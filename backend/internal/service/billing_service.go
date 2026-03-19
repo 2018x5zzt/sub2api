@@ -288,6 +288,8 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 			return s.fallbackPrices["gpt-5.4"]
 		case "gpt-5.4-mini":
 			return s.fallbackPrices["gpt-5.4-mini"]
+		case "gpt-5.4-nano":
+			return s.fallbackPrices["gpt-5.4-nano"]
 		}
 	}
 

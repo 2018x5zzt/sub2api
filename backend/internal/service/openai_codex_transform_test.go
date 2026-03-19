@@ -328,14 +328,17 @@ func TestNormalizeCodexModel_SupportedAliases(t *testing.T) {
 		"gpt-5.4-high":          "gpt-5.4",
 		"gpt-5.4-medium":        "gpt-5.4",
 		"gpt-5.4-mini":          "gpt-5.4-mini",
+		"gpt-5.4-nano":          "gpt-5.4-nano",
 		"gpt-5.4-xhigh":         "gpt-5.4",
 		"codex-mini-latest":     "gpt-5.1-codex-mini",
 		"models/gpt-5.4-medium": "gpt-5.4",
 		"models/gpt-5.2-high":   "gpt-5.2",
 		"models/gpt-5-codex":    "gpt-5-codex",
 		"models/gpt-5.4-mini":   "gpt-5.4-mini",
+		"models/gpt-5.4-nano":   "gpt-5.4-nano",
 		"gpt 5.3 codex":         "gpt-5.3-codex",
 		"gpt 5.4 mini":          "gpt-5.4-mini",
+		"gpt 5.4 nano":          "gpt-5.4-nano",
 		"gpt 5 codex mini":      "gpt-5-codex-mini",
 	}
 

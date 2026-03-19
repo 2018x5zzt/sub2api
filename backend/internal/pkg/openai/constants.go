@@ -39,6 +39,7 @@ var DefaultModels = []Model{
 	{ID: "gpt-5.4-high", Object: "model", Created: 1738368000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.4 High", InputPricePerMTok: 2.50, OutputPricePerMTok: 15.00},
 	{ID: "gpt-5.4-medium", Object: "model", Created: 1738368000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.4 Medium", InputPricePerMTok: 2.50, OutputPricePerMTok: 15.00},
 	{ID: "gpt-5.4-mini", Object: "model", Created: 1738368000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.4 Mini", InputPricePerMTok: 0.75, OutputPricePerMTok: 4.50},
+	{ID: "gpt-5.4-nano", Object: "model", Created: 1738368000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.4 Nano", InputPricePerMTok: 0.20, OutputPricePerMTok: 1.25},
 	{ID: "gpt-5.4-xhigh", Object: "model", Created: 1738368000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.4 XHigh", InputPricePerMTok: 2.50, OutputPricePerMTok: 15.00},
 }
 

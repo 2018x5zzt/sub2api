@@ -44,6 +44,15 @@ var (
 		Mode:                            "chat",
 		SupportsPromptCaching:           true,
 	}
+	openAIGPT54NanoFallbackPricing = &LiteLLMModelPricing{
+		InputCostPerToken:       2e-07,
+		OutputCostPerToken:      1.25e-06,
+		CacheReadInputTokenCost: 2e-08,
+		SupportsServiceTier:     true,
+		LiteLLMProvider:         "openai",
+		Mode:                    "chat",
+		SupportsPromptCaching:   true,
+	}
 )
 
 // LiteLLMModelPricing LiteLLM价格数据结构
@@ -720,7 +729,7 @@ func (s *PricingService) matchByModelFamily(model string) *LiteLLMModelPricing {
 // 回退顺序：
 // 1. 先把 sub2api 暴露给用户的别名规范化为真实上游基础模型。
 // 2. 再尝试日期快照、基础版本、业务兼容 alias 的回退。
-// 3. gpt-5.4 / gpt-5.4-mini 在本地兜底静态价格不可缺失。
+// 3. gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano 在本地兜底静态价格不可缺失。
 // 4. 未命中时返回 nil，避免把不支持的模型误计到默认模型上。
 func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 	normalizedModel := normalizeCodexModel(model)
@@ -743,6 +752,10 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 		logger.With(zap.String("component", "service.pricing")).
 			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.4-mini(static)"))
 		return openAIGPT54MiniFallbackPricing
+	case "gpt-5.4-nano":
+		logger.With(zap.String("component", "service.pricing")).
+			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.4-nano(static)"))
+		return openAIGPT54NanoFallbackPricing
 	}
 
 	return nil

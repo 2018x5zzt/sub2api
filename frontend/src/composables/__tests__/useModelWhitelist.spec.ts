@@ -12,6 +12,7 @@ describe('useModelWhitelist', () => {
 
     expect(models).toContain('gpt-5.4')
     expect(models).toContain('gpt-5.4-mini')
+    expect(models).toContain('gpt-5.4-nano')
     expect(models).toContain('gpt-5.2-high')
     expect(models).not.toContain('gpt-5.4-2026-03-05')
     expect(models).not.toContain('gpt-5.3-codex-spark')
@@ -59,6 +60,15 @@ describe('useModelWhitelist', () => {
 
     expect(mapping).toEqual({
       'gpt-5.4-mini': 'gpt-5.4-mini'
+    })
+  })
+
+  it('whitelist keeps GPT-5.4 mini and nano exact mappings', () => {
+    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-mini', 'gpt-5.4-nano'], [])
+
+    expect(mapping).toEqual({
+      'gpt-5.4-mini': 'gpt-5.4-mini',
+      'gpt-5.4-nano': 'gpt-5.4-nano'
     })
   })
 })

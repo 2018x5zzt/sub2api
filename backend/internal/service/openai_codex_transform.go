@@ -59,6 +59,7 @@ var codexModelMap = map[string]string{
 	"gpt-5.4-xhigh":              "gpt-5.4",
 	"gpt-5.4-chat-latest":        "gpt-5.4",
 	"gpt-5.4-mini":               "gpt-5.4-mini",
+	"gpt-5.4-nano":               "gpt-5.4-nano",
 }
 
 type codexTransformResult struct {
@@ -248,7 +249,9 @@ func normalizeCodexModel(model string) string {
 	if strings.Contains(normalized, "gpt-5.4-mini") || strings.Contains(normalized, "gpt 5.4 mini") {
 		return "gpt-5.4-mini"
 	}
-
+	if strings.Contains(normalized, "gpt-5.4-nano") || strings.Contains(normalized, "gpt 5.4 nano") {
+		return "gpt-5.4-nano"
+	}
 	if strings.Contains(normalized, "gpt-5.4") || strings.Contains(normalized, "gpt 5.4") {
 		return "gpt-5.4"
 	}

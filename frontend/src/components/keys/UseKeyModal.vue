@@ -753,6 +753,16 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
       options: {
         store: false
       }
+    },
+    'gpt-5.4-nano': {
+      name: 'GPT-5.4 Nano',
+      limit: {
+        context: 1050000,
+        output: 128000
+      },
+      options: {
+        store: false
+      }
     }
   }
   const geminiModels = {
