@@ -926,6 +926,7 @@ func TestOpenAIGatewayServiceRecordUsage_UsesRequestedModelAndUpstreamModelMetad
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
 	require.Equal(t, "gpt-5.1", usageRepo.lastLog.Model)
+	require.Equal(t, "gpt-5.1", usageRepo.lastLog.RequestedModel)
 	require.NotNil(t, usageRepo.lastLog.UpstreamModel)
 	require.Equal(t, "gpt-5.1-codex", *usageRepo.lastLog.UpstreamModel)
 	require.NotNil(t, usageRepo.lastLog.ServiceTier)
