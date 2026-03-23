@@ -83,11 +83,22 @@
 
               <!-- Model -->
               <td class="px-4 py-2">
-                <div class="max-w-[120px] truncate" :title="log.model">
-                  <span v-if="log.model" class="font-mono text-[11px] text-gray-700 dark:text-gray-300">
-                    {{ log.model }}
-                  </span>
-                  <span v-else class="text-xs text-gray-400">-</span>
+                <div class="max-w-[160px]">
+                  <template v-if="hasModelMapping(log)">
+                    <el-tooltip :content="modelMappingTooltip(log)" placement="top" :show-after="500">
+                      <span class="flex items-center gap-1 truncate font-mono text-[11px] text-gray-700 dark:text-gray-300">
+                        <span class="truncate">{{ log.requested_model }}</span>
+                        <span class="flex-shrink-0 text-gray-400">→</span>
+                        <span class="truncate text-primary-600 dark:text-primary-400">{{ log.upstream_model }}</span>
+                      </span>
+                    </el-tooltip>
+                  </template>
+                  <template v-else>
+                    <span v-if="displayModel(log)" class="truncate font-mono text-[11px] text-gray-700 dark:text-gray-300" :title="displayModel(log)">
+                      {{ displayModel(log) }}
+                    </span>
+                    <span v-else class="text-xs text-gray-400">-</span>
+                  </template>
                 </div>
               </td>
 
@@ -193,6 +204,28 @@ function isUpstreamRow(log: OpsErrorLog): boolean {
   return phase === 'upstream' && owner === 'provider'
 }
 
+function hasModelMapping(log: OpsErrorLog): boolean {
+  const requested = String(log.requested_model || '').trim()
+  const upstream = String(log.upstream_model || '').trim()
+  return !!requested && !!upstream && requested !== upstream
+}
+
+function modelMappingTooltip(log: OpsErrorLog): string {
+  const requested = String(log.requested_model || '').trim()
+  const upstream = String(log.upstream_model || '').trim()
+  if (!requested && !upstream) return ''
+  if (requested && upstream) return `${requested} → ${upstream}`
+  return upstream || requested
+}
+
+function displayModel(log: OpsErrorLog): string {
+  const upstream = String(log.upstream_model || '').trim()
+  if (upstream) return upstream
+  const requested = String(log.requested_model || '').trim()
+  if (requested) return requested
+  return String(log.model || '').trim()
+}
+
 function getTypeBadge(log: OpsErrorLog): { label: string; className: string } {
   const phase = String(log.phase || '').toLowerCase()
   const owner = String(log.error_owner || '').toLowerCase()
@@ -213,8 +246,8 @@ function getTypeBadge(log: OpsErrorLog): { label: string; className: string } {
     return { label: t('admin.ops.errorLog.typeInternal'), className: 'bg-gray-100 text-gray-800 ring-gray-600/20 dark:bg-dark-700 dark:text-gray-200 dark:ring-dark-500/40' }
   }
 
-    const fallback = phase || owner || t('common.unknown')
-    return { label: fallback, className: 'bg-gray-50 text-gray-700 ring-gray-600/10 dark:bg-dark-900 dark:text-gray-300 dark:ring-dark-700' }
+  const fallback = phase || owner || t('common.unknown')
+  return { label: fallback, className: 'bg-gray-50 text-gray-700 ring-gray-600/10 dark:bg-dark-900 dark:text-gray-300 dark:ring-dark-700' }
 }
 
 interface Props {
@@ -261,6 +294,5 @@ function formatSmartMessage(msg: string): string {
   if (msg.toLowerCase().includes('rate limit')) return t('admin.ops.errorLog.commonErrors.rateLimit')
 
   return msg.length > 200 ? msg.substring(0, 200) + '...' : msg
-
 }
 </script>
