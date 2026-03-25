@@ -946,6 +946,8 @@ func (h *AccountHandler) refreshSingleAccount(ctx context.Context, account *serv
 
 	// OpenAI OAuth: 刷新成功后检查并设置 privacy_mode
 	h.adminService.EnsureOpenAIPrivacy(ctx, updatedAccount)
+	// Antigravity OAuth: 刷新成功后检查并设置 privacy_mode
+	h.adminService.EnsureAntigravityPrivacy(ctx, updatedAccount)
 
 	return updatedAccount, "", nil
 }
@@ -1969,7 +1971,7 @@ func (h *AccountHandler) SetPrivacy(c *gin.Context) {
 		return
 	}
 	if account.Type != service.AccountTypeOAuth {
-		response.BadRequest(c, "Only OAuth accounts support privacy setting")
+		response.BadRequest(c, "Only OpenAI and Antigravity OAuth accounts support privacy setting")
 		return
 	}
 	var mode string
@@ -1999,6 +2001,7 @@ func (h *AccountHandler) SetPrivacy(c *gin.Context) {
 	}
 	response.Success(c, h.buildAccountResponseWithRuntime(c.Request.Context(), updated))
 }
+
 // RefreshTier handles refreshing Google One tier for a single account
 // POST /api/v1/admin/accounts/:id/refresh-tier
 func (h *AccountHandler) RefreshTier(c *gin.Context) {

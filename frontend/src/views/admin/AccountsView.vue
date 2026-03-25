@@ -1269,7 +1269,8 @@ const handleSetPrivacy = async (a: Account) => {
     appStore.showSuccess(t('common.success'))
   } catch (error: any) {
     console.error('Failed to set privacy:', error)
-    appStore.showError(error?.response?.data?.message || t('admin.accounts.privacyFailed'))
+    const fallbackKey = a.platform === 'antigravity' ? 'admin.accounts.privacyAntigravityFailed' : 'admin.accounts.privacyFailed'
+    appStore.showError(error?.response?.data?.message || t(fallbackKey))
   }
 }
 const handleDelete = (a: Account) => { deletingAcc.value = a; showDeleteDialog.value = true }
