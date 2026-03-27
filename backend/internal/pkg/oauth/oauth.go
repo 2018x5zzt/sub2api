@@ -21,7 +21,7 @@ const (
 	// OAuth endpoints
 	AuthorizeURL = "https://claude.ai/oauth/authorize"
 	TokenURL     = "https://platform.claude.com/v1/oauth/token"
-	RedirectURI  = "https://platform.claude.com/oauth/code/callback"
+	RedirectURI  = ""
 
 	// Scopes - Browser URL (includes org:create_api_key for user authorization)
 	ScopeOAuth = "org:create_api_key user:profile user:inference user:sessions:claude_code user:mcp_servers user:file_upload"
