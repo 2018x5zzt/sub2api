@@ -1906,6 +1906,50 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 	response.Success(c, models)
 }
 
+// SetPrivacy handles setting privacy for a single OpenAI/Antigravity OAuth account
+// POST /api/v1/admin/accounts/:id/set-privacy
+func (h *AccountHandler) SetPrivacy(c *gin.Context) {
+	accountID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid account ID")
+		return
+	}
+	account, err := h.adminService.GetAccount(c.Request.Context(), accountID)
+	if err != nil {
+		response.NotFound(c, "Account not found")
+		return
+	}
+	if account.Type != service.AccountTypeOAuth {
+		response.BadRequest(c, "Only OAuth accounts support privacy setting")
+		return
+	}
+	var mode string
+	switch account.Platform {
+	case service.PlatformOpenAI:
+		mode = h.adminService.ForceOpenAIPrivacy(c.Request.Context(), account)
+	case service.PlatformAntigravity:
+		mode = h.adminService.ForceAntigravityPrivacy(c.Request.Context(), account)
+	default:
+		response.BadRequest(c, "Only OpenAI and Antigravity OAuth accounts support privacy setting")
+		return
+	}
+	if mode == "" {
+		response.BadRequest(c, "Cannot set privacy: missing access_token")
+		return
+	}
+	// 从 DB 重新读取以确保返回最新状态
+	updated, err := h.adminService.GetAccount(c.Request.Context(), accountID)
+	if err != nil {
+		// 隐私已设置成功但读取失败，回退到内存更新
+		if account.Extra == nil {
+			account.Extra = make(map[string]any)
+		}
+		account.Extra["privacy_mode"] = mode
+		response.Success(c, h.buildAccountResponseWithRuntime(c.Request.Context(), account))
+		return
+	}
+	response.Success(c, h.buildAccountResponseWithRuntime(c.Request.Context(), updated))
+}
 // RefreshTier handles refreshing Google One tier for a single account
 // POST /api/v1/admin/accounts/:id/refresh-tier
 func (h *AccountHandler) RefreshTier(c *gin.Context) {
