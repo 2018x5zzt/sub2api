@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -579,6 +580,10 @@ func (h *AccountHandler) Create(c *gin.Context) {
 		if execErr != nil {
 			return nil, execErr
 		}
+		// Antigravity OAuth: 新账号直接设置隐私
+		h.adminService.ForceAntigravityPrivacy(ctx, account)
+		// OpenAI OAuth: 新账号直接设置隐私
+		h.adminService.ForceOpenAIPrivacy(ctx, account)
 		return h.buildAccountResponseWithRuntime(ctx, account), nil
 	})
 	if err != nil {
@@ -1210,6 +1215,9 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 		success := 0
 		failed := 0
 		results := make([]gin.H, 0, len(req.Accounts))
+		// 收集需要异步设置隐私的 OAuth 账号
+		var antigravityPrivacyAccounts []*service.Account
+		var openaiPrivacyAccounts []*service.Account
 
 		for _, item := range req.Accounts {
 			if item.RateMultiplier != nil && *item.RateMultiplier < 0 {
@@ -1252,6 +1260,15 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 				})
 				continue
 			}
+			// 收集需要异步设置隐私的 OAuth 账号
+			if account.Type == service.AccountTypeOAuth {
+				switch account.Platform {
+				case service.PlatformAntigravity:
+					antigravityPrivacyAccounts = append(antigravityPrivacyAccounts, account)
+				case service.PlatformOpenAI:
+					openaiPrivacyAccounts = append(openaiPrivacyAccounts, account)
+				}
+			}
 			success++
 			results = append(results, gin.H{
 				"name":    item.Name,
@@ -1260,6 +1277,36 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 			})
 		}
 
+		// 异步设置隐私，避免批量创建时阻塞请求
+		adminSvc := h.adminService
+		if len(antigravityPrivacyAccounts) > 0 {
+			accounts := antigravityPrivacyAccounts
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("batch_create_antigravity_privacy_panic", "recover", r)
+					}
+				}()
+				bgCtx := context.Background()
+				for _, acc := range accounts {
+					adminSvc.ForceAntigravityPrivacy(bgCtx, acc)
+				}
+			}()
+		}
+		if len(openaiPrivacyAccounts) > 0 {
+			accounts := openaiPrivacyAccounts
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						slog.Error("batch_create_openai_privacy_panic", "recover", r)
+					}
+				}()
+				bgCtx := context.Background()
+				for _, acc := range accounts {
+					adminSvc.ForceOpenAIPrivacy(bgCtx, acc)
+				}
+			}()
+		}
 		return gin.H{
 			"success": success,
 			"failed":  failed,
