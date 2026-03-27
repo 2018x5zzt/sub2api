@@ -332,13 +332,13 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-			c.ErrorPassthroughRule, c.Group, c.GroupHealthSnapshot, c.IdempotencyRecord,
-			c.InviteAdminAction, c.InviteRelationshipEvent, c.InviteRewardRecord,
-			c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
-			c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
-			c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
-			c.TLSFingerprintProfile,
-		} {
+		c.ErrorPassthroughRule, c.Group, c.GroupHealthSnapshot, c.IdempotencyRecord,
+		c.InviteAdminAction, c.InviteRelationshipEvent, c.InviteRewardRecord,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserSubscription,
+	} {
 		n.Use(hooks...)
 	}
 }
@@ -348,13 +348,13 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-			c.ErrorPassthroughRule, c.Group, c.GroupHealthSnapshot, c.IdempotencyRecord,
-			c.InviteAdminAction, c.InviteRelationshipEvent, c.InviteRewardRecord,
-			c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
-			c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
-			c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
-			c.TLSFingerprintProfile,
-		} {
+		c.ErrorPassthroughRule, c.Group, c.GroupHealthSnapshot, c.IdempotencyRecord,
+		c.InviteAdminAction, c.InviteRelationshipEvent, c.InviteRewardRecord,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
+		c.UserSubscription,
+	} {
 		n.Intercept(interceptors...)
 	}
 }
@@ -4599,17 +4599,17 @@ type (
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
 		ErrorPassthroughRule, Group, GroupHealthSnapshot, IdempotencyRecord,
 		InviteAdminAction, InviteRelationshipEvent, InviteRewardRecord, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask,
-		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserSubscription, TLSFingerprintProfile []ent.Hook
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
 		ErrorPassthroughRule, Group, GroupHealthSnapshot, IdempotencyRecord,
 		InviteAdminAction, InviteRelationshipEvent, InviteRewardRecord, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask,
-		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserSubscription, TLSFingerprintProfile []ent.Interceptor
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, TLSFingerprintProfile,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Interceptor
 	}
 )
 
