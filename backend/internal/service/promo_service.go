@@ -48,9 +48,39 @@ func NewPromoService(
 	}
 }
 
+func normalizePromoCodeScene(scene string) string {
+	switch strings.ToLower(strings.TrimSpace(scene)) {
+	case "", PromoCodeSceneRegister:
+		return PromoCodeSceneRegister
+	case PromoCodeSceneBenefit:
+		return PromoCodeSceneBenefit
+	default:
+		return ""
+	}
+}
+
+func (s *PromoService) ensurePromoCodeScene(promoCode *PromoCode, scene string) error {
+	if promoCode == nil {
+		return nil
+	}
+	if normalizePromoCodeScene(promoCode.Scene) != scene {
+		return ErrPromoCodeNotFound
+	}
+	return nil
+}
+
 // ValidatePromoCode 验证优惠码（注册前调用）
 // 返回 nil, nil 表示空码（不报错）
 func (s *PromoService) ValidatePromoCode(ctx context.Context, code string) (*PromoCode, error) {
+	return s.validatePromoCodeInScene(ctx, code, PromoCodeSceneRegister)
+}
+
+// ValidateBenefitCode 验证福利码（用户兑换入口调用）
+func (s *PromoService) ValidateBenefitCode(ctx context.Context, code string) (*PromoCode, error) {
+	return s.validatePromoCodeInScene(ctx, code, PromoCodeSceneBenefit)
+}
+
+func (s *PromoService) validatePromoCodeInScene(ctx context.Context, code string, scene string) (*PromoCode, error) {
 	code = strings.TrimSpace(code)
 	if code == "" {
 		return nil, nil // 空码不报错，直接返回
@@ -59,6 +89,9 @@ func (s *PromoService) ValidatePromoCode(ctx context.Context, code string) (*Pro
 	promoCode, err := s.promoRepo.GetByCode(ctx, code)
 	if err != nil {
 		// 保留原始错误类型，不要统一映射为 NotFound
+		return nil, err
+	}
+	if err := s.ensurePromoCodeScene(promoCode, scene); err != nil {
 		return nil, err
 	}
 
@@ -89,6 +122,15 @@ func (s *PromoService) validatePromoCodeStatus(promoCode *PromoCode) error {
 // ApplyPromoCode 应用优惠码（注册成功后调用）
 // 使用事务和行锁确保并发安全
 func (s *PromoService) ApplyPromoCode(ctx context.Context, userID int64, code string) error {
+	return s.applyPromoCodeInScene(ctx, userID, code, PromoCodeSceneRegister)
+}
+
+// ApplyBenefitCode 应用福利码（已注册用户兑换入口调用）
+func (s *PromoService) ApplyBenefitCode(ctx context.Context, userID int64, code string) error {
+	return s.applyPromoCodeInScene(ctx, userID, code, PromoCodeSceneBenefit)
+}
+
+func (s *PromoService) applyPromoCodeInScene(ctx context.Context, userID int64, code string, scene string) error {
 	code = strings.TrimSpace(code)
 	if code == "" {
 		return nil
@@ -106,6 +148,9 @@ func (s *PromoService) ApplyPromoCode(ctx context.Context, userID int64, code st
 	// 在事务中获取并锁定优惠码记录（FOR UPDATE）
 	promoCode, err := s.promoRepo.GetByCodeForUpdate(txCtx, code)
 	if err != nil {
+		return err
+	}
+	if err := s.ensurePromoCodeScene(promoCode, scene); err != nil {
 		return err
 	}
 
@@ -181,6 +226,10 @@ func (s *PromoService) GenerateRandomCode() (string, error) {
 // Create 创建优惠码
 func (s *PromoService) Create(ctx context.Context, input *CreatePromoCodeInput) (*PromoCode, error) {
 	code := strings.TrimSpace(input.Code)
+	scene := normalizePromoCodeScene(input.Scene)
+	if scene == "" {
+		return nil, ErrPromoCodeInvalid
+	}
 	if code == "" {
 		// 自动生成
 		var err error
@@ -191,13 +240,15 @@ func (s *PromoService) Create(ctx context.Context, input *CreatePromoCodeInput) 
 	}
 
 	promoCode := &PromoCode{
-		Code:        strings.ToUpper(code),
-		BonusAmount: input.BonusAmount,
-		MaxUses:     input.MaxUses,
-		UsedCount:   0,
-		Status:      PromoCodeStatusActive,
-		ExpiresAt:   input.ExpiresAt,
-		Notes:       input.Notes,
+		Code:           strings.ToUpper(code),
+		Scene:          scene,
+		BonusAmount:    input.BonusAmount,
+		MaxUses:        input.MaxUses,
+		UsedCount:      0,
+		Status:         PromoCodeStatusActive,
+		ExpiresAt:      input.ExpiresAt,
+		SuccessMessage: strings.TrimSpace(input.SuccessMessage),
+		Notes:          input.Notes,
 	}
 
 	if err := s.promoRepo.Create(ctx, promoCode); err != nil {
@@ -226,6 +277,9 @@ func (s *PromoService) Update(ctx context.Context, id int64, input *UpdatePromoC
 	if input.Code != nil {
 		promoCode.Code = strings.ToUpper(strings.TrimSpace(*input.Code))
 	}
+	if normalizePromoCodeScene(promoCode.Scene) == "" {
+		promoCode.Scene = PromoCodeSceneRegister
+	}
 	if input.BonusAmount != nil {
 		promoCode.BonusAmount = *input.BonusAmount
 	}
@@ -237,6 +291,9 @@ func (s *PromoService) Update(ctx context.Context, id int64, input *UpdatePromoC
 	}
 	if input.ExpiresAt != nil {
 		promoCode.ExpiresAt = input.ExpiresAt
+	}
+	if input.SuccessMessage != nil {
+		promoCode.SuccessMessage = strings.TrimSpace(*input.SuccessMessage)
 	}
 	if input.Notes != nil {
 		promoCode.Notes = *input.Notes
@@ -258,8 +315,12 @@ func (s *PromoService) Delete(ctx context.Context, id int64) error {
 }
 
 // List 获取优惠码列表
-func (s *PromoService) List(ctx context.Context, params pagination.PaginationParams, status, search string) ([]PromoCode, *pagination.PaginationResult, error) {
-	return s.promoRepo.ListWithFilters(ctx, params, status, search)
+func (s *PromoService) List(ctx context.Context, params pagination.PaginationParams, scene, status, search string) ([]PromoCode, *pagination.PaginationResult, error) {
+	normalizedScene := normalizePromoCodeScene(scene)
+	if normalizedScene == "" {
+		normalizedScene = PromoCodeSceneRegister
+	}
+	return s.promoRepo.ListWithFilters(ctx, params, normalizedScene, status, search)
 }
 
 // ListUsages 获取使用记录

@@ -50,6 +50,12 @@ const (
 	PromoCodeStatusDisabled = domain.PromoCodeStatusDisabled
 )
 
+// PromoCode scene constants
+const (
+	PromoCodeSceneRegister = domain.PromoCodeSceneRegister
+	PromoCodeSceneBenefit  = domain.PromoCodeSceneBenefit
+)
+
 // Admin adjustment type constants
 const (
 	AdjustmentTypeAdminBalance     = domain.AdjustmentTypeAdminBalance     // 管理员调整余额

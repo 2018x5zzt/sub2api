@@ -48,6 +48,12 @@ const (
 	PromoCodeStatusDisabled = "disabled"
 )
 
+// PromoCode scene constants
+const (
+	PromoCodeSceneRegister = "register"
+	PromoCodeSceneBenefit  = "benefit"
+)
+
 // Admin adjustment type constants
 const (
 	AdjustmentTypeAdminBalance     = "admin_balance"     // 管理员调整余额

@@ -57,6 +57,15 @@ func TestGetBaseURL(t *testing.T) {
 			expected: "https://upstream.example.com/antigravity",
 		},
 		{
+			name: "antigravity apikey direct endpoint mode keeps raw base_url",
+			account: Account{
+				Type:        AccountTypeAPIKey,
+				Platform:    PlatformAntigravity,
+				Credentials: map[string]any{"base_url": "https://upstream.example.com/fixed", "append_api_path": false},
+			},
+			expected: "https://upstream.example.com/fixed",
+		},
+		{
 			name: "antigravity non-apikey returns empty",
 			account: Account{
 				Type:        AccountTypeOAuth,
@@ -120,6 +129,15 @@ func TestGetGeminiBaseURL(t *testing.T) {
 				Credentials: map[string]any{"base_url": "https://upstream.example.com/"},
 			},
 			expected: "https://upstream.example.com/antigravity",
+		},
+		{
+			name: "antigravity apikey direct endpoint keeps raw base_url",
+			account: Account{
+				Type:        AccountTypeAPIKey,
+				Platform:    PlatformAntigravity,
+				Credentials: map[string]any{"base_url": "https://upstream.example.com/fixed", "append_api_path": false},
+			},
+			expected: "https://upstream.example.com/fixed",
 		},
 		{
 			name: "antigravity oauth does NOT append /antigravity",

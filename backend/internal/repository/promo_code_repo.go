@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
@@ -22,10 +23,12 @@ func (r *promoCodeRepository) Create(ctx context.Context, code *service.PromoCod
 	client := clientFromContext(ctx, r.client)
 	builder := client.PromoCode.Create().
 		SetCode(code.Code).
+		SetScene(code.Scene).
 		SetBonusAmount(code.BonusAmount).
 		SetMaxUses(code.MaxUses).
 		SetUsedCount(code.UsedCount).
 		SetStatus(code.Status).
+		SetSuccessMessage(code.SuccessMessage).
 		SetNotes(code.Notes)
 
 	if code.ExpiresAt != nil {
@@ -88,16 +91,21 @@ func (r *promoCodeRepository) Update(ctx context.Context, code *service.PromoCod
 	client := clientFromContext(ctx, r.client)
 	builder := client.PromoCode.UpdateOneID(code.ID).
 		SetCode(code.Code).
+		SetScene(code.Scene).
 		SetBonusAmount(code.BonusAmount).
 		SetMaxUses(code.MaxUses).
 		SetUsedCount(code.UsedCount).
 		SetStatus(code.Status).
+		SetSuccessMessage(code.SuccessMessage).
 		SetNotes(code.Notes)
 
 	if code.ExpiresAt != nil {
 		builder.SetExpiresAt(*code.ExpiresAt)
 	} else {
 		builder.ClearExpiresAt()
+	}
+	if strings.TrimSpace(code.SuccessMessage) == "" {
+		builder.ClearSuccessMessage()
 	}
 
 	updated, err := builder.Save(ctx)
@@ -119,11 +127,12 @@ func (r *promoCodeRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *promoCodeRepository) List(ctx context.Context, params pagination.PaginationParams) ([]service.PromoCode, *pagination.PaginationResult, error) {
-	return r.ListWithFilters(ctx, params, "", "")
+	return r.ListWithFilters(ctx, params, service.PromoCodeSceneRegister, "", "")
 }
 
-func (r *promoCodeRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, status, search string) ([]service.PromoCode, *pagination.PaginationResult, error) {
-	q := r.client.PromoCode.Query()
+func (r *promoCodeRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, scene, status, search string) ([]service.PromoCode, *pagination.PaginationResult, error) {
+	q := r.client.PromoCode.Query().
+		Where(promocode.SceneEQ(scene))
 
 	if status != "" {
 		q = q.Where(promocode.StatusEQ(status))
@@ -222,16 +231,18 @@ func promoCodeEntityToService(m *dbent.PromoCode) *service.PromoCode {
 		return nil
 	}
 	return &service.PromoCode{
-		ID:          m.ID,
-		Code:        m.Code,
-		BonusAmount: m.BonusAmount,
-		MaxUses:     m.MaxUses,
-		UsedCount:   m.UsedCount,
-		Status:      m.Status,
-		ExpiresAt:   m.ExpiresAt,
-		Notes:       derefString(m.Notes),
-		CreatedAt:   m.CreatedAt,
-		UpdatedAt:   m.UpdatedAt,
+		ID:             m.ID,
+		Code:           m.Code,
+		Scene:          m.Scene,
+		BonusAmount:    m.BonusAmount,
+		MaxUses:        m.MaxUses,
+		UsedCount:      m.UsedCount,
+		Status:         m.Status,
+		ExpiresAt:      m.ExpiresAt,
+		SuccessMessage: derefString(m.SuccessMessage),
+		Notes:          derefString(m.Notes),
+		CreatedAt:      m.CreatedAt,
+		UpdatedAt:      m.UpdatedAt,
 	}
 }
 

@@ -53,6 +53,7 @@ func NewSoraGatewayHandler(
 	cfg *config.Config,
 ) *SoraGatewayHandler {
 	pingInterval := time.Duration(0)
+	userSlotWaitTimeout := maxConcurrencyWait
 	maxAccountSwitches := 3
 	streamMode := "force"
 	soraTLSEnabled := true
@@ -60,6 +61,9 @@ func NewSoraGatewayHandler(
 	mediaRoot := "/app/data/sora"
 	if cfg != nil {
 		pingInterval = time.Duration(cfg.Concurrency.PingInterval) * time.Second
+		if cfg.Concurrency.UserSlotWaitTimeout > 0 {
+			userSlotWaitTimeout = cfg.Concurrency.UserSlotWaitTimeout
+		}
 		if cfg.Gateway.MaxAccountSwitches > 0 {
 			maxAccountSwitches = cfg.Gateway.MaxAccountSwitches
 		}
@@ -72,12 +76,14 @@ func NewSoraGatewayHandler(
 			mediaRoot = root
 		}
 	}
+	concurrencyHelper := NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval)
+	concurrencyHelper.SetUserSlotWaitTimeout(userSlotWaitTimeout)
 	return &SoraGatewayHandler{
 		gatewayService:        gatewayService,
 		soraGatewayService:    soraGatewayService,
 		billingCacheService:   billingCacheService,
 		usageRecordWorkerPool: usageRecordWorkerPool,
-		concurrencyHelper:     NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
+		concurrencyHelper:     concurrencyHelper,
 		maxAccountSwitches:    maxAccountSwitches,
 		streamMode:            strings.ToLower(streamMode),
 		soraTLSEnabled:        soraTLSEnabled,

@@ -29,6 +29,20 @@ func (_c *PromoCodeCreate) SetCode(v string) *PromoCodeCreate {
 	return _c
 }
 
+// SetScene sets the "scene" field.
+func (_c *PromoCodeCreate) SetScene(v string) *PromoCodeCreate {
+	_c.mutation.SetScene(v)
+	return _c
+}
+
+// SetNillableScene sets the "scene" field if the given value is not nil.
+func (_c *PromoCodeCreate) SetNillableScene(v *string) *PromoCodeCreate {
+	if v != nil {
+		_c.SetScene(*v)
+	}
+	return _c
+}
+
 // SetBonusAmount sets the "bonus_amount" field.
 func (_c *PromoCodeCreate) SetBonusAmount(v float64) *PromoCodeCreate {
 	_c.mutation.SetBonusAmount(v)
@@ -95,6 +109,20 @@ func (_c *PromoCodeCreate) SetExpiresAt(v time.Time) *PromoCodeCreate {
 func (_c *PromoCodeCreate) SetNillableExpiresAt(v *time.Time) *PromoCodeCreate {
 	if v != nil {
 		_c.SetExpiresAt(*v)
+	}
+	return _c
+}
+
+// SetSuccessMessage sets the "success_message" field.
+func (_c *PromoCodeCreate) SetSuccessMessage(v string) *PromoCodeCreate {
+	_c.mutation.SetSuccessMessage(v)
+	return _c
+}
+
+// SetNillableSuccessMessage sets the "success_message" field if the given value is not nil.
+func (_c *PromoCodeCreate) SetNillableSuccessMessage(v *string) *PromoCodeCreate {
+	if v != nil {
+		_c.SetSuccessMessage(*v)
 	}
 	return _c
 }
@@ -191,6 +219,10 @@ func (_c *PromoCodeCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *PromoCodeCreate) defaults() {
+	if _, ok := _c.mutation.Scene(); !ok {
+		v := promocode.DefaultScene
+		_c.mutation.SetScene(v)
+	}
 	if _, ok := _c.mutation.BonusAmount(); !ok {
 		v := promocode.DefaultBonusAmount
 		_c.mutation.SetBonusAmount(v)
@@ -225,6 +257,14 @@ func (_c *PromoCodeCreate) check() error {
 	if v, ok := _c.mutation.Code(); ok {
 		if err := promocode.CodeValidator(v); err != nil {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "PromoCode.code": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Scene(); !ok {
+		return &ValidationError{Name: "scene", err: errors.New(`ent: missing required field "PromoCode.scene"`)}
+	}
+	if v, ok := _c.mutation.Scene(); ok {
+		if err := promocode.SceneValidator(v); err != nil {
+			return &ValidationError{Name: "scene", err: fmt.Errorf(`ent: validator failed for field "PromoCode.scene": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.BonusAmount(); !ok {
@@ -281,6 +321,10 @@ func (_c *PromoCodeCreate) createSpec() (*PromoCode, *sqlgraph.CreateSpec) {
 		_spec.SetField(promocode.FieldCode, field.TypeString, value)
 		_node.Code = value
 	}
+	if value, ok := _c.mutation.Scene(); ok {
+		_spec.SetField(promocode.FieldScene, field.TypeString, value)
+		_node.Scene = value
+	}
 	if value, ok := _c.mutation.BonusAmount(); ok {
 		_spec.SetField(promocode.FieldBonusAmount, field.TypeFloat64, value)
 		_node.BonusAmount = value
@@ -300,6 +344,10 @@ func (_c *PromoCodeCreate) createSpec() (*PromoCode, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(promocode.FieldExpiresAt, field.TypeTime, value)
 		_node.ExpiresAt = &value
+	}
+	if value, ok := _c.mutation.SuccessMessage(); ok {
+		_spec.SetField(promocode.FieldSuccessMessage, field.TypeString, value)
+		_node.SuccessMessage = &value
 	}
 	if value, ok := _c.mutation.Notes(); ok {
 		_spec.SetField(promocode.FieldNotes, field.TypeString, value)
@@ -393,6 +441,18 @@ func (u *PromoCodeUpsert) UpdateCode() *PromoCodeUpsert {
 	return u
 }
 
+// SetScene sets the "scene" field.
+func (u *PromoCodeUpsert) SetScene(v string) *PromoCodeUpsert {
+	u.Set(promocode.FieldScene, v)
+	return u
+}
+
+// UpdateScene sets the "scene" field to the value that was provided on create.
+func (u *PromoCodeUpsert) UpdateScene() *PromoCodeUpsert {
+	u.SetExcluded(promocode.FieldScene)
+	return u
+}
+
 // SetBonusAmount sets the "bonus_amount" field.
 func (u *PromoCodeUpsert) SetBonusAmount(v float64) *PromoCodeUpsert {
 	u.Set(promocode.FieldBonusAmount, v)
@@ -474,6 +534,24 @@ func (u *PromoCodeUpsert) UpdateExpiresAt() *PromoCodeUpsert {
 // ClearExpiresAt clears the value of the "expires_at" field.
 func (u *PromoCodeUpsert) ClearExpiresAt() *PromoCodeUpsert {
 	u.SetNull(promocode.FieldExpiresAt)
+	return u
+}
+
+// SetSuccessMessage sets the "success_message" field.
+func (u *PromoCodeUpsert) SetSuccessMessage(v string) *PromoCodeUpsert {
+	u.Set(promocode.FieldSuccessMessage, v)
+	return u
+}
+
+// UpdateSuccessMessage sets the "success_message" field to the value that was provided on create.
+func (u *PromoCodeUpsert) UpdateSuccessMessage() *PromoCodeUpsert {
+	u.SetExcluded(promocode.FieldSuccessMessage)
+	return u
+}
+
+// ClearSuccessMessage clears the value of the "success_message" field.
+func (u *PromoCodeUpsert) ClearSuccessMessage() *PromoCodeUpsert {
+	u.SetNull(promocode.FieldSuccessMessage)
 	return u
 }
 
@@ -563,6 +641,20 @@ func (u *PromoCodeUpsertOne) SetCode(v string) *PromoCodeUpsertOne {
 func (u *PromoCodeUpsertOne) UpdateCode() *PromoCodeUpsertOne {
 	return u.Update(func(s *PromoCodeUpsert) {
 		s.UpdateCode()
+	})
+}
+
+// SetScene sets the "scene" field.
+func (u *PromoCodeUpsertOne) SetScene(v string) *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetScene(v)
+	})
+}
+
+// UpdateScene sets the "scene" field to the value that was provided on create.
+func (u *PromoCodeUpsertOne) UpdateScene() *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateScene()
 	})
 }
 
@@ -661,6 +753,27 @@ func (u *PromoCodeUpsertOne) UpdateExpiresAt() *PromoCodeUpsertOne {
 func (u *PromoCodeUpsertOne) ClearExpiresAt() *PromoCodeUpsertOne {
 	return u.Update(func(s *PromoCodeUpsert) {
 		s.ClearExpiresAt()
+	})
+}
+
+// SetSuccessMessage sets the "success_message" field.
+func (u *PromoCodeUpsertOne) SetSuccessMessage(v string) *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetSuccessMessage(v)
+	})
+}
+
+// UpdateSuccessMessage sets the "success_message" field to the value that was provided on create.
+func (u *PromoCodeUpsertOne) UpdateSuccessMessage() *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateSuccessMessage()
+	})
+}
+
+// ClearSuccessMessage clears the value of the "success_message" field.
+func (u *PromoCodeUpsertOne) ClearSuccessMessage() *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.ClearSuccessMessage()
 	})
 }
 
@@ -924,6 +1037,20 @@ func (u *PromoCodeUpsertBulk) UpdateCode() *PromoCodeUpsertBulk {
 	})
 }
 
+// SetScene sets the "scene" field.
+func (u *PromoCodeUpsertBulk) SetScene(v string) *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetScene(v)
+	})
+}
+
+// UpdateScene sets the "scene" field to the value that was provided on create.
+func (u *PromoCodeUpsertBulk) UpdateScene() *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateScene()
+	})
+}
+
 // SetBonusAmount sets the "bonus_amount" field.
 func (u *PromoCodeUpsertBulk) SetBonusAmount(v float64) *PromoCodeUpsertBulk {
 	return u.Update(func(s *PromoCodeUpsert) {
@@ -1019,6 +1146,27 @@ func (u *PromoCodeUpsertBulk) UpdateExpiresAt() *PromoCodeUpsertBulk {
 func (u *PromoCodeUpsertBulk) ClearExpiresAt() *PromoCodeUpsertBulk {
 	return u.Update(func(s *PromoCodeUpsert) {
 		s.ClearExpiresAt()
+	})
+}
+
+// SetSuccessMessage sets the "success_message" field.
+func (u *PromoCodeUpsertBulk) SetSuccessMessage(v string) *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetSuccessMessage(v)
+	})
+}
+
+// UpdateSuccessMessage sets the "success_message" field to the value that was provided on create.
+func (u *PromoCodeUpsertBulk) UpdateSuccessMessage() *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateSuccessMessage()
+	})
+}
+
+// ClearSuccessMessage clears the value of the "success_message" field.
+func (u *PromoCodeUpsertBulk) ClearSuccessMessage() *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.ClearSuccessMessage()
 	})
 }
 

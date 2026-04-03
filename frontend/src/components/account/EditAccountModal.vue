@@ -45,6 +45,17 @@
             "
           />
           <p class="input-hint">{{ baseUrlHint }}</p>
+          <template v-if="account.platform !== 'sora'">
+            <label class="mt-3 flex cursor-pointer items-start gap-3">
+              <input
+                v-model="editAppendApiPath"
+                type="checkbox"
+                class="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.appendApiPath') }}</span>
+            </label>
+            <p class="input-hint mt-1">{{ t('admin.accounts.appendApiPathHint') }}</p>
+          </template>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.apiKey') }}</label>
@@ -550,6 +561,15 @@
             placeholder="https://cloudcode-pa.googleapis.com"
           />
           <p class="input-hint">{{ t('admin.accounts.upstream.baseUrlHint') }}</p>
+          <label class="mt-3 flex cursor-pointer items-start gap-3">
+            <input
+              v-model="editAppendApiPath"
+              type="checkbox"
+              class="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.appendApiPath') }}</span>
+          </label>
+          <p class="input-hint mt-1">{{ t('admin.accounts.appendApiPathHint') }}</p>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.upstream.apiKey') }}</label>
@@ -1824,6 +1844,7 @@ interface TempUnschedRuleForm {
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
+const editAppendApiPath = ref(true)
 // Bedrock credentials
 const editBedrockAccessKeyId = ref('')
 const editBedrockSecretAccessKey = ref('')
@@ -2053,6 +2074,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   const credentials = newAccount.credentials as Record<string, unknown> | undefined
   interceptWarmupRequests.value = credentials?.intercept_warmup_requests === true
   autoPauseOnExpired.value = newAccount.auto_pause_on_expired === true
+  editAppendApiPath.value = credentials?.append_api_path !== false
 
   // Load mixed scheduling setting (only for antigravity accounts)
   mixedScheduling.value = false
@@ -2163,6 +2185,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
           ? 'https://generativelanguage.googleapis.com'
           : 'https://api.anthropic.com'
     editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl
+    editAppendApiPath.value = credentials.append_api_path !== false
 
     // Load model mappings and detect mode
     const existingMappings = credentials.model_mapping as Record<string, string> | undefined
@@ -2251,6 +2274,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   } else if (newAccount.type === 'upstream' && newAccount.credentials) {
     const credentials = newAccount.credentials as Record<string, unknown>
     editBaseUrl.value = (credentials.base_url as string) || ''
+    editAppendApiPath.value = credentials.append_api_path !== false
   } else {
     const platformDefaultUrl =
       newAccount.platform === 'openai' || newAccount.platform === 'sora'
@@ -2259,6 +2283,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
           ? 'https://generativelanguage.googleapis.com'
           : 'https://api.anthropic.com'
     editBaseUrl.value = platformDefaultUrl
+    editAppendApiPath.value = true
 
     // Load model mappings for OpenAI OAuth accounts
     if (newAccount.platform === 'openai' && newAccount.credentials) {
@@ -2745,13 +2770,18 @@ const handleSubmit = async () => {
     // For apikey type, handle credentials update
     if (props.account.type === 'apikey') {
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
+      if (props.account.platform !== 'sora' && !editAppendApiPath.value && !editBaseUrl.value.trim()) {
+        appStore.showError(t('admin.accounts.pleaseEnterBaseUrl'))
+        return
+      }
       const newBaseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value
       const shouldApplyModelMapping = !(props.account.platform === 'openai' && openaiPassthroughEnabled.value)
 
       // Always update credentials for apikey type to handle model mapping changes
       const newCredentials: Record<string, unknown> = {
         ...currentCredentials,
-        base_url: newBaseUrl
+        base_url: newBaseUrl,
+        append_api_path: editAppendApiPath.value
       }
 
       // Handle API key
@@ -2805,9 +2835,14 @@ const handleSubmit = async () => {
       updatePayload.credentials = newCredentials
     } else if (props.account.type === 'upstream') {
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
+      if (!editAppendApiPath.value && !editBaseUrl.value.trim()) {
+        appStore.showError(t('admin.accounts.pleaseEnterBaseUrl'))
+        return
+      }
       const newCredentials: Record<string, unknown> = { ...currentCredentials }
 
       newCredentials.base_url = editBaseUrl.value.trim()
+      newCredentials.append_api_path = editAppendApiPath.value
 
       if (editApiKey.value.trim()) {
         newCredentials.api_key = editApiKey.value.trim()

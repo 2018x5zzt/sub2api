@@ -238,8 +238,9 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 			return s.sendErrorAndEnd(c, "No access token available")
 		}
 	} else if account.Type == "apikey" {
-		// API Key - use x-api-key header
-		useBearer = false
+		// API Key accounts default to x-api-key. Direct endpoint mode also adds
+		// Bearer auth for fixed AI Gateway endpoints.
+		useBearer = account.UseDirectEndpointMode()
 		authToken = account.GetCredential("api_key")
 		if authToken == "" {
 			return s.sendErrorAndEnd(c, "No API key available")
@@ -253,7 +254,10 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}
-		apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/v1/messages?beta=true"
+		apiURL = normalizedBaseURL
+		if account.ShouldAppendAPIPath() {
+			apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/v1/messages?beta=true"
+		}
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
@@ -293,6 +297,9 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 	if useBearer {
 		req.Header.Set("anthropic-beta", claude.DefaultBetaHeader)
 		req.Header.Set("Authorization", "Bearer "+authToken)
+		if account.Type == "apikey" {
+			req.Header.Set("x-api-key", authToken)
+		}
 	} else {
 		req.Header.Set("anthropic-beta", claude.APIKeyBetaHeader)
 		req.Header.Set("x-api-key", authToken)
@@ -481,7 +488,10 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}
-		apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/responses"
+		apiURL = normalizedBaseURL
+		if account.ShouldAppendAPIPath() {
+			apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/responses"
+		}
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
@@ -1389,17 +1399,26 @@ func (s *AccountTestService) buildGeminiAPIKeyRequest(ctx context.Context, accou
 		return nil, err
 	}
 
-	// Use streamGenerateContent for real-time feedback
-	fullURL := fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?alt=sse",
-		strings.TrimRight(normalizedBaseURL, "/"), modelID)
+	fullURL := normalizedBaseURL
+	requestBody := payload
+	if account.ShouldAppendAPIPath() {
+		// Use streamGenerateContent for real-time feedback
+		fullURL = fmt.Sprintf("%s/v1beta/models/%s:streamGenerateContent?alt=sse",
+			strings.TrimRight(normalizedBaseURL, "/"), modelID)
+	} else {
+		requestBody = buildGeminiDirectGatewayPayload(payload, modelID, true)
+	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", fullURL, bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, "POST", fullURL, bytes.NewReader(requestBody))
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-goog-api-key", apiKey)
+	if account.UseDirectEndpointMode() {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
 
 	return req, nil
 }
@@ -1525,6 +1544,24 @@ func createGeminiTestPayload(modelID string, prompt string) []byte {
 	}
 	bytes, _ := json.Marshal(payload)
 	return bytes
+}
+
+func buildGeminiDirectGatewayPayload(payload []byte, modelID string, stream bool) []byte {
+	var body map[string]any
+	if err := json.Unmarshal(payload, &body); err != nil {
+		return payload
+	}
+	if strings.TrimSpace(modelID) != "" {
+		body["model"] = modelID
+	}
+	if stream {
+		body["stream"] = true
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return payload
+	}
+	return encoded
 }
 
 // processGeminiStream processes SSE stream from Gemini API

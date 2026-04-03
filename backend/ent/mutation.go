@@ -12543,6 +12543,7 @@ type PromoCodeMutation struct {
 	typ                  string
 	id                   *int64
 	code                 *string
+	scene                *string
 	bonus_amount         *float64
 	addbonus_amount      *float64
 	max_uses             *int
@@ -12551,6 +12552,7 @@ type PromoCodeMutation struct {
 	addused_count        *int
 	status               *string
 	expires_at           *time.Time
+	success_message      *string
 	notes                *string
 	created_at           *time.Time
 	updated_at           *time.Time
@@ -12695,6 +12697,42 @@ func (m *PromoCodeMutation) OldCode(ctx context.Context) (v string, err error) {
 // ResetCode resets all changes to the "code" field.
 func (m *PromoCodeMutation) ResetCode() {
 	m.code = nil
+}
+
+// SetScene sets the "scene" field.
+func (m *PromoCodeMutation) SetScene(s string) {
+	m.scene = &s
+}
+
+// Scene returns the value of the "scene" field in the mutation.
+func (m *PromoCodeMutation) Scene() (r string, exists bool) {
+	v := m.scene
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScene returns the old "scene" field's value of the PromoCode entity.
+// If the PromoCode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PromoCodeMutation) OldScene(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScene is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScene requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScene: %w", err)
+	}
+	return oldValue.Scene, nil
+}
+
+// ResetScene resets all changes to the "scene" field.
+func (m *PromoCodeMutation) ResetScene() {
+	m.scene = nil
 }
 
 // SetBonusAmount sets the "bonus_amount" field.
@@ -12950,6 +12988,55 @@ func (m *PromoCodeMutation) ResetExpiresAt() {
 	delete(m.clearedFields, promocode.FieldExpiresAt)
 }
 
+// SetSuccessMessage sets the "success_message" field.
+func (m *PromoCodeMutation) SetSuccessMessage(s string) {
+	m.success_message = &s
+}
+
+// SuccessMessage returns the value of the "success_message" field in the mutation.
+func (m *PromoCodeMutation) SuccessMessage() (r string, exists bool) {
+	v := m.success_message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSuccessMessage returns the old "success_message" field's value of the PromoCode entity.
+// If the PromoCode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PromoCodeMutation) OldSuccessMessage(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSuccessMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSuccessMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSuccessMessage: %w", err)
+	}
+	return oldValue.SuccessMessage, nil
+}
+
+// ClearSuccessMessage clears the value of the "success_message" field.
+func (m *PromoCodeMutation) ClearSuccessMessage() {
+	m.success_message = nil
+	m.clearedFields[promocode.FieldSuccessMessage] = struct{}{}
+}
+
+// SuccessMessageCleared returns if the "success_message" field was cleared in this mutation.
+func (m *PromoCodeMutation) SuccessMessageCleared() bool {
+	_, ok := m.clearedFields[promocode.FieldSuccessMessage]
+	return ok
+}
+
+// ResetSuccessMessage resets all changes to the "success_message" field.
+func (m *PromoCodeMutation) ResetSuccessMessage() {
+	m.success_message = nil
+	delete(m.clearedFields, promocode.FieldSuccessMessage)
+}
+
 // SetNotes sets the "notes" field.
 func (m *PromoCodeMutation) SetNotes(s string) {
 	m.notes = &s
@@ -13159,9 +13246,12 @@ func (m *PromoCodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PromoCodeMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 11)
 	if m.code != nil {
 		fields = append(fields, promocode.FieldCode)
+	}
+	if m.scene != nil {
+		fields = append(fields, promocode.FieldScene)
 	}
 	if m.bonus_amount != nil {
 		fields = append(fields, promocode.FieldBonusAmount)
@@ -13177,6 +13267,9 @@ func (m *PromoCodeMutation) Fields() []string {
 	}
 	if m.expires_at != nil {
 		fields = append(fields, promocode.FieldExpiresAt)
+	}
+	if m.success_message != nil {
+		fields = append(fields, promocode.FieldSuccessMessage)
 	}
 	if m.notes != nil {
 		fields = append(fields, promocode.FieldNotes)
@@ -13197,6 +13290,8 @@ func (m *PromoCodeMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case promocode.FieldCode:
 		return m.Code()
+	case promocode.FieldScene:
+		return m.Scene()
 	case promocode.FieldBonusAmount:
 		return m.BonusAmount()
 	case promocode.FieldMaxUses:
@@ -13207,6 +13302,8 @@ func (m *PromoCodeMutation) Field(name string) (ent.Value, bool) {
 		return m.Status()
 	case promocode.FieldExpiresAt:
 		return m.ExpiresAt()
+	case promocode.FieldSuccessMessage:
+		return m.SuccessMessage()
 	case promocode.FieldNotes:
 		return m.Notes()
 	case promocode.FieldCreatedAt:
@@ -13224,6 +13321,8 @@ func (m *PromoCodeMutation) OldField(ctx context.Context, name string) (ent.Valu
 	switch name {
 	case promocode.FieldCode:
 		return m.OldCode(ctx)
+	case promocode.FieldScene:
+		return m.OldScene(ctx)
 	case promocode.FieldBonusAmount:
 		return m.OldBonusAmount(ctx)
 	case promocode.FieldMaxUses:
@@ -13234,6 +13333,8 @@ func (m *PromoCodeMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldStatus(ctx)
 	case promocode.FieldExpiresAt:
 		return m.OldExpiresAt(ctx)
+	case promocode.FieldSuccessMessage:
+		return m.OldSuccessMessage(ctx)
 	case promocode.FieldNotes:
 		return m.OldNotes(ctx)
 	case promocode.FieldCreatedAt:
@@ -13255,6 +13356,13 @@ func (m *PromoCodeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCode(v)
+		return nil
+	case promocode.FieldScene:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScene(v)
 		return nil
 	case promocode.FieldBonusAmount:
 		v, ok := value.(float64)
@@ -13290,6 +13398,13 @@ func (m *PromoCodeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetExpiresAt(v)
+		return nil
+	case promocode.FieldSuccessMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSuccessMessage(v)
 		return nil
 	case promocode.FieldNotes:
 		v, ok := value.(string)
@@ -13384,6 +13499,9 @@ func (m *PromoCodeMutation) ClearedFields() []string {
 	if m.FieldCleared(promocode.FieldExpiresAt) {
 		fields = append(fields, promocode.FieldExpiresAt)
 	}
+	if m.FieldCleared(promocode.FieldSuccessMessage) {
+		fields = append(fields, promocode.FieldSuccessMessage)
+	}
 	if m.FieldCleared(promocode.FieldNotes) {
 		fields = append(fields, promocode.FieldNotes)
 	}
@@ -13404,6 +13522,9 @@ func (m *PromoCodeMutation) ClearField(name string) error {
 	case promocode.FieldExpiresAt:
 		m.ClearExpiresAt()
 		return nil
+	case promocode.FieldSuccessMessage:
+		m.ClearSuccessMessage()
+		return nil
 	case promocode.FieldNotes:
 		m.ClearNotes()
 		return nil
@@ -13417,6 +13538,9 @@ func (m *PromoCodeMutation) ResetField(name string) error {
 	switch name {
 	case promocode.FieldCode:
 		m.ResetCode()
+		return nil
+	case promocode.FieldScene:
+		m.ResetScene()
 		return nil
 	case promocode.FieldBonusAmount:
 		m.ResetBonusAmount()
@@ -13432,6 +13556,9 @@ func (m *PromoCodeMutation) ResetField(name string) error {
 		return nil
 	case promocode.FieldExpiresAt:
 		m.ResetExpiresAt()
+		return nil
+	case promocode.FieldSuccessMessage:
+		m.ResetSuccessMessage()
 		return nil
 	case promocode.FieldNotes:
 		m.ResetNotes()

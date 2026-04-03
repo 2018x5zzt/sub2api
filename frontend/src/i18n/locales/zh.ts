@@ -330,6 +330,7 @@ export default {
     dashboard: '仪表盘',
     announcements: '公告',
     apiKeys: 'API 密钥',
+    modelHub: '模型广场',
     usage: '使用记录',
     redeem: '兑换',
     profile: '个人资料',
@@ -341,6 +342,7 @@ export default {
     redeemCodes: '兑换码',
     ops: '运维监控',
     promoCodes: '优惠码',
+    benefitCodes: '福利码',
     settings: '系统设置',
     myAccount: '我的账户',
     lightMode: '浅色模式',
@@ -697,6 +699,37 @@ export default {
     }
   },
 
+  modelHub: {
+    eyebrow: '按分组查看模型',
+    title: '模型广场',
+    description: '查看当前账号可访问分组下支持的模型，并直接复制模型名称用于客户端或脚本配置。',
+    searchLabel: '搜索',
+    searchPlaceholder: '搜索模型名、显示名或分组名',
+    platformFilterLabel: '平台筛选',
+    groupFilterLabel: '分组筛选',
+    allPlatforms: '全部平台',
+    allGroups: '全部分组',
+    groupsLabel: '可用分组',
+    uniqueModelsLabel: '去重模型',
+    visibleModelsLabel: '当前可见模型',
+    platformsLabel: '覆盖平台',
+    sourceDefault: '平台默认模型',
+    sourceMapping: '按账号映射聚合',
+    sourceMixed: '默认模型 + 账号映射',
+    copyVisible: '复制当前结果',
+    copyGroup: '复制本组模型',
+    copiedModel: '已复制模型名称',
+    copiedGroup: '已复制本组模型',
+    copiedVisible: '已复制当前筛选结果',
+    modelCount: '{count} 个模型',
+    clearFilters: '清空筛选',
+    emptyTitle: '没有可展示的模型',
+    emptyDescription: '当前筛选条件下没有匹配的分组或模型。',
+    noModelsInGroup: '这个分组当前没有可展示的模型。',
+    loadFailedTitle: '模型列表加载失败',
+    loadFailedDescription: '请稍后刷新重试。'
+  },
+
   // Usage
   usage: {
     title: '使用记录',
@@ -816,7 +849,9 @@ export default {
     codeRedeemSuccess: '兑换成功！',
     failedToRedeem: '兑换失败，请检查兑换码后重试。',
     subscriptionRefreshFailed: '兑换成功，但订阅状态刷新失败。',
-    pleaseEnterCode: '请输入兑换码'
+    pleaseEnterCode: '请输入兑换码',
+    benefitDialogTitle: '福利到账',
+    benefitDialogSubtitle: '这是给你的额外留言'
   },
 
   // Profile
@@ -2314,9 +2349,13 @@ export default {
       setupTokenLongLived: 'Setup Token（长期有效）',
       baseUrl: 'Base URL',
       baseUrlHint: '留空使用官方 Anthropic API',
+      pleaseEnterBaseUrl: '请输入 Base URL',
       apiKeyRequired: 'API Key *',
       apiKeyPlaceholder: 'sk-ant-api03-...',
       apiKeyHint: '您的 Claude Console API Key',
+      appendApiPath: '自动追加平台路径',
+      appendApiPathHint:
+        '开启后会自动补 /v1/messages、/v1/responses 或 Gemini 模型路径。关闭后会把 Base URL 当作完整固定端点直连，并额外附加 Authorization: Bearer，适用于 AI Gateway。',
       // OpenAI specific hints
       openai: {
         baseUrlHint: '留空使用官方 OpenAI API',
@@ -3381,6 +3420,62 @@ export default {
       failedToUpdate: '更新优惠码失败',
       failedToDelete: '删除优惠码失败',
       failedToLoadUsages: '加载使用记录失败'
+    },
+
+    benefit: {
+      title: '福利码管理',
+      description: '创建和管理面向已注册用户的福利码',
+      createCode: '创建福利码',
+      editCode: '编辑福利码',
+      deleteCode: '删除福利码',
+      searchCodes: '搜索福利码...',
+      allStatus: '全部状态',
+      columns: {
+        code: '福利码',
+        bonusAmount: '赠送金额',
+        maxUses: '最大兑换人数',
+        usedCount: '已兑换',
+        usage: '兑换量',
+        status: '状态',
+        expiresAt: '过期时间',
+        createdAt: '创建时间',
+        actions: '操作'
+      },
+      code: '福利码',
+      autoGenerate: '留空自动生成',
+      codePlaceholder: '输入福利码或留空',
+      bonusAmount: '赠送金额 ($)',
+      maxUses: '最大兑换人数',
+      zeroUnlimited: '0 = 无限制',
+      expiresAt: '过期时间',
+      successMessage: '成功弹窗文案',
+      successMessagePlaceholder: '例如：感谢你的支持，祝你使用愉快。',
+      notes: '内部备注',
+      notesPlaceholder: '仅管理员可见的备注信息',
+      status: '状态',
+      neverExpires: '永不过期',
+      statusActive: '启用',
+      statusDisabled: '禁用',
+      statusExpired: '已过期',
+      statusMaxUsed: '已兑完',
+      usageRecords: '兑换记录',
+      viewUsages: '查看兑换记录',
+      noUsages: '暂无兑换记录',
+      userPrefix: '用户 #{id}',
+      copied: '已复制！',
+      noCodesYet: '暂无福利码',
+      createFirstCode: '创建您的第一个福利码，为已注册用户发放额度福利。',
+      codeCreated: '福利码创建成功',
+      codeUpdated: '福利码更新成功',
+      codeDeleted: '福利码删除成功',
+      deleteCodeConfirm: '确定要删除此福利码吗？此操作无法撤销。',
+      copyRegisterLink: '复制注册链接',
+      registerLinkCopied: '注册链接已复制到剪贴板',
+      failedToLoad: '加载福利码失败',
+      failedToCreate: '创建福利码失败',
+      failedToUpdate: '更新福利码失败',
+      failedToDelete: '删除福利码失败',
+      failedToLoadUsages: '加载兑换记录失败'
     },
 
     // Usage Records

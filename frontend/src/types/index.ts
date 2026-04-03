@@ -428,6 +428,19 @@ export interface AdminGroup extends Group {
   sort_order: number
 }
 
+export interface SupportedModel {
+  id: string
+  display_name: string
+}
+
+export type GroupModelCatalogSource = 'default' | 'mapping' | 'mixed'
+
+export interface GroupModelCatalog {
+  group: Group
+  models: SupportedModel[]
+  source: GroupModelCatalogSource
+}
+
 export interface ApiKey {
   id: number
   user_id: number
@@ -1495,14 +1508,18 @@ export interface UserAttributeValuesMap {
 
 // ==================== Promo Code Types ====================
 
+export type PromoCodeScene = 'register' | 'benefit'
+
 export interface PromoCode {
   id: number
   code: string
+  scene: PromoCodeScene
   bonus_amount: number
   max_uses: number
   used_count: number
   status: 'active' | 'disabled'
   expires_at: string | null
+  success_message: string | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -1519,9 +1536,11 @@ export interface PromoCodeUsage {
 
 export interface CreatePromoCodeRequest {
   code?: string
+  scene?: PromoCodeScene
   bonus_amount: number
   max_uses?: number
   expires_at?: number | null
+  success_message?: string
   notes?: string
 }
 
@@ -1531,6 +1550,7 @@ export interface UpdatePromoCodeRequest {
   max_uses?: number
   status?: 'active' | 'disabled'
   expires_at?: number | null
+  success_message?: string
   notes?: string
 }
 

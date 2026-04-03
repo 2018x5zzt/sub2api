@@ -106,6 +106,17 @@ type Group struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type SupportedModel struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+}
+
+type GroupModelCatalog struct {
+	Group  Group            `json:"group"`
+	Models []SupportedModel `json:"models"`
+	Source string           `json:"source"`
+}
+
 // AdminGroup 是管理员接口使用的 group DTO（包含敏感/内部字段）。
 // 注意：普通用户接口不得返回 model_routing/account_count/account_groups 等内部信息。
 type AdminGroup struct {
@@ -502,16 +513,18 @@ type BulkAssignResult struct {
 
 // PromoCode 注册优惠码
 type PromoCode struct {
-	ID          int64      `json:"id"`
-	Code        string     `json:"code"`
-	BonusAmount float64    `json:"bonus_amount"`
-	MaxUses     int        `json:"max_uses"`
-	UsedCount   int        `json:"used_count"`
-	Status      string     `json:"status"`
-	ExpiresAt   *time.Time `json:"expires_at"`
-	Notes       string     `json:"notes"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID             int64      `json:"id"`
+	Code           string     `json:"code"`
+	Scene          string     `json:"scene"`
+	BonusAmount    float64    `json:"bonus_amount"`
+	MaxUses        int        `json:"max_uses"`
+	UsedCount      int        `json:"used_count"`
+	Status         string     `json:"status"`
+	ExpiresAt      *time.Time `json:"expires_at"`
+	SuccessMessage string     `json:"success_message"`
+	Notes          string     `json:"notes"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // PromoCodeUsage 优惠码使用记录

@@ -4874,7 +4874,10 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 		if err != nil {
 			return nil, err
 		}
-		targetURL = validatedURL + "/v1/messages?beta=true"
+		targetURL = validatedURL
+		if account.ShouldAppendAPIPath() {
+			targetURL = validatedURL + "/v1/messages?beta=true"
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
@@ -4896,10 +4899,13 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 	}
 
 	// 覆盖入站鉴权残留，并注入上游认证
-	req.Header.Del("authorization")
-	req.Header.Del("x-api-key")
-	req.Header.Del("x-goog-api-key")
-	req.Header.Del("cookie")
+req.Header.Del("authorization")
+req.Header.Del("x-api-key")
+req.Header.Del("x-goog-api-key")
+req.Header.Del("cookie")
+	if account.UseDirectEndpointMode() {
+		setHeaderRaw(req.Header, "authorization", "Bearer "+token)
+	}
 	setHeaderRaw(req.Header, "x-api-key", token)
 
 	if getHeaderRaw(req.Header, "content-type") == "" {
@@ -5631,7 +5637,10 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 			if err != nil {
 				return nil, err
 			}
-			targetURL = validatedURL + "/v1/messages?beta=true"
+			targetURL = validatedURL
+			if account.ShouldAppendAPIPath() {
+				targetURL = validatedURL + "/v1/messages?beta=true"
+			}
 		}
 	} else if account.IsCustomBaseURLEnabled() {
 		customURL := account.GetCustomBaseURL()
@@ -5690,6 +5699,9 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	if tokenType == "oauth" {
 		setHeaderRaw(req.Header, "authorization", "Bearer "+token)
 	} else {
+		if account.UseDirectEndpointMode() {
+			setHeaderRaw(req.Header, "authorization", "Bearer "+token)
+		}
 		setHeaderRaw(req.Header, "x-api-key", token)
 	}
 
@@ -8321,7 +8333,10 @@ func (s *GatewayService) buildCountTokensRequestAnthropicAPIKeyPassthrough(
 		if err != nil {
 			return nil, err
 		}
-		targetURL = validatedURL + "/v1/messages/count_tokens?beta=true"
+		targetURL = validatedURL
+		if account.ShouldAppendAPIPath() {
+			targetURL = validatedURL + "/v1/messages/count_tokens?beta=true"
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
@@ -8346,6 +8361,9 @@ func (s *GatewayService) buildCountTokensRequestAnthropicAPIKeyPassthrough(
 	req.Header.Del("x-api-key")
 	req.Header.Del("x-goog-api-key")
 	req.Header.Del("cookie")
+	if account.UseDirectEndpointMode() {
+		req.Header.Set("authorization", "Bearer "+token)
+	}
 	req.Header.Set("x-api-key", token)
 
 	if req.Header.Get("content-type") == "" {
@@ -8369,7 +8387,10 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 			if err != nil {
 				return nil, err
 			}
-			targetURL = validatedURL + "/v1/messages/count_tokens?beta=true"
+			targetURL = validatedURL
+			if account.ShouldAppendAPIPath() {
+				targetURL = validatedURL + "/v1/messages/count_tokens?beta=true"
+			}
 		}
 	} else if account.IsCustomBaseURLEnabled() {
 		customURL := account.GetCustomBaseURL()

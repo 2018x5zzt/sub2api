@@ -96,3 +96,95 @@ func TestHasItemReferenceForCallIDs(t *testing.T) {
 	require.True(t, HasItemReferenceForCallIDs(req, []string{"call_1", "call_2"}))
 	require.False(t, HasItemReferenceForCallIDs(req, []string{"call_1", "call_3"}))
 }
+
+func TestNeedsFunctionCallOutputHistoryInference(t *testing.T) {
+	cases := []struct {
+		name string
+		body map[string]any
+		want bool
+	}{
+		{
+			name: "bare_function_call_output",
+			body: map[string]any{
+				"input": []any{
+					map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "ok"},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "has_previous_response_id",
+			body: map[string]any{
+				"previous_response_id": "resp_1",
+				"input": []any{
+					map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "ok"},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "has_tool_call_context",
+			body: map[string]any{
+				"input": []any{
+					map[string]any{"type": "tool_call", "call_id": "call_1"},
+					map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "ok"},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "has_item_reference_for_all_calls",
+			body: map[string]any{
+				"input": []any{
+					map[string]any{"type": "item_reference", "id": "call_1"},
+					map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "ok"},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "missing_call_id_still_invalid",
+			body: map[string]any{
+				"input": []any{
+					map[string]any{"type": "function_call_output", "output": "ok"},
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, NeedsFunctionCallOutputHistoryInference(tt.body))
+		})
+	}
+}
+
+func TestResolveOpenAIResponsesRequiredTransport(t *testing.T) {
+	reqBody := map[string]any{
+		"input": []any{
+			map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "ok"},
+		},
+	}
+
+	require.Equal(
+		t,
+		OpenAIUpstreamTransportResponsesWebsocketV2,
+		ResolveOpenAIResponsesRequiredTransport(reqBody, "session_hash_1"),
+	)
+	require.Equal(
+		t,
+		OpenAIUpstreamTransportAny,
+		ResolveOpenAIResponsesRequiredTransport(reqBody, ""),
+	)
+	require.Equal(
+		t,
+		OpenAIUpstreamTransportAny,
+		ResolveOpenAIResponsesRequiredTransport(map[string]any{
+			"previous_response_id": "resp_1",
+			"input": []any{
+				map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "ok"},
+			},
+		}, "session_hash_1"),
+	)
+}

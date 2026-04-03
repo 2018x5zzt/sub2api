@@ -2427,6 +2427,32 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		})
 		return nil, fmt.Errorf("upstream request failed: %s", safeErr)
 	}
+	if resp == nil || resp.Body == nil {
+		upstreamRequestID := ""
+		upstreamStatusCode := 0
+		if resp != nil {
+			upstreamStatusCode = resp.StatusCode
+			upstreamRequestID = strings.TrimSpace(resp.Header.Get("x-request-id"))
+		}
+		setOpsUpstreamError(c, http.StatusBadGateway, "upstream returned empty response", "")
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			Platform:           account.Platform,
+			AccountID:          account.ID,
+			AccountName:        account.Name,
+			UpstreamStatusCode: upstreamStatusCode,
+			UpstreamRequestID:  upstreamRequestID,
+			Passthrough:        true,
+			Kind:               "request_error",
+			Message:            "upstream returned empty response",
+		})
+		c.JSON(http.StatusBadGateway, gin.H{
+			"error": gin.H{
+				"type":    "upstream_error",
+				"message": "Upstream returned empty response",
+			},
+		})
+		return nil, errors.New("upstream request failed: empty response")
+	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
@@ -2444,7 +2470,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		usage = result.usage
 		firstTokenMs = result.firstTokenMs
 	} else {
-		usage, err = s.handleNonStreamingResponsePassthrough(ctx, resp, c)
+		usage, err = s.handleNonStreamingResponsePassthrough(ctx, resp, c, account)
 		if err != nil {
 			return nil, err
 		}
@@ -2520,10 +2546,15 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 			if err != nil {
 				return nil, err
 			}
-			targetURL = buildOpenAIResponsesURL(validatedURL)
+			targetURL = validatedURL
+			if account.ShouldAppendAPIPath() {
+				targetURL = buildOpenAIResponsesURL(validatedURL)
+			}
 		}
 	}
-	targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
+	if account.ShouldAppendAPIPath() {
+		targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -2818,6 +2849,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	ctx context.Context,
 	resp *http.Response,
 	c *gin.Context,
+	account *Account,
 ) (*OpenAIUsage, error) {
 	maxBytes := resolveUpstreamResponseReadLimit(s.cfg)
 	body, err := readUpstreamResponseBodyLimited(resp.Body, maxBytes)
@@ -2832,6 +2864,26 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 			})
 		}
 		return nil, err
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		setOpsUpstreamError(c, http.StatusBadGateway, "upstream returned empty response", "")
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			Platform:           account.Platform,
+			AccountID:          account.ID,
+			AccountName:        account.Name,
+			UpstreamStatusCode: resp.StatusCode,
+			UpstreamRequestID:  resp.Header.Get("x-request-id"),
+			Passthrough:        true,
+			Kind:               "request_error",
+			Message:            "upstream returned empty response",
+		})
+		c.JSON(http.StatusBadGateway, gin.H{
+			"error": gin.H{
+				"type":    "upstream_error",
+				"message": "Upstream returned empty response",
+			},
+		})
+		return nil, errors.New("upstream request failed: empty response")
 	}
 
 	usage := &OpenAIUsage{}
@@ -2922,12 +2974,17 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 			if err != nil {
 				return nil, err
 			}
-			targetURL = buildOpenAIResponsesURL(validatedURL)
+			targetURL = validatedURL
+			if account.ShouldAppendAPIPath() {
+				targetURL = buildOpenAIResponsesURL(validatedURL)
+			}
 		}
 	default:
 		targetURL = openaiPlatformAPIURL
 	}
-	targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
+	if account.ShouldAppendAPIPath() {
+		targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
+	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
 	if err != nil {

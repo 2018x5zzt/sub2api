@@ -74,6 +74,22 @@ func TestLoadDefaultSchedulingConfig(t *testing.T) {
 	if cfg.Gateway.Scheduling.SlotCleanupInterval != 30*time.Second {
 		t.Fatalf("SlotCleanupInterval = %v, want 30s", cfg.Gateway.Scheduling.SlotCleanupInterval)
 	}
+	if cfg.Concurrency.UserSlotWaitTimeout != 30*time.Second {
+		t.Fatalf("UserSlotWaitTimeout = %v, want 30s", cfg.Concurrency.UserSlotWaitTimeout)
+	}
+}
+
+func TestLoadConcurrencyAndSchedulingOverridesFromEnv(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("CONCURRENCY_USER_SLOT_WAIT_TIMEOUT", "2s")
+	t.Setenv("GATEWAY_SCHEDULING_FALLBACK_WAIT_TIMEOUT", "7s")
+	t.Setenv("GATEWAY_SCHEDULING_DB_FALLBACK_ENABLED", "false")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, 2*time.Second, cfg.Concurrency.UserSlotWaitTimeout)
+	require.Equal(t, 7*time.Second, cfg.Gateway.Scheduling.FallbackWaitTimeout)
+	require.False(t, cfg.Gateway.Scheduling.DbFallbackEnabled)
 }
 
 func TestLoadDefaultOpenAIWSConfig(t *testing.T) {
@@ -736,6 +752,23 @@ func TestValidateConcurrencyPingInterval(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "concurrency.ping_interval") {
 		t.Fatalf("Validate() expected concurrency.ping_interval error, got: %v", err)
+	}
+}
+
+func TestValidateConcurrencyUserSlotWaitTimeout(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	cfg.Concurrency.UserSlotWaitTimeout = 0
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatalf("Validate() expected error for concurrency.user_slot_wait_timeout")
+	}
+	if !strings.Contains(err.Error(), "concurrency.user_slot_wait_timeout") {
+		t.Fatalf("Validate() expected concurrency.user_slot_wait_timeout error, got: %v", err)
 	}
 }
 

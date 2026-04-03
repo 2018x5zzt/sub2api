@@ -43,6 +43,20 @@ func (_u *PromoCodeUpdate) SetNillableCode(v *string) *PromoCodeUpdate {
 	return _u
 }
 
+// SetScene sets the "scene" field.
+func (_u *PromoCodeUpdate) SetScene(v string) *PromoCodeUpdate {
+	_u.mutation.SetScene(v)
+	return _u
+}
+
+// SetNillableScene sets the "scene" field if the given value is not nil.
+func (_u *PromoCodeUpdate) SetNillableScene(v *string) *PromoCodeUpdate {
+	if v != nil {
+		_u.SetScene(*v)
+	}
+	return _u
+}
+
 // SetBonusAmount sets the "bonus_amount" field.
 func (_u *PromoCodeUpdate) SetBonusAmount(v float64) *PromoCodeUpdate {
 	_u.mutation.ResetBonusAmount()
@@ -137,6 +151,26 @@ func (_u *PromoCodeUpdate) SetNillableExpiresAt(v *time.Time) *PromoCodeUpdate {
 // ClearExpiresAt clears the value of the "expires_at" field.
 func (_u *PromoCodeUpdate) ClearExpiresAt() *PromoCodeUpdate {
 	_u.mutation.ClearExpiresAt()
+	return _u
+}
+
+// SetSuccessMessage sets the "success_message" field.
+func (_u *PromoCodeUpdate) SetSuccessMessage(v string) *PromoCodeUpdate {
+	_u.mutation.SetSuccessMessage(v)
+	return _u
+}
+
+// SetNillableSuccessMessage sets the "success_message" field if the given value is not nil.
+func (_u *PromoCodeUpdate) SetNillableSuccessMessage(v *string) *PromoCodeUpdate {
+	if v != nil {
+		_u.SetSuccessMessage(*v)
+	}
+	return _u
+}
+
+// ClearSuccessMessage clears the value of the "success_message" field.
+func (_u *PromoCodeUpdate) ClearSuccessMessage() *PromoCodeUpdate {
+	_u.mutation.ClearSuccessMessage()
 	return _u
 }
 
@@ -250,6 +284,11 @@ func (_u *PromoCodeUpdate) check() error {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "PromoCode.code": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Scene(); ok {
+		if err := promocode.SceneValidator(v); err != nil {
+			return &ValidationError{Name: "scene", err: fmt.Errorf(`ent: validator failed for field "PromoCode.scene": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := promocode.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "PromoCode.status": %w`, err)}
@@ -272,6 +311,9 @@ func (_u *PromoCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Code(); ok {
 		_spec.SetField(promocode.FieldCode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Scene(); ok {
+		_spec.SetField(promocode.FieldScene, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.BonusAmount(); ok {
 		_spec.SetField(promocode.FieldBonusAmount, field.TypeFloat64, value)
@@ -299,6 +341,12 @@ func (_u *PromoCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ExpiresAtCleared() {
 		_spec.ClearField(promocode.FieldExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.SuccessMessage(); ok {
+		_spec.SetField(promocode.FieldSuccessMessage, field.TypeString, value)
+	}
+	if _u.mutation.SuccessMessageCleared() {
+		_spec.ClearField(promocode.FieldSuccessMessage, field.TypeString)
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(promocode.FieldNotes, field.TypeString, value)
@@ -384,6 +432,20 @@ func (_u *PromoCodeUpdateOne) SetCode(v string) *PromoCodeUpdateOne {
 func (_u *PromoCodeUpdateOne) SetNillableCode(v *string) *PromoCodeUpdateOne {
 	if v != nil {
 		_u.SetCode(*v)
+	}
+	return _u
+}
+
+// SetScene sets the "scene" field.
+func (_u *PromoCodeUpdateOne) SetScene(v string) *PromoCodeUpdateOne {
+	_u.mutation.SetScene(v)
+	return _u
+}
+
+// SetNillableScene sets the "scene" field if the given value is not nil.
+func (_u *PromoCodeUpdateOne) SetNillableScene(v *string) *PromoCodeUpdateOne {
+	if v != nil {
+		_u.SetScene(*v)
 	}
 	return _u
 }
@@ -482,6 +544,26 @@ func (_u *PromoCodeUpdateOne) SetNillableExpiresAt(v *time.Time) *PromoCodeUpdat
 // ClearExpiresAt clears the value of the "expires_at" field.
 func (_u *PromoCodeUpdateOne) ClearExpiresAt() *PromoCodeUpdateOne {
 	_u.mutation.ClearExpiresAt()
+	return _u
+}
+
+// SetSuccessMessage sets the "success_message" field.
+func (_u *PromoCodeUpdateOne) SetSuccessMessage(v string) *PromoCodeUpdateOne {
+	_u.mutation.SetSuccessMessage(v)
+	return _u
+}
+
+// SetNillableSuccessMessage sets the "success_message" field if the given value is not nil.
+func (_u *PromoCodeUpdateOne) SetNillableSuccessMessage(v *string) *PromoCodeUpdateOne {
+	if v != nil {
+		_u.SetSuccessMessage(*v)
+	}
+	return _u
+}
+
+// ClearSuccessMessage clears the value of the "success_message" field.
+func (_u *PromoCodeUpdateOne) ClearSuccessMessage() *PromoCodeUpdateOne {
+	_u.mutation.ClearSuccessMessage()
 	return _u
 }
 
@@ -608,6 +690,11 @@ func (_u *PromoCodeUpdateOne) check() error {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "PromoCode.code": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Scene(); ok {
+		if err := promocode.SceneValidator(v); err != nil {
+			return &ValidationError{Name: "scene", err: fmt.Errorf(`ent: validator failed for field "PromoCode.scene": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := promocode.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "PromoCode.status": %w`, err)}
@@ -648,6 +735,9 @@ func (_u *PromoCodeUpdateOne) sqlSave(ctx context.Context) (_node *PromoCode, er
 	if value, ok := _u.mutation.Code(); ok {
 		_spec.SetField(promocode.FieldCode, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Scene(); ok {
+		_spec.SetField(promocode.FieldScene, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.BonusAmount(); ok {
 		_spec.SetField(promocode.FieldBonusAmount, field.TypeFloat64, value)
 	}
@@ -674,6 +764,12 @@ func (_u *PromoCodeUpdateOne) sqlSave(ctx context.Context) (_node *PromoCode, er
 	}
 	if _u.mutation.ExpiresAtCleared() {
 		_spec.ClearField(promocode.FieldExpiresAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.SuccessMessage(); ok {
+		_spec.SetField(promocode.FieldSuccessMessage, field.TypeString, value)
+	}
+	if _u.mutation.SuccessMessageCleared() {
+		_spec.ClearField(promocode.FieldSuccessMessage, field.TypeString)
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(promocode.FieldNotes, field.TypeString, value)

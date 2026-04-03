@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from './client'
-import type { RedeemCodeRequest } from '@/types'
+import type { PromoCodeScene, RedeemCodeRequest } from '@/types'
 
 export interface RedeemHistoryItem {
   id: number
@@ -34,8 +34,12 @@ export async function redeem(code: string): Promise<{
   message: string
   type: string
   value: number
+  scene?: PromoCodeScene
+  success_message?: string
   new_balance?: number
   new_concurrency?: number
+  group_name?: string
+  validity_days?: number
 }> {
   const payload: RedeemCodeRequest = { code }
 
@@ -43,8 +47,12 @@ export async function redeem(code: string): Promise<{
     message: string
     type: string
     value: number
+    scene?: PromoCodeScene
+    success_message?: string
     new_balance?: number
     new_concurrency?: number
+    group_name?: string
+    validity_days?: number
   }>('/redeem', payload)
 
   return data

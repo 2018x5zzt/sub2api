@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from './client'
-import type { Group } from '@/types'
+import type { Group, GroupModelCatalog } from '@/types'
 
 /**
  * Get available groups that the current user can bind to API keys
@@ -19,6 +19,15 @@ export async function getAvailable(): Promise<Group[]> {
 }
 
 /**
+ * Get model catalogs for the current user's available groups
+ * @returns Group model catalogs
+ */
+export async function getModels(): Promise<GroupModelCatalog[]> {
+  const { data } = await apiClient.get<GroupModelCatalog[]>('/groups/models')
+  return data
+}
+
+/**
  * Get current user's custom group rate multipliers
  * @returns Map of group_id to custom rate_multiplier
  */
@@ -29,6 +38,7 @@ export async function getUserGroupRates(): Promise<Record<number, number>> {
 
 export const userGroupsAPI = {
   getAvailable,
+  getModels,
   getUserGroupRates
 }
 
