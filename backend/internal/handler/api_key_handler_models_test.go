@@ -5,9 +5,11 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/stretchr/testify/require"
 )
 
 func TestCollectGroupModelIDs_ExpandsWildcardMappingSelectors(t *testing.T) {
@@ -116,4 +118,44 @@ func TestCollectGroupModelIDs_DefaultAccountsKeepDefaultsAlongsideMappedModels(t
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("mergeDefaultAndMappedModels() = %v, want %v", got, want)
 	}
+}
+
+func TestResolveGroupRateMultiplier_UsesUserOverride(t *testing.T) {
+	group := &service.Group{
+		ID:             42,
+		RateMultiplier: 1.8,
+	}
+
+	effective, userRate := resolveGroupRateMultiplier(group, map[int64]float64{
+		42: 1.25,
+	})
+
+	require.InDelta(t, 1.25, effective, 1e-12)
+	require.NotNil(t, userRate)
+	require.InDelta(t, 1.25, *userRate, 1e-12)
+}
+
+func TestSupportedModelPricingFromService_UsesEffectiveRateMultiplier(t *testing.T) {
+	h := NewAPIKeyHandler(nil, nil)
+	h.SetBillingService(service.NewBillingService(&config.Config{}, nil))
+
+	pricing := h.buildSupportedModelPricing("gpt-5.4", 1.5, map[string]cachedModelPricing{})
+	require.NotNil(t, pricing)
+	require.Equal(t, "USD", pricing.Currency)
+	require.NotNil(t, pricing.InputPricePerMillionTokens)
+	require.NotNil(t, pricing.OutputPricePerMillionTokens)
+	require.InDelta(t, 3.75, *pricing.InputPricePerMillionTokens, 1e-9)
+	require.InDelta(t, 22.5, *pricing.OutputPricePerMillionTokens, 1e-9)
+}
+
+func TestSupportedModelPricingFromService_ZeroMultiplierShowsZeroEffectivePrice(t *testing.T) {
+	h := NewAPIKeyHandler(nil, nil)
+	h.SetBillingService(service.NewBillingService(&config.Config{}, nil))
+
+	pricing := h.buildSupportedModelPricing("gpt-5.4-mini", 0, map[string]cachedModelPricing{})
+	require.NotNil(t, pricing)
+	require.NotNil(t, pricing.InputPricePerMillionTokens)
+	require.NotNil(t, pricing.OutputPricePerMillionTokens)
+	require.InDelta(t, 0, *pricing.InputPricePerMillionTokens, 1e-12)
+	require.InDelta(t, 0, *pricing.OutputPricePerMillionTokens, 1e-12)
 }

@@ -72,6 +72,17 @@ func ProvideSettingHandler(settingService *service.SettingService, buildInfo Bui
 	return NewSettingHandler(settingService, buildInfo.Version)
 }
 
+// ProvideAPIKeyHandler wires BillingService into APIKeyHandler for user-facing model pricing.
+func ProvideAPIKeyHandler(
+	apiKeyService *service.APIKeyService,
+	accountRepo service.AccountRepository,
+	billingService *service.BillingService,
+) *APIKeyHandler {
+	h := NewAPIKeyHandler(apiKeyService, accountRepo)
+	h.SetBillingService(billingService)
+	return h
+}
+
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	authHandler *AuthHandler,
@@ -114,7 +125,7 @@ var ProviderSet = wire.NewSet(
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,
-	NewAPIKeyHandler,
+	ProvideAPIKeyHandler,
 	NewUsageHandler,
 	NewRedeemHandler,
 	NewSubscriptionHandler,

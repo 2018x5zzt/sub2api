@@ -23,8 +23,9 @@ import (
 
 // APIKeyHandler handles API key-related requests
 type APIKeyHandler struct {
-	apiKeyService *service.APIKeyService
-	accountRepo   service.AccountRepository
+	apiKeyService  *service.APIKeyService
+	accountRepo    service.AccountRepository
+	billingService *service.BillingService
 }
 
 // NewAPIKeyHandler creates a new APIKeyHandler
@@ -33,6 +34,13 @@ func NewAPIKeyHandler(apiKeyService *service.APIKeyService, accountRepo service.
 		apiKeyService: apiKeyService,
 		accountRepo:   accountRepo,
 	}
+}
+
+func (h *APIKeyHandler) SetBillingService(billingService *service.BillingService) {
+	if h == nil {
+		return
+	}
+	h.billingService = billingService
 }
 
 // CreateAPIKeyRequest represents the create API key request payload
@@ -309,6 +317,13 @@ func (h *APIKeyHandler) GetAvailableGroupModels(c *gin.Context) {
 		return
 	}
 
+	userRates, err := h.apiKeyService.GetUserGroupRates(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	pricingCache := make(map[string]cachedModelPricing)
 	out := make([]dto.GroupModelCatalog, 0, len(groups))
 	for i := range groups {
 		models, source, err := h.getGroupSupportedModels(c.Request.Context(), &groups[i])
@@ -316,13 +331,109 @@ func (h *APIKeyHandler) GetAvailableGroupModels(c *gin.Context) {
 			response.ErrorFrom(c, err)
 			return
 		}
+
+		effectiveRateMultiplier, userRateMultiplier := resolveGroupRateMultiplier(&groups[i], userRates)
 		out = append(out, dto.GroupModelCatalog{
-			Group:  *dto.GroupFromService(&groups[i]),
-			Models: models,
-			Source: source,
+			Group:                   *dto.GroupFromService(&groups[i]),
+			Models:                  h.attachSupportedModelPricing(models, effectiveRateMultiplier, pricingCache),
+			Source:                  source,
+			EffectiveRateMultiplier: effectiveRateMultiplier,
+			UserRateMultiplier:      userRateMultiplier,
 		})
 	}
 	response.Success(c, out)
+}
+
+type cachedModelPricing struct {
+	pricing *service.ModelPricing
+	loaded  bool
+}
+
+func resolveGroupRateMultiplier(group *service.Group, userRates map[int64]float64) (float64, *float64) {
+	if group == nil {
+		return 1, nil
+	}
+
+	effective := group.RateMultiplier
+	if len(userRates) == 0 {
+		return effective, nil
+	}
+
+	userRate, ok := userRates[group.ID]
+	if !ok {
+		return effective, nil
+	}
+
+	rateCopy := userRate
+	return userRate, &rateCopy
+}
+
+func (h *APIKeyHandler) attachSupportedModelPricing(
+	models []dto.SupportedModel,
+	effectiveRateMultiplier float64,
+	pricingCache map[string]cachedModelPricing,
+) []dto.SupportedModel {
+	if len(models) == 0 {
+		return models
+	}
+
+	out := make([]dto.SupportedModel, 0, len(models))
+	for _, model := range models {
+		modelCopy := model
+		modelCopy.Pricing = h.buildSupportedModelPricing(model.ID, effectiveRateMultiplier, pricingCache)
+		out = append(out, modelCopy)
+	}
+	return out
+}
+
+func (h *APIKeyHandler) buildSupportedModelPricing(
+	modelID string,
+	effectiveRateMultiplier float64,
+	pricingCache map[string]cachedModelPricing,
+) *dto.SupportedModelPricing {
+	if h == nil || h.billingService == nil || modelID == "" {
+		return nil
+	}
+
+	entry, ok := pricingCache[modelID]
+	if !ok || !entry.loaded {
+		pricing, err := h.billingService.GetModelPricing(modelID)
+		if err == nil {
+			entry.pricing = pricing
+		}
+		entry.loaded = true
+		pricingCache[modelID] = entry
+	}
+
+	return supportedModelPricingFromService(entry.pricing, effectiveRateMultiplier)
+}
+
+func supportedModelPricingFromService(
+	pricing *service.ModelPricing,
+	effectiveRateMultiplier float64,
+) *dto.SupportedModelPricing {
+	if pricing == nil {
+		return nil
+	}
+
+	hasInput := pricing.InputPricePerToken > 0
+	hasOutput := pricing.OutputPricePerToken > 0
+	if !hasInput && !hasOutput {
+		return nil
+	}
+
+	const tokensPerMillion = 1_000_000.0
+
+	out := &dto.SupportedModelPricing{Currency: "USD"}
+	if hasInput {
+		v := pricing.InputPricePerToken * effectiveRateMultiplier * tokensPerMillion
+		out.InputPricePerMillionTokens = &v
+	}
+	if hasOutput {
+		v := pricing.OutputPricePerToken * effectiveRateMultiplier * tokensPerMillion
+		out.OutputPricePerMillionTokens = &v
+	}
+	return out
 }
 
 // GetUserGroupRates 获取当前用户的专属分组倍率配置
