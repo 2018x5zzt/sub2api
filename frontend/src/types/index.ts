@@ -543,8 +543,13 @@ export interface AdminGroup extends Group {
 export interface SupportedModel {
   id: string
   display_name: string
-  input_price_per_mtoken?: number
-  output_price_per_mtoken?: number
+  pricing?: SupportedModelPricing | null
+}
+
+export interface SupportedModelPricing {
+  currency: string
+  input_price_per_million_tokens?: number
+  output_price_per_million_tokens?: number
 }
 
 export type GroupModelCatalogSource = 'default' | 'mapping' | 'mixed'
@@ -553,6 +558,8 @@ export interface GroupModelCatalog {
   group: Group
   models: SupportedModel[]
   source: GroupModelCatalogSource
+  effective_rate_multiplier: number
+  user_rate_multiplier?: number | null
 }
 
 export interface ApiKey {

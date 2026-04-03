@@ -238,7 +238,7 @@
                         :platform="catalog.group.platform"
                         :subscription-type="catalog.group.subscription_type"
                         :rate-multiplier="catalog.group.rate_multiplier"
-                        :show-rate="false"
+                        :user-rate-multiplier="catalog.user_rate_multiplier ?? null"
                       />
                       <span class="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600 dark:bg-dark-700 dark:text-gray-300">
                         {{ getSourceLabel(catalog.source) }}
@@ -252,6 +252,9 @@
                       class="text-sm leading-6 text-gray-600 dark:text-gray-300"
                     >
                       {{ catalog.group.description }}
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('modelHub.pricingComputedWithRate', { rate: formatRateMultiplier(catalog.effective_rate_multiplier) }) }}
                     </p>
                   </div>
 
@@ -285,11 +288,11 @@
                     v-for="model in catalog.models"
                     :key="`${catalog.group.id}-${model.id}`"
                     type="button"
-                    class="group flex items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-sm dark:border-dark-600 dark:bg-dark-800 dark:hover:border-sky-500/60"
+                    class="group flex items-start justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-sm dark:border-dark-600 dark:bg-dark-800 dark:hover:border-sky-500/60"
                     @click="copyModel(model.id)"
                   >
-                    <div class="flex min-w-0 items-center gap-3">
-                      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 dark:bg-dark-700 dark:text-slate-200">
+                    <div class="flex min-w-0 items-start gap-3">
+                      <div class="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 dark:bg-dark-700 dark:text-slate-200">
                         <ModelIcon :model="model.id" size="20px" />
                       </div>
                       <div class="min-w-0">
@@ -299,28 +302,31 @@
                         <code class="mt-1 block truncate text-xs text-gray-500 dark:text-gray-400">
                           {{ model.id }}
                         </code>
+                        <div v-if="hasDisplayedPricing(model)" class="mt-2 flex flex-wrap gap-1.5">
+                          <span
+                            v-if="model.pricing?.input_price_per_million_tokens !== undefined"
+                            class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                          >
+                            {{ t('modelHub.inputPriceShort') }} {{ formatPerMillionPrice(model.pricing?.input_price_per_million_tokens) }}
+                          </span>
+                          <span
+                            v-if="model.pricing?.output_price_per_million_tokens !== undefined"
+                            class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                          >
+                            {{ t('modelHub.outputPriceShort') }} {{ formatPerMillionPrice(model.pricing?.output_price_per_million_tokens) }}
+                          </span>
+                        </div>
                         <div
-                          v-if="hasPricing(model)"
-                          class="mt-2 flex flex-wrap gap-1.5"
+                          v-else
+                          class="mt-2 text-[11px] text-gray-400 dark:text-gray-500"
                         >
-                          <span
-                            v-if="model.input_price_per_mtoken"
-                            class="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
-                          >
-                            {{ t('modelHub.inputPrice') }} {{ formatPricePerMTok(model.input_price_per_mtoken) }}
-                          </span>
-                          <span
-                            v-if="model.output_price_per_mtoken"
-                            class="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
-                          >
-                            {{ t('modelHub.outputPrice') }} {{ formatPricePerMTok(model.output_price_per_mtoken) }}
-                          </span>
+                          {{ t('modelHub.pricingUnavailable') }}
                         </div>
                       </div>
                     </div>
 
                     <div
-                      class="ml-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-transparent text-gray-400 transition-colors group-hover:border-sky-200 group-hover:text-sky-600 dark:group-hover:border-sky-500/30 dark:group-hover:text-sky-300"
+                      class="ml-3 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-transparent text-gray-400 transition-colors group-hover:border-sky-200 group-hover:text-sky-600 dark:group-hover:border-sky-500/30 dark:group-hover:text-sky-300"
                     >
                       <Icon
                         :name="copiedKey === `model:${model.id}` ? 'check' : 'clipboard'"
@@ -349,6 +355,7 @@ import GroupBadge from '@/components/common/GroupBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import { useClipboard } from '@/composables/useClipboard'
+import { formatCurrency } from '@/utils/format'
 
 type PlatformFilter = GroupPlatform | 'all'
 type GroupFilter = number | 'all'
@@ -357,11 +364,6 @@ interface PlatformOption {
   value: PlatformFilter
   label: string
 }
-
-const priceFormatter = new Intl.NumberFormat(undefined, {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2
-})
 
 const { t } = useI18n()
 const { copyToClipboard } = useClipboard()
@@ -480,6 +482,27 @@ function getSourceLabel(source: GroupModelCatalog['source']): string {
   return t('modelHub.sourceDefault')
 }
 
+function formatRateMultiplier(rate: number): string {
+  if (!Number.isFinite(rate)) {
+    return '1'
+  }
+  return rate.toFixed(2).replace(/\.?0+$/, '')
+}
+
+function formatPerMillionPrice(price?: number | null): string {
+  if (price === null || price === undefined) {
+    return t('modelHub.pricingUnavailable')
+  }
+  return `${formatCurrency(price)} ${t('modelHub.perMillionTokens')}`
+}
+
+function hasDisplayedPricing(model: SupportedModel): boolean {
+  return (
+    model.pricing?.input_price_per_million_tokens !== undefined ||
+    model.pricing?.output_price_per_million_tokens !== undefined
+  )
+}
+
 function collectUniqueModelIds(groupCatalogs: GroupModelCatalog[]): string[] {
   const seen = new Set<string>()
   const ids: string[] = []
@@ -493,17 +516,6 @@ function collectUniqueModelIds(groupCatalogs: GroupModelCatalog[]): string[] {
     }
   }
   return ids
-}
-
-function hasPricing(model: SupportedModel): boolean {
-  return Boolean(model.input_price_per_mtoken || model.output_price_per_mtoken)
-}
-
-function formatPricePerMTok(price?: number): string {
-  if (!price || !Number.isFinite(price)) {
-    return ''
-  }
-  return `$${priceFormatter.format(price)}/M`
 }
 
 function markCopied(key: string) {

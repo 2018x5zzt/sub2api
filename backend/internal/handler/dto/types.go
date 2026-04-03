@@ -110,16 +110,23 @@ type Group struct {
 }
 
 type SupportedModel struct {
-	ID                 string  `json:"id"`
-	DisplayName        string  `json:"display_name"`
-	InputPricePerMTok  float64 `json:"input_price_per_mtoken,omitempty"`
-	OutputPricePerMTok float64 `json:"output_price_per_mtoken,omitempty"`
+	ID          string                 `json:"id"`
+	DisplayName string                 `json:"display_name"`
+	Pricing     *SupportedModelPricing `json:"pricing,omitempty"`
+}
+
+type SupportedModelPricing struct {
+	Currency                    string   `json:"currency"`
+	InputPricePerMillionTokens  *float64 `json:"input_price_per_million_tokens,omitempty"`
+	OutputPricePerMillionTokens *float64 `json:"output_price_per_million_tokens,omitempty"`
 }
 
 type GroupModelCatalog struct {
-	Group  Group            `json:"group"`
-	Models []SupportedModel `json:"models"`
-	Source string           `json:"source"`
+	Group                   Group            `json:"group"`
+	Models                  []SupportedModel `json:"models"`
+	Source                  string           `json:"source"`
+	EffectiveRateMultiplier float64          `json:"effective_rate_multiplier"`
+	UserRateMultiplier      *float64         `json:"user_rate_multiplier,omitempty"`
 }
 
 // AdminGroup 是管理员接口使用的 group DTO（包含敏感/内部字段）。
