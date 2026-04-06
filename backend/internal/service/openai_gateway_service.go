@@ -57,6 +57,11 @@ const (
 	openAICodexSnapshotPersistMinInterval = 30 * time.Second
 )
 
+var (
+	errOpenAIEmptyResponse         = errors.New("upstream request failed: empty response")
+	errOpenAIStreamMissingTerminal = errors.New("stream usage incomplete: missing terminal event")
+)
+
 // OpenAI allowed headers whitelist (for non-passthrough).
 var openaiAllowedHeaders = map[string]bool{
 	"accept-language":       true,
@@ -2428,35 +2433,13 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		return nil, fmt.Errorf("upstream request failed: %s", safeErr)
 	}
 	if resp == nil || resp.Body == nil {
-		upstreamRequestID := ""
-		upstreamStatusCode := 0
-		if resp != nil {
-			upstreamStatusCode = resp.StatusCode
-			upstreamRequestID = strings.TrimSpace(resp.Header.Get("x-request-id"))
-		}
-		setOpsUpstreamError(c, http.StatusBadGateway, "upstream returned empty response", "")
-		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-			Platform:           account.Platform,
-			AccountID:          account.ID,
-			AccountName:        account.Name,
-			UpstreamStatusCode: upstreamStatusCode,
-			UpstreamRequestID:  upstreamRequestID,
-			Passthrough:        true,
-			Kind:               "request_error",
-			Message:            "upstream returned empty response",
-		})
-		c.JSON(http.StatusBadGateway, gin.H{
-			"error": gin.H{
-				"type":    "upstream_error",
-				"message": "Upstream returned empty response",
-			},
-		})
-		return nil, errors.New("upstream request failed: empty response")
+		return nil, wrapRecoverableOpenAIPassthroughError(c, account, resp, errOpenAIEmptyResponse)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		// 透传模式不做 failover（避免改变原始上游语义），按上游原样返回错误响应。
+		// 透传模式仍保留原始响应体；但对明确可恢复的错误允许上层切号，
+		// 避免单个坏号持续把上游错误直接扩散给客户端。
 		return nil, s.handleErrorResponsePassthrough(ctx, resp, c, account, body)
 	}
 
@@ -2465,14 +2448,14 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	if reqStream {
 		result, err := s.handleStreamingResponsePassthrough(ctx, resp, c, account, startTime)
 		if err != nil {
-			return nil, err
+			return nil, wrapRecoverableOpenAIPassthroughError(c, account, resp, err)
 		}
 		usage = result.usage
 		firstTokenMs = result.firstTokenMs
 	} else {
 		usage, err = s.handleNonStreamingResponsePassthrough(ctx, resp, c, account)
 		if err != nil {
-			return nil, err
+			return nil, wrapRecoverableOpenAIPassthroughError(c, account, resp, err)
 		}
 	}
 
@@ -2665,6 +2648,31 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 	logOpenAIInstructionsRequiredDebug(ctx, c, account, resp.StatusCode, upstreamMsg, requestBody, body)
+
+	if s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, body) {
+		if s.rateLimitService != nil {
+			_ = s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
+		}
+		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+			Platform:             account.Platform,
+			AccountID:            account.ID,
+			AccountName:          account.Name,
+			UpstreamStatusCode:   resp.StatusCode,
+			UpstreamRequestID:    resp.Header.Get("x-request-id"),
+			Passthrough:          true,
+			Kind:                 "failover",
+			Message:              upstreamMsg,
+			Detail:               upstreamDetail,
+			UpstreamResponseBody: upstreamDetail,
+		})
+		return &UpstreamFailoverError{
+			StatusCode:             resp.StatusCode,
+			ResponseBody:           body,
+			ResponseHeaders:        resp.Header.Clone(),
+			RetryableOnSameAccount: account.IsPoolMode() && (isPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, body)),
+		}
+	}
+
 	if s.rateLimitService != nil {
 		// Passthrough mode preserves the raw upstream error response, but runtime
 		// account state still needs to be updated so sticky routing can stop
@@ -2739,6 +2747,89 @@ func collectOpenAIPassthroughTimeoutHeaders(h http.Header) []string {
 	return matched
 }
 
+func buildSyntheticOpenAIErrorResponseBody(message, code string) []byte {
+	payload := map[string]any{
+		"error": map[string]any{
+			"type":    "upstream_error",
+			"message": message,
+		},
+	}
+	if strings.TrimSpace(code) != "" {
+		payload["error"].(map[string]any)["code"] = code
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return []byte(message)
+	}
+	return raw
+}
+
+func wrapRecoverableOpenAIPassthroughError(c *gin.Context, account *Account, resp *http.Response, err error) error {
+	if err == nil {
+		return nil
+	}
+	if c == nil || c.Writer == nil || c.Writer.Written() {
+		return err
+	}
+
+	message := ""
+	code := ""
+	switch {
+	case errors.Is(err, errOpenAIEmptyResponse):
+		message = "Upstream returned empty response"
+		code = "empty_response"
+	case errors.Is(err, errOpenAIStreamMissingTerminal):
+		message = "Upstream stream ended before a terminal event"
+		code = "stream_incomplete"
+	default:
+		return err
+	}
+
+	upstreamStatusCode := 0
+	upstreamRequestID := ""
+	var responseHeaders http.Header
+	if resp != nil {
+		upstreamStatusCode = resp.StatusCode
+		if resp.Header != nil {
+			upstreamRequestID = strings.TrimSpace(resp.Header.Get("x-request-id"))
+			responseHeaders = resp.Header.Clone()
+		}
+	}
+
+	event := OpsUpstreamErrorEvent{
+		UpstreamStatusCode: upstreamStatusCode,
+		UpstreamRequestID:  upstreamRequestID,
+		Passthrough:        true,
+		Kind:               "failover",
+		Message:            message,
+	}
+	if account != nil {
+		event.Platform = account.Platform
+		event.AccountID = account.ID
+		event.AccountName = account.Name
+	}
+	appendOpsUpstreamError(c, event)
+
+	return &UpstreamFailoverError{
+		StatusCode:             http.StatusBadGateway,
+		ResponseBody:           buildSyntheticOpenAIErrorResponseBody(message, code),
+		ResponseHeaders:        responseHeaders,
+		RetryableOnSameAccount: account != nil && account.IsPoolMode(),
+	}
+}
+
+func shouldDelayOpenAIPassthroughPrelude(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" {
+		return true
+	}
+	lower := strings.ToLower(trimmed)
+	return strings.HasPrefix(lower, ":") ||
+		strings.HasPrefix(lower, "event:") ||
+		strings.HasPrefix(lower, "id:") ||
+		strings.HasPrefix(lower, "retry:")
+}
+
 type openaiStreamingResultPassthrough struct {
 	usage        *OpenAIUsage
 	firstTokenMs *int
@@ -2773,6 +2864,8 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	clientDisconnected := false
 	sawDone := false
 	sawTerminalEvent := false
+	streamActivated := false
+	pendingPrelude := make([]string, 0, 4)
 	upstreamRequestID := strings.TrimSpace(resp.Header.Get("x-request-id"))
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -2783,6 +2876,31 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	scanBuf := getSSEScannerBuf64K()
 	scanner.Buffer(scanBuf[:0], maxLineSize)
 	defer putSSEScannerBuf64K(scanBuf)
+
+	writeLine := func(line string) {
+		if clientDisconnected {
+			return
+		}
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			clientDisconnected = true
+			logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] Client disconnected during streaming, continue draining upstream for usage: account=%d", account.ID)
+			return
+		}
+		flusher.Flush()
+	}
+
+	flushPrelude := func() {
+		if len(pendingPrelude) == 0 {
+			return
+		}
+		for _, line := range pendingPrelude {
+			writeLine(line)
+			if clientDisconnected {
+				break
+			}
+		}
+		pendingPrelude = pendingPrelude[:0]
+	}
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -2800,16 +2918,24 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				firstTokenMs = &ms
 			}
 			s.parseSSEUsageBytes(dataBytes, usage)
+
+			if !streamActivated {
+				if trimmedData == "" || trimmedData == "[DONE]" {
+					pendingPrelude = append(pendingPrelude, line)
+					continue
+				}
+				streamActivated = true
+				flushPrelude()
+			}
+		} else if !streamActivated && shouldDelayOpenAIPassthroughPrelude(line) {
+			pendingPrelude = append(pendingPrelude, line)
+			continue
+		} else if !streamActivated {
+			streamActivated = true
+			flushPrelude()
 		}
 
-		if !clientDisconnected {
-			if _, err := fmt.Fprintln(w, line); err != nil {
-				clientDisconnected = true
-				logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] Client disconnected during streaming, continue draining upstream for usage: account=%d", account.ID)
-			} else {
-				flusher.Flush()
-			}
-		}
+		writeLine(line)
 	}
 	if err := scanner.Err(); err != nil {
 		if sawTerminalEvent {
@@ -2833,13 +2959,21 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		)
 		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream read error: %w", err)
 	}
+	if !clientDisconnected && !streamActivated && ctx.Err() == nil {
+		logger.FromContext(ctx).With(
+			zap.String("component", "service.openai_gateway"),
+			zap.Int64("account_id", account.ID),
+			zap.String("upstream_request_id", upstreamRequestID),
+		).Info("OpenAI passthrough 上游流在未收到有效 data 事件时结束，疑似空传")
+		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, errOpenAIEmptyResponse
+	}
 	if !clientDisconnected && !sawDone && !sawTerminalEvent && ctx.Err() == nil {
 		logger.FromContext(ctx).With(
 			zap.String("component", "service.openai_gateway"),
 			zap.Int64("account_id", account.ID),
 			zap.String("upstream_request_id", upstreamRequestID),
 		).Info("OpenAI passthrough 上游流在未收到 [DONE] 时结束，疑似断流")
-		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, errors.New("stream usage incomplete: missing terminal event")
+		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, errOpenAIStreamMissingTerminal
 	}
 
 	return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, nil
@@ -2866,24 +3000,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 		return nil, err
 	}
 	if len(bytes.TrimSpace(body)) == 0 {
-		setOpsUpstreamError(c, http.StatusBadGateway, "upstream returned empty response", "")
-		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-			Platform:           account.Platform,
-			AccountID:          account.ID,
-			AccountName:        account.Name,
-			UpstreamStatusCode: resp.StatusCode,
-			UpstreamRequestID:  resp.Header.Get("x-request-id"),
-			Passthrough:        true,
-			Kind:               "request_error",
-			Message:            "upstream returned empty response",
-		})
-		c.JSON(http.StatusBadGateway, gin.H{
-			"error": gin.H{
-				"type":    "upstream_error",
-				"message": "Upstream returned empty response",
-			},
-		})
-		return nil, errors.New("upstream request failed: empty response")
+		return nil, errOpenAIEmptyResponse
 	}
 
 	usage := &OpenAIUsage{}

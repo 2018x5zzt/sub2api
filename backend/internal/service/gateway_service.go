@@ -119,7 +119,7 @@ func openAIStreamEventIsTerminal(data string) bool {
 		return true
 	}
 	switch gjson.Get(trimmed, "type").String() {
-	case "response.completed", "response.done", "response.failed":
+	case "response.completed", "response.done", "response.failed", "response.incomplete":
 		return true
 	default:
 		return false
@@ -4899,10 +4899,10 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 	}
 
 	// 覆盖入站鉴权残留，并注入上游认证
-req.Header.Del("authorization")
-req.Header.Del("x-api-key")
-req.Header.Del("x-goog-api-key")
-req.Header.Del("cookie")
+	req.Header.Del("authorization")
+	req.Header.Del("x-api-key")
+	req.Header.Del("x-goog-api-key")
+	req.Header.Del("cookie")
 	if account.UseDirectEndpointMode() {
 		setHeaderRaw(req.Header, "authorization", "Bearer "+token)
 	}

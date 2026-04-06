@@ -672,6 +672,66 @@ func TestAcquireResponsesAccountSlot_SkipsQueueWaitAfter429Failover(t *testing.T
 	require.Equal(t, int32(0), cache.incrementAccountWaitCalled)
 }
 
+func TestShouldRetrySameOpenAIAccount(t *testing.T) {
+	t.Run("429 switches accounts immediately", func(t *testing.T) {
+		require.False(t, shouldRetrySameOpenAIAccount(&service.UpstreamFailoverError{
+			StatusCode:             http.StatusTooManyRequests,
+			RetryableOnSameAccount: true,
+		}))
+	})
+
+	t.Run("other retryable statuses keep same-account retry", func(t *testing.T) {
+		require.True(t, shouldRetrySameOpenAIAccount(&service.UpstreamFailoverError{
+			StatusCode:             http.StatusForbidden,
+			RetryableOnSameAccount: true,
+		}))
+	})
+
+	t.Run("non retryable stays disabled", func(t *testing.T) {
+		require.False(t, shouldRetrySameOpenAIAccount(&service.UpstreamFailoverError{
+			StatusCode:             http.StatusServiceUnavailable,
+			RetryableOnSameAccount: false,
+		}))
+	})
+}
+
+func TestOpenAI429SilentFailoverState(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+
+	var state openAI429SilentFailoverState
+	require.False(t, state.noteSwitch(&service.UpstreamFailoverError{StatusCode: http.StatusServiceUnavailable}, now))
+	require.Zero(t, state.remaining(now))
+	require.Zero(t, state.nextWaitDuration(now))
+	require.Zero(t, state.switchCount())
+
+	require.True(t, state.noteSwitch(&service.UpstreamFailoverError{StatusCode: http.StatusTooManyRequests}, now))
+	require.Equal(t, openAI429SilentFailoverBudget, state.remaining(now))
+	require.Equal(t, openAI429SilentFailoverPollInterval, state.nextWaitDuration(now))
+	require.Equal(t, 1, state.switchCount())
+
+	require.True(t, state.noteSwitch(&service.UpstreamFailoverError{StatusCode: http.StatusTooManyRequests}, now.Add(time.Second)))
+	require.Equal(t, 2, state.switchCount())
+
+	nearDeadline := now.Add(openAI429SilentFailoverBudget - 50*time.Millisecond)
+	require.Equal(t, 50*time.Millisecond, state.remaining(nearDeadline))
+	require.Equal(t, 50*time.Millisecond, state.nextWaitDuration(nearDeadline))
+
+	expiredAt := now.Add(openAI429SilentFailoverBudget + time.Millisecond)
+	require.Zero(t, state.remaining(expiredAt))
+	require.Zero(t, state.nextWaitDuration(expiredAt))
+}
+
+func TestClearOpenAI429ExcludedAccounts(t *testing.T) {
+	failedAccountIDs := map[int64]struct{}{
+		11: {},
+		22: {},
+	}
+
+	require.Equal(t, 2, clearOpenAI429ExcludedAccounts(failedAccountIDs))
+	require.Empty(t, failedAccountIDs)
+	require.Zero(t, clearOpenAI429ExcludedAccounts(failedAccountIDs))
+}
+
 // TestOpenAIHandler_GjsonValidation 验证修复后的 JSON 合法性和类型校验
 func TestOpenAIHandler_GjsonValidation(t *testing.T) {
 	// 非法 JSON 被 gjson.ValidBytes 拦截
