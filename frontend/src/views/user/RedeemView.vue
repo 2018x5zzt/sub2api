@@ -132,6 +132,29 @@
         </div>
       </transition>
 
+      <BaseDialog
+        :show="showBenefitDialog"
+        :title="t('redeem.benefitDialogTitle')"
+        width="normal"
+        @close="showBenefitDialog = false"
+      >
+        <div class="space-y-3 text-sm text-gray-700 dark:text-gray-300">
+          <p class="font-medium text-gray-900 dark:text-white">
+            {{ t('redeem.benefitDialogSubtitle') }}
+          </p>
+          <p class="whitespace-pre-wrap leading-6">
+            {{ benefitDialogMessage }}
+          </p>
+        </div>
+        <template #footer>
+          <div class="flex justify-end">
+            <button type="button" class="btn btn-primary" @click="showBenefitDialog = false">
+              {{ t('common.confirm') }}
+            </button>
+          </div>
+        </template>
+      </BaseDialog>
+
       <!-- Error Message -->
       <transition name="fade">
         <div
@@ -349,6 +372,7 @@ import { useAppStore } from '@/stores/app'
 import { useSubscriptionStore } from '@/stores/subscriptions'
 import { redeemAPI, authAPI, type RedeemHistoryItem } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTime } from '@/utils/format'
 
@@ -365,12 +389,16 @@ const redeemResult = ref<{
   message: string
   type: string
   value: number
+  scene?: 'register' | 'benefit'
+  success_message?: string
   new_balance?: number
   new_concurrency?: number
   group_name?: string
   validity_days?: number
 } | null>(null)
 const errorMessage = ref('')
+const showBenefitDialog = ref(false)
+const benefitDialogMessage = ref('')
 
 // History data
 const history = ref<RedeemHistoryItem[]>([])
@@ -440,6 +468,8 @@ const handleRedeem = async () => {
   submitting.value = true
   errorMessage.value = ''
   redeemResult.value = null
+  showBenefitDialog.value = false
+  benefitDialogMessage.value = ''
 
   try {
     const result = await redeemAPI.redeem(redeemCode.value.trim())
@@ -461,6 +491,11 @@ const handleRedeem = async () => {
 
     // Clear the input
     redeemCode.value = ''
+
+    if (result.scene === 'benefit' && result.success_message) {
+      benefitDialogMessage.value = result.success_message
+      showBenefitDialog.value = true
+    }
 
     // Refresh history
     await fetchHistory()

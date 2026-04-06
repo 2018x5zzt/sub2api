@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"go.uber.org/zap"
 )
 
 func TestOpenAIHandleStreamingAwareError_JSONEscaping(t *testing.T) {
@@ -431,6 +432,41 @@ func TestOpenAIResponses_RejectsMessageIDAsPreviousResponseID(t *testing.T) {
 	require.Contains(t, w.Body.String(), "previous_response_id must be a response.id")
 }
 
+func TestValidateFunctionCallOutputRequest_RejectsMissingReferenceWithoutSessionAnchor(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := []byte(`{"model":"gpt-5.1","input":[{"type":"function_call_output","call_id":"call_1","output":"ok"}]}`)
+
+	h := &OpenAIGatewayHandler{}
+	ok := h.validateFunctionCallOutputRequest(c, body, "", zap.NewNop())
+
+	require.False(t, ok)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+	require.Contains(t, w.Body.String(), "function_call_output requires item_reference ids matching each call_id")
+}
+
+func TestValidateFunctionCallOutputRequest_AllowsHistoryInferenceWithSessionAnchor(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := []byte(`{"model":"gpt-5.1","prompt_cache_key":"session-1","input":[{"type":"function_call_output","call_id":"call_1","output":"ok"}]}`)
+
+	h := &OpenAIGatewayHandler{}
+	ok := h.validateFunctionCallOutputRequest(c, body, "session_hash_1", zap.NewNop())
+
+	require.True(t, ok)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	cachedReqBody, exists := c.Get(service.OpenAIParsedRequestBodyKey)
+	require.True(t, exists)
+	reqBody, okCast := cachedReqBody.(map[string]any)
+	require.True(t, okCast)
+	require.True(t, service.NeedsFunctionCallOutputHistoryInference(reqBody))
+}
+
 func TestOpenAIResponsesWebSocket_SetsClientTransportWSWhenUpgradeValid(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -576,6 +612,40 @@ func TestOpenAIHandler_GjsonExtraction(t *testing.T) {
 			require.Equal(t, tt.wantStream, stream)
 		})
 	}
+}
+
+func TestAcquireResponsesAccountSlot_SkipsQueueWaitAfter429Failover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+
+	cache := &concurrencyCacheMock{
+		acquireAccountSlotFn: func(ctx context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error) {
+			return false, nil
+		},
+	}
+	h := &OpenAIGatewayHandler{
+		gatewayService:    &service.OpenAIGatewayService{},
+		concurrencyHelper: NewConcurrencyHelper(service.NewConcurrencyService(cache), SSEPingFormatNone, time.Second),
+	}
+	selection := &service.AccountSelectionResult{
+		Account: &service.Account{ID: 42, Concurrency: 1},
+		WaitPlan: &service.AccountWaitPlan{
+			AccountID:      42,
+			MaxConcurrency: 1,
+			Timeout:        10 * time.Second,
+			MaxWaiting:     3,
+		},
+	}
+
+	streamStarted := false
+	release, acquired, waitSkipped := h.acquireResponsesAccountSlot(c, nil, "", selection, false, &streamStarted, false, zap.NewNop())
+	require.Nil(t, release)
+	require.False(t, acquired)
+	require.True(t, waitSkipped)
+	require.Zero(t, w.Body.Len())
+	require.Equal(t, int32(0), cache.incrementAccountWaitCalled)
 }
 
 // TestOpenAIHandler_GjsonValidation 验证修复后的 JSON 合法性和类型校验

@@ -60,6 +60,11 @@ func Code(v string) predicate.PromoCode {
 	return predicate.PromoCode(sql.FieldEQ(FieldCode, v))
 }
 
+// Scene applies equality check predicate on the "scene" field. It's identical to SceneEQ.
+func Scene(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEQ(FieldScene, v))
+}
+
 // BonusAmount applies equality check predicate on the "bonus_amount" field. It's identical to BonusAmountEQ.
 func BonusAmount(v float64) predicate.PromoCode {
 	return predicate.PromoCode(sql.FieldEQ(FieldBonusAmount, v))
@@ -83,6 +88,11 @@ func Status(v string) predicate.PromoCode {
 // ExpiresAt applies equality check predicate on the "expires_at" field. It's identical to ExpiresAtEQ.
 func ExpiresAt(v time.Time) predicate.PromoCode {
 	return predicate.PromoCode(sql.FieldEQ(FieldExpiresAt, v))
+}
+
+// SuccessMessage applies equality check predicate on the "success_message" field. It's identical to SuccessMessageEQ.
+func SuccessMessage(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEQ(FieldSuccessMessage, v))
 }
 
 // Notes applies equality check predicate on the "notes" field. It's identical to NotesEQ.
@@ -163,6 +173,71 @@ func CodeEqualFold(v string) predicate.PromoCode {
 // CodeContainsFold applies the ContainsFold predicate on the "code" field.
 func CodeContainsFold(v string) predicate.PromoCode {
 	return predicate.PromoCode(sql.FieldContainsFold(FieldCode, v))
+}
+
+// SceneEQ applies the EQ predicate on the "scene" field.
+func SceneEQ(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEQ(FieldScene, v))
+}
+
+// SceneNEQ applies the NEQ predicate on the "scene" field.
+func SceneNEQ(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldNEQ(FieldScene, v))
+}
+
+// SceneIn applies the In predicate on the "scene" field.
+func SceneIn(vs ...string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldIn(FieldScene, vs...))
+}
+
+// SceneNotIn applies the NotIn predicate on the "scene" field.
+func SceneNotIn(vs ...string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldNotIn(FieldScene, vs...))
+}
+
+// SceneGT applies the GT predicate on the "scene" field.
+func SceneGT(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldGT(FieldScene, v))
+}
+
+// SceneGTE applies the GTE predicate on the "scene" field.
+func SceneGTE(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldGTE(FieldScene, v))
+}
+
+// SceneLT applies the LT predicate on the "scene" field.
+func SceneLT(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldLT(FieldScene, v))
+}
+
+// SceneLTE applies the LTE predicate on the "scene" field.
+func SceneLTE(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldLTE(FieldScene, v))
+}
+
+// SceneContains applies the Contains predicate on the "scene" field.
+func SceneContains(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldContains(FieldScene, v))
+}
+
+// SceneHasPrefix applies the HasPrefix predicate on the "scene" field.
+func SceneHasPrefix(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldHasPrefix(FieldScene, v))
+}
+
+// SceneHasSuffix applies the HasSuffix predicate on the "scene" field.
+func SceneHasSuffix(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldHasSuffix(FieldScene, v))
+}
+
+// SceneEqualFold applies the EqualFold predicate on the "scene" field.
+func SceneEqualFold(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEqualFold(FieldScene, v))
+}
+
+// SceneContainsFold applies the ContainsFold predicate on the "scene" field.
+func SceneContainsFold(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldContainsFold(FieldScene, v))
 }
 
 // BonusAmountEQ applies the EQ predicate on the "bonus_amount" field.
@@ -398,6 +473,81 @@ func ExpiresAtIsNil() predicate.PromoCode {
 // ExpiresAtNotNil applies the NotNil predicate on the "expires_at" field.
 func ExpiresAtNotNil() predicate.PromoCode {
 	return predicate.PromoCode(sql.FieldNotNull(FieldExpiresAt))
+}
+
+// SuccessMessageEQ applies the EQ predicate on the "success_message" field.
+func SuccessMessageEQ(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEQ(FieldSuccessMessage, v))
+}
+
+// SuccessMessageNEQ applies the NEQ predicate on the "success_message" field.
+func SuccessMessageNEQ(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldNEQ(FieldSuccessMessage, v))
+}
+
+// SuccessMessageIn applies the In predicate on the "success_message" field.
+func SuccessMessageIn(vs ...string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldIn(FieldSuccessMessage, vs...))
+}
+
+// SuccessMessageNotIn applies the NotIn predicate on the "success_message" field.
+func SuccessMessageNotIn(vs ...string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldNotIn(FieldSuccessMessage, vs...))
+}
+
+// SuccessMessageGT applies the GT predicate on the "success_message" field.
+func SuccessMessageGT(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldGT(FieldSuccessMessage, v))
+}
+
+// SuccessMessageGTE applies the GTE predicate on the "success_message" field.
+func SuccessMessageGTE(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldGTE(FieldSuccessMessage, v))
+}
+
+// SuccessMessageLT applies the LT predicate on the "success_message" field.
+func SuccessMessageLT(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldLT(FieldSuccessMessage, v))
+}
+
+// SuccessMessageLTE applies the LTE predicate on the "success_message" field.
+func SuccessMessageLTE(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldLTE(FieldSuccessMessage, v))
+}
+
+// SuccessMessageContains applies the Contains predicate on the "success_message" field.
+func SuccessMessageContains(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldContains(FieldSuccessMessage, v))
+}
+
+// SuccessMessageHasPrefix applies the HasPrefix predicate on the "success_message" field.
+func SuccessMessageHasPrefix(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldHasPrefix(FieldSuccessMessage, v))
+}
+
+// SuccessMessageHasSuffix applies the HasSuffix predicate on the "success_message" field.
+func SuccessMessageHasSuffix(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldHasSuffix(FieldSuccessMessage, v))
+}
+
+// SuccessMessageIsNil applies the IsNil predicate on the "success_message" field.
+func SuccessMessageIsNil() predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldIsNull(FieldSuccessMessage))
+}
+
+// SuccessMessageNotNil applies the NotNil predicate on the "success_message" field.
+func SuccessMessageNotNil() predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldNotNull(FieldSuccessMessage))
+}
+
+// SuccessMessageEqualFold applies the EqualFold predicate on the "success_message" field.
+func SuccessMessageEqualFold(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldEqualFold(FieldSuccessMessage, v))
+}
+
+// SuccessMessageContainsFold applies the ContainsFold predicate on the "success_message" field.
+func SuccessMessageContainsFold(v string) predicate.PromoCode {
+	return predicate.PromoCode(sql.FieldContainsFold(FieldSuccessMessage, v))
 }
 
 // NotesEQ applies the EQ predicate on the "notes" field.

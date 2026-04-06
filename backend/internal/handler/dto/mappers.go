@@ -348,12 +348,13 @@ func AccountGroupFromService(ag *service.AccountGroup) *AccountGroup {
 		return nil
 	}
 	return &AccountGroup{
-		AccountID: ag.AccountID,
-		GroupID:   ag.GroupID,
-		Priority:  ag.Priority,
-		CreatedAt: ag.CreatedAt,
-		Account:   AccountFromServiceShallow(ag.Account),
-		Group:     GroupFromServiceShallow(ag.Group),
+		AccountID:         ag.AccountID,
+		GroupID:           ag.GroupID,
+		Priority:          ag.Priority,
+		BillingMultiplier: ag.EffectiveBillingMultiplier(),
+		CreatedAt:         ag.CreatedAt,
+		Account:           AccountFromServiceShallow(ag.Account),
+		Group:             GroupFromServiceShallow(ag.Group),
 	}
 }
 
@@ -709,16 +710,18 @@ func PromoCodeFromService(pc *service.PromoCode) *PromoCode {
 		return nil
 	}
 	return &PromoCode{
-		ID:          pc.ID,
-		Code:        pc.Code,
-		BonusAmount: pc.BonusAmount,
-		MaxUses:     pc.MaxUses,
-		UsedCount:   pc.UsedCount,
-		Status:      pc.Status,
-		ExpiresAt:   pc.ExpiresAt,
-		Notes:       pc.Notes,
-		CreatedAt:   pc.CreatedAt,
-		UpdatedAt:   pc.UpdatedAt,
+		ID:             pc.ID,
+		Code:           pc.Code,
+		Scene:          pc.Scene,
+		BonusAmount:    pc.BonusAmount,
+		MaxUses:        pc.MaxUses,
+		UsedCount:      pc.UsedCount,
+		Status:         pc.Status,
+		ExpiresAt:      pc.ExpiresAt,
+		SuccessMessage: pc.SuccessMessage,
+		Notes:          pc.Notes,
+		CreatedAt:      pc.CreatedAt,
+		UpdatedAt:      pc.UpdatedAt,
 	}
 }
 

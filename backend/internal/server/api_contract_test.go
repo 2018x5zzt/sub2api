@@ -5,6 +5,7 @@ package server_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -584,11 +585,130 @@ func TestAPIContracts(t *testing.T) {
 	}
 }
 
+func TestAdminAccountCreateUpdateContract_GroupBindings(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("POST /api/v1/admin/accounts accepts group_bindings", func(t *testing.T) {
+		deps := newContractDeps(t)
+		deps.groupRepo.SetActive([]service.Group{
+			{
+				ID:        10,
+				Name:      "anthropic-default",
+				Platform:  service.PlatformAnthropic,
+				Status:    service.StatusActive,
+				CreatedAt: deps.now,
+				UpdatedAt: deps.now,
+			},
+		})
+
+		status, body := doRequest(t, deps.router, http.MethodPost, "/api/v1/admin/accounts", `{
+			"name": "Contract Create",
+			"platform": "anthropic",
+			"type": "apikey",
+			"credentials": {
+				"api_key": "sk-ant-contract",
+				"base_url": "https://api.anthropic.com"
+			},
+			"concurrency": 2,
+			"priority": 3,
+			"group_bindings": [
+				{"group_id": 10, "billing_multiplier": 1.25}
+			],
+			"confirm_mixed_channel_risk": true
+		}`, map[string]string{
+			"Content-Type": "application/json",
+		})
+		require.Equal(t, http.StatusOK, status)
+
+		var resp struct {
+			Code    int                    `json:"code"`
+			Message string                 `json:"message"`
+			Data    map[string]interface{} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(body), &resp))
+		require.Equal(t, 0, resp.Code)
+		require.Equal(t, "success", resp.Message)
+		require.Equal(t, "Contract Create", resp.Data["name"])
+		require.Equal(t, "anthropic", resp.Data["platform"])
+		require.Equal(t, "apikey", resp.Data["type"])
+		require.Equal(t, float64(2), resp.Data["concurrency"])
+		require.Equal(t, float64(3), resp.Data["priority"])
+
+		stored, err := deps.accountRepo.GetByID(context.Background(), 300)
+		require.NoError(t, err)
+		require.Equal(t, []int64{10}, stored.GroupIDs)
+		require.Len(t, stored.AccountGroups, 1)
+		require.Equal(t, 1.25, stored.AccountGroups[0].BillingMultiplier)
+	})
+
+	t.Run("PUT /api/v1/admin/accounts/:id returns account_groups billing_multiplier", func(t *testing.T) {
+		deps := newContractDeps(t)
+		deps.groupRepo.SetActive([]service.Group{
+			{
+				ID:        10,
+				Name:      "anthropic-default",
+				Platform:  service.PlatformAnthropic,
+				Status:    service.StatusActive,
+				CreatedAt: deps.now,
+				UpdatedAt: deps.now,
+			},
+		})
+		deps.accountRepo.Seed(&service.Account{
+			ID:          401,
+			Name:        "Before Update",
+			Platform:    service.PlatformAnthropic,
+			Type:        service.AccountTypeAPIKey,
+			Credentials: map[string]any{"api_key": "sk-ant-old", "base_url": "https://api.anthropic.com"},
+			Concurrency: 1,
+			Priority:    1,
+			Status:      service.StatusActive,
+			Schedulable: true,
+			CreatedAt:   deps.now,
+			UpdatedAt:   deps.now,
+		})
+
+		status, body := doRequest(t, deps.router, http.MethodPut, "/api/v1/admin/accounts/401", `{
+			"name": "After Update",
+			"group_bindings": [
+				{"group_id": 10, "billing_multiplier": 1.5}
+			],
+			"confirm_mixed_channel_risk": true
+		}`, map[string]string{
+			"Content-Type": "application/json",
+		})
+		require.Equal(t, http.StatusOK, status)
+
+		var resp struct {
+			Code    int                    `json:"code"`
+			Message string                 `json:"message"`
+			Data    map[string]interface{} `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal([]byte(body), &resp))
+		require.Equal(t, 0, resp.Code)
+		require.Equal(t, "success", resp.Message)
+		require.Equal(t, "After Update", resp.Data["name"])
+
+		groupIDs, ok := resp.Data["group_ids"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, groupIDs, 1)
+		require.Equal(t, float64(10), groupIDs[0])
+
+		accountGroups, ok := resp.Data["account_groups"].([]interface{})
+		require.True(t, ok)
+		require.Len(t, accountGroups, 1)
+		accountGroup, ok := accountGroups[0].(map[string]interface{})
+		require.True(t, ok)
+		require.Equal(t, float64(10), accountGroup["group_id"])
+		require.Equal(t, float64(1.5), accountGroup["billing_multiplier"])
+	})
+}
+
 type contractDeps struct {
 	now         time.Time
 	router      http.Handler
 	apiKeyRepo  *stubApiKeyRepo
 	groupRepo   *stubGroupRepo
+	accountRepo *stubAccountRepo
 	userSubRepo *stubUserSubscriptionRepo
 	usageRepo   *stubUsageLogRepo
 	settingRepo *stubSettingRepo
@@ -622,7 +742,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	apiKeyCache := stubApiKeyCache{}
 	groupRepo := &stubGroupRepo{}
 	userSubRepo := &stubUserSubscriptionRepo{}
-	accountRepo := stubAccountRepo{}
+	accountRepo := newStubAccountRepo(now)
 	proxyRepo := stubProxyRepo{}
 	redeemRepo := &stubRedeemCodeRepo{}
 
@@ -643,14 +763,14 @@ func newContractDeps(t *testing.T) *contractDeps {
 	subscriptionHandler := handler.NewSubscriptionHandler(subscriptionService)
 
 	redeemService := service.NewRedeemService(redeemRepo, userRepo, subscriptionService, nil, nil, nil, nil)
-	redeemHandler := handler.NewRedeemHandler(redeemService)
+	redeemHandler := handler.NewRedeemHandler(redeemService, nil, nil)
 
 	settingRepo := newStubSettingRepo()
 	settingService := service.NewSettingService(settingRepo, cfg)
 
-	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, nil, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	adminService := service.NewAdminService(userRepo, groupRepo, accountRepo, nil, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil)
-	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
+	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService, accountRepo)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService)
 	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil, nil)
 	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
@@ -685,6 +805,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Keys.GET("/keys", apiKeyHandler.List)
 	v1Keys.POST("/keys", apiKeyHandler.Create)
 	v1Keys.GET("/groups/available", apiKeyHandler.GetAvailableGroups)
+	v1Keys.GET("/groups/models", apiKeyHandler.GetAvailableGroupModels)
 
 	v1Usage := v1.Group("")
 	v1Usage.Use(jwtAuth)
@@ -702,6 +823,8 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Admin := v1.Group("/admin")
 	v1Admin.Use(adminAuth)
 	v1Admin.GET("/settings", adminSettingHandler.GetSettings)
+	v1Admin.POST("/accounts", adminAccountHandler.Create)
+	v1Admin.PUT("/accounts/:id", adminAccountHandler.Update)
 	v1Admin.POST("/accounts/bulk-update", adminAccountHandler.BulkUpdate)
 
 	return &contractDeps{
@@ -709,6 +832,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 		router:      r,
 		apiKeyRepo:  apiKeyRepo,
 		groupRepo:   groupRepo,
+		accountRepo: accountRepo,
 		userSubRepo: userSubRepo,
 		usageRepo:   usageRepo,
 		settingRepo: settingRepo,
@@ -882,7 +1006,13 @@ func (stubGroupRepo) Create(ctx context.Context, group *service.Group) error {
 	return errors.New("not implemented")
 }
 
-func (stubGroupRepo) GetByID(ctx context.Context, id int64) (*service.Group, error) {
+func (r *stubGroupRepo) GetByID(ctx context.Context, id int64) (*service.Group, error) {
+	for i := range r.active {
+		if r.active[i].ID == id {
+			group := r.active[i]
+			return &group, nil
+		}
+	}
 	return nil, service.ErrGroupNotFound
 }
 
@@ -950,15 +1080,47 @@ func (stubGroupRepo) UpdateSortOrders(ctx context.Context, updates []service.Gro
 }
 
 type stubAccountRepo struct {
+	now           time.Time
+	nextID        int64
+	accounts      map[int64]*service.Account
 	bulkUpdateIDs []int64
 }
 
+func newStubAccountRepo(now time.Time) *stubAccountRepo {
+	return &stubAccountRepo{
+		now:      now,
+		nextID:   300,
+		accounts: make(map[int64]*service.Account),
+	}
+}
+
+func (s *stubAccountRepo) Seed(account *service.Account) {
+	if account == nil {
+		return
+	}
+	s.accounts[account.ID] = cloneServiceAccount(account)
+}
+
 func (s *stubAccountRepo) Create(ctx context.Context, account *service.Account) error {
-	return errors.New("not implemented")
+	if account == nil {
+		return service.ErrAccountNilInput
+	}
+	if account.ID == 0 {
+		account.ID = s.nextID
+		s.nextID++
+	}
+	account.CreatedAt = s.now
+	account.UpdatedAt = s.now
+	s.accounts[account.ID] = cloneServiceAccount(account)
+	return nil
 }
 
 func (s *stubAccountRepo) GetByID(ctx context.Context, id int64) (*service.Account, error) {
-	return nil, service.ErrAccountNotFound
+	account, ok := s.accounts[id]
+	if !ok {
+		return nil, service.ErrAccountNotFound
+	}
+	return cloneServiceAccount(account), nil
 }
 
 func (s *stubAccountRepo) GetByIDs(ctx context.Context, ids []int64) ([]*service.Account, error) {
@@ -978,7 +1140,19 @@ func (s *stubAccountRepo) FindByExtraField(ctx context.Context, key string, valu
 }
 
 func (s *stubAccountRepo) Update(ctx context.Context, account *service.Account) error {
-	return errors.New("not implemented")
+	if account == nil {
+		return service.ErrAccountNilInput
+	}
+	existing, ok := s.accounts[account.ID]
+	if !ok {
+		return service.ErrAccountNotFound
+	}
+	if account.CreatedAt.IsZero() {
+		account.CreatedAt = existing.CreatedAt
+	}
+	account.UpdatedAt = s.now
+	s.accounts[account.ID] = cloneServiceAccount(account)
+	return nil
 }
 
 func (s *stubAccountRepo) Delete(ctx context.Context, id int64) error {
@@ -994,7 +1168,16 @@ func (s *stubAccountRepo) ListWithFilters(ctx context.Context, params pagination
 }
 
 func (s *stubAccountRepo) ListByGroup(ctx context.Context, groupID int64) ([]service.Account, error) {
-	return nil, errors.New("not implemented")
+	out := make([]service.Account, 0)
+	for _, account := range s.accounts {
+		for _, id := range account.GroupIDs {
+			if id == groupID {
+				out = append(out, *cloneServiceAccount(account))
+				break
+			}
+		}
+	}
+	return out, nil
 }
 
 func (s *stubAccountRepo) ListActive(ctx context.Context) ([]service.Account, error) {
@@ -1030,7 +1213,32 @@ func (s *stubAccountRepo) AutoPauseExpiredAccounts(ctx context.Context, now time
 }
 
 func (s *stubAccountRepo) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
-	return errors.New("not implemented")
+	bindings := make([]service.AccountGroupBindingInput, 0, len(groupIDs))
+	for _, groupID := range groupIDs {
+		bindings = append(bindings, service.AccountGroupBindingInput{GroupID: groupID})
+	}
+	return s.BindGroupBindings(ctx, accountID, bindings)
+}
+
+func (s *stubAccountRepo) BindGroupBindings(ctx context.Context, accountID int64, bindings []service.AccountGroupBindingInput) error {
+	account, ok := s.accounts[accountID]
+	if !ok {
+		return service.ErrAccountNotFound
+	}
+
+	account.GroupIDs = make([]int64, 0, len(bindings))
+	account.AccountGroups = make([]service.AccountGroup, 0, len(bindings))
+	for idx, binding := range bindings {
+		account.GroupIDs = append(account.GroupIDs, binding.GroupID)
+		account.AccountGroups = append(account.AccountGroups, service.AccountGroup{
+			AccountID:         accountID,
+			GroupID:           binding.GroupID,
+			Priority:          idx + 1,
+			BillingMultiplier: binding.EffectiveBillingMultiplier(),
+			CreatedAt:         s.now,
+		})
+	}
+	return nil
 }
 
 func (s *stubAccountRepo) ListSchedulable(ctx context.Context) ([]service.Account, error) {
@@ -1120,6 +1328,35 @@ func (s *stubAccountRepo) BulkUpdate(ctx context.Context, ids []int64, updates s
 
 func (s *stubAccountRepo) ListCRSAccountIDs(ctx context.Context) (map[string]int64, error) {
 	return nil, errors.New("not implemented")
+}
+
+func cloneServiceAccount(account *service.Account) *service.Account {
+	if account == nil {
+		return nil
+	}
+	cloned := *account
+	if account.Credentials != nil {
+		cloned.Credentials = make(map[string]any, len(account.Credentials))
+		for k, v := range account.Credentials {
+			cloned.Credentials[k] = v
+		}
+	}
+	if account.Extra != nil {
+		cloned.Extra = make(map[string]any, len(account.Extra))
+		for k, v := range account.Extra {
+			cloned.Extra[k] = v
+		}
+	}
+	if account.GroupIDs != nil {
+		cloned.GroupIDs = append([]int64(nil), account.GroupIDs...)
+	}
+	if account.AccountGroups != nil {
+		cloned.AccountGroups = append([]service.AccountGroup(nil), account.AccountGroups...)
+	}
+	if account.Groups != nil {
+		cloned.Groups = append([]*service.Group(nil), account.Groups...)
+	}
+	return &cloned
 }
 
 type stubProxyRepo struct{}

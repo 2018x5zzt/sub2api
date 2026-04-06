@@ -16,6 +16,8 @@ const (
 	FieldID = "id"
 	// FieldCode holds the string denoting the code field in the database.
 	FieldCode = "code"
+	// FieldScene holds the string denoting the scene field in the database.
+	FieldScene = "scene"
 	// FieldBonusAmount holds the string denoting the bonus_amount field in the database.
 	FieldBonusAmount = "bonus_amount"
 	// FieldMaxUses holds the string denoting the max_uses field in the database.
@@ -26,6 +28,8 @@ const (
 	FieldStatus = "status"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
 	FieldExpiresAt = "expires_at"
+	// FieldSuccessMessage holds the string denoting the success_message field in the database.
+	FieldSuccessMessage = "success_message"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -49,11 +53,13 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldCode,
+	FieldScene,
 	FieldBonusAmount,
 	FieldMaxUses,
 	FieldUsedCount,
 	FieldStatus,
 	FieldExpiresAt,
+	FieldSuccessMessage,
 	FieldNotes,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -72,6 +78,10 @@ func ValidColumn(column string) bool {
 var (
 	// CodeValidator is a validator for the "code" field. It is called by the builders before save.
 	CodeValidator func(string) error
+	// DefaultScene holds the default value on creation for the "scene" field.
+	DefaultScene string
+	// SceneValidator is a validator for the "scene" field. It is called by the builders before save.
+	SceneValidator func(string) error
 	// DefaultBonusAmount holds the default value on creation for the "bonus_amount" field.
 	DefaultBonusAmount float64
 	// DefaultMaxUses holds the default value on creation for the "max_uses" field.
@@ -103,6 +113,11 @@ func ByCode(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCode, opts...).ToFunc()
 }
 
+// ByScene orders the results by the scene field.
+func ByScene(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldScene, opts...).ToFunc()
+}
+
 // ByBonusAmount orders the results by the bonus_amount field.
 func ByBonusAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBonusAmount, opts...).ToFunc()
@@ -126,6 +141,11 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByExpiresAt orders the results by the expires_at field.
 func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldExpiresAt, opts...).ToFunc()
+}
+
+// BySuccessMessage orders the results by the success_message field.
+func BySuccessMessage(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSuccessMessage, opts...).ToFunc()
 }
 
 // ByNotes orders the results by the notes field.

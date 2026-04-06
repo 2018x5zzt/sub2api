@@ -142,6 +142,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/models',
+    name: 'ModelHub',
+    component: () => import('@/views/user/ModelHubView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Model Hub',
+      titleKey: 'modelHub.title',
+      descriptionKey: 'modelHub.description'
+    }
+  },
+  {
     path: '/usage',
     name: 'Usage',
     component: () => import('@/views/user/UsageView.vue'),
@@ -347,7 +359,21 @@ const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Promo Code Management',
       titleKey: 'admin.promo.title',
-      descriptionKey: 'admin.promo.description'
+      descriptionKey: 'admin.promo.description',
+      promoScene: 'register'
+    }
+  },
+  {
+    path: '/admin/benefit-codes',
+    name: 'AdminBenefitCodes',
+    component: () => import('@/views/admin/PromoCodesView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Benefit Code Management',
+      titleKey: 'admin.benefit.title',
+      descriptionKey: 'admin.benefit.description',
+      promoScene: 'benefit'
     }
   },
   {

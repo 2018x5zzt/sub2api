@@ -5,6 +5,7 @@
 import { apiClient } from '../client'
 import type {
   PromoCode,
+  PromoCodeScene,
   PromoCodeUsage,
   CreatePromoCodeRequest,
   UpdatePromoCodeRequest,
@@ -15,6 +16,7 @@ export async function list(
   page: number = 1,
   pageSize: number = 20,
   filters?: {
+    scene?: PromoCodeScene
     status?: string
     search?: string
   }

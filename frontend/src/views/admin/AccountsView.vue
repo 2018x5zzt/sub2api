@@ -200,7 +200,12 @@
             />
           </template>
           <template #cell-groups="{ row }">
-            <AccountGroupsCell :groups="row.groups" :max-display="4" />
+            <AccountGroupsCell
+              :groups="row.groups"
+              :account-groups="row.account_groups"
+              :show-binding-multiplier="true"
+              :max-display="4"
+            />
           </template>
           <template #cell-usage="{ row }">
             <AccountUsageCell

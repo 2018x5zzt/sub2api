@@ -51,6 +51,10 @@ type accountRepository struct {
 	schedulerCache service.SchedulerCache
 }
 
+type sqlTxBeginner interface {
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+}
+
 var schedulerNeutralExtraKeyPrefixes = []string{
 	"codex_primary_",
 	"codex_secondary_",
@@ -733,47 +737,51 @@ func (r *accountRepository) GetGroups(ctx context.Context, accountID int64) ([]s
 }
 
 func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
+	bindings := make([]service.AccountGroupBindingInput, 0, len(groupIDs))
+	for _, groupID := range groupIDs {
+		bindings = append(bindings, service.AccountGroupBindingInput{GroupID: groupID})
+	}
+	return r.BindGroupBindings(ctx, accountID, bindings)
+}
+
+func (r *accountRepository) BindGroupBindings(ctx context.Context, accountID int64, bindings []service.AccountGroupBindingInput) error {
 	existingGroupIDs, err := r.loadAccountGroupIDs(ctx, accountID)
 	if err != nil {
 		return err
 	}
-	// 使用事务保证删除旧绑定与创建新绑定的原子性
-	tx, err := r.client.Tx(ctx)
-	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
-		return err
+	normalizedBindings := normalizeAccountGroupBindings(bindings)
+	groupIDs := make([]int64, 0, len(normalizedBindings))
+	for _, binding := range normalizedBindings {
+		groupIDs = append(groupIDs, binding.GroupID)
 	}
 
-	var txClient *dbent.Client
-	if err == nil {
-		defer func() { _ = tx.Rollback() }()
-		txClient = tx.Client()
-	} else {
-		// 已处于外部事务中（ErrTxStarted），复用当前 client
-		txClient = r.client
-	}
-
-	if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID)).Exec(ctx); err != nil {
-		return err
-	}
-
-	if len(groupIDs) == 0 {
-		if tx != nil {
-			return tx.Commit()
+	exec := r.sql
+	var tx *sql.Tx
+	if beginner, ok := r.sql.(sqlTxBeginner); ok {
+		sqlTx, txErr := beginner.BeginTx(ctx, nil)
+		if txErr != nil {
+			return txErr
 		}
-		return nil
+		tx = sqlTx
+		exec = sqlTx
+		defer func() { _ = tx.Rollback() }()
 	}
 
-	builders := make([]*dbent.AccountGroupCreate, 0, len(groupIDs))
-	for i, groupID := range groupIDs {
-		builders = append(builders, txClient.AccountGroup.Create().
-			SetAccountID(accountID).
-			SetGroupID(groupID).
-			SetPriority(i+1),
-		)
-	}
-
-	if _, err := txClient.AccountGroup.CreateBulk(builders...).Save(ctx); err != nil {
+	if _, err := exec.ExecContext(ctx, "DELETE FROM account_groups WHERE account_id = $1", accountID); err != nil {
 		return err
+	}
+
+	for i, binding := range normalizedBindings {
+		if _, err := exec.ExecContext(ctx,
+			`INSERT INTO account_groups (account_id, group_id, priority, billing_multiplier, created_at)
+			 VALUES ($1, $2, $3, $4, NOW())`,
+			accountID,
+			binding.GroupID,
+			i+1,
+			binding.EffectiveBillingMultiplier(),
+		); err != nil {
+			return err
+		}
 	}
 
 	if tx != nil {
@@ -1518,23 +1526,62 @@ func (r *accountRepository) loadAccountGroups(ctx context.Context, accountIDs []
 		return groupsByAccount, groupIDsByAccount, accountGroupsByAccount, nil
 	}
 
-	entries, err := r.client.AccountGroup.Query().
-		Where(dbaccountgroup.AccountIDIn(accountIDs...)).
-		WithGroup().
-		Order(dbaccountgroup.ByAccountID(), dbaccountgroup.ByPriority()).
-		All(ctx)
+	rows, err := r.sql.QueryContext(ctx, `
+		SELECT account_id, group_id, priority, billing_multiplier, created_at
+		FROM account_groups
+		WHERE account_id = ANY($1)
+		ORDER BY account_id, priority
+	`, pq.Array(accountIDs))
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	defer rows.Close()
 
-	for _, ag := range entries {
-		groupSvc := groupEntityToService(ag.Edges.Group)
+	type accountGroupRow struct {
+		AccountID         int64
+		GroupID           int64
+		Priority          int
+		BillingMultiplier float64
+		CreatedAt         time.Time
+	}
+	rowsData := make([]accountGroupRow, 0)
+	groupIDSet := make(map[int64]struct{})
+	for rows.Next() {
+		var row accountGroupRow
+		if err := rows.Scan(&row.AccountID, &row.GroupID, &row.Priority, &row.BillingMultiplier, &row.CreatedAt); err != nil {
+			return nil, nil, nil, err
+		}
+		rowsData = append(rowsData, row)
+		groupIDSet[row.GroupID] = struct{}{}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, nil, err
+	}
+
+	groupIDs := make([]int64, 0, len(groupIDSet))
+	for groupID := range groupIDSet {
+		groupIDs = append(groupIDs, groupID)
+	}
+	groupByID := make(map[int64]*service.Group, len(groupIDs))
+	if len(groupIDs) > 0 {
+		groupEntities, err := r.client.Group.Query().Where(dbgroup.IDIn(groupIDs...)).All(ctx)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		for _, groupEntity := range groupEntities {
+			groupByID[groupEntity.ID] = groupEntityToService(groupEntity)
+		}
+	}
+
+	for _, ag := range rowsData {
+		groupSvc := groupByID[ag.GroupID]
 		agSvc := service.AccountGroup{
-			AccountID: ag.AccountID,
-			GroupID:   ag.GroupID,
-			Priority:  ag.Priority,
-			CreatedAt: ag.CreatedAt,
-			Group:     groupSvc,
+			AccountID:         ag.AccountID,
+			GroupID:           ag.GroupID,
+			Priority:          ag.Priority,
+			BillingMultiplier: ag.BillingMultiplier,
+			CreatedAt:         ag.CreatedAt,
+			Group:             groupSvc,
 		}
 		accountGroupsByAccount[ag.AccountID] = append(accountGroupsByAccount[ag.AccountID], agSvc)
 		groupIDsByAccount[ag.AccountID] = append(groupIDsByAccount[ag.AccountID], ag.GroupID)
@@ -1559,6 +1606,26 @@ func (r *accountRepository) loadAccountGroupIDs(ctx context.Context, accountID i
 		ids = append(ids, entry.GroupID)
 	}
 	return ids, nil
+}
+
+func normalizeAccountGroupBindings(bindings []service.AccountGroupBindingInput) []service.AccountGroupBindingInput {
+	if len(bindings) == 0 {
+		return nil
+	}
+	normalized := make([]service.AccountGroupBindingInput, 0, len(bindings))
+	indexByGroupID := make(map[int64]int, len(bindings))
+	for _, binding := range bindings {
+		if binding.GroupID <= 0 {
+			continue
+		}
+		if idx, exists := indexByGroupID[binding.GroupID]; exists {
+			normalized[idx].BillingMultiplier = binding.BillingMultiplier
+			continue
+		}
+		indexByGroupID[binding.GroupID] = len(normalized)
+		normalized = append(normalized, binding)
+	}
+	return normalized
 }
 
 func mergeGroupIDs(a []int64, b []int64) []int64 {

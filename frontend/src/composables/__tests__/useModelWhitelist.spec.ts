@@ -7,11 +7,14 @@ vi.mock('@/api/admin/accounts', () => ({
 import { buildModelMappingObject, getModelsByPlatform } from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
-  it('openai 模型列表包含 GPT-5.4 官方快照', () => {
+  it('openai 模型列表仅暴露兼容的 GPT-5 模型集合', () => {
     const models = getModelsByPlatform('openai')
 
     expect(models).toContain('gpt-5.4')
-    expect(models).toContain('gpt-5.4-2026-03-05')
+    expect(models).toContain('gpt-5.4-mini')
+    expect(models).toContain('gpt-5.2-high')
+    expect(models).not.toContain('gpt-5.4-2026-03-05')
+    expect(models).not.toContain('gpt-5.3-codex-spark')
   })
 
   it('antigravity 模型列表包含图片模型兼容项', () => {
@@ -45,11 +48,11 @@ describe('useModelWhitelist', () => {
     })
   })
 
-  it('whitelist 模式会保留 GPT-5.4 官方快照的精确映射', () => {
-    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-2026-03-05'], [])
+  it('whitelist 模式会保留兼容模型的精确映射', () => {
+    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-mini'], [])
 
     expect(mapping).toEqual({
-      'gpt-5.4-2026-03-05': 'gpt-5.4-2026-03-05'
+      'gpt-5.4-mini': 'gpt-5.4-mini'
     })
   })
 })

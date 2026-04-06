@@ -25,3 +25,30 @@ func TestAccount_BillingRateMultiplier_NegativeFallsBackToOne(t *testing.T) {
 	a := Account{RateMultiplier: &v}
 	require.Equal(t, 1.0, a.BillingRateMultiplier())
 }
+
+func TestAccount_GroupBillingMultiplier_DefaultsToOne(t *testing.T) {
+	groupID := int64(10)
+	var a Account
+	require.Equal(t, 1.0, a.GroupBillingMultiplier(&groupID))
+}
+
+func TestAccount_GroupBillingMultiplier_UsesMatchingBinding(t *testing.T) {
+	groupID := int64(10)
+	a := Account{
+		AccountGroups: []AccountGroup{
+			{GroupID: 9, BillingMultiplier: 1.1},
+			{GroupID: 10, BillingMultiplier: 1.35},
+		},
+	}
+	require.Equal(t, 1.35, a.GroupBillingMultiplier(&groupID))
+}
+
+func TestAccount_GroupBillingMultiplier_InvalidFallsBackToOne(t *testing.T) {
+	groupID := int64(10)
+	a := Account{
+		AccountGroups: []AccountGroup{
+			{GroupID: 10, BillingMultiplier: 0},
+		},
+	}
+	require.Equal(t, 1.0, a.GroupBillingMultiplier(&groupID))
+}

@@ -617,6 +617,16 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
     }
   }
   const openaiModels = {
+    'gpt-5': {
+      name: 'GPT-5',
+      limit: {
+        context: 400000,
+        output: 128000
+      },
+      options: {
+        store: false
+      }
+    },
     'gpt-5-codex': {
       name: 'GPT-5 Codex',
       limit: {
@@ -625,11 +635,26 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
       },
       options: {
         store: false
+      }
+    },
+    'gpt-5-codex-mini': {
+      name: 'GPT-5 Codex Mini',
+      limit: {
+        context: 272000,
+        output: 128000
       },
-      variants: {
-        low: {},
-        medium: {},
-        high: {}
+      options: {
+        store: false
+      }
+    },
+    'gpt-5.1': {
+      name: 'GPT-5.1',
+      limit: {
+        context: 400000,
+        output: 128000
+      },
+      options: {
+        store: false
       }
     },
     'gpt-5.1-codex': {
@@ -640,11 +665,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
       },
       options: {
         store: false
-      },
-      variants: {
-        low: {},
-        medium: {},
-        high: {}
       }
     },
     'gpt-5.1-codex-max': {
@@ -655,15 +675,20 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
       },
       options: {
         store: false
-      },
-      variants: {
-        low: {},
-        medium: {},
-        high: {}
       }
     },
     'gpt-5.1-codex-mini': {
       name: 'GPT-5.1 Codex Mini',
+      limit: {
+        context: 272000,
+        output: 128000
+      },
+      options: {
+        store: false
+      }
+    },
+    'gpt-5.2': {
+      name: 'GPT-5.2',
       limit: {
         context: 400000,
         output: 128000
@@ -674,11 +699,22 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
       variants: {
         low: {},
         medium: {},
-        high: {}
+        high: {},
+        xhigh: {}
       }
     },
-    'gpt-5.2': {
-      name: 'GPT-5.2',
+    'gpt-5.2-codex': {
+      name: 'GPT-5.2 Codex',
+      limit: {
+        context: 400000,
+        output: 128000
+      },
+      options: {
+        store: false
+      }
+    },
+    'gpt-5.3-codex': {
+      name: 'GPT-5.3 Codex',
       limit: {
         context: 400000,
         output: 128000
@@ -703,73 +739,19 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         store: false
       },
       variants: {
-        low: {},
         medium: {},
         high: {},
         xhigh: {}
       }
     },
-    'gpt-5.3-codex-spark': {
-      name: 'GPT-5.3 Codex Spark',
+    'gpt-5.4-mini': {
+      name: 'GPT-5.4 Mini',
       limit: {
-        context: 128000,
-        output: 32000
-      },
-      options: {
-        store: false
-      },
-      variants: {
-        low: {},
-        medium: {},
-        high: {},
-        xhigh: {}
-      }
-    },
-    'gpt-5.3-codex': {
-      name: 'GPT-5.3 Codex',
-      limit: {
-        context: 400000,
+        context: 1050000,
         output: 128000
       },
       options: {
         store: false
-      },
-      variants: {
-        low: {},
-        medium: {},
-        high: {},
-        xhigh: {}
-      }
-    },
-    'gpt-5.2-codex': {
-      name: 'GPT-5.2 Codex',
-      limit: {
-        context: 400000,
-        output: 128000
-      },
-      options: {
-        store: false
-      },
-      variants: {
-        low: {},
-        medium: {},
-        high: {},
-        xhigh: {}
-      }
-    },
-    'codex-mini-latest': {
-      name: 'Codex Mini',
-      limit: {
-        context: 200000,
-        output: 100000
-      },
-      options: {
-        store: false
-      },
-      variants: {
-        low: {},
-        medium: {},
-        high: {}
       }
     }
   }

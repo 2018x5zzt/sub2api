@@ -794,6 +794,15 @@
             placeholder="https://cloudcode-pa.googleapis.com"
           />
           <p class="input-hint">{{ t('admin.accounts.upstream.baseUrlHint') }}</p>
+          <label class="mt-3 flex cursor-pointer items-start gap-3">
+            <input
+              v-model="upstreamAppendApiPath"
+              type="checkbox"
+              class="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.appendApiPath') }}</span>
+          </label>
+          <p class="input-hint mt-1">{{ t('admin.accounts.appendApiPathHint') }}</p>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.upstream.apiKey') }}</label>
@@ -943,6 +952,17 @@
             "
           />
           <p class="input-hint">{{ form.platform === 'sora' ? t('admin.accounts.soraUpstreamBaseUrlHint') : baseUrlHint }}</p>
+          <template v-if="form.platform !== 'sora'">
+            <label class="mt-3 flex cursor-pointer items-start gap-3">
+              <input
+                v-model="apiKeyAppendApiPath"
+                type="checkbox"
+                class="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.appendApiPath') }}</span>
+            </label>
+            <p class="input-hint mt-1">{{ t('admin.accounts.appendApiPathHint') }}</p>
+          </template>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.apiKeyRequired') }}</label>
@@ -2486,6 +2506,42 @@
           :mixed-scheduling="mixedScheduling"
           data-tour="account-form-groups"
         />
+
+        <div
+          v-if="!authStore.isSimpleMode && selectedGroupBillingConfigs.length > 0"
+          class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+        >
+          <div class="mb-3">
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white">分组扣费乘数</h4>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              乘入现有分组/用户倍率，默认 1，不影响原有扣费逻辑。
+            </p>
+          </div>
+          <div class="space-y-3">
+            <div
+              v-for="config in selectedGroupBillingConfigs"
+              :key="config.groupId"
+              class="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-700/50"
+            >
+              <div class="min-w-0">
+                <div class="truncate text-sm font-medium text-gray-900 dark:text-white">
+                  {{ config.groupName }}
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  Group ID: {{ config.groupId }}
+                </div>
+              </div>
+              <input
+                type="number"
+                step="0.001"
+                min="0.001"
+                :value="config.billingMultiplier"
+                @input="setGroupBillingMultiplier(config.groupId, ($event.target as HTMLInputElement).value)"
+                class="w-28 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-800"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
     </form>
@@ -2991,6 +3047,7 @@ const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock'>('oauth-based')
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
+const apiKeyAppendApiPath = ref(true)
 const editQuotaLimit = ref<number | null>(null)
 const editQuotaDailyLimit = ref<number | null>(null)
 const editQuotaWeeklyLimit = ref<number | null>(null)
@@ -3023,6 +3080,7 @@ const antigravityAccountType = ref<'oauth' | 'upstream'>('oauth') // For antigra
 const soraAccountType = ref<'oauth' | 'apikey'>('oauth') // For sora: oauth or apikey (upstream)
 const upstreamBaseUrl = ref('') // For upstream type: base URL
 const upstreamApiKey = ref('') // For upstream type: API key
+const upstreamAppendApiPath = ref(true)
 const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const antigravityWhitelistModels = ref<string[]>([])
 const antigravityModelMappings = ref<ModelMapping[]>([])
@@ -3202,6 +3260,20 @@ const form = reactive({
   expires_at: null as number | null
 })
 
+const DEFAULT_GROUP_BILLING_MULTIPLIER = '1'
+const groupBillingMultipliers = reactive<Record<number, string>>({})
+
+const selectedGroupBillingConfigs = computed(() =>
+  form.group_ids.map((groupId) => {
+    const group = props.groups.find((item) => item.id === groupId)
+    return {
+      groupId,
+      groupName: group?.name || `#${groupId}`,
+      billingMultiplier: groupBillingMultipliers[groupId] ?? DEFAULT_GROUP_BILLING_MULTIPLIER
+    }
+  })
+)
+
 // Helper to check if current type needs OAuth flow
 const isOAuthFlow = computed(() => {
   // Antigravity upstream 类型不需要 OAuth 流程
@@ -3225,6 +3297,50 @@ const expiresAtInput = computed({
     form.expires_at = parseDateTimeLocal(value)
   }
 })
+
+const syncSelectedGroupBillingMultipliers = (groupIDs: number[]) => {
+  for (const groupID of groupIDs) {
+    if (!groupBillingMultipliers[groupID]) {
+      groupBillingMultipliers[groupID] = DEFAULT_GROUP_BILLING_MULTIPLIER
+    }
+  }
+}
+
+const setGroupBillingMultiplier = (groupID: number, value: string) => {
+  groupBillingMultipliers[groupID] = value
+}
+
+const buildGroupBindingsPayload = () =>
+  form.group_ids.map((groupId) => {
+    const rawValue = (groupBillingMultipliers[groupId] ?? DEFAULT_GROUP_BILLING_MULTIPLIER).trim()
+    const parsed = Number.parseFloat(rawValue)
+    return {
+      group_id: groupId,
+      ...(Number.isFinite(parsed) && parsed > 0 && Math.abs(parsed - 1) > 1e-9
+        ? { billing_multiplier: parsed }
+        : {})
+    }
+  })
+
+const validateGroupBillingMultipliers = () => {
+  for (const groupId of form.group_ids) {
+    const rawValue = (groupBillingMultipliers[groupId] ?? DEFAULT_GROUP_BILLING_MULTIPLIER).trim()
+    const parsed = Number.parseFloat(rawValue)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      appStore.showError(`分组 ${groupId} 的扣费乘数必须大于 0`)
+      return false
+    }
+  }
+  return true
+}
+
+watch(
+  () => form.group_ids.slice(),
+  (groupIDs) => {
+    syncSelectedGroupBillingMultipliers(groupIDs)
+  },
+  { immediate: true }
+)
 
 const canExchangeCode = computed(() => {
   const authCode = oauthFlowRef.value?.authCode || ''
@@ -3304,6 +3420,7 @@ watch(
         : newPlatform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
           : 'https://api.anthropic.com'
+    apiKeyAppendApiPath.value = true
     // Clear model-related settings
     allowedModels.value = []
     modelMappings.value = []
@@ -3660,9 +3777,18 @@ const ensureAntigravityMixedChannelConfirmed = async (onConfirm: () => Promise<v
 }
 
 const submitCreateAccount = async (payload: CreateAccountRequest) => {
+  if (!validateGroupBillingMultipliers()) {
+    return
+  }
   submitting.value = true
   try {
-    await adminAPI.accounts.create(withAntigravityConfirmFlag(payload))
+    const groupIDs = payload.group_ids ?? form.group_ids
+    const enrichedPayload: CreateAccountRequest = {
+      ...payload,
+      group_ids: groupIDs,
+      group_bindings: buildGroupBindingsPayload()
+    }
+    await adminAPI.accounts.create(withAntigravityConfirmFlag(enrichedPayload))
     appStore.showSuccess(t('admin.accounts.accountCreated'))
     emit('created')
     handleClose()
@@ -3697,11 +3823,15 @@ const resetForm = () => {
   form.priority = 1
   form.rate_multiplier = 1
   form.group_ids = []
+  for (const key of Object.keys(groupBillingMultipliers)) {
+    delete groupBillingMultipliers[Number(key)]
+  }
   form.expires_at = null
   accountCategory.value = 'oauth-based'
   addMethod.value = 'oauth'
   apiKeyBaseUrl.value = 'https://api.anthropic.com'
   apiKeyValue.value = ''
+  apiKeyAppendApiPath.value = true
   editQuotaLimit.value = null
   editQuotaDailyLimit.value = null
   editQuotaWeeklyLimit.value = null
@@ -3752,6 +3882,7 @@ const resetForm = () => {
   antigravityAccountType.value = 'oauth'
   upstreamBaseUrl.value = ''
   upstreamApiKey.value = ''
+  upstreamAppendApiPath.value = true
   tempUnschedEnabled.value = false
   tempUnschedRules.value = []
   geminiOAuthType.value = 'code_assist'
@@ -3982,7 +4113,8 @@ const handleSubmit = async () => {
     // Build upstream credentials (and optional model restriction)
     const credentials: Record<string, unknown> = {
       base_url: upstreamBaseUrl.value.trim(),
-      api_key: upstreamApiKey.value.trim()
+      api_key: upstreamApiKey.value.trim(),
+      append_api_path: upstreamAppendApiPath.value
     }
 
     // Antigravity 只使用映射模式
@@ -4005,6 +4137,10 @@ const handleSubmit = async () => {
   // For apikey type, create directly
   if (!apiKeyValue.value.trim()) {
     appStore.showError(t('admin.accounts.pleaseEnterApiKey'))
+    return
+  }
+  if (form.platform !== 'sora' && !apiKeyAppendApiPath.value && !apiKeyBaseUrl.value.trim()) {
+    appStore.showError(t('admin.accounts.pleaseEnterBaseUrl'))
     return
   }
 
@@ -4032,7 +4168,8 @@ const handleSubmit = async () => {
   // Build credentials with optional model mapping
   const credentials: Record<string, unknown> = {
     base_url: apiKeyBaseUrl.value.trim() || defaultBaseUrl,
-    api_key: apiKeyValue.value.trim()
+    api_key: apiKeyValue.value.trim(),
+    append_api_path: apiKeyAppendApiPath.value
   }
   if (form.platform === 'gemini') {
     credentials.tier_id = geminiTierAIStudio.value

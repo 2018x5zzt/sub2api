@@ -20,6 +20,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/gemini"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -607,17 +608,26 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 			if req.Stream {
 				action = "streamGenerateContent"
 			}
-			fullURL := fmt.Sprintf("%s/v1beta/models/%s:%s", strings.TrimRight(normalizedBaseURL, "/"), mappedModel, action)
-			if req.Stream {
-				fullURL += "?alt=sse"
+			fullURL := normalizedBaseURL
+			requestBody := geminiReq
+			if account.ShouldAppendAPIPath() {
+				fullURL = fmt.Sprintf("%s/v1beta/models/%s:%s", strings.TrimRight(normalizedBaseURL, "/"), mappedModel, action)
+				if req.Stream {
+					fullURL += "?alt=sse"
+				}
+			} else {
+				requestBody = buildGeminiDirectEndpointPayload(originalClaudeBody, mappedModel, req.Stream)
 			}
 
-			upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(geminiReq))
+			upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(requestBody))
 			if err != nil {
 				return nil, "", err
 			}
 			upstreamReq.Header.Set("Content-Type", "application/json")
 			upstreamReq.Header.Set("x-goog-api-key", apiKey)
+			if account.UseDirectEndpointMode() {
+				upstreamReq.Header.Set("Authorization", "Bearer "+apiKey)
+			}
 			return upstreamReq, "x-request-id", nil
 		}
 		requestIDHeader = "x-request-id"
@@ -1112,17 +1122,26 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 				return nil, "", err
 			}
 
-			fullURL := fmt.Sprintf("%s/v1beta/models/%s:%s", strings.TrimRight(normalizedBaseURL, "/"), mappedModel, upstreamAction)
-			if useUpstreamStream {
-				fullURL += "?alt=sse"
+			fullURL := normalizedBaseURL
+			requestBody := body
+			if account.ShouldAppendAPIPath() {
+				fullURL = fmt.Sprintf("%s/v1beta/models/%s:%s", strings.TrimRight(normalizedBaseURL, "/"), mappedModel, upstreamAction)
+				if useUpstreamStream {
+					fullURL += "?alt=sse"
+				}
+			} else {
+				requestBody = buildGeminiDirectEndpointPayload(body, mappedModel, useUpstreamStream)
 			}
 
-			upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(body))
+			upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(requestBody))
 			if err != nil {
 				return nil, "", err
 			}
 			upstreamReq.Header.Set("Content-Type", "application/json")
 			upstreamReq.Header.Set("x-goog-api-key", apiKey)
+			if account.UseDirectEndpointMode() {
+				upstreamReq.Header.Set("Authorization", "Bearer "+apiKey)
+			}
 			return upstreamReq, "x-request-id", nil
 		}
 		requestIDHeader = "x-request-id"
@@ -2546,6 +2565,9 @@ func (s *GeminiMessagesCompatService) ForwardAIStudioGET(ctx context.Context, ac
 	if path == "" || !strings.HasPrefix(path, "/") {
 		return nil, errors.New("invalid path")
 	}
+	if account.UseDirectEndpointMode() {
+		return buildGeminiDirectEndpointMetadata(path)
+	}
 
 	baseURL := account.GetGeminiBaseURL(geminicli.AIStudioBaseURL)
 	normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
@@ -2599,6 +2621,53 @@ func (s *GeminiMessagesCompatService) ForwardAIStudioGET(ctx context.Context, ac
 	return &UpstreamHTTPResult{
 		StatusCode: resp.StatusCode,
 		Headers:    filteredHeaders,
+		Body:       body,
+	}, nil
+}
+
+func buildGeminiDirectEndpointPayload(payload []byte, model string, stream bool) []byte {
+	var body map[string]any
+	if err := json.Unmarshal(payload, &body); err != nil {
+		return payload
+	}
+	if strings.TrimSpace(model) != "" {
+		body["model"] = model
+	}
+	if stream {
+		body["stream"] = true
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return payload
+	}
+	return encoded
+}
+
+func buildGeminiDirectEndpointMetadata(path string) (*UpstreamHTTPResult, error) {
+	headers := http.Header{}
+	headers.Set("Content-Type", "application/json")
+
+	var payload any
+	switch {
+	case path == "/v1beta/models":
+		payload = gemini.FallbackModelsList()
+	case strings.HasPrefix(path, "/v1beta/models/"):
+		modelName := strings.TrimPrefix(path, "/v1beta/models/")
+		if strings.TrimSpace(modelName) == "" {
+			return nil, errors.New("invalid model path")
+		}
+		payload = gemini.FallbackModel(modelName)
+	default:
+		return nil, errors.New("unsupported direct endpoint metadata path")
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	return &UpstreamHTTPResult{
+		StatusCode: http.StatusOK,
+		Headers:    headers,
 		Body:       body,
 	}, nil
 }

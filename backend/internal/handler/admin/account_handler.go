@@ -94,41 +94,48 @@ func NewAccountHandler(
 
 // CreateAccountRequest represents create account request
 type CreateAccountRequest struct {
-	Name                    string         `json:"name" binding:"required"`
-	Notes                   *string        `json:"notes"`
-	Platform                string         `json:"platform" binding:"required"`
-	Type                    string         `json:"type" binding:"required,oneof=oauth setup-token apikey upstream bedrock"`
-	Credentials             map[string]any `json:"credentials" binding:"required"`
-	Extra                   map[string]any `json:"extra"`
-	ProxyID                 *int64         `json:"proxy_id"`
-	Concurrency             int            `json:"concurrency"`
-	Priority                int            `json:"priority"`
-	RateMultiplier          *float64       `json:"rate_multiplier"`
-	LoadFactor              *int           `json:"load_factor"`
-	GroupIDs                []int64        `json:"group_ids"`
-	ExpiresAt               *int64         `json:"expires_at"`
-	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
-	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
+	Name                    string                       `json:"name" binding:"required"`
+	Notes                   *string                      `json:"notes"`
+	Platform                string                       `json:"platform" binding:"required"`
+	Type                    string                       `json:"type" binding:"required,oneof=oauth setup-token apikey upstream bedrock"`
+	Credentials             map[string]any               `json:"credentials" binding:"required"`
+	Extra                   map[string]any               `json:"extra"`
+	ProxyID                 *int64                       `json:"proxy_id"`
+	Concurrency             int                          `json:"concurrency"`
+	Priority                int                          `json:"priority"`
+	RateMultiplier          *float64                     `json:"rate_multiplier"`
+	LoadFactor              *int                         `json:"load_factor"`
+	GroupIDs                []int64                      `json:"group_ids"`
+	GroupBindings           []AccountGroupBindingRequest `json:"group_bindings"`
+	ExpiresAt               *int64                       `json:"expires_at"`
+	AutoPauseOnExpired      *bool                        `json:"auto_pause_on_expired"`
+	ConfirmMixedChannelRisk *bool                        `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
 }
 
 // UpdateAccountRequest represents update account request
 // 使用指针类型来区分"未提供"和"设置为0"
 type UpdateAccountRequest struct {
-	Name                    string         `json:"name"`
-	Notes                   *string        `json:"notes"`
-	Type                    string         `json:"type" binding:"omitempty,oneof=oauth setup-token apikey upstream bedrock"`
-	Credentials             map[string]any `json:"credentials"`
-	Extra                   map[string]any `json:"extra"`
-	ProxyID                 *int64         `json:"proxy_id"`
-	Concurrency             *int           `json:"concurrency"`
-	Priority                *int           `json:"priority"`
-	RateMultiplier          *float64       `json:"rate_multiplier"`
-	LoadFactor              *int           `json:"load_factor"`
-	Status                  string         `json:"status" binding:"omitempty,oneof=active inactive error"`
-	GroupIDs                *[]int64       `json:"group_ids"`
-	ExpiresAt               *int64         `json:"expires_at"`
-	AutoPauseOnExpired      *bool          `json:"auto_pause_on_expired"`
-	ConfirmMixedChannelRisk *bool          `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
+	Name                    string                        `json:"name"`
+	Notes                   *string                       `json:"notes"`
+	Type                    string                        `json:"type" binding:"omitempty,oneof=oauth setup-token apikey upstream bedrock"`
+	Credentials             map[string]any                `json:"credentials"`
+	Extra                   map[string]any                `json:"extra"`
+	ProxyID                 *int64                        `json:"proxy_id"`
+	Concurrency             *int                          `json:"concurrency"`
+	Priority                *int                          `json:"priority"`
+	RateMultiplier          *float64                      `json:"rate_multiplier"`
+	LoadFactor              *int                          `json:"load_factor"`
+	Status                  string                        `json:"status" binding:"omitempty,oneof=active inactive error"`
+	GroupIDs                *[]int64                      `json:"group_ids"`
+	GroupBindings           *[]AccountGroupBindingRequest `json:"group_bindings"`
+	ExpiresAt               *int64                        `json:"expires_at"`
+	AutoPauseOnExpired      *bool                         `json:"auto_pause_on_expired"`
+	ConfirmMixedChannelRisk *bool                         `json:"confirm_mixed_channel_risk"` // 用户确认混合渠道风险
+}
+
+type AccountGroupBindingRequest struct {
+	GroupID           int64    `json:"group_id"`
+	BillingMultiplier *float64 `json:"billing_multiplier"`
 }
 
 // BulkUpdateAccountsRequest represents the payload for bulk editing accounts
@@ -434,6 +441,37 @@ func ifNoneMatchMatched(ifNoneMatch, etag string) bool {
 	return false
 }
 
+func validateAccountGroupBindingRequests(bindings []AccountGroupBindingRequest) error {
+	seen := make(map[int64]struct{}, len(bindings))
+	for _, binding := range bindings {
+		if binding.GroupID <= 0 {
+			return fmt.Errorf("group_bindings.group_id must be > 0")
+		}
+		if _, exists := seen[binding.GroupID]; exists {
+			return fmt.Errorf("duplicate group binding: %d", binding.GroupID)
+		}
+		seen[binding.GroupID] = struct{}{}
+		if binding.BillingMultiplier != nil && *binding.BillingMultiplier <= 0 {
+			return fmt.Errorf("group_bindings[%d].billing_multiplier must be > 0", binding.GroupID)
+		}
+	}
+	return nil
+}
+
+func buildAccountGroupBindingInputs(bindings []AccountGroupBindingRequest) []service.AccountGroupBindingInput {
+	if len(bindings) == 0 {
+		return nil
+	}
+	out := make([]service.AccountGroupBindingInput, 0, len(bindings))
+	for _, binding := range bindings {
+		out = append(out, service.AccountGroupBindingInput{
+			GroupID:           binding.GroupID,
+			BillingMultiplier: binding.BillingMultiplier,
+		})
+	}
+	return out
+}
+
 // GetByID handles getting an account by ID
 // GET /api/v1/admin/accounts/:id
 func (h *AccountHandler) GetByID(c *gin.Context) {
@@ -508,6 +546,10 @@ func (h *AccountHandler) Create(c *gin.Context) {
 		response.BadRequest(c, "rate_multiplier must be >= 0")
 		return
 	}
+	if err := validateAccountGroupBindingRequests(req.GroupBindings); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
 	// base_rpm 输入校验：负值归零，超过 10000 截断
 	sanitizeExtraBaseRPM(req.Extra)
 
@@ -528,6 +570,7 @@ func (h *AccountHandler) Create(c *gin.Context) {
 			RateMultiplier:        req.RateMultiplier,
 			LoadFactor:            req.LoadFactor,
 			GroupIDs:              req.GroupIDs,
+			GroupBindings:         buildAccountGroupBindingInputs(req.GroupBindings),
 			ExpiresAt:             req.ExpiresAt,
 			AutoPauseOnExpired:    req.AutoPauseOnExpired,
 			SkipMixedChannelCheck: skipCheck,
@@ -580,6 +623,12 @@ func (h *AccountHandler) Update(c *gin.Context) {
 		response.BadRequest(c, "rate_multiplier must be >= 0")
 		return
 	}
+	if req.GroupBindings != nil {
+		if err := validateAccountGroupBindingRequests(*req.GroupBindings); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
+	}
 	// base_rpm 输入校验：负值归零，超过 10000 截断
 	sanitizeExtraBaseRPM(req.Extra)
 
@@ -587,18 +636,25 @@ func (h *AccountHandler) Update(c *gin.Context) {
 	skipCheck := req.ConfirmMixedChannelRisk != nil && *req.ConfirmMixedChannelRisk
 
 	account, err := h.adminService.UpdateAccount(c.Request.Context(), accountID, &service.UpdateAccountInput{
-		Name:                  req.Name,
-		Notes:                 req.Notes,
-		Type:                  req.Type,
-		Credentials:           req.Credentials,
-		Extra:                 req.Extra,
-		ProxyID:               req.ProxyID,
-		Concurrency:           req.Concurrency, // 指针类型，nil 表示未提供
-		Priority:              req.Priority,    // 指针类型，nil 表示未提供
-		RateMultiplier:        req.RateMultiplier,
-		LoadFactor:            req.LoadFactor,
-		Status:                req.Status,
-		GroupIDs:              req.GroupIDs,
+		Name:           req.Name,
+		Notes:          req.Notes,
+		Type:           req.Type,
+		Credentials:    req.Credentials,
+		Extra:          req.Extra,
+		ProxyID:        req.ProxyID,
+		Concurrency:    req.Concurrency, // 指针类型，nil 表示未提供
+		Priority:       req.Priority,    // 指针类型，nil 表示未提供
+		RateMultiplier: req.RateMultiplier,
+		LoadFactor:     req.LoadFactor,
+		Status:         req.Status,
+		GroupIDs:       req.GroupIDs,
+		GroupBindings: func() *[]service.AccountGroupBindingInput {
+			if req.GroupBindings == nil {
+				return nil
+			}
+			bindings := buildAccountGroupBindingInputs(*req.GroupBindings)
+			return &bindings
+		}(),
 		ExpiresAt:             req.ExpiresAt,
 		AutoPauseOnExpired:    req.AutoPauseOnExpired,
 		SkipMixedChannelCheck: skipCheck,

@@ -421,6 +421,19 @@ export interface AdminGroup extends Group {
   sort_order: number
 }
 
+export interface SupportedModel {
+  id: string
+  display_name: string
+}
+
+export type GroupModelCatalogSource = 'default' | 'mapping' | 'mixed'
+
+export interface GroupModelCatalog {
+  group: Group
+  models: SupportedModel[]
+  source: GroupModelCatalogSource
+}
+
 export interface ApiKey {
   id: number
   user_id: number
@@ -685,6 +698,7 @@ export interface Account {
   created_at: string
   updated_at: string
   proxy?: Proxy
+  account_groups?: AccountGroup[]
   group_ids?: number[] // Groups this account belongs to
   groups?: Group[] // Preloaded group objects
 
@@ -754,6 +768,20 @@ export interface Account {
   current_window_cost?: number | null // 当前窗口费用
   active_sessions?: number | null // 当前活跃会话数
   current_rpm?: number | null // 当前分钟 RPM 计数
+}
+
+export interface AccountGroup {
+  account_id: number
+  group_id: number
+  priority: number
+  billing_multiplier: number
+  created_at: string
+  group?: Group
+}
+
+export interface AccountGroupBindingRequest {
+  group_id: number
+  billing_multiplier?: number
 }
 
 // Account Usage types
@@ -853,6 +881,7 @@ export interface CreateAccountRequest {
   priority?: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
   group_ids?: number[]
+  group_bindings?: AccountGroupBindingRequest[]
   expires_at?: number | null
   auto_pause_on_expired?: boolean
   confirm_mixed_channel_risk?: boolean
@@ -872,6 +901,7 @@ export interface UpdateAccountRequest {
   schedulable?: boolean
   status?: 'active' | 'inactive' | 'error'
   group_ids?: number[]
+  group_bindings?: AccountGroupBindingRequest[]
   expires_at?: number | null
   auto_pause_on_expired?: boolean
   confirm_mixed_channel_risk?: boolean
@@ -1482,14 +1512,18 @@ export interface UserAttributeValuesMap {
 
 // ==================== Promo Code Types ====================
 
+export type PromoCodeScene = 'register' | 'benefit'
+
 export interface PromoCode {
   id: number
   code: string
+  scene: PromoCodeScene
   bonus_amount: number
   max_uses: number
   used_count: number
   status: 'active' | 'disabled'
   expires_at: string | null
+  success_message: string | null
   notes: string | null
   created_at: string
   updated_at: string
@@ -1506,9 +1540,11 @@ export interface PromoCodeUsage {
 
 export interface CreatePromoCodeRequest {
   code?: string
+  scene?: PromoCodeScene
   bonus_amount: number
   max_uses?: number
   expires_at?: number | null
+  success_message?: string
   notes?: string
 }
 
@@ -1518,6 +1554,7 @@ export interface UpdatePromoCodeRequest {
   max_uses?: number
   status?: 'active' | 'disabled'
   expires_at?: number | null
+  success_message?: string
   notes?: string
 }
 

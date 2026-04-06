@@ -19,6 +19,8 @@ type PromoCode struct {
 	ID int64 `json:"id,omitempty"`
 	// 优惠码
 	Code string `json:"code,omitempty"`
+	// 优惠码场景: register, benefit
+	Scene string `json:"scene,omitempty"`
 	// 赠送余额金额
 	BonusAmount float64 `json:"bonus_amount,omitempty"`
 	// 最大使用次数，0表示无限制
@@ -29,6 +31,8 @@ type PromoCode struct {
 	Status string `json:"status,omitempty"`
 	// 过期时间，null表示永不过期
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// 兑换成功后展示给用户的弹窗文案
+	SuccessMessage *string `json:"success_message,omitempty"`
 	// 备注
 	Notes *string `json:"notes,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -68,7 +72,7 @@ func (*PromoCode) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case promocode.FieldID, promocode.FieldMaxUses, promocode.FieldUsedCount:
 			values[i] = new(sql.NullInt64)
-		case promocode.FieldCode, promocode.FieldStatus, promocode.FieldNotes:
+		case promocode.FieldCode, promocode.FieldScene, promocode.FieldStatus, promocode.FieldSuccessMessage, promocode.FieldNotes:
 			values[i] = new(sql.NullString)
 		case promocode.FieldExpiresAt, promocode.FieldCreatedAt, promocode.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -98,6 +102,12 @@ func (_m *PromoCode) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field code", values[i])
 			} else if value.Valid {
 				_m.Code = value.String
+			}
+		case promocode.FieldScene:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field scene", values[i])
+			} else if value.Valid {
+				_m.Scene = value.String
 			}
 		case promocode.FieldBonusAmount:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -129,6 +139,13 @@ func (_m *PromoCode) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ExpiresAt = new(time.Time)
 				*_m.ExpiresAt = value.Time
+			}
+		case promocode.FieldSuccessMessage:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field success_message", values[i])
+			} else if value.Valid {
+				_m.SuccessMessage = new(string)
+				*_m.SuccessMessage = value.String
 			}
 		case promocode.FieldNotes:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -193,6 +210,9 @@ func (_m *PromoCode) String() string {
 	builder.WriteString("code=")
 	builder.WriteString(_m.Code)
 	builder.WriteString(", ")
+	builder.WriteString("scene=")
+	builder.WriteString(_m.Scene)
+	builder.WriteString(", ")
 	builder.WriteString("bonus_amount=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BonusAmount))
 	builder.WriteString(", ")
@@ -208,6 +228,11 @@ func (_m *PromoCode) String() string {
 	if v := _m.ExpiresAt; v != nil {
 		builder.WriteString("expires_at=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.SuccessMessage; v != nil {
+		builder.WriteString("success_message=")
+		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	if v := _m.Notes; v != nil {

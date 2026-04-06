@@ -311,6 +311,27 @@ func TestAcquireAccountSlotWithWaitTimeout_ImmediateAttemptBeforeBackoff(t *test
 	require.GreaterOrEqual(t, cache.accountAcquireCalls, 1)
 }
 
+func TestAcquireUserSlotWithWait_UsesConfiguredTimeout(t *testing.T) {
+	cache := &helperConcurrencyCacheStub{
+		userSeq: []bool{false},
+	}
+	concurrency := service.NewConcurrencyService(cache)
+	helper := NewConcurrencyHelper(concurrency, SSEPingFormatNone, 5*time.Millisecond)
+	helper.SetUserSlotWaitTimeout(30 * time.Millisecond)
+	c, _ := newHelperTestContext(http.MethodPost, "/v1/messages")
+	streamStarted := false
+
+	start := time.Now()
+	release, err := helper.AcquireUserSlotWithWait(c, 401, 1, false, &streamStarted)
+	elapsed := time.Since(start)
+	require.Nil(t, release)
+	var cErr *ConcurrencyError
+	require.ErrorAs(t, err, &cErr)
+	require.True(t, cErr.IsTimeout)
+	require.Less(t, elapsed, 200*time.Millisecond)
+	require.GreaterOrEqual(t, cache.userAcquireCalls, 1)
+}
+
 type helperConcurrencyCacheStubWithError struct {
 	helperConcurrencyCacheStub
 	err error

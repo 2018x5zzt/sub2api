@@ -212,6 +212,7 @@ type CreateAccountInput struct {
 	RateMultiplier     *float64 // 账号计费倍率（>=0，允许 0）
 	LoadFactor         *int
 	GroupIDs           []int64
+	GroupBindings      []AccountGroupBindingInput
 	ExpiresAt          *int64
 	AutoPauseOnExpired *bool
 	// SkipDefaultGroupBind prevents auto-binding to platform default group when GroupIDs is empty.
@@ -234,6 +235,7 @@ type UpdateAccountInput struct {
 	LoadFactor            *int
 	Status                string
 	GroupIDs              *[]int64
+	GroupBindings         *[]AccountGroupBindingInput
 	ExpiresAt             *int64
 	AutoPauseOnExpired    *bool
 	SkipMixedChannelCheck bool // 跳过混合渠道检查（用户已确认风险）
@@ -431,6 +433,46 @@ const (
 	proxyQualityMaxBodyBytes          = int64(8 * 1024)
 	proxyQualityClientUserAgent       = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 )
+
+type accountGroupBindingWriter interface {
+	BindGroupBindings(ctx context.Context, accountID int64, bindings []AccountGroupBindingInput) error
+}
+
+func groupIDsFromAccountBindings(bindings []AccountGroupBindingInput) []int64 {
+	if len(bindings) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(bindings))
+	seen := make(map[int64]struct{}, len(bindings))
+	for _, binding := range bindings {
+		if binding.GroupID <= 0 {
+			continue
+		}
+		if _, exists := seen[binding.GroupID]; exists {
+			continue
+		}
+		seen[binding.GroupID] = struct{}{}
+		ids = append(ids, binding.GroupID)
+	}
+	return ids
+}
+
+func validateAccountGroupBindings(bindings []AccountGroupBindingInput) error {
+	seen := make(map[int64]struct{}, len(bindings))
+	for _, binding := range bindings {
+		if binding.GroupID <= 0 {
+			return errors.New("group_bindings.group_id must be > 0")
+		}
+		if _, exists := seen[binding.GroupID]; exists {
+			return fmt.Errorf("duplicate group binding: %d", binding.GroupID)
+		}
+		seen[binding.GroupID] = struct{}{}
+		if binding.BillingMultiplier != nil && *binding.BillingMultiplier <= 0 {
+			return fmt.Errorf("group_bindings[%d].billing_multiplier must be > 0", binding.GroupID)
+		}
+	}
+	return nil
+}
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
@@ -1482,8 +1524,17 @@ func (s *adminServiceImpl) GetAccountsByIDs(ctx context.Context, ids []int64) ([
 }
 
 func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error) {
+	if len(input.GroupBindings) > 0 {
+		if err := validateAccountGroupBindings(input.GroupBindings); err != nil {
+			return nil, err
+		}
+	}
+
 	// 绑定分组
 	groupIDs := input.GroupIDs
+	if len(input.GroupBindings) > 0 {
+		groupIDs = groupIDsFromAccountBindings(input.GroupBindings)
+	}
 	// 如果没有指定分组,自动绑定对应平台的默认分组
 	if len(groupIDs) == 0 && !input.SkipDefaultGroupBind {
 		defaultGroupName := input.Platform + "-default"
@@ -1576,7 +1627,15 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 
 	// 绑定分组
 	if len(groupIDs) > 0 {
-		if err := s.accountRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
+		if len(input.GroupBindings) > 0 {
+			if writer, ok := s.accountRepo.(accountGroupBindingWriter); ok {
+				if err := writer.BindGroupBindings(ctx, account.ID, input.GroupBindings); err != nil {
+					return nil, err
+				}
+			} else if err := s.accountRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
+				return nil, err
+			}
+		} else if err := s.accountRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
 			return nil, err
 		}
 	}
@@ -1590,6 +1649,12 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		return nil, err
 	}
 	wasOveragesEnabled := account.IsOveragesEnabled()
+
+	if input.GroupBindings != nil {
+		if err := validateAccountGroupBindings(*input.GroupBindings); err != nil {
+			return nil, err
+		}
+	}
 
 	if input.Name != "" {
 		account.Name = input.Name
@@ -1689,15 +1754,23 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 	}
 
+	var targetGroupIDs *[]int64
+	if input.GroupBindings != nil {
+		ids := groupIDsFromAccountBindings(*input.GroupBindings)
+		targetGroupIDs = &ids
+	} else if input.GroupIDs != nil {
+		targetGroupIDs = input.GroupIDs
+	}
+
 	// 先验证分组是否存在（在任何写操作之前）
-	if input.GroupIDs != nil {
-		if err := s.validateGroupIDsExist(ctx, *input.GroupIDs); err != nil {
+	if targetGroupIDs != nil {
+		if err := s.validateGroupIDsExist(ctx, *targetGroupIDs); err != nil {
 			return nil, err
 		}
 
 		// 检查混合渠道风险（除非用户已确认）
 		if !input.SkipMixedChannelCheck {
-			if err := s.checkMixedChannelRisk(ctx, account.ID, account.Platform, *input.GroupIDs); err != nil {
+			if err := s.checkMixedChannelRisk(ctx, account.ID, account.Platform, *targetGroupIDs); err != nil {
 				return nil, err
 			}
 		}
@@ -1708,8 +1781,16 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 
 	// 绑定分组
-	if input.GroupIDs != nil {
-		if err := s.accountRepo.BindGroups(ctx, account.ID, *input.GroupIDs); err != nil {
+	if targetGroupIDs != nil {
+		if input.GroupBindings != nil {
+			if writer, ok := s.accountRepo.(accountGroupBindingWriter); ok {
+				if err := writer.BindGroupBindings(ctx, account.ID, *input.GroupBindings); err != nil {
+					return nil, err
+				}
+			} else if err := s.accountRepo.BindGroups(ctx, account.ID, *targetGroupIDs); err != nil {
+				return nil, err
+			}
+		} else if err := s.accountRepo.BindGroups(ctx, account.ID, *targetGroupIDs); err != nil {
 			return nil, err
 		}
 	}

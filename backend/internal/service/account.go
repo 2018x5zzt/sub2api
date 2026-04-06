@@ -90,6 +90,22 @@ func (a *Account) BillingRateMultiplier() float64 {
 	return *a.RateMultiplier
 }
 
+// GroupBillingMultiplier 返回账号在指定分组绑定下的扣费乘数。
+// - 未绑定或未配置时按 1.0 处理
+// - 非法值（<=0）按 1.0 处理，避免影响既有计费链路
+func (a *Account) GroupBillingMultiplier(groupID *int64) float64 {
+	if a == nil || groupID == nil || *groupID <= 0 {
+		return 1.0
+	}
+	for i := range a.AccountGroups {
+		ag := a.AccountGroups[i]
+		if ag.GroupID == *groupID {
+			return ag.EffectiveBillingMultiplier()
+		}
+	}
+	return 1.0
+}
+
 func (a *Account) EffectiveLoadFactor() int {
 	if a == nil {
 		return 1
@@ -550,7 +566,7 @@ func (a *Account) GetBaseURL() string {
 	if baseURL == "" {
 		return "https://api.anthropic.com"
 	}
-	if a.Platform == PlatformAntigravity {
+	if a.Platform == PlatformAntigravity && a.ShouldAppendAPIPath() {
 		return strings.TrimRight(baseURL, "/") + "/antigravity"
 	}
 	return baseURL
@@ -563,10 +579,55 @@ func (a *Account) GetGeminiBaseURL(defaultBaseURL string) string {
 	if baseURL == "" {
 		return defaultBaseURL
 	}
-	if a.Platform == PlatformAntigravity && a.Type == AccountTypeAPIKey {
+	if a.Platform == PlatformAntigravity && a.Type == AccountTypeAPIKey && a.ShouldAppendAPIPath() {
 		return strings.TrimRight(baseURL, "/") + "/antigravity"
 	}
 	return baseURL
+}
+
+// ShouldAppendAPIPath controls whether Sub2API should append platform-specific
+// upstream paths (for example /v1/messages or /v1/responses) to the configured
+// base_url. It defaults to true for backwards compatibility.
+func (a *Account) ShouldAppendAPIPath() bool {
+	if a.Credentials == nil {
+		return true
+	}
+	raw, ok := a.Credentials["append_api_path"]
+	if !ok {
+		return true
+	}
+	enabled, ok := parseBoolish(raw)
+	if !ok {
+		return true
+	}
+	return enabled
+}
+
+// UseDirectEndpointMode is enabled when the account should use base_url as a
+// fixed endpoint without appending platform-specific paths.
+func (a *Account) UseDirectEndpointMode() bool {
+	return !a.ShouldAppendAPIPath()
+}
+
+func parseBoolish(value any) (bool, bool) {
+	switch v := value.(type) {
+	case bool:
+		return v, true
+	case string:
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "true", "1", "yes", "on":
+			return true, true
+		case "false", "0", "no", "off":
+			return false, true
+		}
+	case int:
+		return v != 0, true
+	case int64:
+		return v != 0, true
+	case float64:
+		return v != 0, true
+	}
+	return false, false
 }
 
 func (a *Account) GetExtraString(key string) string {

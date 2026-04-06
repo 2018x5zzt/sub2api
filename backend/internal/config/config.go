@@ -301,6 +301,8 @@ type CircuitBreakerConfig struct {
 type ConcurrencyConfig struct {
 	// PingInterval: 并发等待期间的 SSE ping 间隔（秒）
 	PingInterval int `mapstructure:"ping_interval"`
+	// UserSlotWaitTimeout: 用户并发槽位最大等待时间
+	UserSlotWaitTimeout time.Duration `mapstructure:"user_slot_wait_timeout"`
 }
 
 // SoraConfig 直连 Sora 配置
@@ -997,6 +999,9 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	// 环境变量支持
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	_ = viper.BindEnv("concurrency.user_slot_wait_timeout")
+	_ = viper.BindEnv("gateway.scheduling.fallback_wait_timeout")
+	_ = viper.BindEnv("gateway.scheduling.db_fallback_enabled")
 
 	// 默认值
 	setDefaults()
@@ -1448,6 +1453,7 @@ func setDefaults() {
 
 	viper.SetDefault("gateway.tls_fingerprint.enabled", true)
 	viper.SetDefault("concurrency.ping_interval", 10)
+	viper.SetDefault("concurrency.user_slot_wait_timeout", 30*time.Second)
 
 	// Sora 直连配置
 	viper.SetDefault("sora.client.base_url", "https://sora.chatgpt.com/backend")
@@ -2234,6 +2240,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Concurrency.PingInterval < 5 || c.Concurrency.PingInterval > 30 {
 		return fmt.Errorf("concurrency.ping_interval must be between 5-30 seconds")
+	}
+	if c.Concurrency.UserSlotWaitTimeout <= 0 {
+		return fmt.Errorf("concurrency.user_slot_wait_timeout must be positive")
 	}
 	return nil
 }

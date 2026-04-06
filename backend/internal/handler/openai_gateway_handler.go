@@ -48,20 +48,26 @@ func NewOpenAIGatewayHandler(
 	cfg *config.Config,
 ) *OpenAIGatewayHandler {
 	pingInterval := time.Duration(0)
+	userSlotWaitTimeout := maxConcurrencyWait
 	maxAccountSwitches := 3
 	if cfg != nil {
 		pingInterval = time.Duration(cfg.Concurrency.PingInterval) * time.Second
+		if cfg.Concurrency.UserSlotWaitTimeout > 0 {
+			userSlotWaitTimeout = cfg.Concurrency.UserSlotWaitTimeout
+		}
 		if cfg.Gateway.MaxAccountSwitches > 0 {
 			maxAccountSwitches = cfg.Gateway.MaxAccountSwitches
 		}
 	}
+	concurrencyHelper := NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval)
+	concurrencyHelper.SetUserSlotWaitTimeout(userSlotWaitTimeout)
 	return &OpenAIGatewayHandler{
 		gatewayService:          gatewayService,
 		billingCacheService:     billingCacheService,
 		apiKeyService:           apiKeyService,
 		usageRecordWorkerPool:   usageRecordWorkerPool,
 		errorPassthroughService: errorPassthroughService,
-		concurrencyHelper:       NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
+		concurrencyHelper:       concurrencyHelper,
 		maxAccountSwitches:      maxAccountSwitches,
 		cfg:                     cfg,
 	}
@@ -174,8 +180,11 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 
 	setOpsRequestContext(c, reqModel, reqStream, body)
 
-	// 提前校验 function_call_output 是否具备可关联上下文，避免上游 400。
-	if !h.validateFunctionCallOutputRequest(c, body, reqLog) {
+	sessionHash := h.gatewayService.GenerateSessionHash(c, sessionHashBody)
+
+	// 提前校验 function_call_output 是否具备可关联上下文；若请求可依赖稳定会话历史，
+	// 则放行并在后续账号选择阶段强制走 WS v2。
+	if !h.validateFunctionCallOutputRequest(c, body, sessionHash, reqLog) {
 		return
 	}
 
@@ -207,8 +216,12 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		return
 	}
 
-	// Generate session hash (header first; fallback to prompt_cache_key)
-	sessionHash := h.gatewayService.GenerateSessionHash(c, sessionHashBody)
+	requiredTransport := service.OpenAIUpstreamTransportAny
+	if cachedReqBody, ok := c.Get(service.OpenAIParsedRequestBodyKey); ok {
+		if reqBody, ok := cachedReqBody.(map[string]any); ok {
+			requiredTransport = service.ResolveOpenAIResponsesRequiredTransport(reqBody, sessionHash)
+		}
+	}
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
@@ -226,7 +239,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			sessionHash,
 			reqModel,
 			failedAccountIDs,
-			service.OpenAIUpstreamTransportAny,
+			requiredTransport,
 		)
 		if err != nil {
 			reqLog.Warn("openai.account_select_failed",
@@ -265,8 +278,12 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		reqLog.Debug("openai.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
 		setOpsSelectedAccount(c, account.ID, account.Platform)
 
-		accountReleaseFunc, acquired := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, reqLog)
+		allowQueueWait := h.shouldAllowOpenAIAccountQueueWait(lastFailoverErr)
+		accountReleaseFunc, acquired, waitSkipped := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, allowQueueWait, reqLog)
 		if !acquired {
+			if waitSkipped && lastFailoverErr != nil {
+				h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
+			}
 			return
 		}
 
@@ -649,8 +666,12 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		_ = scheduleDecision
 		setOpsSelectedAccount(c, account.ID, account.Platform)
 
-		accountReleaseFunc, acquired := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, reqLog)
+		allowQueueWait := h.shouldAllowOpenAIAccountQueueWait(lastFailoverErr)
+		accountReleaseFunc, acquired, waitSkipped := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, allowQueueWait, reqLog)
 		if !acquired {
+			if waitSkipped && lastFailoverErr != nil {
+				h.handleAnthropicFailoverExhausted(c, lastFailoverErr, streamStarted)
+			}
 			return
 		}
 
@@ -812,7 +833,7 @@ func (h *OpenAIGatewayHandler) ensureAnthropicErrorResponse(c *gin.Context, stre
 	return true
 }
 
-func (h *OpenAIGatewayHandler) validateFunctionCallOutputRequest(c *gin.Context, body []byte, reqLog *zap.Logger) bool {
+func (h *OpenAIGatewayHandler) validateFunctionCallOutputRequest(c *gin.Context, body []byte, sessionHash string, reqLog *zap.Logger) bool {
 	if !gjson.GetBytes(body, `input.#(type=="function_call_output")`).Exists() {
 		return true
 	}
@@ -842,6 +863,12 @@ func (h *OpenAIGatewayHandler) validateFunctionCallOutputRequest(c *gin.Context,
 		return false
 	}
 	if validation.HasItemReferenceForAllCallIDs {
+		return true
+	}
+	if strings.TrimSpace(sessionHash) != "" && service.NeedsFunctionCallOutputHistoryInference(reqBody) {
+		reqLog.Info("openai.function_call_output_history_inference_enabled",
+			zap.Bool("requires_ws_v2", true),
+		)
 		return true
 	}
 
@@ -904,6 +931,10 @@ func (h *OpenAIGatewayHandler) acquireResponsesUserSlot(
 	return wrapReleaseOnDone(ctx, userReleaseFunc), true
 }
 
+func (h *OpenAIGatewayHandler) shouldAllowOpenAIAccountQueueWait(lastFailoverErr *service.UpstreamFailoverError) bool {
+	return lastFailoverErr == nil || lastFailoverErr.StatusCode != http.StatusTooManyRequests
+}
+
 func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 	c *gin.Context,
 	groupID *int64,
@@ -911,21 +942,22 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 	selection *service.AccountSelectionResult,
 	reqStream bool,
 	streamStarted *bool,
+	allowQueueWait bool,
 	reqLog *zap.Logger,
-) (func(), bool) {
+) (func(), bool, bool) {
 	if selection == nil || selection.Account == nil {
 		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", *streamStarted)
-		return nil, false
+		return nil, false, false
 	}
 
 	ctx := c.Request.Context()
 	account := selection.Account
 	if selection.Acquired {
-		return wrapReleaseOnDone(ctx, selection.ReleaseFunc), true
+		return wrapReleaseOnDone(ctx, selection.ReleaseFunc), true, false
 	}
 	if selection.WaitPlan == nil {
 		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", *streamStarted)
-		return nil, false
+		return nil, false, false
 	}
 
 	fastReleaseFunc, fastAcquired, err := h.concurrencyHelper.TryAcquireAccountSlot(
@@ -936,13 +968,21 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 	if err != nil {
 		reqLog.Warn("openai.account_slot_quick_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 		h.handleConcurrencyError(c, err, "account", *streamStarted)
-		return nil, false
+		return nil, false, false
 	}
 	if fastAcquired {
 		if err := h.gatewayService.BindStickySession(ctx, groupID, sessionHash, account.ID); err != nil {
 			reqLog.Warn("openai.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 		}
-		return wrapReleaseOnDone(ctx, fastReleaseFunc), true
+		return wrapReleaseOnDone(ctx, fastReleaseFunc), true, false
+	}
+	if !allowQueueWait {
+		reqLog.Info("openai.account_wait_skipped_after_429_failover",
+			zap.Int64("account_id", account.ID),
+			zap.Duration("planned_timeout", selection.WaitPlan.Timeout),
+			zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
+		)
+		return nil, false, true
 	}
 
 	canWait, waitErr := h.concurrencyHelper.IncrementAccountWaitCount(ctx, account.ID, selection.WaitPlan.MaxWaiting)
@@ -954,7 +994,7 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 			zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
 		)
 		h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", *streamStarted)
-		return nil, false
+		return nil, false, false
 	}
 
 	accountWaitCounted := waitErr == nil && canWait
@@ -977,7 +1017,7 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 	if err != nil {
 		reqLog.Warn("openai.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 		h.handleConcurrencyError(c, err, "account", *streamStarted)
-		return nil, false
+		return nil, false, false
 	}
 
 	// Slot acquired: no longer waiting in queue.
@@ -985,7 +1025,7 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 	if err := h.gatewayService.BindStickySession(ctx, groupID, sessionHash, account.ID); err != nil {
 		reqLog.Warn("openai.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 	}
-	return wrapReleaseOnDone(ctx, accountReleaseFunc), true
+	return wrapReleaseOnDone(ctx, accountReleaseFunc), true, false
 }
 
 // ResponsesWebSocket handles OpenAI Responses API WebSocket ingress endpoint

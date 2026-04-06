@@ -37,6 +37,10 @@ func (PromoCode) Fields() []ent.Field {
 			NotEmpty().
 			Unique().
 			Comment("优惠码"),
+		field.String("scene").
+			MaxLen(20).
+			Default(domain.PromoCodeSceneRegister).
+			Comment("优惠码场景: register, benefit"),
 		field.Float("bonus_amount").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0).
@@ -56,6 +60,11 @@ func (PromoCode) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}).
 			Comment("过期时间，null表示永不过期"),
+		field.String("success_message").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "text"}).
+			Comment("兑换成功后展示给用户的弹窗文案"),
 		field.String("notes").
 			Optional().
 			Nillable().
@@ -81,6 +90,7 @@ func (PromoCode) Edges() []ent.Edge {
 func (PromoCode) Indexes() []ent.Index {
 	return []ent.Index{
 		// code 字段已在 Fields() 中声明 Unique()，无需重复索引
+		index.Fields("scene"),
 		index.Fields("status"),
 		index.Fields("expires_at"),
 	}

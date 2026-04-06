@@ -232,24 +232,49 @@ func TestApplyCodexOAuthTransform_EmptyInput(t *testing.T) {
 	require.Len(t, input, 0)
 }
 
-func TestNormalizeCodexModel_Gpt53(t *testing.T) {
+func TestNormalizeCodexModel_SupportedAliases(t *testing.T) {
 	cases := map[string]string{
-		"gpt-5.4":                   "gpt-5.4",
-		"gpt-5.4-high":              "gpt-5.4",
-		"gpt-5.4-chat-latest":       "gpt-5.4",
-		"gpt 5.4":                   "gpt-5.4",
-		"gpt-5.3":                   "gpt-5.3-codex",
-		"gpt-5.3-codex":             "gpt-5.3-codex",
-		"gpt-5.3-codex-xhigh":       "gpt-5.3-codex",
-		"gpt-5.3-codex-spark":       "gpt-5.3-codex",
-		"gpt-5.3-codex-spark-high":  "gpt-5.3-codex",
-		"gpt-5.3-codex-spark-xhigh": "gpt-5.3-codex",
-		"gpt 5.3 codex":             "gpt-5.3-codex",
+		"gpt-5":                 "gpt-5",
+		"gpt-5-codex":           "gpt-5-codex",
+		"gpt-5-codex-mini":      "gpt-5-codex-mini",
+		"gpt-5.1":               "gpt-5.1",
+		"gpt-5.1-codex":         "gpt-5.1-codex",
+		"gpt-5.1-codex-max":     "gpt-5.1-codex-max",
+		"gpt-5.1-codex-mini":    "gpt-5.1-codex-mini",
+		"gpt-5.2":               "gpt-5.2",
+		"gpt-5.2-high":          "gpt-5.2",
+		"gpt-5.2-low":           "gpt-5.2",
+		"gpt-5.2-medium":        "gpt-5.2",
+		"gpt-5.2-xhigh":         "gpt-5.2",
+		"gpt-5.2-codex":         "gpt-5.2-codex",
+		"gpt-5.3-codex":         "gpt-5.3-codex",
+		"gpt-5.3-codex-high":    "gpt-5.3-codex",
+		"gpt-5.3-codex-medium":  "gpt-5.3-codex",
+		"gpt-5.3-codex-xhigh":   "gpt-5.3-codex",
+		"gpt-5.3-codex-spark":   "gpt-5.3-codex",
+		"gpt-5.4":               "gpt-5.4",
+		"gpt-5.4-high":          "gpt-5.4",
+		"gpt-5.4-medium":        "gpt-5.4",
+		"gpt-5.4-mini":          "gpt-5.4-mini",
+		"gpt-5.4-xhigh":         "gpt-5.4",
+		"codex-mini-latest":     "gpt-5.1-codex-mini",
+		"models/gpt-5.4-medium": "gpt-5.4",
+		"models/gpt-5.2-high":   "gpt-5.2",
+		"models/gpt-5-codex":    "gpt-5-codex",
+		"models/gpt-5.4-mini":   "gpt-5.4-mini",
+		"gpt 5.3 codex":         "gpt-5.3-codex",
+		"gpt 5.4 mini":          "gpt-5.4-mini",
+		"gpt 5 codex mini":      "gpt-5-codex-mini",
 	}
 
 	for input, expected := range cases {
 		require.Equal(t, expected, normalizeCodexModel(input))
 	}
+}
+
+func TestNormalizeCodexModel_UnsupportedModelsDoNotSilentlyRemap(t *testing.T) {
+	require.Equal(t, "gpt-5-pro", normalizeCodexModel("gpt-5-pro"))
+	require.Equal(t, "gpt-4o", normalizeCodexModel("gpt-4o"))
 }
 
 func TestApplyCodexOAuthTransform_CodexCLI_PreservesExistingInstructions(t *testing.T) {

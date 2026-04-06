@@ -45,6 +45,17 @@
             "
           />
           <p class="input-hint">{{ baseUrlHint }}</p>
+          <template v-if="account.platform !== 'sora'">
+            <label class="mt-3 flex cursor-pointer items-start gap-3">
+              <input
+                v-model="editAppendApiPath"
+                type="checkbox"
+                class="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.appendApiPath') }}</span>
+            </label>
+            <p class="input-hint mt-1">{{ t('admin.accounts.appendApiPathHint') }}</p>
+          </template>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.apiKey') }}</label>
@@ -550,6 +561,15 @@
             placeholder="https://cloudcode-pa.googleapis.com"
           />
           <p class="input-hint">{{ t('admin.accounts.upstream.baseUrlHint') }}</p>
+          <label class="mt-3 flex cursor-pointer items-start gap-3">
+            <input
+              v-model="editAppendApiPath"
+              type="checkbox"
+              class="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.appendApiPath') }}</span>
+          </label>
+          <p class="input-hint mt-1">{{ t('admin.accounts.appendApiPathHint') }}</p>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.upstream.apiKey') }}</label>
@@ -1649,6 +1669,42 @@
         data-tour="account-form-groups"
       />
 
+      <div
+        v-if="!authStore.isSimpleMode && selectedGroupBillingConfigs.length > 0"
+        class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+      >
+        <div class="mb-3">
+          <h4 class="text-sm font-semibold text-gray-900 dark:text-white">分组扣费乘数</h4>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            乘入现有分组/用户倍率，默认 1，不影响原有扣费逻辑。
+          </p>
+        </div>
+        <div class="space-y-3">
+          <div
+            v-for="config in selectedGroupBillingConfigs"
+            :key="config.groupId"
+            class="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-700/50"
+          >
+            <div class="min-w-0">
+              <div class="truncate text-sm font-medium text-gray-900 dark:text-white">
+                {{ config.groupName }}
+              </div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">
+                Group ID: {{ config.groupId }}
+              </div>
+            </div>
+            <input
+              type="number"
+              step="0.001"
+              min="0.001"
+              :value="config.billingMultiplier"
+              @input="setGroupBillingMultiplier(config.groupId, ($event.target as HTMLInputElement).value)"
+              class="w-28 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-800"
+            />
+          </div>
+        </div>
+      </div>
+
     </form>
 
     <template #footer>
@@ -1781,6 +1837,7 @@ interface TempUnschedRuleForm {
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
+const editAppendApiPath = ref(true)
 // Bedrock credentials
 const editBedrockAccessKeyId = ref('')
 const editBedrockSecretAccessKey = ref('')
@@ -1947,6 +2004,20 @@ const form = reactive({
   expires_at: null as number | null
 })
 
+const DEFAULT_GROUP_BILLING_MULTIPLIER = '1'
+const groupBillingMultipliers = reactive<Record<number, string>>({})
+
+const selectedGroupBillingConfigs = computed(() =>
+  form.group_ids.map((groupId) => {
+    const group = props.groups.find((item) => item.id === groupId)
+    return {
+      groupId,
+      groupName: group?.name || `#${groupId}`,
+      billingMultiplier: groupBillingMultipliers[groupId] ?? DEFAULT_GROUP_BILLING_MULTIPLIER
+    }
+  })
+)
+
 const statusOptions = computed(() => {
   const options = [
     { value: 'active', label: t('common.active') },
@@ -1964,6 +2035,42 @@ const expiresAtInput = computed({
     form.expires_at = parseDateTimeLocal(value)
   }
 })
+
+const syncSelectedGroupBillingMultipliers = (groupIDs: number[]) => {
+  for (const groupID of groupIDs) {
+    if (!groupBillingMultipliers[groupID]) {
+      groupBillingMultipliers[groupID] = DEFAULT_GROUP_BILLING_MULTIPLIER
+    }
+  }
+}
+
+const setGroupBillingMultiplier = (groupID: number, value: string) => {
+  groupBillingMultipliers[groupID] = value
+}
+
+const buildGroupBindingsPayload = () =>
+  form.group_ids.map((groupId) => {
+    const rawValue = (groupBillingMultipliers[groupId] ?? DEFAULT_GROUP_BILLING_MULTIPLIER).trim()
+    const parsed = Number.parseFloat(rawValue)
+    return {
+      group_id: groupId,
+      ...(Number.isFinite(parsed) && parsed > 0 && Math.abs(parsed - 1) > 1e-9
+        ? { billing_multiplier: parsed }
+        : {})
+    }
+  })
+
+const validateGroupBillingMultipliers = () => {
+  for (const groupId of form.group_ids) {
+    const rawValue = (groupBillingMultipliers[groupId] ?? DEFAULT_GROUP_BILLING_MULTIPLIER).trim()
+    const parsed = Number.parseFloat(rawValue)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      appStore.showError(`分组 ${groupId} 的扣费乘数必须大于 0`)
+      return false
+    }
+  }
+  return true
+}
 
 // Watchers
 const normalizePoolModeRetryCount = (value: number) => {
@@ -2000,12 +2107,20 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     ? newAccount.status
     : 'active'
   form.group_ids = newAccount.group_ids || []
+  for (const key of Object.keys(groupBillingMultipliers)) {
+    delete groupBillingMultipliers[Number(key)]
+  }
+  for (const binding of newAccount.account_groups || []) {
+    groupBillingMultipliers[binding.group_id] = String(binding.billing_multiplier ?? 1)
+  }
+  syncSelectedGroupBillingMultipliers(form.group_ids)
   form.expires_at = newAccount.expires_at ?? null
 
   // Load intercept warmup requests setting (applies to all account types)
   const credentials = newAccount.credentials as Record<string, unknown> | undefined
   interceptWarmupRequests.value = credentials?.intercept_warmup_requests === true
   autoPauseOnExpired.value = newAccount.auto_pause_on_expired === true
+  editAppendApiPath.value = credentials?.append_api_path !== false
 
   // Load mixed scheduling setting (only for antigravity accounts)
   mixedScheduling.value = false
@@ -2116,6 +2231,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
           ? 'https://generativelanguage.googleapis.com'
           : 'https://api.anthropic.com'
     editBaseUrl.value = (credentials.base_url as string) || platformDefaultUrl
+    editAppendApiPath.value = credentials.append_api_path !== false
 
     // Load model mappings and detect mode
     const existingMappings = credentials.model_mapping as Record<string, string> | undefined
@@ -2204,6 +2320,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   } else if (newAccount.type === 'upstream' && newAccount.credentials) {
     const credentials = newAccount.credentials as Record<string, unknown>
     editBaseUrl.value = (credentials.base_url as string) || ''
+    editAppendApiPath.value = credentials.append_api_path !== false
   } else {
     const platformDefaultUrl =
       newAccount.platform === 'openai' || newAccount.platform === 'sora'
@@ -2212,6 +2329,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
           ? 'https://generativelanguage.googleapis.com'
           : 'https://api.anthropic.com'
     editBaseUrl.value = platformDefaultUrl
+    editAppendApiPath.value = true
 
     // Load model mappings for OpenAI OAuth accounts
     if (newAccount.platform === 'openai' && newAccount.credentials) {
@@ -2246,6 +2364,14 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   }
   editApiKey.value = ''
 }
+
+watch(
+  () => form.group_ids.slice(),
+  (groupIDs) => {
+    syncSelectedGroupBillingMultipliers(groupIDs)
+  },
+  { immediate: true }
+)
 
 watch(
   [() => props.show, () => props.account],
@@ -2658,6 +2784,9 @@ const handleSubmit = async () => {
     appStore.showError(t('admin.accounts.pleaseSelectStatus'))
     return
   }
+  if (!validateGroupBillingMultipliers()) {
+    return
+  }
 
   const updatePayload: Record<string, unknown> = { ...form }
   try {
@@ -2674,17 +2803,23 @@ const handleSubmit = async () => {
       updatePayload.load_factor = 0
     }
     updatePayload.auto_pause_on_expired = autoPauseOnExpired.value
+    updatePayload.group_bindings = buildGroupBindingsPayload()
 
     // For apikey type, handle credentials update
     if (props.account.type === 'apikey') {
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
+      if (props.account.platform !== 'sora' && !editAppendApiPath.value && !editBaseUrl.value.trim()) {
+        appStore.showError(t('admin.accounts.pleaseEnterBaseUrl'))
+        return
+      }
       const newBaseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value
       const shouldApplyModelMapping = !(props.account.platform === 'openai' && openaiPassthroughEnabled.value)
 
       // Always update credentials for apikey type to handle model mapping changes
       const newCredentials: Record<string, unknown> = {
         ...currentCredentials,
-        base_url: newBaseUrl
+        base_url: newBaseUrl,
+        append_api_path: editAppendApiPath.value
       }
 
       // Handle API key
@@ -2738,9 +2873,14 @@ const handleSubmit = async () => {
       updatePayload.credentials = newCredentials
     } else if (props.account.type === 'upstream') {
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
+      if (!editAppendApiPath.value && !editBaseUrl.value.trim()) {
+        appStore.showError(t('admin.accounts.pleaseEnterBaseUrl'))
+        return
+      }
       const newCredentials: Record<string, unknown> = { ...currentCredentials }
 
       newCredentials.base_url = editBaseUrl.value.trim()
+      newCredentials.append_api_path = editAppendApiPath.value
 
       if (editApiKey.value.trim()) {
         newCredentials.api_key = editApiKey.value.trim()

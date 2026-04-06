@@ -4810,7 +4810,10 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 		if err != nil {
 			return nil, err
 		}
-		targetURL = validatedURL + "/v1/messages?beta=true"
+		targetURL = validatedURL
+		if account.ShouldAppendAPIPath() {
+			targetURL = validatedURL + "/v1/messages?beta=true"
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
@@ -4835,6 +4838,9 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 	req.Header.Del("x-api-key")
 	req.Header.Del("x-goog-api-key")
 	req.Header.Del("cookie")
+	if account.UseDirectEndpointMode() {
+		req.Header.Set("authorization", "Bearer "+token)
+	}
 	req.Header.Set("x-api-key", token)
 
 	if req.Header.Get("content-type") == "" {
@@ -5564,7 +5570,10 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 			if err != nil {
 				return nil, err
 			}
-			targetURL = validatedURL + "/v1/messages?beta=true"
+			targetURL = validatedURL
+			if account.ShouldAppendAPIPath() {
+				targetURL = validatedURL + "/v1/messages?beta=true"
+			}
 		}
 	}
 
@@ -5607,6 +5616,9 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	if tokenType == "oauth" {
 		req.Header.Set("authorization", "Bearer "+token)
 	} else {
+		if account.UseDirectEndpointMode() {
+			req.Header.Set("authorization", "Bearer "+token)
+		}
 		req.Header.Set("x-api-key", token)
 	}
 
@@ -7514,6 +7526,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		groupDefault := apiKey.Group.RateMultiplier
 		multiplier = s.getUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
 	}
+	effectiveRateMultiplier := multiplier * account.GroupBillingMultiplier(apiKey.GroupID)
 
 	var cost *CostBreakdown
 
@@ -7529,9 +7542,9 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 			}
 		}
 		if result.MediaType == "image" {
-			cost = s.billingService.CalculateSoraImageCost(result.ImageSize, result.ImageCount, soraConfig, multiplier)
+			cost = s.billingService.CalculateSoraImageCost(result.ImageSize, result.ImageCount, soraConfig, effectiveRateMultiplier)
 		} else {
-			cost = s.billingService.CalculateSoraVideoCost(result.Model, soraConfig, multiplier)
+			cost = s.billingService.CalculateSoraVideoCost(result.Model, soraConfig, effectiveRateMultiplier)
 		}
 	} else if result.MediaType == "prompt" {
 		cost = &CostBreakdown{}
@@ -7545,7 +7558,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 				Price4K: apiKey.Group.ImagePrice4K,
 			}
 		}
-		cost = s.billingService.CalculateImageCost(result.Model, result.ImageSize, result.ImageCount, groupConfig, multiplier)
+		cost = s.billingService.CalculateImageCost(result.Model, result.ImageSize, result.ImageCount, groupConfig, effectiveRateMultiplier)
 	} else {
 		// Token 计费
 		tokens := UsageTokens{
@@ -7557,7 +7570,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 			CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		}
 		var err error
-		cost, err = s.billingService.CalculateCost(result.Model, tokens, multiplier)
+		cost, err = s.billingService.CalculateCost(result.Model, tokens, effectiveRateMultiplier)
 		if err != nil {
 			logger.LegacyPrintf("service.gateway", "Calculate cost failed: %v", err)
 			cost = &CostBreakdown{ActualCost: 0}
@@ -7605,7 +7618,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		CacheReadCost:         cost.CacheReadCost,
 		TotalCost:             cost.TotalCost,
 		ActualCost:            cost.ActualCost,
-		RateMultiplier:        multiplier,
+		RateMultiplier:        effectiveRateMultiplier,
 		AccountRateMultiplier: &accountRateMultiplier,
 		BillingType:           billingType,
 		Stream:                result.Stream,
@@ -7717,6 +7730,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		groupDefault := apiKey.Group.RateMultiplier
 		multiplier = s.getUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
 	}
+	effectiveRateMultiplier := multiplier * account.GroupBillingMultiplier(apiKey.GroupID)
 
 	var cost *CostBreakdown
 
@@ -7731,7 +7745,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 				Price4K: apiKey.Group.ImagePrice4K,
 			}
 		}
-		cost = s.billingService.CalculateImageCost(result.Model, result.ImageSize, result.ImageCount, groupConfig, multiplier)
+		cost = s.billingService.CalculateImageCost(result.Model, result.ImageSize, result.ImageCount, groupConfig, effectiveRateMultiplier)
 	} else {
 		// Token 计费（使用长上下文计费方法）
 		tokens := UsageTokens{
@@ -7743,7 +7757,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 			CacheCreation1hTokens: result.Usage.CacheCreation1hTokens,
 		}
 		var err error
-		cost, err = s.billingService.CalculateCostWithLongContext(result.Model, tokens, multiplier, input.LongContextThreshold, input.LongContextMultiplier)
+		cost, err = s.billingService.CalculateCostWithLongContext(result.Model, tokens, effectiveRateMultiplier, input.LongContextThreshold, input.LongContextMultiplier)
 		if err != nil {
 			logger.LegacyPrintf("service.gateway", "Calculate cost failed: %v", err)
 			cost = &CostBreakdown{ActualCost: 0}
@@ -7787,7 +7801,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		CacheReadCost:         cost.CacheReadCost,
 		TotalCost:             cost.TotalCost,
 		ActualCost:            cost.ActualCost,
-		RateMultiplier:        multiplier,
+		RateMultiplier:        effectiveRateMultiplier,
 		AccountRateMultiplier: &accountRateMultiplier,
 		BillingType:           billingType,
 		Stream:                result.Stream,
@@ -8160,7 +8174,10 @@ func (s *GatewayService) buildCountTokensRequestAnthropicAPIKeyPassthrough(
 		if err != nil {
 			return nil, err
 		}
-		targetURL = validatedURL + "/v1/messages/count_tokens?beta=true"
+		targetURL = validatedURL
+		if account.ShouldAppendAPIPath() {
+			targetURL = validatedURL + "/v1/messages/count_tokens?beta=true"
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
@@ -8184,6 +8201,9 @@ func (s *GatewayService) buildCountTokensRequestAnthropicAPIKeyPassthrough(
 	req.Header.Del("x-api-key")
 	req.Header.Del("x-goog-api-key")
 	req.Header.Del("cookie")
+	if account.UseDirectEndpointMode() {
+		req.Header.Set("authorization", "Bearer "+token)
+	}
 	req.Header.Set("x-api-key", token)
 
 	if req.Header.Get("content-type") == "" {
@@ -8207,7 +8227,10 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 			if err != nil {
 				return nil, err
 			}
-			targetURL = validatedURL + "/v1/messages/count_tokens?beta=true"
+			targetURL = validatedURL
+			if account.ShouldAppendAPIPath() {
+				targetURL = validatedURL + "/v1/messages/count_tokens?beta=true"
+			}
 		}
 	}
 
