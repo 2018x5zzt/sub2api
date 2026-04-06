@@ -345,12 +345,11 @@ func (h *APIKeyHandler) GetUserGroupRates(c *gin.Context) {
 
 func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *service.Group) ([]dto.SupportedModel, string, error) {
 	if group == nil {
-		return nil, "default", nil
+		return nil, "mapping", nil
 	}
 
-	defaultModels := defaultModelsForGroup(group)
-	if group.Platform == service.PlatformAntigravity || group.Platform == service.PlatformSora || h.accountRepo == nil {
-		return defaultModels, "default", nil
+	if h.accountRepo == nil {
+		return nil, "mapping", nil
 	}
 
 	accounts, err := h.accountRepo.ListSchedulableByGroupID(ctx, group.ID)
@@ -358,58 +357,24 @@ func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *serv
 		return nil, "", err
 	}
 
-	mappedModelIDs, hasAnyMapping, includeDefaults := collectGroupModelIDs(group.Platform, accounts, defaultModels)
-	if !hasAnyMapping {
-		return defaultModels, "default", nil
-	}
-
-	if includeDefaults {
-		return mergeDefaultAndMappedModels(defaultModels, mappedModelIDs), "mixed", nil
-	}
-
-	return buildMappedModels(mappedModelIDs, defaultModels), "mapping", nil
+	mappedModelIDs := collectGroupModelIDs(group.Platform, accounts)
+	return buildMappedModels(mappedModelIDs, nil), "mapping", nil
 }
 
-func defaultModelsForGroup(group *service.Group) []dto.SupportedModel {
-	if group == nil {
-		return nil
-	}
-
-	switch group.Platform {
-	case service.PlatformOpenAI:
-		return supportedModelsFromOpenAI(openai.DefaultModels)
-	case service.PlatformGemini:
-		return supportedModelsFromGemini(geminicli.DefaultModels)
-	case service.PlatformAntigravity:
-		return filterAntigravityModelsByScopes(
-			supportedModelsFromAntigravity(antigravity.DefaultModels()),
-			group.SupportedModelScopes,
-		)
-	case service.PlatformSora:
-		return supportedModelsFromOpenAI(service.DefaultSoraModels(nil))
-	default:
-		return supportedModelsFromClaude(claude.DefaultModels)
-	}
-}
-
-func collectGroupModelIDs(platform string, accounts []service.Account, defaults []dto.SupportedModel) ([]string, bool, bool) {
+func collectGroupModelIDs(platform string, accounts []service.Account) []string {
 	modelSet := make(map[string]struct{})
-	hasAnyMapping := false
-	includeDefaults := false
 
 	for i := range accounts {
 		account := &accounts[i]
-		mapping := account.GetModelMapping()
-		if accountUsesDefaultModels(platform, account, mapping) {
-			includeDefaults = true
+		mapping := configuredModelMapping(account)
+		if accountUsesImplicitModelCatalog(platform, account, mapping) {
 			continue
 		}
-		hasAnyMapping = true
-		addMappedModelIDs(modelSet, mapping, defaults)
+		addConcreteMappedModelIDs(modelSet, mapping)
 	}
 
-	if !hasAnyMapping {
-		return nil, false, includeDefaults
+	if len(modelSet) == 0 {
+		return nil
 	}
 
 	models := make([]string, 0, len(modelSet))
@@ -417,10 +382,34 @@ func collectGroupModelIDs(platform string, accounts []service.Account, defaults 
 		models = append(models, modelID)
 	}
 	sort.Strings(models)
-	return models, true, includeDefaults
+	return models
 }
 
-func accountUsesDefaultModels(platform string, account *service.Account, mapping map[string]string) bool {
+func configuredModelMapping(account *service.Account) map[string]string {
+	if account == nil || account.Credentials == nil {
+		return nil
+	}
+
+	rawMapping, _ := account.Credentials["model_mapping"].(map[string]any)
+	if len(rawMapping) == 0 {
+		return nil
+	}
+
+	mapping := make(map[string]string, len(rawMapping))
+	for selector, target := range rawMapping {
+		targetModel, ok := target.(string)
+		if !ok {
+			continue
+		}
+		mapping[selector] = targetModel
+	}
+	if len(mapping) == 0 {
+		return nil
+	}
+	return mapping
+}
+
+func accountUsesImplicitModelCatalog(platform string, account *service.Account, mapping map[string]string) bool {
 	if account == nil {
 		return false
 	}
@@ -438,45 +427,14 @@ func accountUsesDefaultModels(platform string, account *service.Account, mapping
 	}
 }
 
-func addMappedModelIDs(modelSet map[string]struct{}, mapping map[string]string, defaults []dto.SupportedModel) {
-	for modelID := range mapping {
-		expanded := expandMappedModelSelector(modelID, defaults)
-		if len(expanded) == 0 {
-			modelSet[modelID] = struct{}{}
+func addConcreteMappedModelIDs(modelSet map[string]struct{}, mapping map[string]string) {
+	for selector := range mapping {
+		modelID := strings.TrimSpace(selector)
+		if modelID == "" || strings.Contains(modelID, "*") {
 			continue
 		}
-		for _, expandedID := range expanded {
-			modelSet[expandedID] = struct{}{}
-		}
+		modelSet[modelID] = struct{}{}
 	}
-}
-
-func expandMappedModelSelector(selector string, defaults []dto.SupportedModel) []string {
-	selector = strings.TrimSpace(selector)
-	if selector == "" {
-		return nil
-	}
-	if !strings.Contains(selector, "*") {
-		return []string{selector}
-	}
-
-	expanded := make([]string, 0, len(defaults))
-	for _, model := range defaults {
-		if matchModelSelector(selector, model.ID) {
-			expanded = append(expanded, model.ID)
-		}
-	}
-	if len(expanded) == 0 {
-		return nil
-	}
-	return expanded
-}
-
-func matchModelSelector(selector, modelID string) bool {
-	if strings.HasSuffix(selector, "*") {
-		return strings.HasPrefix(modelID, strings.TrimSuffix(selector, "*"))
-	}
-	return selector == modelID
 }
 
 func buildMappedModels(mappedModelIDs []string, defaults []dto.SupportedModel) []dto.SupportedModel {
