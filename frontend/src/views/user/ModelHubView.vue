@@ -299,6 +299,23 @@
                         <code class="mt-1 block truncate text-xs text-gray-500 dark:text-gray-400">
                           {{ model.id }}
                         </code>
+                        <div
+                          v-if="hasPricing(model)"
+                          class="mt-2 flex flex-wrap gap-1.5"
+                        >
+                          <span
+                            v-if="model.input_price_per_mtoken"
+                            class="rounded-full bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                          >
+                            {{ t('modelHub.inputPrice') }} {{ formatPricePerMTok(model.input_price_per_mtoken) }}
+                          </span>
+                          <span
+                            v-if="model.output_price_per_mtoken"
+                            class="rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                          >
+                            {{ t('modelHub.outputPrice') }} {{ formatPricePerMTok(model.output_price_per_mtoken) }}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
@@ -325,7 +342,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { userGroupsAPI } from '@/api'
-import type { GroupModelCatalog, GroupPlatform } from '@/types'
+import type { GroupModelCatalog, GroupPlatform, SupportedModel } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
@@ -340,6 +357,11 @@ interface PlatformOption {
   value: PlatformFilter
   label: string
 }
+
+const priceFormatter = new Intl.NumberFormat(undefined, {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+})
 
 const { t } = useI18n()
 const { copyToClipboard } = useClipboard()
@@ -471,6 +493,17 @@ function collectUniqueModelIds(groupCatalogs: GroupModelCatalog[]): string[] {
     }
   }
   return ids
+}
+
+function hasPricing(model: SupportedModel): boolean {
+  return Boolean(model.input_price_per_mtoken || model.output_price_per_mtoken)
+}
+
+function formatPricePerMTok(price?: number): string {
+  if (!price || !Number.isFinite(price)) {
+    return ''
+  }
+  return `$${priceFormatter.format(price)}/M`
 }
 
 function markCopied(key: string) {

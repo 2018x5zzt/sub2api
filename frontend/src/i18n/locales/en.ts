@@ -709,6 +709,8 @@ export default {
     copiedGroup: 'Group model list copied',
     copiedVisible: 'Visible results copied',
     modelCount: '{count} models',
+    inputPrice: 'Input',
+    outputPrice: 'Output',
     clearFilters: 'Clear filters',
     emptyTitle: 'No models to display',
     emptyDescription: 'No groups or models match the current filters.',

@@ -358,7 +358,40 @@ func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *serv
 	}
 
 	mappedModelIDs := collectGroupModelIDs(group.Platform, accounts)
-	return buildMappedModels(mappedModelIDs, nil), "mapping", nil
+	catalog := staticCatalogModelsForPlatform(group.Platform)
+	mappedModelIDs = filterMappedModelIDsByCatalog(group.Platform, mappedModelIDs)
+	return buildMappedModels(mappedModelIDs, catalog), "mapping", nil
+}
+
+func staticCatalogModelsForPlatform(platform string) []dto.SupportedModel {
+	switch platform {
+	case service.PlatformOpenAI:
+		return supportedModelsFromOpenAI(openai.DefaultModels)
+	default:
+		return nil
+	}
+}
+
+func filterMappedModelIDsByCatalog(platform string, modelIDs []string) []string {
+	if len(modelIDs) == 0 {
+		return nil
+	}
+
+	switch platform {
+	case service.PlatformOpenAI:
+		filtered := make([]string, 0, len(modelIDs))
+		for _, modelID := range modelIDs {
+			if openai.IsDefaultModel(modelID) {
+				filtered = append(filtered, modelID)
+			}
+		}
+		if len(filtered) == 0 {
+			return nil
+		}
+		return filtered
+	default:
+		return modelIDs
+	}
 }
 
 func collectGroupModelIDs(platform string, accounts []service.Account) []string {
@@ -518,8 +551,10 @@ func supportedModelsFromOpenAI(models []openai.Model) []dto.SupportedModel {
 			displayName = model.ID
 		}
 		out = append(out, dto.SupportedModel{
-			ID:          model.ID,
-			DisplayName: displayName,
+			ID:                 model.ID,
+			DisplayName:        displayName,
+			InputPricePerMTok:  model.InputPricePerMTok,
+			OutputPricePerMTok: model.OutputPricePerMTok,
 		})
 	}
 	return out

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
 // APIKeyRateLimitCacheData holds rate limit usage data cached in Redis.
@@ -216,22 +217,13 @@ func (s *BillingService) initFallbackPricing() {
 		SupportsCacheBreakdown:     false,
 	}
 
-	// OpenAI GPT-5 / Codex 族兜底价格，和当前业务兼容表保持一致。
-	s.fallbackPrices["gpt-5"] = newOpenAIFallbackPricing(1.25, 10)
-	s.fallbackPrices["gpt-5-codex"] = newOpenAIFallbackPricing(1.25, 10)
-	s.fallbackPrices["gpt-5-codex-mini"] = newOpenAIFallbackPricing(0.25, 2)
-	s.fallbackPrices["gpt-5.1"] = newOpenAIFallbackPricing(1.25, 10)
-	s.fallbackPrices["gpt-5.1-codex"] = newOpenAIFallbackPricing(1.25, 10)
-	s.fallbackPrices["gpt-5.1-codex-max"] = newOpenAIFallbackPricing(1.25, 10)
-	s.fallbackPrices["gpt-5.1-codex-mini"] = newOpenAIFallbackPricing(0.25, 2)
-	s.fallbackPrices["gpt-5.2"] = newOpenAIFallbackPricing(1.75, 14)
-	s.fallbackPrices["gpt-5.2-codex"] = newOpenAIFallbackPricing(1.75, 14)
-	s.fallbackPrices["gpt-5.3-codex"] = newOpenAIFallbackPricing(1.75, 14)
-	s.fallbackPrices["gpt-5.4"] = newOpenAIFallbackPricing(2.5, 15)
+	// OpenAI GPT-5 / Codex 族兜底价格直接复用静态展示目录，避免目录和计费表漂移。
+	for _, model := range openai.DefaultModels {
+		s.fallbackPrices[model.ID] = newOpenAIFallbackPricing(model.InputPricePerMTok, model.OutputPricePerMTok)
+	}
 	s.fallbackPrices["gpt-5.4"].LongContextInputThreshold = openAIGPT54LongContextInputThreshold
 	s.fallbackPrices["gpt-5.4"].LongContextInputMultiplier = openAIGPT54LongContextInputMultiplier
 	s.fallbackPrices["gpt-5.4"].LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
-	s.fallbackPrices["gpt-5.4-mini"] = newOpenAIFallbackPricing(0.75, 4.5)
 }
 
 // getFallbackPricing 根据模型系列获取回退价格

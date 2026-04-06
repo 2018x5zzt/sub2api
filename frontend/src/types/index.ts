@@ -424,6 +424,8 @@ export interface AdminGroup extends Group {
 export interface SupportedModel {
   id: string
   display_name: string
+  input_price_per_mtoken?: number
+  output_price_per_mtoken?: number
 }
 
 export type GroupModelCatalogSource = 'default' | 'mapping' | 'mixed'

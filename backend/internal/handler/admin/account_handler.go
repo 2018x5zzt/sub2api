@@ -1808,26 +1808,7 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 			return
 		}
 
-		// Return mapped models
-		var models []openai.Model
-		for requestedModel := range mapping {
-			var found bool
-			for _, dm := range openai.DefaultModels {
-				if dm.ID == requestedModel {
-					models = append(models, dm)
-					found = true
-					break
-				}
-			}
-			if !found {
-				models = append(models, openai.Model{
-					ID:          requestedModel,
-					Object:      "model",
-					Type:        "model",
-					DisplayName: requestedModel,
-				})
-			}
-		}
+		models := openAICatalogModelsFromMapping(mapping)
 		response.Success(c, models)
 		return
 	}
@@ -2089,6 +2070,20 @@ func (h *AccountHandler) BatchRefreshTier(c *gin.Context) {
 // GET /api/v1/admin/accounts/antigravity/default-model-mapping
 func (h *AccountHandler) GetAntigravityDefaultModelMapping(c *gin.Context) {
 	response.Success(c, domain.DefaultAntigravityModelMapping)
+}
+
+func openAICatalogModelsFromMapping(mapping map[string]string) []openai.Model {
+	if len(mapping) == 0 {
+		return nil
+	}
+
+	models := make([]openai.Model, 0, len(mapping))
+	for _, model := range openai.DefaultModels {
+		if _, ok := mapping[model.ID]; ok {
+			models = append(models, model)
+		}
+	}
+	return models
 }
 
 // sanitizeExtraBaseRPM 对 extra map 中的 base_rpm 值进行范围校验和归一化。

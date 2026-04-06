@@ -78,3 +78,14 @@ func TestCollectGroupModelIDs_OnlyKeepsConcreteModelsFromExplicitAPIKeyMappings(
 		t.Fatalf("collectGroupModelIDs() = %v, want %v", modelIDs, want)
 	}
 }
+
+func TestFilterMappedModelIDsByCatalog_OpenAIOnlyKeepsCatalogModels(t *testing.T) {
+	modelIDs := []string{"gpt-5.4", "legacy-gpt-5-preview"}
+
+	got := filterMappedModelIDsByCatalog(service.PlatformOpenAI, modelIDs)
+	want := []string{"gpt-5.4"}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("filterMappedModelIDsByCatalog() = %v, want %v", got, want)
+	}
+}

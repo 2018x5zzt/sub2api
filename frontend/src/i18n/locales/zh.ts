@@ -714,6 +714,8 @@ export default {
     copiedGroup: '已复制本组模型',
     copiedVisible: '已复制当前筛选结果',
     modelCount: '{count} 个模型',
+    inputPrice: '输入',
+    outputPrice: '输出',
     clearFilters: '清空筛选',
     emptyTitle: '没有可展示的模型',
     emptyDescription: '当前筛选条件下没有匹配的分组或模型。',

@@ -107,8 +107,10 @@ type Group struct {
 }
 
 type SupportedModel struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
+	ID                 string  `json:"id"`
+	DisplayName        string  `json:"display_name"`
+	InputPricePerMTok  float64 `json:"input_price_per_mtoken,omitempty"`
+	OutputPricePerMTok float64 `json:"output_price_per_mtoken,omitempty"`
 }
 
 type GroupModelCatalog struct {
