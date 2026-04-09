@@ -600,6 +600,12 @@ const formatHistoryValue = (item: RedeemHistoryItem) => {
   }
 }
 
+const getApiErrorReason = (error: any): string | undefined =>
+  error?.reason || error?.response?.data?.reason
+
+const getApiErrorDetail = (error: any): string | undefined =>
+  error?.detail || error?.response?.data?.detail || error?.message || error?.response?.data?.message
+
 const fetchHistory = async () => {
   loadingHistory.value = true
   try {
@@ -617,8 +623,8 @@ const openLeaderboard = async (code: string) => {
     leaderboard.value = await redeemAPI.getBenefitLeaderboard(code)
     showLeaderboardDialog.value = true
   } catch (error: any) {
-    const reason = error?.response?.data?.reason
-    const detail = error?.response?.data?.detail
+    const reason = getApiErrorReason(error)
+    const detail = getApiErrorDetail(error)
     if (reason === 'PROMO_CODE_USERNAME_REQUIRED') {
       showUsernameRequiredDialog.value = true
       return
@@ -691,8 +697,8 @@ const handleRedeem = async () => {
     // Show success toast
     appStore.showSuccess(t('redeem.codeRedeemSuccess'))
   } catch (error: any) {
-    const reason = error?.response?.data?.reason
-    errorMessage.value = error.response?.data?.detail || t('redeem.failedToRedeem')
+    const reason = getApiErrorReason(error)
+    errorMessage.value = getApiErrorDetail(error) || t('redeem.failedToRedeem')
 
     if (reason === 'PROMO_CODE_USERNAME_REQUIRED') {
       showUsernameRequiredDialog.value = true

@@ -263,19 +263,37 @@ apiClient.interceptors.response.use(
         }
       }
 
-      // Return structured error
-      return Promise.reject({
+      const normalizedMessage = apiData.message || apiData.detail || error.message || 'Unknown error'
+      const normalizedError = {
         status,
-        code: apiData.code,
+        code: apiData.code ?? status,
+        reason: apiData.reason,
         error: apiData.error,
-        message: apiData.message || apiData.detail || error.message
-      })
+        message: normalizedMessage,
+        detail: apiData.detail || normalizedMessage,
+        metadata: apiData.metadata,
+        response: {
+          status,
+          data: {
+            code: apiData.code ?? status,
+            reason: apiData.reason,
+            error: apiData.error,
+            message: normalizedMessage,
+            detail: apiData.detail || normalizedMessage,
+            metadata: apiData.metadata
+          }
+        }
+      }
+
+      // Return structured error
+      return Promise.reject(normalizedError)
     }
 
     // Network error
     return Promise.reject({
       status: 0,
-      message: 'Network error. Please check your connection.'
+      message: 'Network error. Please check your connection.',
+      detail: 'Network error. Please check your connection.'
     })
   }
 )
