@@ -142,13 +142,13 @@
 
       <BaseDialog
         :show="showBenefitDialog"
-        :title="t('redeem.benefitDialogTitle')"
+        :title="t(benefitDialogTitleKey)"
         width="normal"
         @close="showBenefitDialog = false"
       >
         <div class="space-y-3 text-sm text-gray-700 dark:text-gray-300">
           <p class="font-medium text-gray-900 dark:text-white">
-            {{ t('redeem.benefitDialogSubtitle') }}
+            {{ t(benefitDialogSubtitleKey) }}
           </p>
           <p class="whitespace-pre-wrap leading-6">
             {{ benefitDialogMessage }}
@@ -157,7 +157,7 @@
         <template #footer>
           <div class="flex justify-end gap-3">
             <button
-              v-if="canShowLeaderboardFromResult"
+              v-if="canShowLeaderboardFromDialog"
               type="button"
               class="btn btn-secondary"
               :disabled="leaderboardLoading"
@@ -537,6 +537,9 @@ const redeemResult = ref<{
 const errorMessage = ref('')
 const showBenefitDialog = ref(false)
 const benefitDialogMessage = ref('')
+const benefitDialogTitleKey = ref('redeem.benefitDialogTitle')
+const benefitDialogSubtitleKey = ref('redeem.benefitDialogSubtitle')
+const benefitDialogAllowLeaderboard = ref(false)
 const lastBenefitCode = ref('')
 const leaderboardLoading = ref(false)
 const showLeaderboardDialog = ref(false)
@@ -551,10 +554,8 @@ const showBenefitBreakdown = computed(() =>
   redeemResult.value?.scene === 'benefit' &&
   (redeemResult.value?.fixed_value !== undefined || redeemResult.value?.random_value !== undefined)
 )
-const canShowLeaderboardFromResult = computed(() =>
-  redeemResult.value?.scene === 'benefit' &&
-  redeemResult.value?.leaderboard_enabled &&
-  !!lastBenefitCode.value
+const canShowLeaderboardFromDialog = computed(() =>
+  benefitDialogAllowLeaderboard.value && !!lastBenefitCode.value
 )
 
 // Helper functions for history display
@@ -605,6 +606,35 @@ const getApiErrorReason = (error: any): string | undefined =>
 
 const getApiErrorDetail = (error: any): string | undefined =>
   error?.detail || error?.response?.data?.detail || error?.message || error?.response?.data?.message
+
+const resetBenefitDialog = () => {
+  showBenefitDialog.value = false
+  benefitDialogMessage.value = ''
+  benefitDialogTitleKey.value = 'redeem.benefitDialogTitle'
+  benefitDialogSubtitleKey.value = 'redeem.benefitDialogSubtitle'
+  benefitDialogAllowLeaderboard.value = false
+}
+
+const maybeShowRepeatRedeemLeaderboardDialog = async (code: string) => {
+  try {
+    await redeemAPI.getBenefitLeaderboard(code)
+    lastBenefitCode.value = code
+    benefitDialogTitleKey.value = 'redeem.repeatRedeemDialogTitle'
+    benefitDialogSubtitleKey.value = 'redeem.repeatRedeemDialogSubtitle'
+    benefitDialogMessage.value = t('redeem.repeatRedeemLeaderboardBody')
+    benefitDialogAllowLeaderboard.value = true
+    showBenefitDialog.value = true
+    errorMessage.value = ''
+    return true
+  } catch (error: any) {
+    const reason = getApiErrorReason(error)
+    if (reason === 'PROMO_CODE_USERNAME_REQUIRED') {
+      showUsernameRequiredDialog.value = true
+      return true
+    }
+    return false
+  }
+}
 
 const fetchHistory = async () => {
   loadingHistory.value = true
@@ -658,8 +688,7 @@ const handleRedeem = async () => {
   submitting.value = true
   errorMessage.value = ''
   redeemResult.value = null
-  showBenefitDialog.value = false
-  benefitDialogMessage.value = ''
+  resetBenefitDialog()
 
   try {
     const submittedCode = redeemCode.value.trim()
@@ -668,6 +697,7 @@ const handleRedeem = async () => {
     redeemResult.value = result
     if (result.scene === 'benefit') {
       lastBenefitCode.value = submittedCode
+      benefitDialogAllowLeaderboard.value = !!result.leaderboard_enabled
     }
 
     // Refresh user data to get updated balance/concurrency
@@ -698,12 +728,20 @@ const handleRedeem = async () => {
     appStore.showSuccess(t('redeem.codeRedeemSuccess'))
   } catch (error: any) {
     const reason = getApiErrorReason(error)
-    errorMessage.value = getApiErrorDetail(error) || t('redeem.failedToRedeem')
 
     if (reason === 'PROMO_CODE_USERNAME_REQUIRED') {
       showUsernameRequiredDialog.value = true
       return
     }
+
+    if (reason === 'PROMO_CODE_ALREADY_USED') {
+      const submittedCode = redeemCode.value.trim()
+      if (submittedCode && await maybeShowRepeatRedeemLeaderboardDialog(submittedCode)) {
+        return
+      }
+    }
+
+    errorMessage.value = getApiErrorDetail(error) || t('redeem.failedToRedeem')
 
     appStore.showError(t('redeem.redeemFailed'))
   } finally {
