@@ -238,8 +238,8 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 	}
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineSize)
 
-	var finalResponse *apicompat.ResponsesResponse
 	var usage OpenAIUsage
+	responsesAccumulator := newResponsesStreamAccumulator()
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -256,20 +256,7 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 			)
 			continue
 		}
-
-		if (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed") &&
-			event.Response != nil {
-			finalResponse = event.Response
-			if event.Response.Usage != nil {
-				usage = OpenAIUsage{
-					InputTokens:  event.Response.Usage.InputTokens,
-					OutputTokens: event.Response.Usage.OutputTokens,
-				}
-				if event.Response.Usage.InputTokensDetails != nil {
-					usage.CacheReadInputTokens = event.Response.Usage.InputTokensDetails.CachedTokens
-				}
-			}
-		}
+		responsesAccumulator.ApplyEvent(&event)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -281,9 +268,13 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 		}
 	}
 
-	if finalResponse == nil {
+	finalResponse, ok := responsesAccumulator.FinalResponse()
+	if !ok {
 		writeChatCompletionsError(c, http.StatusBadGateway, "api_error", "Upstream stream ended without a terminal response event")
 		return nil, fmt.Errorf("upstream stream ended without terminal event")
+	}
+	if finalUsage, ok := openAIUsageFromResponsesResponse(finalResponse); ok {
+		usage = finalUsage
 	}
 
 	chatResp := apicompat.ResponsesToChatCompletions(finalResponse, originalModel)
@@ -370,14 +361,9 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 		}
 
 		// Extract usage from completion events
-		if (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed") &&
-			event.Response != nil && event.Response.Usage != nil {
-			usage = OpenAIUsage{
-				InputTokens:  event.Response.Usage.InputTokens,
-				OutputTokens: event.Response.Usage.OutputTokens,
-			}
-			if event.Response.Usage.InputTokensDetails != nil {
-				usage.CacheReadInputTokens = event.Response.Usage.InputTokensDetails.CachedTokens
+		if isResponsesTerminalUsageEvent(event.Type) {
+			if eventUsage, ok := openAIUsageFromResponsesResponse(event.Response); ok {
+				usage = eventUsage
 			}
 		}
 

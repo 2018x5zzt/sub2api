@@ -18,6 +18,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 // 编译期接口断言
@@ -1781,6 +1782,12 @@ func TestParseSSEUsage_SelectiveParsing(t *testing.T) {
 	require.Equal(t, 13, usage.InputTokens)
 	require.Equal(t, 15, usage.OutputTokens)
 	require.Equal(t, 4, usage.CacheReadInputTokens)
+
+	// incomplete 事件也应提取 usage，避免非流式 fallback 和记费记录丢失
+	svc.parseSSEUsage(`{"type":"response.incomplete","response":{"usage":{"input_tokens":21,"output_tokens":34,"input_tokens_details":{"cached_tokens":5}}}}`, usage)
+	require.Equal(t, 21, usage.InputTokens)
+	require.Equal(t, 34, usage.OutputTokens)
+	require.Equal(t, 5, usage.CacheReadInputTokens)
 }
 
 func TestExtractCodexFinalResponse_SampleReplay(t *testing.T) {
@@ -1795,6 +1802,61 @@ func TestExtractCodexFinalResponse_SampleReplay(t *testing.T) {
 	require.True(t, ok)
 	require.Contains(t, string(finalResp), `"id":"resp_1"`)
 	require.Contains(t, string(finalResp), `"input_tokens":11`)
+}
+
+func TestExtractCodexFinalResponse_AggregatesDeltaOnlyTerminalResponse(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"type":"response.created","response":{"id":"resp_agg","model":"gpt-4o","status":"in_progress"}}`,
+		`data: {"type":"response.reasoning_summary_text.delta","output_index":0,"summary_index":0,"delta":"plan first"}`,
+		`data: {"type":"response.output_text.delta","output_index":1,"content_index":0,"delta":"final answer"}`,
+		`data: {"type":"response.completed","response":{"id":"resp_agg","model":"gpt-4o","usage":{"input_tokens":11,"output_tokens":22,"input_tokens_details":{"cached_tokens":3}}}}`,
+		`data: [DONE]`,
+	}, "\n")
+
+	finalResp, ok := extractCodexFinalResponse(body)
+	require.True(t, ok)
+	require.Equal(t, "resp_agg", gjson.GetBytes(finalResp, "id").String())
+	require.Equal(t, "completed", gjson.GetBytes(finalResp, "status").String())
+	require.Equal(t, "plan first", gjson.GetBytes(finalResp, "output.0.summary.0.text").String())
+	require.Equal(t, "final answer", gjson.GetBytes(finalResp, "output.1.content.0.text").String())
+	require.Equal(t, int64(11), gjson.GetBytes(finalResp, "usage.input_tokens").Int())
+	require.Equal(t, int64(22), gjson.GetBytes(finalResp, "usage.output_tokens").Int())
+	require.Equal(t, int64(3), gjson.GetBytes(finalResp, "usage.input_tokens_details.cached_tokens").Int())
+}
+
+func TestExtractCodexFinalResponse_AggregatesToolCallArguments(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"type":"response.created","response":{"id":"resp_tool_agg","model":"gpt-4o","status":"in_progress"}}`,
+		`data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","call_id":"call_1","name":"get_weather"}}`,
+		`data: {"type":"response.function_call_arguments.delta","output_index":0,"delta":"{\"city\":\"Ber"}`,
+		`data: {"type":"response.function_call_arguments.delta","output_index":0,"delta":"lin\"}"}`,
+		`data: {"type":"response.completed","response":{"id":"resp_tool_agg","model":"gpt-4o","usage":{"input_tokens":5,"output_tokens":3}}}`,
+		`data: [DONE]`,
+	}, "\n")
+
+	finalResp, ok := extractCodexFinalResponse(body)
+	require.True(t, ok)
+	require.Equal(t, "function_call", gjson.GetBytes(finalResp, "output.0.type").String())
+	require.Equal(t, "call_1", gjson.GetBytes(finalResp, "output.0.call_id").String())
+	require.Equal(t, "get_weather", gjson.GetBytes(finalResp, "output.0.name").String())
+	require.Equal(t, `{"city":"Berlin"}`, gjson.GetBytes(finalResp, "output.0.arguments").String())
+}
+
+func TestExtractCodexFinalResponse_AggregatesIncompleteTerminalResponse(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"type":"response.created","response":{"id":"resp_incomplete","model":"gpt-4o","status":"in_progress"}}`,
+		`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"partial answer"}`,
+		`data: {"type":"response.incomplete","response":{"id":"resp_incomplete","model":"gpt-4o","usage":{"input_tokens":8,"output_tokens":5},"incomplete_details":{"reason":"max_output_tokens"}}}`,
+		`data: [DONE]`,
+	}, "\n")
+
+	finalResp, ok := extractCodexFinalResponse(body)
+	require.True(t, ok)
+	require.Equal(t, "incomplete", gjson.GetBytes(finalResp, "status").String())
+	require.Equal(t, "partial answer", gjson.GetBytes(finalResp, "output.0.content.0.text").String())
+	require.Equal(t, "max_output_tokens", gjson.GetBytes(finalResp, "incomplete_details.reason").String())
+	require.Equal(t, int64(8), gjson.GetBytes(finalResp, "usage.input_tokens").Int())
+	require.Equal(t, int64(5), gjson.GetBytes(finalResp, "usage.output_tokens").Int())
 }
 
 func TestHandleOAuthSSEToJSON_CompletedEventReturnsJSON(t *testing.T) {
@@ -1824,6 +1886,65 @@ func TestHandleOAuthSSEToJSON_CompletedEventReturnsJSON(t *testing.T) {
 	require.NotContains(t, rec.Body.String(), "event:")
 	require.Contains(t, rec.Body.String(), `"id":"resp_2"`)
 	require.NotContains(t, rec.Body.String(), "data:")
+}
+
+func TestHandleOAuthSSEToJSON_CompletedEventAggregatesDeltaOnlyTerminalResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+	}
+	body := []byte(strings.Join([]string{
+		`data: {"type":"response.created","response":{"id":"resp_agg_json","model":"gpt-4o","status":"in_progress"}}`,
+		`data: {"type":"response.reasoning_summary_text.delta","output_index":0,"summary_index":0,"delta":"plan first"}`,
+		`data: {"type":"response.output_text.delta","output_index":1,"content_index":0,"delta":"final answer"}`,
+		`data: {"type":"response.completed","response":{"id":"resp_agg_json","model":"gpt-4o","usage":{"input_tokens":7,"output_tokens":9,"input_tokens_details":{"cached_tokens":1}}}}`,
+		`data: [DONE]`,
+	}, "\n"))
+
+	usage, err := svc.handleOAuthSSEToJSON(resp, c, body, "gpt-4o", "gpt-4o")
+	require.NoError(t, err)
+	require.NotNil(t, usage)
+	require.Equal(t, 7, usage.InputTokens)
+	require.Equal(t, 9, usage.OutputTokens)
+	require.Equal(t, 1, usage.CacheReadInputTokens)
+	require.NotContains(t, rec.Body.String(), "data:")
+	require.Equal(t, "plan first", gjson.GetBytes(rec.Body.Bytes(), "output.0.summary.0.text").String())
+	require.Equal(t, "final answer", gjson.GetBytes(rec.Body.Bytes(), "output.1.content.0.text").String())
+}
+
+func TestHandleOAuthSSEToJSON_IncompleteEventAggregatesDeltaOnlyTerminalResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+	}
+	body := []byte(strings.Join([]string{
+		`data: {"type":"response.created","response":{"id":"resp_incomplete_json","model":"gpt-4o","status":"in_progress"}}`,
+		`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"partial answer"}`,
+		`data: {"type":"response.incomplete","response":{"id":"resp_incomplete_json","model":"gpt-4o","usage":{"input_tokens":7,"output_tokens":4},"incomplete_details":{"reason":"max_output_tokens"}}}`,
+		`data: [DONE]`,
+	}, "\n"))
+
+	usage, err := svc.handleOAuthSSEToJSON(resp, c, body, "gpt-4o", "gpt-4o")
+	require.NoError(t, err)
+	require.NotNil(t, usage)
+	require.Equal(t, 7, usage.InputTokens)
+	require.Equal(t, 4, usage.OutputTokens)
+	require.NotContains(t, rec.Body.String(), "data:")
+	require.Equal(t, "incomplete", gjson.GetBytes(rec.Body.Bytes(), "status").String())
+	require.Equal(t, "partial answer", gjson.GetBytes(rec.Body.Bytes(), "output.0.content.0.text").String())
+	require.Equal(t, "max_output_tokens", gjson.GetBytes(rec.Body.Bytes(), "incomplete_details.reason").String())
 }
 
 func TestHandleOAuthSSEToJSON_NoFinalResponseKeepsSSEBody(t *testing.T) {

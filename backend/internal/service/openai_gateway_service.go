@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
@@ -3664,7 +3665,7 @@ func (s *OpenAIGatewayService) parseSSEUsageBytes(data []byte, usage *OpenAIUsag
 		return
 	}
 	eventType := gjson.GetBytes(data, "type").String()
-	if eventType != "response.completed" && eventType != "response.done" {
+	if !isResponsesTerminalUsageEvent(eventType) {
 		return
 	}
 
@@ -3834,6 +3835,7 @@ func (s *OpenAIGatewayService) writeOpenAINonStreamingProtocolError(resp *http.R
 }
 
 func extractCodexFinalResponse(body string) ([]byte, bool) {
+	accumulator := newResponsesStreamAccumulator()
 	lines := strings.Split(body, "\n")
 	for _, line := range lines {
 		data, ok := extractOpenAISSEDataLine(line)
@@ -3843,14 +3845,24 @@ func extractCodexFinalResponse(body string) ([]byte, bool) {
 		if data == "" || data == "[DONE]" {
 			continue
 		}
-		eventType := gjson.Get(data, "type").String()
-		if eventType == "response.done" || eventType == "response.completed" {
-			if response := gjson.Get(data, "response"); response.Exists() && response.Type == gjson.JSON && response.Raw != "" {
-				return []byte(response.Raw), true
-			}
+		var event apicompat.ResponsesStreamEvent
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
+			continue
 		}
+		accumulator.ApplyEvent(&event)
 	}
-	return nil, false
+	if terminalType := accumulator.TerminalEventType(); terminalType != "response.done" && terminalType != "response.completed" && terminalType != "response.incomplete" {
+		return nil, false
+	}
+	finalResponse, ok := accumulator.FinalResponse()
+	if !ok {
+		return nil, false
+	}
+	bodyBytes, err := json.Marshal(finalResponse)
+	if err != nil {
+		return nil, false
+	}
+	return bodyBytes, true
 }
 
 func (s *OpenAIGatewayService) parseSSEUsageFromBody(body string) *OpenAIUsage {
