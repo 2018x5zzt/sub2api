@@ -734,7 +734,7 @@ const handleRedeem = async () => {
       return
     }
 
-    if (reason === 'PROMO_CODE_ALREADY_USED') {
+    if (reason === 'PROMO_CODE_ALREADY_USED' || reason === 'PROMO_CODE_MAX_USED') {
       const submittedCode = redeemCode.value.trim()
       if (submittedCode && await maybeShowRepeatRedeemLeaderboardDialog(submittedCode)) {
         return
