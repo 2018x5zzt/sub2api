@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -287,6 +288,57 @@ func TestRedeemHandler_GetBenefitLeaderboardAfterRedeem(t *testing.T) {
 	require.Len(t, payload.Entries, 1)
 	require.Equal(t, "rank_user", payload.Entries[0].DisplayName)
 	require.Equal(t, 1, payload.Entries[0].Rank)
+	require.NotNil(t, payload.CurrentUserRank)
+	require.Equal(t, 1, *payload.CurrentUserRank)
+}
+
+func TestRedeemHandler_GetBenefitLeaderboardReturnsAllEntries(t *testing.T) {
+	env := newRedeemHandlerTestEnv(t)
+	env.promoRepo.addCode(&service.PromoCode{
+		ID:                    405,
+		Code:                  "LUCKYALL",
+		Scene:                 service.PromoCodeSceneBenefit,
+		BonusAmount:           1,
+		RandomBonusPoolAmount: 100,
+		RandomBonusRemaining:  100,
+		MaxUses:               25,
+		LeaderboardEnabled:    true,
+		Status:                service.PromoCodeStatusActive,
+	})
+
+	for i := 1; i <= 21; i++ {
+		userID := int64(i)
+		env.userRepo.users[userID] = &service.User{
+			ID:       userID,
+			Email:    fmt.Sprintf("rank%d@test.local", i),
+			Username: fmt.Sprintf("rank_user_%02d", i),
+			Role:     service.RoleUser,
+			Status:   service.StatusActive,
+		}
+		require.NoError(t, env.promoRepo.CreateUsage(context.Background(), &service.PromoCodeUsage{
+			PromoCodeID:       405,
+			UserID:            userID,
+			BonusAmount:       float64(22 - i),
+			FixedBonusAmount:  1,
+			RandomBonusAmount: float64(21 - i),
+			UsedAt:            time.Unix(int64(i), 0).UTC(),
+		}))
+	}
+
+	rec := performBenefitLeaderboardRequest(t, env.handler, 1, "LUCKYALL")
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var envelope testRedeemEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	require.Equal(t, 0, envelope.Code)
+
+	var payload BenefitLeaderboardResponse
+	require.NoError(t, json.Unmarshal(envelope.Data, &payload))
+	require.Len(t, payload.Entries, 21)
+	require.Equal(t, "rank_user_01", payload.Entries[0].DisplayName)
+	require.Equal(t, 1, payload.Entries[0].Rank)
+	require.Equal(t, "rank_user_21", payload.Entries[20].DisplayName)
+	require.Equal(t, 21, payload.Entries[20].Rank)
 	require.NotNil(t, payload.CurrentUserRank)
 	require.Equal(t, 1, *payload.CurrentUserRank)
 }

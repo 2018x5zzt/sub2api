@@ -163,7 +163,7 @@ func (h *RedeemHandler) GetBenefitLeaderboard(c *gin.Context) {
 		return
 	}
 
-	result, err := h.promoService.GetBenefitLeaderboard(c.Request.Context(), subject.UserID, code, 20)
+	result, err := h.promoService.GetBenefitLeaderboard(c.Request.Context(), subject.UserID, code, 0)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

@@ -400,7 +400,7 @@ func rankBenefitUsages(usages []PromoCodeUsage, currentUserID int64, limit int) 
 	})
 
 	if limit <= 0 {
-		limit = 20
+		limit = len(sorted)
 	}
 
 	result := &BenefitLeaderboardResult{
