@@ -1521,8 +1521,11 @@ export interface PromoCode {
   code: string
   scene: PromoCodeScene
   bonus_amount: number
+  random_bonus_pool_amount: number
+  random_bonus_remaining: number
   max_uses: number
   used_count: number
+  leaderboard_enabled: boolean
   status: 'active' | 'disabled'
   expires_at: string | null
   success_message: string | null
@@ -1536,6 +1539,8 @@ export interface PromoCodeUsage {
   promo_code_id: number
   user_id: number
   bonus_amount: number
+  fixed_bonus_amount: number
+  random_bonus_amount: number
   used_at: string
   user?: User
 }
@@ -1544,7 +1549,9 @@ export interface CreatePromoCodeRequest {
   code?: string
   scene?: PromoCodeScene
   bonus_amount: number
+  random_bonus_pool_amount?: number
   max_uses?: number
+  leaderboard_enabled?: boolean
   expires_at?: number | null
   success_message?: string
   notes?: string
@@ -1553,11 +1560,36 @@ export interface CreatePromoCodeRequest {
 export interface UpdatePromoCodeRequest {
   code?: string
   bonus_amount?: number
+  random_bonus_pool_amount?: number
   max_uses?: number
+  leaderboard_enabled?: boolean
   status?: 'active' | 'disabled'
   expires_at?: number | null
   success_message?: string
   notes?: string
+}
+
+export interface BenefitLeaderboardEntry {
+  rank: number
+  display_name: string
+  fixed_value: number
+  random_value: number
+  total_value: number
+  used_at: string
+  is_current_user: boolean
+}
+
+export interface BenefitLeaderboard {
+  code: string
+  fixed_value: number
+  random_pool_value: number
+  random_remaining_value: number
+  max_uses: number
+  used_count: number
+  entries: BenefitLeaderboardEntry[]
+  current_user_rank?: number
+  current_user_random_value?: number
+  current_user_total_value?: number
 }
 
 // ==================== TOTP (2FA) Types ====================

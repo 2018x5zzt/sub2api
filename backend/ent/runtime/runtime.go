@@ -528,34 +528,54 @@ func init() {
 	promocodeDescBonusAmount := promocodeFields[2].Descriptor()
 	// promocode.DefaultBonusAmount holds the default value on creation for the bonus_amount field.
 	promocode.DefaultBonusAmount = promocodeDescBonusAmount.Default.(float64)
+	// promocodeDescRandomBonusPoolAmount is the schema descriptor for random_bonus_pool_amount field.
+	promocodeDescRandomBonusPoolAmount := promocodeFields[3].Descriptor()
+	// promocode.DefaultRandomBonusPoolAmount holds the default value on creation for the random_bonus_pool_amount field.
+	promocode.DefaultRandomBonusPoolAmount = promocodeDescRandomBonusPoolAmount.Default.(float64)
+	// promocodeDescRandomBonusRemaining is the schema descriptor for random_bonus_remaining field.
+	promocodeDescRandomBonusRemaining := promocodeFields[4].Descriptor()
+	// promocode.DefaultRandomBonusRemaining holds the default value on creation for the random_bonus_remaining field.
+	promocode.DefaultRandomBonusRemaining = promocodeDescRandomBonusRemaining.Default.(float64)
 	// promocodeDescMaxUses is the schema descriptor for max_uses field.
-	promocodeDescMaxUses := promocodeFields[3].Descriptor()
+	promocodeDescMaxUses := promocodeFields[5].Descriptor()
 	// promocode.DefaultMaxUses holds the default value on creation for the max_uses field.
 	promocode.DefaultMaxUses = promocodeDescMaxUses.Default.(int)
 	// promocodeDescUsedCount is the schema descriptor for used_count field.
-	promocodeDescUsedCount := promocodeFields[4].Descriptor()
+	promocodeDescUsedCount := promocodeFields[6].Descriptor()
 	// promocode.DefaultUsedCount holds the default value on creation for the used_count field.
 	promocode.DefaultUsedCount = promocodeDescUsedCount.Default.(int)
+	// promocodeDescLeaderboardEnabled is the schema descriptor for leaderboard_enabled field.
+	promocodeDescLeaderboardEnabled := promocodeFields[7].Descriptor()
+	// promocode.DefaultLeaderboardEnabled holds the default value on creation for the leaderboard_enabled field.
+	promocode.DefaultLeaderboardEnabled = promocodeDescLeaderboardEnabled.Default.(bool)
 	// promocodeDescStatus is the schema descriptor for status field.
-	promocodeDescStatus := promocodeFields[5].Descriptor()
+	promocodeDescStatus := promocodeFields[8].Descriptor()
 	// promocode.DefaultStatus holds the default value on creation for the status field.
 	promocode.DefaultStatus = promocodeDescStatus.Default.(string)
 	// promocode.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	promocode.StatusValidator = promocodeDescStatus.Validators[0].(func(string) error)
 	// promocodeDescCreatedAt is the schema descriptor for created_at field.
-	promocodeDescCreatedAt := promocodeFields[9].Descriptor()
+	promocodeDescCreatedAt := promocodeFields[12].Descriptor()
 	// promocode.DefaultCreatedAt holds the default value on creation for the created_at field.
 	promocode.DefaultCreatedAt = promocodeDescCreatedAt.Default.(func() time.Time)
 	// promocodeDescUpdatedAt is the schema descriptor for updated_at field.
-	promocodeDescUpdatedAt := promocodeFields[10].Descriptor()
+	promocodeDescUpdatedAt := promocodeFields[13].Descriptor()
 	// promocode.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	promocode.DefaultUpdatedAt = promocodeDescUpdatedAt.Default.(func() time.Time)
 	// promocode.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	promocode.UpdateDefaultUpdatedAt = promocodeDescUpdatedAt.UpdateDefault.(func() time.Time)
 	promocodeusageFields := schema.PromoCodeUsage{}.Fields()
 	_ = promocodeusageFields
+	// promocodeusageDescFixedBonusAmount is the schema descriptor for fixed_bonus_amount field.
+	promocodeusageDescFixedBonusAmount := promocodeusageFields[3].Descriptor()
+	// promocodeusage.DefaultFixedBonusAmount holds the default value on creation for the fixed_bonus_amount field.
+	promocodeusage.DefaultFixedBonusAmount = promocodeusageDescFixedBonusAmount.Default.(float64)
+	// promocodeusageDescRandomBonusAmount is the schema descriptor for random_bonus_amount field.
+	promocodeusageDescRandomBonusAmount := promocodeusageFields[4].Descriptor()
+	// promocodeusage.DefaultRandomBonusAmount holds the default value on creation for the random_bonus_amount field.
+	promocodeusage.DefaultRandomBonusAmount = promocodeusageDescRandomBonusAmount.Default.(float64)
 	// promocodeusageDescUsedAt is the schema descriptor for used_at field.
-	promocodeusageDescUsedAt := promocodeusageFields[3].Descriptor()
+	promocodeusageDescUsedAt := promocodeusageFields[5].Descriptor()
 	// promocodeusage.DefaultUsedAt holds the default value on creation for the used_at field.
 	promocodeusage.DefaultUsedAt = promocodeusageDescUsedAt.Default.(func() time.Time)
 	proxyMixin := schema.Proxy{}.Mixin()

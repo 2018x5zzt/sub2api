@@ -66,10 +66,19 @@
             </div>
           </template>
 
-          <template #cell-bonus_amount="{ value }">
-            <span class="text-sm font-medium text-gray-900 dark:text-white">
-              ${{ value.toFixed(2) }}
-            </span>
+          <template #cell-bonus_amount="{ value, row }">
+            <div>
+              <span class="text-sm font-medium text-gray-900 dark:text-white">
+                ${{ value.toFixed(2) }}
+              </span>
+              <p
+                v-if="isBenefitScene && row.random_bonus_pool_amount > 0"
+                class="mt-1 text-xs text-amber-700 dark:text-amber-300"
+              >
+                {{ pageText('randomPoolAmount') }}:
+                ${{ row.random_bonus_remaining.toFixed(2) }} / ${{ row.random_bonus_pool_amount.toFixed(2) }}
+              </p>
+            </div>
           </template>
 
           <template #cell-usage="{ row }">
@@ -180,6 +189,16 @@
             class="input"
           />
         </div>
+        <div v-if="isBenefitScene">
+          <label class="input-label">{{ pageText('randomPoolAmount') }}</label>
+          <input
+            v-model.number="createForm.random_bonus_pool_amount"
+            type="number"
+            step="0.01"
+            min="0"
+            class="input"
+          />
+        </div>
         <div>
           <label class="input-label">
             {{ pageText('maxUses') }}
@@ -202,6 +221,16 @@
             type="datetime-local"
             class="input"
           />
+        </div>
+        <div v-if="isBenefitScene">
+          <label class="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <input
+              v-model="createForm.leaderboard_enabled"
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            {{ pageText('leaderboardEnabled') }}
+          </label>
         </div>
         <div v-if="isBenefitScene">
           <label class="input-label">
@@ -267,6 +296,16 @@
             class="input"
           />
         </div>
+        <div v-if="isBenefitScene">
+          <label class="input-label">{{ pageText('randomPoolAmount') }}</label>
+          <input
+            v-model.number="editForm.random_bonus_pool_amount"
+            type="number"
+            step="0.01"
+            min="0"
+            class="input"
+          />
+        </div>
         <div>
           <label class="input-label">
             {{ pageText('maxUses') }}
@@ -293,6 +332,16 @@
             type="datetime-local"
             class="input"
           />
+        </div>
+        <div v-if="isBenefitScene">
+          <label class="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <input
+              v-model="editForm.leaderboard_enabled"
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            {{ pageText('leaderboardEnabled') }}
+          </label>
         </div>
         <div v-if="isBenefitScene">
           <label class="input-label">
@@ -366,6 +415,14 @@
             <span class="text-sm font-medium text-green-600 dark:text-green-400">
               +${{ usage.bonus_amount.toFixed(2) }}
             </span>
+            <p
+              v-if="usage.random_bonus_amount > 0"
+              class="mt-1 text-xs text-amber-700 dark:text-amber-300"
+            >
+              {{ pageText('fixedAmount') }}: ${{ usage.fixed_bonus_amount.toFixed(2) }}
+              <span class="mx-1">+</span>
+              {{ pageText('randomAmount') }}: ${{ usage.random_bonus_amount.toFixed(2) }}
+            </p>
           </div>
         </div>
         <!-- Usages Pagination -->
@@ -472,7 +529,9 @@ const usagesTotal = ref(0)
 const createForm = reactive({
   code: '',
   bonus_amount: 1,
+  random_bonus_pool_amount: 0,
   max_uses: 0,
+  leaderboard_enabled: false,
   expires_at_str: '',
   success_message: '',
   notes: ''
@@ -481,7 +540,9 @@ const createForm = reactive({
 const editForm = reactive({
   code: '',
   bonus_amount: 0,
+  random_bonus_pool_amount: 0,
   max_uses: 0,
+  leaderboard_enabled: false,
   status: 'active' as 'active' | 'disabled',
   expires_at_str: '',
   success_message: '',
@@ -606,7 +667,9 @@ const handleCreate = async () => {
       code: createForm.code || undefined,
       scene: promoScene.value,
       bonus_amount: createForm.bonus_amount,
+      random_bonus_pool_amount: createForm.random_bonus_pool_amount || undefined,
       max_uses: createForm.max_uses,
+      leaderboard_enabled: createForm.leaderboard_enabled,
       expires_at: createForm.expires_at_str ? Math.floor(new Date(createForm.expires_at_str).getTime() / 1000) : undefined,
       success_message: createForm.success_message || undefined,
       notes: createForm.notes || undefined
@@ -625,7 +688,9 @@ const handleCreate = async () => {
 const resetCreateForm = () => {
   createForm.code = ''
   createForm.bonus_amount = 1
+  createForm.random_bonus_pool_amount = 0
   createForm.max_uses = 0
+  createForm.leaderboard_enabled = false
   createForm.expires_at_str = ''
   createForm.success_message = ''
   createForm.notes = ''
@@ -636,7 +701,9 @@ const handleEdit = (code: PromoCode) => {
   editingCode.value = code
   editForm.code = code.code
   editForm.bonus_amount = code.bonus_amount
+  editForm.random_bonus_pool_amount = code.random_bonus_pool_amount
   editForm.max_uses = code.max_uses
+  editForm.leaderboard_enabled = code.leaderboard_enabled
   editForm.status = code.status
   editForm.expires_at_str = code.expires_at ? new Date(code.expires_at).toISOString().slice(0, 16) : ''
   editForm.success_message = code.success_message || ''
@@ -658,7 +725,9 @@ const handleUpdate = async () => {
     await adminAPI.promo.update(editingCode.value.id, {
       code: editForm.code,
       bonus_amount: editForm.bonus_amount,
+      random_bonus_pool_amount: editForm.random_bonus_pool_amount,
       max_uses: editForm.max_uses,
+      leaderboard_enabled: editForm.leaderboard_enabled,
       status: editForm.status,
       expires_at: editForm.expires_at_str ? Math.floor(new Date(editForm.expires_at_str).getTime() / 1000) : 0,
       success_message: editForm.success_message,

@@ -510,27 +510,32 @@ type BulkAssignResult struct {
 
 // PromoCode 注册优惠码
 type PromoCode struct {
-	ID             int64      `json:"id"`
-	Code           string     `json:"code"`
-	Scene          string     `json:"scene"`
-	BonusAmount    float64    `json:"bonus_amount"`
-	MaxUses        int        `json:"max_uses"`
-	UsedCount      int        `json:"used_count"`
-	Status         string     `json:"status"`
-	ExpiresAt      *time.Time `json:"expires_at"`
-	SuccessMessage string     `json:"success_message"`
-	Notes          string     `json:"notes"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
+	ID                    int64      `json:"id"`
+	Code                  string     `json:"code"`
+	Scene                 string     `json:"scene"`
+	BonusAmount           float64    `json:"bonus_amount"`
+	RandomBonusPoolAmount float64    `json:"random_bonus_pool_amount"`
+	RandomBonusRemaining  float64    `json:"random_bonus_remaining"`
+	MaxUses               int        `json:"max_uses"`
+	UsedCount             int        `json:"used_count"`
+	LeaderboardEnabled    bool       `json:"leaderboard_enabled"`
+	Status                string     `json:"status"`
+	ExpiresAt             *time.Time `json:"expires_at"`
+	SuccessMessage        string     `json:"success_message"`
+	Notes                 string     `json:"notes"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
 // PromoCodeUsage 优惠码使用记录
 type PromoCodeUsage struct {
-	ID          int64     `json:"id"`
-	PromoCodeID int64     `json:"promo_code_id"`
-	UserID      int64     `json:"user_id"`
-	BonusAmount float64   `json:"bonus_amount"`
-	UsedAt      time.Time `json:"used_at"`
+	ID                int64     `json:"id"`
+	PromoCodeID       int64     `json:"promo_code_id"`
+	UserID            int64     `json:"user_id"`
+	BonusAmount       float64   `json:"bonus_amount"`
+	FixedBonusAmount  float64   `json:"fixed_bonus_amount"`
+	RandomBonusAmount float64   `json:"random_bonus_amount"`
+	UsedAt            time.Time `json:"used_at"`
 
 	User *User `json:"user,omitempty"`
 }

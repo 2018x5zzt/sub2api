@@ -74,6 +74,41 @@
               <Icon v-else name="checkCircle" size="md" class="mr-2" />
               {{ submitting ? t('redeem.redeeming') : t('redeem.redeemButton') }}
             </button>
+
+            <button
+              type="button"
+              :disabled="(!redeemCode.trim() && !lastBenefitCode) || leaderboardLoading"
+              class="btn btn-secondary w-full py-3"
+              @click="handleOpenLeaderboard"
+            >
+              <Icon
+                v-if="!leaderboardLoading"
+                name="gift"
+                size="md"
+                class="mr-2"
+              />
+              <svg
+                v-else
+                class="-ml-1 mr-2 h-5 w-5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              {{ t('redeem.viewLuckyLeaderboard') }}
+            </button>
           </form>
         </div>
       </div>
@@ -100,6 +135,14 @@
                   <div class="mt-3 space-y-1">
                     <p v-if="redeemResult.type === 'balance'" class="font-medium">
                       {{ t('redeem.added') }}: ${{ redeemResult.value.toFixed(2) }}
+                    </p>
+                    <p
+                      v-if="redeemResult.type === 'balance' && showBenefitBreakdown"
+                      class="text-xs text-emerald-700 dark:text-emerald-300"
+                    >
+                      {{ t('redeem.fixedAmount') }}: ${{ redeemResult.fixed_value?.toFixed(2) || '0.00' }}
+                      <span class="mx-1">+</span>
+                      {{ t('redeem.luckyAmount') }}: ${{ redeemResult.random_value?.toFixed(2) || '0.00' }}
                     </p>
                     <p v-else-if="redeemResult.type === 'concurrency'" class="font-medium">
                       {{ t('redeem.added') }}: {{ redeemResult.value }}
@@ -147,9 +190,132 @@
           </p>
         </div>
         <template #footer>
-          <div class="flex justify-end">
+          <div class="flex justify-end gap-3">
+            <button
+              v-if="canShowLeaderboardFromResult"
+              type="button"
+              class="btn btn-secondary"
+              :disabled="leaderboardLoading"
+              @click="handleOpenLeaderboard"
+            >
+              {{ t('redeem.viewLuckyLeaderboard') }}
+            </button>
             <button type="button" class="btn btn-primary" @click="showBenefitDialog = false">
               {{ t('common.confirm') }}
+            </button>
+          </div>
+        </template>
+      </BaseDialog>
+
+      <BaseDialog
+        :show="showLeaderboardDialog"
+        :title="t('redeem.luckyLeaderboardTitle')"
+        width="wide"
+        @close="showLeaderboardDialog = false"
+      >
+        <div v-if="leaderboard" class="space-y-5">
+          <div class="rounded-xl bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
+            <p class="font-semibold">{{ t('redeem.luckyLeaderboardSummary') }}</p>
+            <p class="mt-1">
+              {{ t('redeem.fixedAmount') }}: ${{ leaderboard.fixed_value.toFixed(2) }}
+              <span class="mx-2">|</span>
+              {{ t('redeem.randomPoolAmount') }}: ${{ leaderboard.random_pool_value.toFixed(2) }}
+              <span class="mx-2">|</span>
+              {{ t('redeem.remainingRandomPoolAmount') }}: ${{ leaderboard.random_remaining_value.toFixed(2) }}
+            </p>
+            <p class="mt-1">
+              {{ t('redeem.leaderboardClaimProgress', {
+                used: leaderboard.used_count,
+                total: leaderboard.max_uses || '∞'
+              }) }}
+            </p>
+            <p v-if="leaderboard.current_user_rank" class="mt-2 font-medium">
+              {{ t('redeem.yourLuckyRank', {
+                rank: leaderboard.current_user_rank,
+                amount: `$${(leaderboard.current_user_random_value || 0).toFixed(2)}`,
+                total: `$${(leaderboard.current_user_total_value || 0).toFixed(2)}`
+              }) }}
+            </p>
+          </div>
+
+          <div v-if="leaderboard.entries.length > 0" class="space-y-3">
+            <div
+              v-for="entry in leaderboard.entries"
+              :key="`${entry.rank}-${entry.display_name}`"
+              :class="[
+                'flex items-center justify-between rounded-xl border p-4',
+                entry.is_current_user
+                  ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20'
+                  : 'border-gray-200 dark:border-dark-600'
+              ]"
+            >
+              <div class="flex items-center gap-4">
+                <div
+                  :class="[
+                    'flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold',
+                    entry.rank <= 3
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                      : 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-300'
+                  ]"
+                >
+                  #{{ entry.rank }}
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ entry.display_name }}
+                    <span
+                      v-if="entry.is_current_user"
+                      class="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                    >
+                      {{ t('redeem.you') }}
+                    </span>
+                  </p>
+                  <p class="text-xs text-gray-500 dark:text-dark-400">
+                    {{ formatDateTime(entry.used_at) }}
+                  </p>
+                </div>
+              </div>
+              <div class="text-right">
+                <p class="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                  ${{ entry.random_value.toFixed(2) }}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-dark-400">
+                  {{ t('redeem.totalAmount') }}: ${{ entry.total_value.toFixed(2) }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <template #footer>
+          <div class="flex justify-end">
+            <button type="button" class="btn btn-primary" @click="showLeaderboardDialog = false">
+              {{ t('common.close') }}
+            </button>
+          </div>
+        </template>
+      </BaseDialog>
+
+      <BaseDialog
+        :show="showUsernameRequiredDialog"
+        :title="t('redeem.usernameRequiredTitle')"
+        width="normal"
+        @close="showUsernameRequiredDialog = false"
+      >
+        <div class="space-y-3 text-sm text-gray-700 dark:text-gray-300">
+          <p class="font-medium text-gray-900 dark:text-white">
+            {{ t('redeem.usernameRequiredSubtitle') }}
+          </p>
+          <p class="leading-6">
+            {{ t('redeem.usernameRequiredBody') }}
+          </p>
+        </div>
+        <template #footer>
+          <div class="flex justify-end gap-3">
+            <button type="button" class="btn btn-secondary" @click="showUsernameRequiredDialog = false">
+              {{ t('common.cancel') }}
+            </button>
+            <button type="button" class="btn btn-primary" @click="goToProfile">
+              {{ t('redeem.goSetUsername') }}
             </button>
           </div>
         </template>
@@ -366,6 +532,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
@@ -375,8 +542,10 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTime } from '@/utils/format'
+import type { BenefitLeaderboard } from '@/types'
 
 const { t } = useI18n()
+const router = useRouter()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const subscriptionStore = useSubscriptionStore()
@@ -389,8 +558,12 @@ const redeemResult = ref<{
   message: string
   type: string
   value: number
+  fixed_value?: number
+  random_value?: number
+  total_value?: number
   scene?: 'register' | 'benefit'
   success_message?: string
+  leaderboard_enabled?: boolean
   new_balance?: number
   new_concurrency?: number
   group_name?: string
@@ -399,11 +572,25 @@ const redeemResult = ref<{
 const errorMessage = ref('')
 const showBenefitDialog = ref(false)
 const benefitDialogMessage = ref('')
+const lastBenefitCode = ref('')
+const leaderboardLoading = ref(false)
+const showLeaderboardDialog = ref(false)
+const showUsernameRequiredDialog = ref(false)
+const leaderboard = ref<BenefitLeaderboard | null>(null)
 
 // History data
 const history = ref<RedeemHistoryItem[]>([])
 const loadingHistory = ref(false)
 const contactInfo = ref('')
+const showBenefitBreakdown = computed(() =>
+  redeemResult.value?.scene === 'benefit' &&
+  (redeemResult.value?.fixed_value !== undefined || redeemResult.value?.random_value !== undefined)
+)
+const canShowLeaderboardFromResult = computed(() =>
+  redeemResult.value?.scene === 'benefit' &&
+  redeemResult.value?.leaderboard_enabled &&
+  !!lastBenefitCode.value
+)
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {
@@ -459,6 +646,38 @@ const fetchHistory = async () => {
   }
 }
 
+const openLeaderboard = async (code: string) => {
+  leaderboardLoading.value = true
+  try {
+    leaderboard.value = await redeemAPI.getBenefitLeaderboard(code)
+    showLeaderboardDialog.value = true
+  } catch (error: any) {
+    const reason = error?.response?.data?.reason
+    const detail = error?.response?.data?.detail
+    if (reason === 'PROMO_CODE_USERNAME_REQUIRED') {
+      showUsernameRequiredDialog.value = true
+      return
+    }
+    appStore.showError(detail || t('redeem.failedToLoadLeaderboard'))
+  } finally {
+    leaderboardLoading.value = false
+  }
+}
+
+const handleOpenLeaderboard = async () => {
+  const code = redeemCode.value.trim() || lastBenefitCode.value.trim()
+  if (!code) {
+    appStore.showError(t('redeem.pleaseEnterCode'))
+    return
+  }
+  await openLeaderboard(code)
+}
+
+const goToProfile = () => {
+  showUsernameRequiredDialog.value = false
+  router.push({ path: '/profile' })
+}
+
 const handleRedeem = async () => {
   if (!redeemCode.value.trim()) {
     appStore.showError(t('redeem.pleaseEnterCode'))
@@ -472,9 +691,13 @@ const handleRedeem = async () => {
   benefitDialogMessage.value = ''
 
   try {
-    const result = await redeemAPI.redeem(redeemCode.value.trim())
+    const submittedCode = redeemCode.value.trim()
+    const result = await redeemAPI.redeem(submittedCode)
 
     redeemResult.value = result
+    if (result.scene === 'benefit') {
+      lastBenefitCode.value = submittedCode
+    }
 
     // Refresh user data to get updated balance/concurrency
     await authStore.refreshUser()
@@ -503,7 +726,13 @@ const handleRedeem = async () => {
     // Show success toast
     appStore.showSuccess(t('redeem.codeRedeemSuccess'))
   } catch (error: any) {
+    const reason = error?.response?.data?.reason
     errorMessage.value = error.response?.data?.detail || t('redeem.failedToRedeem')
+
+    if (reason === 'PROMO_CODE_USERNAME_REQUIRED') {
+      showUsernameRequiredDialog.value = true
+      return
+    }
 
     appStore.showError(t('redeem.redeemFailed'))
   } finally {

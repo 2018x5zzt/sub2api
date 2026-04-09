@@ -710,18 +710,21 @@ func PromoCodeFromService(pc *service.PromoCode) *PromoCode {
 		return nil
 	}
 	return &PromoCode{
-		ID:             pc.ID,
-		Code:           pc.Code,
-		Scene:          pc.Scene,
-		BonusAmount:    pc.BonusAmount,
-		MaxUses:        pc.MaxUses,
-		UsedCount:      pc.UsedCount,
-		Status:         pc.Status,
-		ExpiresAt:      pc.ExpiresAt,
-		SuccessMessage: pc.SuccessMessage,
-		Notes:          pc.Notes,
-		CreatedAt:      pc.CreatedAt,
-		UpdatedAt:      pc.UpdatedAt,
+		ID:                    pc.ID,
+		Code:                  pc.Code,
+		Scene:                 pc.Scene,
+		BonusAmount:           pc.BonusAmount,
+		RandomBonusPoolAmount: pc.RandomBonusPoolAmount,
+		RandomBonusRemaining:  pc.RandomBonusRemaining,
+		MaxUses:               pc.MaxUses,
+		UsedCount:             pc.UsedCount,
+		LeaderboardEnabled:    pc.LeaderboardEnabled,
+		Status:                pc.Status,
+		ExpiresAt:             pc.ExpiresAt,
+		SuccessMessage:        pc.SuccessMessage,
+		Notes:                 pc.Notes,
+		CreatedAt:             pc.CreatedAt,
+		UpdatedAt:             pc.UpdatedAt,
 	}
 }
 
@@ -730,11 +733,13 @@ func PromoCodeUsageFromService(u *service.PromoCodeUsage) *PromoCodeUsage {
 		return nil
 	}
 	return &PromoCodeUsage{
-		ID:          u.ID,
-		PromoCodeID: u.PromoCodeID,
-		UserID:      u.UserID,
-		BonusAmount: u.BonusAmount,
-		UsedAt:      u.UsedAt,
-		User:        UserFromServiceShallow(u.User),
+		ID:                u.ID,
+		PromoCodeID:       u.PromoCodeID,
+		UserID:            u.UserID,
+		BonusAmount:       u.BonusAmount,
+		FixedBonusAmount:  u.FixedBonusAmount,
+		RandomBonusAmount: u.RandomBonusAmount,
+		UsedAt:            u.UsedAt,
+		User:              UserFromServiceShallow(u.User),
 	}
 }
