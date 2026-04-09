@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 func TestExtractOpenAIRequestMetaFromBody(t *testing.T) {
@@ -103,6 +104,65 @@ func TestExtractOpenAIReasoningEffortFromBody(t *testing.T) {
 			require.Equal(t, tt.wantValue, *got)
 		})
 	}
+}
+
+func TestEnsureOpenAIResponsesReasoning(t *testing.T) {
+	t.Run("derive from mapped model suffix and add summary", func(t *testing.T) {
+		reqBody := map[string]any{
+			"model": "gpt-5.1",
+			"input": "hi",
+		}
+
+		changed := ensureOpenAIResponsesReasoning(reqBody, "gpt-5.1-high")
+		require.True(t, changed)
+
+		reasoning, ok := reqBody["reasoning"].(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, "high", reasoning["effort"])
+		require.Equal(t, "auto", reasoning["summary"])
+	})
+
+	t.Run("keep explicit effort and only fill summary", func(t *testing.T) {
+		reqBody := map[string]any{
+			"model": "gpt-5.1",
+			"reasoning": map[string]any{
+				"effort": "low",
+			},
+		}
+
+		changed := ensureOpenAIResponsesReasoning(reqBody, "gpt-5.1")
+		require.True(t, changed)
+
+		reasoning := reqBody["reasoning"].(map[string]any)
+		require.Equal(t, "low", reasoning["effort"])
+		require.Equal(t, "auto", reasoning["summary"])
+	})
+
+	t.Run("explicit none does not auto inject summary", func(t *testing.T) {
+		reqBody := map[string]any{
+			"model": "gpt-5.1",
+			"reasoning": map[string]any{
+				"effort": "none",
+			},
+		}
+
+		changed := ensureOpenAIResponsesReasoning(reqBody, "gpt-5.1")
+		require.False(t, changed)
+
+		reasoning := reqBody["reasoning"].(map[string]any)
+		_, hasSummary := reasoning["summary"]
+		require.False(t, hasSummary)
+	})
+}
+
+func TestNormalizeOpenAIPassthroughReasoningBody(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.1","reasoning":{"effort":"high"}}`)
+
+	normalized, changed, err := normalizeOpenAIPassthroughReasoningBody(body)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, "high", gjson.GetBytes(normalized, "reasoning.effort").String())
+	require.Equal(t, "auto", gjson.GetBytes(normalized, "reasoning.summary").String())
 }
 
 func TestGetOpenAIRequestBodyMap_UsesContextCache(t *testing.T) {

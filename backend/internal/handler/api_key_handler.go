@@ -69,6 +69,24 @@ type UpdateAPIKeyRequest struct {
 	ResetRateLimitUsage *bool    `json:"reset_rate_limit_usage"` // 重置限速用量
 }
 
+// UserVisibleGroupPoolStatus represents realtime pool availability for a visible group.
+type UserVisibleGroupPoolStatus struct {
+	GroupID                 int64   `json:"group_id"`
+	GroupName               string  `json:"group_name"`
+	Platform                string  `json:"platform"`
+	TotalAccounts           int64   `json:"total_accounts"`
+	ActiveAccountCount      int64   `json:"active_account_count"`
+	RateLimitedAccountCount int64   `json:"rate_limited_account_count"`
+	AvailableAccountCount   int64   `json:"available_account_count"`
+	AvailabilityRatio       float64 `json:"availability_ratio"`
+	Status                  string  `json:"status"`
+}
+
+type UserVisibleGroupPoolStatusResponse struct {
+	CheckedAt string                       `json:"checked_at"`
+	Groups    []UserVisibleGroupPoolStatus `json:"groups"`
+}
+
 // List handles listing user's API keys with pagination
 // GET /api/v1/api-keys
 func (h *APIKeyHandler) List(c *gin.Context) {
@@ -343,30 +361,106 @@ func (h *APIKeyHandler) GetUserGroupRates(c *gin.Context) {
 	response.Success(c, rates)
 }
 
-func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *service.Group) ([]dto.SupportedModel, string, error) {
-	if group == nil {
-		return nil, "mapping", nil
+// GetVisibleGroupPoolStatus 获取当前用户可见分组的实时号池状态。
+// GET /api/v1/groups/pool-status
+func (h *APIKeyHandler) GetVisibleGroupPoolStatus(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
 	}
 
-	if h.accountRepo == nil {
-		return nil, "mapping", nil
-	}
-
-	accounts, err := h.accountRepo.ListSchedulableByGroupID(ctx, group.ID)
+	groups, err := h.apiKeyService.GetAvailableGroups(c.Request.Context(), subject.UserID)
 	if err != nil {
-		return nil, "", err
+		response.ErrorFrom(c, err)
+		return
 	}
 
-	mappedModelIDs := collectGroupModelIDs(group.Platform, accounts)
-	catalog := staticCatalogModelsForPlatform(group.Platform)
-	mappedModelIDs = filterMappedModelIDsByCatalog(group.Platform, mappedModelIDs)
-	return buildMappedModels(mappedModelIDs, catalog), "mapping", nil
+	out := make([]UserVisibleGroupPoolStatus, 0, len(groups))
+	for i := range groups {
+		out = append(out, buildUserVisibleGroupPoolStatus(&groups[i]))
+	}
+
+	response.Success(c, UserVisibleGroupPoolStatusResponse{
+		CheckedAt: time.Now().UTC().Format(time.RFC3339),
+		Groups:    out,
+	})
 }
 
-func staticCatalogModelsForPlatform(platform string) []dto.SupportedModel {
-	switch platform {
+func buildUserVisibleGroupPoolStatus(group *service.Group) UserVisibleGroupPoolStatus {
+	if group == nil {
+		return UserVisibleGroupPoolStatus{}
+	}
+
+	active := group.ActiveAccountCount
+	limited := group.RateLimitedAccountCount
+	if active < 0 {
+		active = 0
+	}
+	if limited < 0 {
+		limited = 0
+	}
+
+	available := active - limited
+	if available < 0 {
+		available = 0
+	}
+
+	ratio := 0.0
+	if denominator := available + limited; denominator > 0 {
+		ratio = float64(available) / float64(denominator)
+	} else if available > 0 {
+		ratio = 1
+	}
+
+	status := "healthy"
+	switch {
+	case available <= 0:
+		status = "down"
+	case limited > 0:
+		status = "degraded"
+	}
+
+	return UserVisibleGroupPoolStatus{
+		GroupID:                 group.ID,
+		GroupName:               group.Name,
+		Platform:                group.Platform,
+		TotalAccounts:           group.AccountCount,
+		ActiveAccountCount:      active,
+		RateLimitedAccountCount: limited,
+		AvailableAccountCount:   available,
+		AvailabilityRatio:       ratio,
+		Status:                  status,
+	}
+}
+
+func (h *APIKeyHandler) getGroupSupportedModels(_ context.Context, group *service.Group) ([]dto.SupportedModel, string, error) {
+	if group == nil {
+		return nil, "default", nil
+	}
+
+	return staticCatalogModelsForGroup(group), "default", nil
+}
+
+func staticCatalogModelsForGroup(group *service.Group) []dto.SupportedModel {
+	if group == nil {
+		return nil
+	}
+
+	switch group.Platform {
 	case service.PlatformOpenAI:
 		return supportedModelsFromOpenAI(openai.DefaultModels)
+	case service.PlatformAnthropic:
+		return supportedModelsFromClaude(claude.DefaultModels)
+	case service.PlatformGemini:
+		return supportedModelsFromGemini(geminicli.DefaultModels)
+	case service.PlatformAntigravity:
+		return filterAntigravityModelsByScopes(
+			supportedModelsFromAntigravity(antigravity.DefaultModels()),
+			group.SupportedModelScopes,
+		)
+	case service.PlatformSora:
+		return supportedModelsFromOpenAI(service.DefaultSoraModels(nil))
 	default:
 		return nil
 	}

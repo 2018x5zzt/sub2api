@@ -54,6 +54,7 @@ func RegisterUserRoutes(
 			groups.GET("/available", h.APIKey.GetAvailableGroups)
 			groups.GET("/models", h.APIKey.GetAvailableGroupModels)
 			groups.GET("/rates", h.APIKey.GetUserGroupRates)
+			groups.GET("/pool-status", h.APIKey.GetVisibleGroupPoolStatus)
 		}
 
 		// 使用记录

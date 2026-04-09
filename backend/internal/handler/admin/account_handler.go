@@ -2078,9 +2078,22 @@ func openAICatalogModelsFromMapping(mapping map[string]string) []openai.Model {
 	}
 
 	models := make([]openai.Model, 0, len(mapping))
-	for _, model := range openai.DefaultModels {
-		if _, ok := mapping[model.ID]; ok {
-			models = append(models, model)
+	for requestedModel := range mapping {
+		var found bool
+		for _, model := range openai.DefaultModels {
+			if model.ID == requestedModel {
+				models = append(models, model)
+				found = true
+				break
+			}
+		}
+		if !found {
+			models = append(models, openai.Model{
+				ID:          requestedModel,
+				Object:      "model",
+				Type:        "model",
+				DisplayName: requestedModel,
+			})
 		}
 	}
 	return models

@@ -1779,6 +1779,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 	// 对所有请求执行模型映射（包含 Codex CLI）。
 	mappedModel := account.GetMappedModel(reqModel)
+	reasoningModel := mappedModel
 	if mappedModel != reqModel {
 		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Model mapping applied: %s -> %s (account: %s, isCodexCLI: %v)", reqModel, mappedModel, account.Name, isCodexCLI)
 		reqBody["model"] = mappedModel
@@ -1829,6 +1830,11 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		if codexResult.PromptCacheKey != "" {
 			promptCacheKey = codexResult.PromptCacheKey
 		}
+	}
+
+	if ensureOpenAIResponsesReasoning(reqBody, reasoningModel) {
+		bodyModified = true
+		disablePatch()
 	}
 
 	// Handle max_output_tokens based on platform and account type
@@ -4633,6 +4639,56 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 		}
 	}
 
+	reasoningBody, reasoningChanged, err := normalizeOpenAIPassthroughReasoningBody(normalized)
+	if err != nil {
+		return body, false, err
+	}
+	if reasoningChanged {
+		normalized = reasoningBody
+		changed = true
+	}
+
+	return normalized, changed, nil
+}
+
+func normalizeOpenAIPassthroughReasoningBody(body []byte) ([]byte, bool, error) {
+	if len(body) == 0 {
+		return body, false, nil
+	}
+
+	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	reasoningEffort := extractOpenAIReasoningEffortFromBody(body, model)
+	if reasoningEffort == nil {
+		return body, false, nil
+	}
+
+	reasoningRoot := gjson.GetBytes(body, "reasoning")
+	if reasoningRoot.Exists() && reasoningRoot.Type != gjson.JSON {
+		return body, false, nil
+	}
+
+	normalized := body
+	changed := false
+
+	if strings.TrimSpace(gjson.GetBytes(normalized, "reasoning.effort").String()) == "" {
+		next, err := sjson.SetBytes(normalized, "reasoning.effort", *reasoningEffort)
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body reasoning.effort: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
+	summary := gjson.GetBytes(normalized, "reasoning.summary")
+	if !summary.Exists() || strings.TrimSpace(summary.String()) == "" {
+		next, err := sjson.SetBytes(normalized, "reasoning.summary", "auto")
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body reasoning.summary: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
 	return normalized, changed, nil
 }
 
@@ -4673,6 +4729,44 @@ func extractOpenAIReasoningEffortFromBody(body []byte, requestedModel string) *s
 		return nil
 	}
 	return &value
+}
+
+func ensureOpenAIResponsesReasoning(reqBody map[string]any, requestedModel string) bool {
+	if reqBody == nil {
+		return false
+	}
+
+	reasoningEffort := extractOpenAIReasoningEffort(reqBody, requestedModel)
+	if reasoningEffort == nil {
+		return false
+	}
+
+	reasoningRaw, exists := reqBody["reasoning"]
+	var reasoning map[string]any
+	if exists {
+		casted, ok := reasoningRaw.(map[string]any)
+		if !ok {
+			return false
+		}
+		reasoning = casted
+	} else {
+		reasoning = make(map[string]any)
+		reqBody["reasoning"] = reasoning
+	}
+
+	changed := !exists
+
+	if effort, ok := reasoning["effort"].(string); !ok || strings.TrimSpace(effort) == "" {
+		reasoning["effort"] = *reasoningEffort
+		changed = true
+	}
+
+	if summary, ok := reasoning["summary"].(string); !ok || strings.TrimSpace(summary) == "" {
+		reasoning["summary"] = "auto"
+		changed = true
+	}
+
+	return changed
 }
 
 func extractOpenAIServiceTier(reqBody map[string]any) *string {

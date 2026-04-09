@@ -104,7 +104,7 @@ func TestAccountHandlerGetAvailableModels_OpenAIOAuthPassthroughFallsBackToDefau
 	require.Greater(t, len(resp.Data), 1)
 }
 
-func TestAccountHandlerGetAvailableModels_OpenAIUnknownMappingsAreFilteredOut(t *testing.T) {
+func TestAccountHandlerGetAvailableModels_OpenAIUnknownMappingsAreIncluded(t *testing.T) {
 	svc := &availableModelsAdminService{
 		stubAdminService: newStubAdminService(),
 		account: service.Account{
@@ -135,6 +135,9 @@ func TestAccountHandlerGetAvailableModels_OpenAIUnknownMappingsAreFilteredOut(t 
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Len(t, resp.Data, 1)
-	require.Equal(t, "gpt-5.4", resp.Data[0].ID)
+	ids := make([]string, 0, len(resp.Data))
+	for _, model := range resp.Data {
+		ids = append(ids, model.ID)
+	}
+	require.ElementsMatch(t, []string{"legacy-gpt-5-preview", "gpt-5.4"}, ids)
 }

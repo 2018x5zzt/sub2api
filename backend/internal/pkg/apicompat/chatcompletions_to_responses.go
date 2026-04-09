@@ -50,12 +50,10 @@ func ChatCompletionsToResponses(req *ChatCompletionsRequest) (*ResponsesRequest,
 		out.MaxOutputTokens = &v
 	}
 
-	// reasoning_effort → reasoning.effort + reasoning.summary="auto"
-	if req.ReasoningEffort != "" {
-		out.Reasoning = &ResponsesReasoning{
-			Effort:  req.ReasoningEffort,
-			Summary: "auto",
-		}
+	// Chat Completions compat should preserve mapped model suffix semantics
+	// (e.g. gpt-5.1-high) and request a displayable reasoning summary.
+	if reasoning := resolveChatCompletionsReasoning(req.Model, req.ReasoningEffort); reasoning != nil {
+		out.Reasoning = reasoning
 	}
 
 	// tools[] and legacy functions[] → ResponsesTool[]
@@ -76,6 +74,94 @@ func ChatCompletionsToResponses(req *ChatCompletionsRequest) (*ResponsesRequest,
 	}
 
 	return out, nil
+}
+
+func resolveChatCompletionsReasoning(model, explicitEffort string) *ResponsesReasoning {
+	if strings.TrimSpace(explicitEffort) != "" {
+		return &ResponsesReasoning{
+			Effort:  explicitEffort,
+			Summary: "auto",
+		}
+	}
+
+	if effort, present := deriveChatCompletionsReasoningEffortFromModel(model); present {
+		if effort == "" {
+			return nil
+		}
+		return &ResponsesReasoning{
+			Effort:  effort,
+			Summary: "auto",
+		}
+	}
+
+	if shouldDefaultChatCompletionsReasoning(model) {
+		return &ResponsesReasoning{
+			Effort:  "medium",
+			Summary: "auto",
+		}
+	}
+
+	return nil
+}
+
+func deriveChatCompletionsReasoningEffortFromModel(model string) (string, bool) {
+	modelID := strings.TrimSpace(model)
+	if modelID == "" {
+		return "", false
+	}
+
+	if strings.Contains(modelID, "/") {
+		parts := strings.Split(modelID, "/")
+		modelID = parts[len(parts)-1]
+	}
+
+	parts := strings.FieldsFunc(strings.ToLower(modelID), func(r rune) bool {
+		switch r {
+		case '-', '_', ' ':
+			return true
+		default:
+			return false
+		}
+	})
+	if len(parts) == 0 {
+		return "", false
+	}
+
+	return normalizeChatCompletionsReasoningToken(parts[len(parts)-1])
+}
+
+func normalizeChatCompletionsReasoningToken(raw string) (string, bool) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	if value == "" {
+		return "", false
+	}
+
+	value = strings.NewReplacer("-", "", "_", "", " ", "").Replace(value)
+
+	switch value {
+	case "none", "minimal":
+		return "", true
+	case "low", "medium", "high":
+		return value, true
+	case "xhigh", "extrahigh":
+		return "xhigh", true
+	default:
+		return "", false
+	}
+}
+
+func shouldDefaultChatCompletionsReasoning(model string) bool {
+	modelID := strings.ToLower(strings.TrimSpace(model))
+	if modelID == "" {
+		return false
+	}
+
+	if strings.Contains(modelID, "/") {
+		parts := strings.Split(modelID, "/")
+		modelID = parts[len(parts)-1]
+	}
+
+	return strings.HasPrefix(modelID, "gpt-5") || strings.Contains(modelID, "codex")
 }
 
 // convertChatMessagesToResponsesInput converts the Chat Completions messages

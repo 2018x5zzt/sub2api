@@ -157,6 +157,43 @@ func TestChatCompletionsToResponses_ReasoningEffort(t *testing.T) {
 	assert.Equal(t, "auto", resp.Reasoning.Summary)
 }
 
+func TestChatCompletionsToResponses_ReasoningDerivedFromModelSuffix(t *testing.T) {
+	req := &ChatCompletionsRequest{
+		Model:    "gpt-5.1-high",
+		Messages: []ChatMessage{{Role: "user", Content: json.RawMessage(`"Hi"`)}},
+	}
+
+	resp, err := ChatCompletionsToResponses(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Reasoning)
+	assert.Equal(t, "high", resp.Reasoning.Effort)
+	assert.Equal(t, "auto", resp.Reasoning.Summary)
+}
+
+func TestChatCompletionsToResponses_ReasoningDefaultsForGPT5Compat(t *testing.T) {
+	req := &ChatCompletionsRequest{
+		Model:    "gpt-5.1",
+		Messages: []ChatMessage{{Role: "user", Content: json.RawMessage(`"Hi"`)}},
+	}
+
+	resp, err := ChatCompletionsToResponses(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Reasoning)
+	assert.Equal(t, "medium", resp.Reasoning.Effort)
+	assert.Equal(t, "auto", resp.Reasoning.Summary)
+}
+
+func TestChatCompletionsToResponses_ReasoningExplicitlyDisabledByModelSuffix(t *testing.T) {
+	req := &ChatCompletionsRequest{
+		Model:    "gpt-5.1-none",
+		Messages: []ChatMessage{{Role: "user", Content: json.RawMessage(`"Hi"`)}},
+	}
+
+	resp, err := ChatCompletionsToResponses(req)
+	require.NoError(t, err)
+	assert.Nil(t, resp.Reasoning)
+}
+
 func TestChatCompletionsToResponses_ImageURL(t *testing.T) {
 	content := `[{"type":"text","text":"Describe this"},{"type":"image_url","image_url":{"url":"data:image/png;base64,abc123"}}]`
 	req := &ChatCompletionsRequest{
