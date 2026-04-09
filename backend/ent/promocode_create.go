@@ -57,6 +57,34 @@ func (_c *PromoCodeCreate) SetNillableBonusAmount(v *float64) *PromoCodeCreate {
 	return _c
 }
 
+// SetRandomBonusPoolAmount sets the "random_bonus_pool_amount" field.
+func (_c *PromoCodeCreate) SetRandomBonusPoolAmount(v float64) *PromoCodeCreate {
+	_c.mutation.SetRandomBonusPoolAmount(v)
+	return _c
+}
+
+// SetNillableRandomBonusPoolAmount sets the "random_bonus_pool_amount" field if the given value is not nil.
+func (_c *PromoCodeCreate) SetNillableRandomBonusPoolAmount(v *float64) *PromoCodeCreate {
+	if v != nil {
+		_c.SetRandomBonusPoolAmount(*v)
+	}
+	return _c
+}
+
+// SetRandomBonusRemaining sets the "random_bonus_remaining" field.
+func (_c *PromoCodeCreate) SetRandomBonusRemaining(v float64) *PromoCodeCreate {
+	_c.mutation.SetRandomBonusRemaining(v)
+	return _c
+}
+
+// SetNillableRandomBonusRemaining sets the "random_bonus_remaining" field if the given value is not nil.
+func (_c *PromoCodeCreate) SetNillableRandomBonusRemaining(v *float64) *PromoCodeCreate {
+	if v != nil {
+		_c.SetRandomBonusRemaining(*v)
+	}
+	return _c
+}
+
 // SetMaxUses sets the "max_uses" field.
 func (_c *PromoCodeCreate) SetMaxUses(v int) *PromoCodeCreate {
 	_c.mutation.SetMaxUses(v)
@@ -81,6 +109,20 @@ func (_c *PromoCodeCreate) SetUsedCount(v int) *PromoCodeCreate {
 func (_c *PromoCodeCreate) SetNillableUsedCount(v *int) *PromoCodeCreate {
 	if v != nil {
 		_c.SetUsedCount(*v)
+	}
+	return _c
+}
+
+// SetLeaderboardEnabled sets the "leaderboard_enabled" field.
+func (_c *PromoCodeCreate) SetLeaderboardEnabled(v bool) *PromoCodeCreate {
+	_c.mutation.SetLeaderboardEnabled(v)
+	return _c
+}
+
+// SetNillableLeaderboardEnabled sets the "leaderboard_enabled" field if the given value is not nil.
+func (_c *PromoCodeCreate) SetNillableLeaderboardEnabled(v *bool) *PromoCodeCreate {
+	if v != nil {
+		_c.SetLeaderboardEnabled(*v)
 	}
 	return _c
 }
@@ -227,6 +269,14 @@ func (_c *PromoCodeCreate) defaults() {
 		v := promocode.DefaultBonusAmount
 		_c.mutation.SetBonusAmount(v)
 	}
+	if _, ok := _c.mutation.RandomBonusPoolAmount(); !ok {
+		v := promocode.DefaultRandomBonusPoolAmount
+		_c.mutation.SetRandomBonusPoolAmount(v)
+	}
+	if _, ok := _c.mutation.RandomBonusRemaining(); !ok {
+		v := promocode.DefaultRandomBonusRemaining
+		_c.mutation.SetRandomBonusRemaining(v)
+	}
 	if _, ok := _c.mutation.MaxUses(); !ok {
 		v := promocode.DefaultMaxUses
 		_c.mutation.SetMaxUses(v)
@@ -234,6 +284,10 @@ func (_c *PromoCodeCreate) defaults() {
 	if _, ok := _c.mutation.UsedCount(); !ok {
 		v := promocode.DefaultUsedCount
 		_c.mutation.SetUsedCount(v)
+	}
+	if _, ok := _c.mutation.LeaderboardEnabled(); !ok {
+		v := promocode.DefaultLeaderboardEnabled
+		_c.mutation.SetLeaderboardEnabled(v)
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := promocode.DefaultStatus
@@ -270,11 +324,20 @@ func (_c *PromoCodeCreate) check() error {
 	if _, ok := _c.mutation.BonusAmount(); !ok {
 		return &ValidationError{Name: "bonus_amount", err: errors.New(`ent: missing required field "PromoCode.bonus_amount"`)}
 	}
+	if _, ok := _c.mutation.RandomBonusPoolAmount(); !ok {
+		return &ValidationError{Name: "random_bonus_pool_amount", err: errors.New(`ent: missing required field "PromoCode.random_bonus_pool_amount"`)}
+	}
+	if _, ok := _c.mutation.RandomBonusRemaining(); !ok {
+		return &ValidationError{Name: "random_bonus_remaining", err: errors.New(`ent: missing required field "PromoCode.random_bonus_remaining"`)}
+	}
 	if _, ok := _c.mutation.MaxUses(); !ok {
 		return &ValidationError{Name: "max_uses", err: errors.New(`ent: missing required field "PromoCode.max_uses"`)}
 	}
 	if _, ok := _c.mutation.UsedCount(); !ok {
 		return &ValidationError{Name: "used_count", err: errors.New(`ent: missing required field "PromoCode.used_count"`)}
+	}
+	if _, ok := _c.mutation.LeaderboardEnabled(); !ok {
+		return &ValidationError{Name: "leaderboard_enabled", err: errors.New(`ent: missing required field "PromoCode.leaderboard_enabled"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "PromoCode.status"`)}
@@ -329,6 +392,14 @@ func (_c *PromoCodeCreate) createSpec() (*PromoCode, *sqlgraph.CreateSpec) {
 		_spec.SetField(promocode.FieldBonusAmount, field.TypeFloat64, value)
 		_node.BonusAmount = value
 	}
+	if value, ok := _c.mutation.RandomBonusPoolAmount(); ok {
+		_spec.SetField(promocode.FieldRandomBonusPoolAmount, field.TypeFloat64, value)
+		_node.RandomBonusPoolAmount = value
+	}
+	if value, ok := _c.mutation.RandomBonusRemaining(); ok {
+		_spec.SetField(promocode.FieldRandomBonusRemaining, field.TypeFloat64, value)
+		_node.RandomBonusRemaining = value
+	}
 	if value, ok := _c.mutation.MaxUses(); ok {
 		_spec.SetField(promocode.FieldMaxUses, field.TypeInt, value)
 		_node.MaxUses = value
@@ -336,6 +407,10 @@ func (_c *PromoCodeCreate) createSpec() (*PromoCode, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UsedCount(); ok {
 		_spec.SetField(promocode.FieldUsedCount, field.TypeInt, value)
 		_node.UsedCount = value
+	}
+	if value, ok := _c.mutation.LeaderboardEnabled(); ok {
+		_spec.SetField(promocode.FieldLeaderboardEnabled, field.TypeBool, value)
+		_node.LeaderboardEnabled = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(promocode.FieldStatus, field.TypeString, value)
@@ -471,6 +546,42 @@ func (u *PromoCodeUpsert) AddBonusAmount(v float64) *PromoCodeUpsert {
 	return u
 }
 
+// SetRandomBonusPoolAmount sets the "random_bonus_pool_amount" field.
+func (u *PromoCodeUpsert) SetRandomBonusPoolAmount(v float64) *PromoCodeUpsert {
+	u.Set(promocode.FieldRandomBonusPoolAmount, v)
+	return u
+}
+
+// UpdateRandomBonusPoolAmount sets the "random_bonus_pool_amount" field to the value that was provided on create.
+func (u *PromoCodeUpsert) UpdateRandomBonusPoolAmount() *PromoCodeUpsert {
+	u.SetExcluded(promocode.FieldRandomBonusPoolAmount)
+	return u
+}
+
+// AddRandomBonusPoolAmount adds v to the "random_bonus_pool_amount" field.
+func (u *PromoCodeUpsert) AddRandomBonusPoolAmount(v float64) *PromoCodeUpsert {
+	u.Add(promocode.FieldRandomBonusPoolAmount, v)
+	return u
+}
+
+// SetRandomBonusRemaining sets the "random_bonus_remaining" field.
+func (u *PromoCodeUpsert) SetRandomBonusRemaining(v float64) *PromoCodeUpsert {
+	u.Set(promocode.FieldRandomBonusRemaining, v)
+	return u
+}
+
+// UpdateRandomBonusRemaining sets the "random_bonus_remaining" field to the value that was provided on create.
+func (u *PromoCodeUpsert) UpdateRandomBonusRemaining() *PromoCodeUpsert {
+	u.SetExcluded(promocode.FieldRandomBonusRemaining)
+	return u
+}
+
+// AddRandomBonusRemaining adds v to the "random_bonus_remaining" field.
+func (u *PromoCodeUpsert) AddRandomBonusRemaining(v float64) *PromoCodeUpsert {
+	u.Add(promocode.FieldRandomBonusRemaining, v)
+	return u
+}
+
 // SetMaxUses sets the "max_uses" field.
 func (u *PromoCodeUpsert) SetMaxUses(v int) *PromoCodeUpsert {
 	u.Set(promocode.FieldMaxUses, v)
@@ -504,6 +615,18 @@ func (u *PromoCodeUpsert) UpdateUsedCount() *PromoCodeUpsert {
 // AddUsedCount adds v to the "used_count" field.
 func (u *PromoCodeUpsert) AddUsedCount(v int) *PromoCodeUpsert {
 	u.Add(promocode.FieldUsedCount, v)
+	return u
+}
+
+// SetLeaderboardEnabled sets the "leaderboard_enabled" field.
+func (u *PromoCodeUpsert) SetLeaderboardEnabled(v bool) *PromoCodeUpsert {
+	u.Set(promocode.FieldLeaderboardEnabled, v)
+	return u
+}
+
+// UpdateLeaderboardEnabled sets the "leaderboard_enabled" field to the value that was provided on create.
+func (u *PromoCodeUpsert) UpdateLeaderboardEnabled() *PromoCodeUpsert {
+	u.SetExcluded(promocode.FieldLeaderboardEnabled)
 	return u
 }
 
@@ -679,6 +802,48 @@ func (u *PromoCodeUpsertOne) UpdateBonusAmount() *PromoCodeUpsertOne {
 	})
 }
 
+// SetRandomBonusPoolAmount sets the "random_bonus_pool_amount" field.
+func (u *PromoCodeUpsertOne) SetRandomBonusPoolAmount(v float64) *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetRandomBonusPoolAmount(v)
+	})
+}
+
+// AddRandomBonusPoolAmount adds v to the "random_bonus_pool_amount" field.
+func (u *PromoCodeUpsertOne) AddRandomBonusPoolAmount(v float64) *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.AddRandomBonusPoolAmount(v)
+	})
+}
+
+// UpdateRandomBonusPoolAmount sets the "random_bonus_pool_amount" field to the value that was provided on create.
+func (u *PromoCodeUpsertOne) UpdateRandomBonusPoolAmount() *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateRandomBonusPoolAmount()
+	})
+}
+
+// SetRandomBonusRemaining sets the "random_bonus_remaining" field.
+func (u *PromoCodeUpsertOne) SetRandomBonusRemaining(v float64) *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetRandomBonusRemaining(v)
+	})
+}
+
+// AddRandomBonusRemaining adds v to the "random_bonus_remaining" field.
+func (u *PromoCodeUpsertOne) AddRandomBonusRemaining(v float64) *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.AddRandomBonusRemaining(v)
+	})
+}
+
+// UpdateRandomBonusRemaining sets the "random_bonus_remaining" field to the value that was provided on create.
+func (u *PromoCodeUpsertOne) UpdateRandomBonusRemaining() *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateRandomBonusRemaining()
+	})
+}
+
 // SetMaxUses sets the "max_uses" field.
 func (u *PromoCodeUpsertOne) SetMaxUses(v int) *PromoCodeUpsertOne {
 	return u.Update(func(s *PromoCodeUpsert) {
@@ -718,6 +883,20 @@ func (u *PromoCodeUpsertOne) AddUsedCount(v int) *PromoCodeUpsertOne {
 func (u *PromoCodeUpsertOne) UpdateUsedCount() *PromoCodeUpsertOne {
 	return u.Update(func(s *PromoCodeUpsert) {
 		s.UpdateUsedCount()
+	})
+}
+
+// SetLeaderboardEnabled sets the "leaderboard_enabled" field.
+func (u *PromoCodeUpsertOne) SetLeaderboardEnabled(v bool) *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetLeaderboardEnabled(v)
+	})
+}
+
+// UpdateLeaderboardEnabled sets the "leaderboard_enabled" field to the value that was provided on create.
+func (u *PromoCodeUpsertOne) UpdateLeaderboardEnabled() *PromoCodeUpsertOne {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateLeaderboardEnabled()
 	})
 }
 
@@ -1072,6 +1251,48 @@ func (u *PromoCodeUpsertBulk) UpdateBonusAmount() *PromoCodeUpsertBulk {
 	})
 }
 
+// SetRandomBonusPoolAmount sets the "random_bonus_pool_amount" field.
+func (u *PromoCodeUpsertBulk) SetRandomBonusPoolAmount(v float64) *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetRandomBonusPoolAmount(v)
+	})
+}
+
+// AddRandomBonusPoolAmount adds v to the "random_bonus_pool_amount" field.
+func (u *PromoCodeUpsertBulk) AddRandomBonusPoolAmount(v float64) *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.AddRandomBonusPoolAmount(v)
+	})
+}
+
+// UpdateRandomBonusPoolAmount sets the "random_bonus_pool_amount" field to the value that was provided on create.
+func (u *PromoCodeUpsertBulk) UpdateRandomBonusPoolAmount() *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateRandomBonusPoolAmount()
+	})
+}
+
+// SetRandomBonusRemaining sets the "random_bonus_remaining" field.
+func (u *PromoCodeUpsertBulk) SetRandomBonusRemaining(v float64) *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetRandomBonusRemaining(v)
+	})
+}
+
+// AddRandomBonusRemaining adds v to the "random_bonus_remaining" field.
+func (u *PromoCodeUpsertBulk) AddRandomBonusRemaining(v float64) *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.AddRandomBonusRemaining(v)
+	})
+}
+
+// UpdateRandomBonusRemaining sets the "random_bonus_remaining" field to the value that was provided on create.
+func (u *PromoCodeUpsertBulk) UpdateRandomBonusRemaining() *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateRandomBonusRemaining()
+	})
+}
+
 // SetMaxUses sets the "max_uses" field.
 func (u *PromoCodeUpsertBulk) SetMaxUses(v int) *PromoCodeUpsertBulk {
 	return u.Update(func(s *PromoCodeUpsert) {
@@ -1111,6 +1332,20 @@ func (u *PromoCodeUpsertBulk) AddUsedCount(v int) *PromoCodeUpsertBulk {
 func (u *PromoCodeUpsertBulk) UpdateUsedCount() *PromoCodeUpsertBulk {
 	return u.Update(func(s *PromoCodeUpsert) {
 		s.UpdateUsedCount()
+	})
+}
+
+// SetLeaderboardEnabled sets the "leaderboard_enabled" field.
+func (u *PromoCodeUpsertBulk) SetLeaderboardEnabled(v bool) *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.SetLeaderboardEnabled(v)
+	})
+}
+
+// UpdateLeaderboardEnabled sets the "leaderboard_enabled" field to the value that was provided on create.
+func (u *PromoCodeUpsertBulk) UpdateLeaderboardEnabled() *PromoCodeUpsertBulk {
+	return u.Update(func(s *PromoCodeUpsert) {
+		s.UpdateLeaderboardEnabled()
 	})
 }
 

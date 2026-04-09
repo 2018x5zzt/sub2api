@@ -12537,30 +12537,35 @@ func (m *IdempotencyRecordMutation) ResetEdge(name string) error {
 // PromoCodeMutation represents an operation that mutates the PromoCode nodes in the graph.
 type PromoCodeMutation struct {
 	config
-	op                   Op
-	typ                  string
-	id                   *int64
-	code                 *string
-	scene                *string
-	bonus_amount         *float64
-	addbonus_amount      *float64
-	max_uses             *int
-	addmax_uses          *int
-	used_count           *int
-	addused_count        *int
-	status               *string
-	expires_at           *time.Time
-	success_message      *string
-	notes                *string
-	created_at           *time.Time
-	updated_at           *time.Time
-	clearedFields        map[string]struct{}
-	usage_records        map[int64]struct{}
-	removedusage_records map[int64]struct{}
-	clearedusage_records bool
-	done                 bool
-	oldValue             func(context.Context) (*PromoCode, error)
-	predicates           []predicate.PromoCode
+	op                          Op
+	typ                         string
+	id                          *int64
+	code                        *string
+	scene                       *string
+	bonus_amount                *float64
+	addbonus_amount             *float64
+	random_bonus_pool_amount    *float64
+	addrandom_bonus_pool_amount *float64
+	random_bonus_remaining      *float64
+	addrandom_bonus_remaining   *float64
+	max_uses                    *int
+	addmax_uses                 *int
+	used_count                  *int
+	addused_count               *int
+	leaderboard_enabled         *bool
+	status                      *string
+	expires_at                  *time.Time
+	success_message             *string
+	notes                       *string
+	created_at                  *time.Time
+	updated_at                  *time.Time
+	clearedFields               map[string]struct{}
+	usage_records               map[int64]struct{}
+	removedusage_records        map[int64]struct{}
+	clearedusage_records        bool
+	done                        bool
+	oldValue                    func(context.Context) (*PromoCode, error)
+	predicates                  []predicate.PromoCode
 }
 
 var _ ent.Mutation = (*PromoCodeMutation)(nil)
@@ -12789,6 +12794,118 @@ func (m *PromoCodeMutation) ResetBonusAmount() {
 	m.addbonus_amount = nil
 }
 
+// SetRandomBonusPoolAmount sets the "random_bonus_pool_amount" field.
+func (m *PromoCodeMutation) SetRandomBonusPoolAmount(f float64) {
+	m.random_bonus_pool_amount = &f
+	m.addrandom_bonus_pool_amount = nil
+}
+
+// RandomBonusPoolAmount returns the value of the "random_bonus_pool_amount" field in the mutation.
+func (m *PromoCodeMutation) RandomBonusPoolAmount() (r float64, exists bool) {
+	v := m.random_bonus_pool_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRandomBonusPoolAmount returns the old "random_bonus_pool_amount" field's value of the PromoCode entity.
+// If the PromoCode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PromoCodeMutation) OldRandomBonusPoolAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRandomBonusPoolAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRandomBonusPoolAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRandomBonusPoolAmount: %w", err)
+	}
+	return oldValue.RandomBonusPoolAmount, nil
+}
+
+// AddRandomBonusPoolAmount adds f to the "random_bonus_pool_amount" field.
+func (m *PromoCodeMutation) AddRandomBonusPoolAmount(f float64) {
+	if m.addrandom_bonus_pool_amount != nil {
+		*m.addrandom_bonus_pool_amount += f
+	} else {
+		m.addrandom_bonus_pool_amount = &f
+	}
+}
+
+// AddedRandomBonusPoolAmount returns the value that was added to the "random_bonus_pool_amount" field in this mutation.
+func (m *PromoCodeMutation) AddedRandomBonusPoolAmount() (r float64, exists bool) {
+	v := m.addrandom_bonus_pool_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRandomBonusPoolAmount resets all changes to the "random_bonus_pool_amount" field.
+func (m *PromoCodeMutation) ResetRandomBonusPoolAmount() {
+	m.random_bonus_pool_amount = nil
+	m.addrandom_bonus_pool_amount = nil
+}
+
+// SetRandomBonusRemaining sets the "random_bonus_remaining" field.
+func (m *PromoCodeMutation) SetRandomBonusRemaining(f float64) {
+	m.random_bonus_remaining = &f
+	m.addrandom_bonus_remaining = nil
+}
+
+// RandomBonusRemaining returns the value of the "random_bonus_remaining" field in the mutation.
+func (m *PromoCodeMutation) RandomBonusRemaining() (r float64, exists bool) {
+	v := m.random_bonus_remaining
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRandomBonusRemaining returns the old "random_bonus_remaining" field's value of the PromoCode entity.
+// If the PromoCode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PromoCodeMutation) OldRandomBonusRemaining(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRandomBonusRemaining is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRandomBonusRemaining requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRandomBonusRemaining: %w", err)
+	}
+	return oldValue.RandomBonusRemaining, nil
+}
+
+// AddRandomBonusRemaining adds f to the "random_bonus_remaining" field.
+func (m *PromoCodeMutation) AddRandomBonusRemaining(f float64) {
+	if m.addrandom_bonus_remaining != nil {
+		*m.addrandom_bonus_remaining += f
+	} else {
+		m.addrandom_bonus_remaining = &f
+	}
+}
+
+// AddedRandomBonusRemaining returns the value that was added to the "random_bonus_remaining" field in this mutation.
+func (m *PromoCodeMutation) AddedRandomBonusRemaining() (r float64, exists bool) {
+	v := m.addrandom_bonus_remaining
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRandomBonusRemaining resets all changes to the "random_bonus_remaining" field.
+func (m *PromoCodeMutation) ResetRandomBonusRemaining() {
+	m.random_bonus_remaining = nil
+	m.addrandom_bonus_remaining = nil
+}
+
 // SetMaxUses sets the "max_uses" field.
 func (m *PromoCodeMutation) SetMaxUses(i int) {
 	m.max_uses = &i
@@ -12899,6 +13016,42 @@ func (m *PromoCodeMutation) AddedUsedCount() (r int, exists bool) {
 func (m *PromoCodeMutation) ResetUsedCount() {
 	m.used_count = nil
 	m.addused_count = nil
+}
+
+// SetLeaderboardEnabled sets the "leaderboard_enabled" field.
+func (m *PromoCodeMutation) SetLeaderboardEnabled(b bool) {
+	m.leaderboard_enabled = &b
+}
+
+// LeaderboardEnabled returns the value of the "leaderboard_enabled" field in the mutation.
+func (m *PromoCodeMutation) LeaderboardEnabled() (r bool, exists bool) {
+	v := m.leaderboard_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLeaderboardEnabled returns the old "leaderboard_enabled" field's value of the PromoCode entity.
+// If the PromoCode object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PromoCodeMutation) OldLeaderboardEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLeaderboardEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLeaderboardEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLeaderboardEnabled: %w", err)
+	}
+	return oldValue.LeaderboardEnabled, nil
+}
+
+// ResetLeaderboardEnabled resets all changes to the "leaderboard_enabled" field.
+func (m *PromoCodeMutation) ResetLeaderboardEnabled() {
+	m.leaderboard_enabled = nil
 }
 
 // SetStatus sets the "status" field.
@@ -13244,7 +13397,7 @@ func (m *PromoCodeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PromoCodeMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 14)
 	if m.code != nil {
 		fields = append(fields, promocode.FieldCode)
 	}
@@ -13254,11 +13407,20 @@ func (m *PromoCodeMutation) Fields() []string {
 	if m.bonus_amount != nil {
 		fields = append(fields, promocode.FieldBonusAmount)
 	}
+	if m.random_bonus_pool_amount != nil {
+		fields = append(fields, promocode.FieldRandomBonusPoolAmount)
+	}
+	if m.random_bonus_remaining != nil {
+		fields = append(fields, promocode.FieldRandomBonusRemaining)
+	}
 	if m.max_uses != nil {
 		fields = append(fields, promocode.FieldMaxUses)
 	}
 	if m.used_count != nil {
 		fields = append(fields, promocode.FieldUsedCount)
+	}
+	if m.leaderboard_enabled != nil {
+		fields = append(fields, promocode.FieldLeaderboardEnabled)
 	}
 	if m.status != nil {
 		fields = append(fields, promocode.FieldStatus)
@@ -13292,10 +13454,16 @@ func (m *PromoCodeMutation) Field(name string) (ent.Value, bool) {
 		return m.Scene()
 	case promocode.FieldBonusAmount:
 		return m.BonusAmount()
+	case promocode.FieldRandomBonusPoolAmount:
+		return m.RandomBonusPoolAmount()
+	case promocode.FieldRandomBonusRemaining:
+		return m.RandomBonusRemaining()
 	case promocode.FieldMaxUses:
 		return m.MaxUses()
 	case promocode.FieldUsedCount:
 		return m.UsedCount()
+	case promocode.FieldLeaderboardEnabled:
+		return m.LeaderboardEnabled()
 	case promocode.FieldStatus:
 		return m.Status()
 	case promocode.FieldExpiresAt:
@@ -13323,10 +13491,16 @@ func (m *PromoCodeMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldScene(ctx)
 	case promocode.FieldBonusAmount:
 		return m.OldBonusAmount(ctx)
+	case promocode.FieldRandomBonusPoolAmount:
+		return m.OldRandomBonusPoolAmount(ctx)
+	case promocode.FieldRandomBonusRemaining:
+		return m.OldRandomBonusRemaining(ctx)
 	case promocode.FieldMaxUses:
 		return m.OldMaxUses(ctx)
 	case promocode.FieldUsedCount:
 		return m.OldUsedCount(ctx)
+	case promocode.FieldLeaderboardEnabled:
+		return m.OldLeaderboardEnabled(ctx)
 	case promocode.FieldStatus:
 		return m.OldStatus(ctx)
 	case promocode.FieldExpiresAt:
@@ -13369,6 +13543,20 @@ func (m *PromoCodeMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBonusAmount(v)
 		return nil
+	case promocode.FieldRandomBonusPoolAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRandomBonusPoolAmount(v)
+		return nil
+	case promocode.FieldRandomBonusRemaining:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRandomBonusRemaining(v)
+		return nil
 	case promocode.FieldMaxUses:
 		v, ok := value.(int)
 		if !ok {
@@ -13382,6 +13570,13 @@ func (m *PromoCodeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUsedCount(v)
+		return nil
+	case promocode.FieldLeaderboardEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLeaderboardEnabled(v)
 		return nil
 	case promocode.FieldStatus:
 		v, ok := value.(string)
@@ -13436,6 +13631,12 @@ func (m *PromoCodeMutation) AddedFields() []string {
 	if m.addbonus_amount != nil {
 		fields = append(fields, promocode.FieldBonusAmount)
 	}
+	if m.addrandom_bonus_pool_amount != nil {
+		fields = append(fields, promocode.FieldRandomBonusPoolAmount)
+	}
+	if m.addrandom_bonus_remaining != nil {
+		fields = append(fields, promocode.FieldRandomBonusRemaining)
+	}
 	if m.addmax_uses != nil {
 		fields = append(fields, promocode.FieldMaxUses)
 	}
@@ -13452,6 +13653,10 @@ func (m *PromoCodeMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case promocode.FieldBonusAmount:
 		return m.AddedBonusAmount()
+	case promocode.FieldRandomBonusPoolAmount:
+		return m.AddedRandomBonusPoolAmount()
+	case promocode.FieldRandomBonusRemaining:
+		return m.AddedRandomBonusRemaining()
 	case promocode.FieldMaxUses:
 		return m.AddedMaxUses()
 	case promocode.FieldUsedCount:
@@ -13471,6 +13676,20 @@ func (m *PromoCodeMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddBonusAmount(v)
+		return nil
+	case promocode.FieldRandomBonusPoolAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRandomBonusPoolAmount(v)
+		return nil
+	case promocode.FieldRandomBonusRemaining:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRandomBonusRemaining(v)
 		return nil
 	case promocode.FieldMaxUses:
 		v, ok := value.(int)
@@ -13543,11 +13762,20 @@ func (m *PromoCodeMutation) ResetField(name string) error {
 	case promocode.FieldBonusAmount:
 		m.ResetBonusAmount()
 		return nil
+	case promocode.FieldRandomBonusPoolAmount:
+		m.ResetRandomBonusPoolAmount()
+		return nil
+	case promocode.FieldRandomBonusRemaining:
+		m.ResetRandomBonusRemaining()
+		return nil
 	case promocode.FieldMaxUses:
 		m.ResetMaxUses()
 		return nil
 	case promocode.FieldUsedCount:
 		m.ResetUsedCount()
+		return nil
+	case promocode.FieldLeaderboardEnabled:
+		m.ResetLeaderboardEnabled()
 		return nil
 	case promocode.FieldStatus:
 		m.ResetStatus()
@@ -13658,20 +13886,24 @@ func (m *PromoCodeMutation) ResetEdge(name string) error {
 // PromoCodeUsageMutation represents an operation that mutates the PromoCodeUsage nodes in the graph.
 type PromoCodeUsageMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *int64
-	bonus_amount      *float64
-	addbonus_amount   *float64
-	used_at           *time.Time
-	clearedFields     map[string]struct{}
-	promo_code        *int64
-	clearedpromo_code bool
-	user              *int64
-	cleareduser       bool
-	done              bool
-	oldValue          func(context.Context) (*PromoCodeUsage, error)
-	predicates        []predicate.PromoCodeUsage
+	op                     Op
+	typ                    string
+	id                     *int64
+	bonus_amount           *float64
+	addbonus_amount        *float64
+	fixed_bonus_amount     *float64
+	addfixed_bonus_amount  *float64
+	random_bonus_amount    *float64
+	addrandom_bonus_amount *float64
+	used_at                *time.Time
+	clearedFields          map[string]struct{}
+	promo_code             *int64
+	clearedpromo_code      bool
+	user                   *int64
+	cleareduser            bool
+	done                   bool
+	oldValue               func(context.Context) (*PromoCodeUsage, error)
+	predicates             []predicate.PromoCodeUsage
 }
 
 var _ ent.Mutation = (*PromoCodeUsageMutation)(nil)
@@ -13900,6 +14132,118 @@ func (m *PromoCodeUsageMutation) ResetBonusAmount() {
 	m.addbonus_amount = nil
 }
 
+// SetFixedBonusAmount sets the "fixed_bonus_amount" field.
+func (m *PromoCodeUsageMutation) SetFixedBonusAmount(f float64) {
+	m.fixed_bonus_amount = &f
+	m.addfixed_bonus_amount = nil
+}
+
+// FixedBonusAmount returns the value of the "fixed_bonus_amount" field in the mutation.
+func (m *PromoCodeUsageMutation) FixedBonusAmount() (r float64, exists bool) {
+	v := m.fixed_bonus_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFixedBonusAmount returns the old "fixed_bonus_amount" field's value of the PromoCodeUsage entity.
+// If the PromoCodeUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PromoCodeUsageMutation) OldFixedBonusAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFixedBonusAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFixedBonusAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFixedBonusAmount: %w", err)
+	}
+	return oldValue.FixedBonusAmount, nil
+}
+
+// AddFixedBonusAmount adds f to the "fixed_bonus_amount" field.
+func (m *PromoCodeUsageMutation) AddFixedBonusAmount(f float64) {
+	if m.addfixed_bonus_amount != nil {
+		*m.addfixed_bonus_amount += f
+	} else {
+		m.addfixed_bonus_amount = &f
+	}
+}
+
+// AddedFixedBonusAmount returns the value that was added to the "fixed_bonus_amount" field in this mutation.
+func (m *PromoCodeUsageMutation) AddedFixedBonusAmount() (r float64, exists bool) {
+	v := m.addfixed_bonus_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetFixedBonusAmount resets all changes to the "fixed_bonus_amount" field.
+func (m *PromoCodeUsageMutation) ResetFixedBonusAmount() {
+	m.fixed_bonus_amount = nil
+	m.addfixed_bonus_amount = nil
+}
+
+// SetRandomBonusAmount sets the "random_bonus_amount" field.
+func (m *PromoCodeUsageMutation) SetRandomBonusAmount(f float64) {
+	m.random_bonus_amount = &f
+	m.addrandom_bonus_amount = nil
+}
+
+// RandomBonusAmount returns the value of the "random_bonus_amount" field in the mutation.
+func (m *PromoCodeUsageMutation) RandomBonusAmount() (r float64, exists bool) {
+	v := m.random_bonus_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRandomBonusAmount returns the old "random_bonus_amount" field's value of the PromoCodeUsage entity.
+// If the PromoCodeUsage object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PromoCodeUsageMutation) OldRandomBonusAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRandomBonusAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRandomBonusAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRandomBonusAmount: %w", err)
+	}
+	return oldValue.RandomBonusAmount, nil
+}
+
+// AddRandomBonusAmount adds f to the "random_bonus_amount" field.
+func (m *PromoCodeUsageMutation) AddRandomBonusAmount(f float64) {
+	if m.addrandom_bonus_amount != nil {
+		*m.addrandom_bonus_amount += f
+	} else {
+		m.addrandom_bonus_amount = &f
+	}
+}
+
+// AddedRandomBonusAmount returns the value that was added to the "random_bonus_amount" field in this mutation.
+func (m *PromoCodeUsageMutation) AddedRandomBonusAmount() (r float64, exists bool) {
+	v := m.addrandom_bonus_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRandomBonusAmount resets all changes to the "random_bonus_amount" field.
+func (m *PromoCodeUsageMutation) ResetRandomBonusAmount() {
+	m.random_bonus_amount = nil
+	m.addrandom_bonus_amount = nil
+}
+
 // SetUsedAt sets the "used_at" field.
 func (m *PromoCodeUsageMutation) SetUsedAt(t time.Time) {
 	m.used_at = &t
@@ -14024,7 +14368,7 @@ func (m *PromoCodeUsageMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PromoCodeUsageMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 6)
 	if m.promo_code != nil {
 		fields = append(fields, promocodeusage.FieldPromoCodeID)
 	}
@@ -14033,6 +14377,12 @@ func (m *PromoCodeUsageMutation) Fields() []string {
 	}
 	if m.bonus_amount != nil {
 		fields = append(fields, promocodeusage.FieldBonusAmount)
+	}
+	if m.fixed_bonus_amount != nil {
+		fields = append(fields, promocodeusage.FieldFixedBonusAmount)
+	}
+	if m.random_bonus_amount != nil {
+		fields = append(fields, promocodeusage.FieldRandomBonusAmount)
 	}
 	if m.used_at != nil {
 		fields = append(fields, promocodeusage.FieldUsedAt)
@@ -14051,6 +14401,10 @@ func (m *PromoCodeUsageMutation) Field(name string) (ent.Value, bool) {
 		return m.UserID()
 	case promocodeusage.FieldBonusAmount:
 		return m.BonusAmount()
+	case promocodeusage.FieldFixedBonusAmount:
+		return m.FixedBonusAmount()
+	case promocodeusage.FieldRandomBonusAmount:
+		return m.RandomBonusAmount()
 	case promocodeusage.FieldUsedAt:
 		return m.UsedAt()
 	}
@@ -14068,6 +14422,10 @@ func (m *PromoCodeUsageMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldUserID(ctx)
 	case promocodeusage.FieldBonusAmount:
 		return m.OldBonusAmount(ctx)
+	case promocodeusage.FieldFixedBonusAmount:
+		return m.OldFixedBonusAmount(ctx)
+	case promocodeusage.FieldRandomBonusAmount:
+		return m.OldRandomBonusAmount(ctx)
 	case promocodeusage.FieldUsedAt:
 		return m.OldUsedAt(ctx)
 	}
@@ -14100,6 +14458,20 @@ func (m *PromoCodeUsageMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBonusAmount(v)
 		return nil
+	case promocodeusage.FieldFixedBonusAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFixedBonusAmount(v)
+		return nil
+	case promocodeusage.FieldRandomBonusAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRandomBonusAmount(v)
+		return nil
 	case promocodeusage.FieldUsedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -14118,6 +14490,12 @@ func (m *PromoCodeUsageMutation) AddedFields() []string {
 	if m.addbonus_amount != nil {
 		fields = append(fields, promocodeusage.FieldBonusAmount)
 	}
+	if m.addfixed_bonus_amount != nil {
+		fields = append(fields, promocodeusage.FieldFixedBonusAmount)
+	}
+	if m.addrandom_bonus_amount != nil {
+		fields = append(fields, promocodeusage.FieldRandomBonusAmount)
+	}
 	return fields
 }
 
@@ -14128,6 +14506,10 @@ func (m *PromoCodeUsageMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case promocodeusage.FieldBonusAmount:
 		return m.AddedBonusAmount()
+	case promocodeusage.FieldFixedBonusAmount:
+		return m.AddedFixedBonusAmount()
+	case promocodeusage.FieldRandomBonusAmount:
+		return m.AddedRandomBonusAmount()
 	}
 	return nil, false
 }
@@ -14143,6 +14525,20 @@ func (m *PromoCodeUsageMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddBonusAmount(v)
+		return nil
+	case promocodeusage.FieldFixedBonusAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddFixedBonusAmount(v)
+		return nil
+	case promocodeusage.FieldRandomBonusAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRandomBonusAmount(v)
 		return nil
 	}
 	return fmt.Errorf("unknown PromoCodeUsage numeric field %s", name)
@@ -14179,6 +14575,12 @@ func (m *PromoCodeUsageMutation) ResetField(name string) error {
 		return nil
 	case promocodeusage.FieldBonusAmount:
 		m.ResetBonusAmount()
+		return nil
+	case promocodeusage.FieldFixedBonusAmount:
+		m.ResetFixedBonusAmount()
+		return nil
+	case promocodeusage.FieldRandomBonusAmount:
+		m.ResetRandomBonusAmount()
 		return nil
 	case promocodeusage.FieldUsedAt:
 		m.ResetUsedAt()

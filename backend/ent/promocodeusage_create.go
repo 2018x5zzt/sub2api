@@ -42,6 +42,34 @@ func (_c *PromoCodeUsageCreate) SetBonusAmount(v float64) *PromoCodeUsageCreate 
 	return _c
 }
 
+// SetFixedBonusAmount sets the "fixed_bonus_amount" field.
+func (_c *PromoCodeUsageCreate) SetFixedBonusAmount(v float64) *PromoCodeUsageCreate {
+	_c.mutation.SetFixedBonusAmount(v)
+	return _c
+}
+
+// SetNillableFixedBonusAmount sets the "fixed_bonus_amount" field if the given value is not nil.
+func (_c *PromoCodeUsageCreate) SetNillableFixedBonusAmount(v *float64) *PromoCodeUsageCreate {
+	if v != nil {
+		_c.SetFixedBonusAmount(*v)
+	}
+	return _c
+}
+
+// SetRandomBonusAmount sets the "random_bonus_amount" field.
+func (_c *PromoCodeUsageCreate) SetRandomBonusAmount(v float64) *PromoCodeUsageCreate {
+	_c.mutation.SetRandomBonusAmount(v)
+	return _c
+}
+
+// SetNillableRandomBonusAmount sets the "random_bonus_amount" field if the given value is not nil.
+func (_c *PromoCodeUsageCreate) SetNillableRandomBonusAmount(v *float64) *PromoCodeUsageCreate {
+	if v != nil {
+		_c.SetRandomBonusAmount(*v)
+	}
+	return _c
+}
+
 // SetUsedAt sets the "used_at" field.
 func (_c *PromoCodeUsageCreate) SetUsedAt(v time.Time) *PromoCodeUsageCreate {
 	_c.mutation.SetUsedAt(v)
@@ -101,6 +129,14 @@ func (_c *PromoCodeUsageCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *PromoCodeUsageCreate) defaults() {
+	if _, ok := _c.mutation.FixedBonusAmount(); !ok {
+		v := promocodeusage.DefaultFixedBonusAmount
+		_c.mutation.SetFixedBonusAmount(v)
+	}
+	if _, ok := _c.mutation.RandomBonusAmount(); !ok {
+		v := promocodeusage.DefaultRandomBonusAmount
+		_c.mutation.SetRandomBonusAmount(v)
+	}
 	if _, ok := _c.mutation.UsedAt(); !ok {
 		v := promocodeusage.DefaultUsedAt()
 		_c.mutation.SetUsedAt(v)
@@ -117,6 +153,12 @@ func (_c *PromoCodeUsageCreate) check() error {
 	}
 	if _, ok := _c.mutation.BonusAmount(); !ok {
 		return &ValidationError{Name: "bonus_amount", err: errors.New(`ent: missing required field "PromoCodeUsage.bonus_amount"`)}
+	}
+	if _, ok := _c.mutation.FixedBonusAmount(); !ok {
+		return &ValidationError{Name: "fixed_bonus_amount", err: errors.New(`ent: missing required field "PromoCodeUsage.fixed_bonus_amount"`)}
+	}
+	if _, ok := _c.mutation.RandomBonusAmount(); !ok {
+		return &ValidationError{Name: "random_bonus_amount", err: errors.New(`ent: missing required field "PromoCodeUsage.random_bonus_amount"`)}
 	}
 	if _, ok := _c.mutation.UsedAt(); !ok {
 		return &ValidationError{Name: "used_at", err: errors.New(`ent: missing required field "PromoCodeUsage.used_at"`)}
@@ -157,6 +199,14 @@ func (_c *PromoCodeUsageCreate) createSpec() (*PromoCodeUsage, *sqlgraph.CreateS
 	if value, ok := _c.mutation.BonusAmount(); ok {
 		_spec.SetField(promocodeusage.FieldBonusAmount, field.TypeFloat64, value)
 		_node.BonusAmount = value
+	}
+	if value, ok := _c.mutation.FixedBonusAmount(); ok {
+		_spec.SetField(promocodeusage.FieldFixedBonusAmount, field.TypeFloat64, value)
+		_node.FixedBonusAmount = value
+	}
+	if value, ok := _c.mutation.RandomBonusAmount(); ok {
+		_spec.SetField(promocodeusage.FieldRandomBonusAmount, field.TypeFloat64, value)
+		_node.RandomBonusAmount = value
 	}
 	if value, ok := _c.mutation.UsedAt(); ok {
 		_spec.SetField(promocodeusage.FieldUsedAt, field.TypeTime, value)
@@ -290,6 +340,42 @@ func (u *PromoCodeUsageUpsert) AddBonusAmount(v float64) *PromoCodeUsageUpsert {
 	return u
 }
 
+// SetFixedBonusAmount sets the "fixed_bonus_amount" field.
+func (u *PromoCodeUsageUpsert) SetFixedBonusAmount(v float64) *PromoCodeUsageUpsert {
+	u.Set(promocodeusage.FieldFixedBonusAmount, v)
+	return u
+}
+
+// UpdateFixedBonusAmount sets the "fixed_bonus_amount" field to the value that was provided on create.
+func (u *PromoCodeUsageUpsert) UpdateFixedBonusAmount() *PromoCodeUsageUpsert {
+	u.SetExcluded(promocodeusage.FieldFixedBonusAmount)
+	return u
+}
+
+// AddFixedBonusAmount adds v to the "fixed_bonus_amount" field.
+func (u *PromoCodeUsageUpsert) AddFixedBonusAmount(v float64) *PromoCodeUsageUpsert {
+	u.Add(promocodeusage.FieldFixedBonusAmount, v)
+	return u
+}
+
+// SetRandomBonusAmount sets the "random_bonus_amount" field.
+func (u *PromoCodeUsageUpsert) SetRandomBonusAmount(v float64) *PromoCodeUsageUpsert {
+	u.Set(promocodeusage.FieldRandomBonusAmount, v)
+	return u
+}
+
+// UpdateRandomBonusAmount sets the "random_bonus_amount" field to the value that was provided on create.
+func (u *PromoCodeUsageUpsert) UpdateRandomBonusAmount() *PromoCodeUsageUpsert {
+	u.SetExcluded(promocodeusage.FieldRandomBonusAmount)
+	return u
+}
+
+// AddRandomBonusAmount adds v to the "random_bonus_amount" field.
+func (u *PromoCodeUsageUpsert) AddRandomBonusAmount(v float64) *PromoCodeUsageUpsert {
+	u.Add(promocodeusage.FieldRandomBonusAmount, v)
+	return u
+}
+
 // SetUsedAt sets the "used_at" field.
 func (u *PromoCodeUsageUpsert) SetUsedAt(v time.Time) *PromoCodeUsageUpsert {
 	u.Set(promocodeusage.FieldUsedAt, v)
@@ -388,6 +474,48 @@ func (u *PromoCodeUsageUpsertOne) AddBonusAmount(v float64) *PromoCodeUsageUpser
 func (u *PromoCodeUsageUpsertOne) UpdateBonusAmount() *PromoCodeUsageUpsertOne {
 	return u.Update(func(s *PromoCodeUsageUpsert) {
 		s.UpdateBonusAmount()
+	})
+}
+
+// SetFixedBonusAmount sets the "fixed_bonus_amount" field.
+func (u *PromoCodeUsageUpsertOne) SetFixedBonusAmount(v float64) *PromoCodeUsageUpsertOne {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.SetFixedBonusAmount(v)
+	})
+}
+
+// AddFixedBonusAmount adds v to the "fixed_bonus_amount" field.
+func (u *PromoCodeUsageUpsertOne) AddFixedBonusAmount(v float64) *PromoCodeUsageUpsertOne {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.AddFixedBonusAmount(v)
+	})
+}
+
+// UpdateFixedBonusAmount sets the "fixed_bonus_amount" field to the value that was provided on create.
+func (u *PromoCodeUsageUpsertOne) UpdateFixedBonusAmount() *PromoCodeUsageUpsertOne {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.UpdateFixedBonusAmount()
+	})
+}
+
+// SetRandomBonusAmount sets the "random_bonus_amount" field.
+func (u *PromoCodeUsageUpsertOne) SetRandomBonusAmount(v float64) *PromoCodeUsageUpsertOne {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.SetRandomBonusAmount(v)
+	})
+}
+
+// AddRandomBonusAmount adds v to the "random_bonus_amount" field.
+func (u *PromoCodeUsageUpsertOne) AddRandomBonusAmount(v float64) *PromoCodeUsageUpsertOne {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.AddRandomBonusAmount(v)
+	})
+}
+
+// UpdateRandomBonusAmount sets the "random_bonus_amount" field to the value that was provided on create.
+func (u *PromoCodeUsageUpsertOne) UpdateRandomBonusAmount() *PromoCodeUsageUpsertOne {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.UpdateRandomBonusAmount()
 	})
 }
 
@@ -655,6 +783,48 @@ func (u *PromoCodeUsageUpsertBulk) AddBonusAmount(v float64) *PromoCodeUsageUpse
 func (u *PromoCodeUsageUpsertBulk) UpdateBonusAmount() *PromoCodeUsageUpsertBulk {
 	return u.Update(func(s *PromoCodeUsageUpsert) {
 		s.UpdateBonusAmount()
+	})
+}
+
+// SetFixedBonusAmount sets the "fixed_bonus_amount" field.
+func (u *PromoCodeUsageUpsertBulk) SetFixedBonusAmount(v float64) *PromoCodeUsageUpsertBulk {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.SetFixedBonusAmount(v)
+	})
+}
+
+// AddFixedBonusAmount adds v to the "fixed_bonus_amount" field.
+func (u *PromoCodeUsageUpsertBulk) AddFixedBonusAmount(v float64) *PromoCodeUsageUpsertBulk {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.AddFixedBonusAmount(v)
+	})
+}
+
+// UpdateFixedBonusAmount sets the "fixed_bonus_amount" field to the value that was provided on create.
+func (u *PromoCodeUsageUpsertBulk) UpdateFixedBonusAmount() *PromoCodeUsageUpsertBulk {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.UpdateFixedBonusAmount()
+	})
+}
+
+// SetRandomBonusAmount sets the "random_bonus_amount" field.
+func (u *PromoCodeUsageUpsertBulk) SetRandomBonusAmount(v float64) *PromoCodeUsageUpsertBulk {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.SetRandomBonusAmount(v)
+	})
+}
+
+// AddRandomBonusAmount adds v to the "random_bonus_amount" field.
+func (u *PromoCodeUsageUpsertBulk) AddRandomBonusAmount(v float64) *PromoCodeUsageUpsertBulk {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.AddRandomBonusAmount(v)
+	})
+}
+
+// UpdateRandomBonusAmount sets the "random_bonus_amount" field to the value that was provided on create.
+func (u *PromoCodeUsageUpsertBulk) UpdateRandomBonusAmount() *PromoCodeUsageUpsertBulk {
+	return u.Update(func(s *PromoCodeUsageUpsert) {
+		s.UpdateRandomBonusAmount()
 	})
 }
 

@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from './client'
-import type { PromoCodeScene, RedeemCodeRequest } from '@/types'
+import type { BenefitLeaderboard, PromoCodeScene, RedeemCodeRequest } from '@/types'
 
 export interface RedeemHistoryItem {
   id: number
@@ -34,8 +34,12 @@ export async function redeem(code: string): Promise<{
   message: string
   type: string
   value: number
+  fixed_value?: number
+  random_value?: number
+  total_value?: number
   scene?: PromoCodeScene
   success_message?: string
+  leaderboard_enabled?: boolean
   new_balance?: number
   new_concurrency?: number
   group_name?: string
@@ -47,14 +51,24 @@ export async function redeem(code: string): Promise<{
     message: string
     type: string
     value: number
+    fixed_value?: number
+    random_value?: number
+    total_value?: number
     scene?: PromoCodeScene
     success_message?: string
+    leaderboard_enabled?: boolean
     new_balance?: number
     new_concurrency?: number
     group_name?: string
     validity_days?: number
   }>('/redeem', payload)
 
+  return data
+}
+
+export async function getBenefitLeaderboard(code: string): Promise<BenefitLeaderboard> {
+  const payload: RedeemCodeRequest = { code }
+  const { data } = await apiClient.post<BenefitLeaderboard>('/redeem/benefit-leaderboard', payload)
   return data
 }
 
@@ -69,7 +83,8 @@ export async function getHistory(): Promise<RedeemHistoryItem[]> {
 
 export const redeemAPI = {
   redeem,
-  getHistory
+  getHistory,
+  getBenefitLeaderboard
 }
 
 export default redeemAPI

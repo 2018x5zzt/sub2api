@@ -45,12 +45,23 @@ func (PromoCode) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0).
 			Comment("赠送余额金额"),
+		field.Float("random_bonus_pool_amount").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("随机红包总池金额，仅 benefit 场景使用"),
+		field.Float("random_bonus_remaining").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0).
+			Comment("随机红包剩余金额，仅 benefit 场景使用"),
 		field.Int("max_uses").
 			Default(0).
 			Comment("最大使用次数，0表示无限制"),
 		field.Int("used_count").
 			Default(0).
 			Comment("已使用次数"),
+		field.Bool("leaderboard_enabled").
+			Default(false).
+			Comment("是否启用手气排行榜，仅 benefit 场景使用"),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.PromoCodeStatusActive).

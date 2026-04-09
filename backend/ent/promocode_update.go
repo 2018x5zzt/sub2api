@@ -78,6 +78,48 @@ func (_u *PromoCodeUpdate) AddBonusAmount(v float64) *PromoCodeUpdate {
 	return _u
 }
 
+// SetRandomBonusPoolAmount sets the "random_bonus_pool_amount" field.
+func (_u *PromoCodeUpdate) SetRandomBonusPoolAmount(v float64) *PromoCodeUpdate {
+	_u.mutation.ResetRandomBonusPoolAmount()
+	_u.mutation.SetRandomBonusPoolAmount(v)
+	return _u
+}
+
+// SetNillableRandomBonusPoolAmount sets the "random_bonus_pool_amount" field if the given value is not nil.
+func (_u *PromoCodeUpdate) SetNillableRandomBonusPoolAmount(v *float64) *PromoCodeUpdate {
+	if v != nil {
+		_u.SetRandomBonusPoolAmount(*v)
+	}
+	return _u
+}
+
+// AddRandomBonusPoolAmount adds value to the "random_bonus_pool_amount" field.
+func (_u *PromoCodeUpdate) AddRandomBonusPoolAmount(v float64) *PromoCodeUpdate {
+	_u.mutation.AddRandomBonusPoolAmount(v)
+	return _u
+}
+
+// SetRandomBonusRemaining sets the "random_bonus_remaining" field.
+func (_u *PromoCodeUpdate) SetRandomBonusRemaining(v float64) *PromoCodeUpdate {
+	_u.mutation.ResetRandomBonusRemaining()
+	_u.mutation.SetRandomBonusRemaining(v)
+	return _u
+}
+
+// SetNillableRandomBonusRemaining sets the "random_bonus_remaining" field if the given value is not nil.
+func (_u *PromoCodeUpdate) SetNillableRandomBonusRemaining(v *float64) *PromoCodeUpdate {
+	if v != nil {
+		_u.SetRandomBonusRemaining(*v)
+	}
+	return _u
+}
+
+// AddRandomBonusRemaining adds value to the "random_bonus_remaining" field.
+func (_u *PromoCodeUpdate) AddRandomBonusRemaining(v float64) *PromoCodeUpdate {
+	_u.mutation.AddRandomBonusRemaining(v)
+	return _u
+}
+
 // SetMaxUses sets the "max_uses" field.
 func (_u *PromoCodeUpdate) SetMaxUses(v int) *PromoCodeUpdate {
 	_u.mutation.ResetMaxUses()
@@ -117,6 +159,20 @@ func (_u *PromoCodeUpdate) SetNillableUsedCount(v *int) *PromoCodeUpdate {
 // AddUsedCount adds value to the "used_count" field.
 func (_u *PromoCodeUpdate) AddUsedCount(v int) *PromoCodeUpdate {
 	_u.mutation.AddUsedCount(v)
+	return _u
+}
+
+// SetLeaderboardEnabled sets the "leaderboard_enabled" field.
+func (_u *PromoCodeUpdate) SetLeaderboardEnabled(v bool) *PromoCodeUpdate {
+	_u.mutation.SetLeaderboardEnabled(v)
+	return _u
+}
+
+// SetNillableLeaderboardEnabled sets the "leaderboard_enabled" field if the given value is not nil.
+func (_u *PromoCodeUpdate) SetNillableLeaderboardEnabled(v *bool) *PromoCodeUpdate {
+	if v != nil {
+		_u.SetLeaderboardEnabled(*v)
+	}
 	return _u
 }
 
@@ -321,6 +377,18 @@ func (_u *PromoCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedBonusAmount(); ok {
 		_spec.AddField(promocode.FieldBonusAmount, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.RandomBonusPoolAmount(); ok {
+		_spec.SetField(promocode.FieldRandomBonusPoolAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedRandomBonusPoolAmount(); ok {
+		_spec.AddField(promocode.FieldRandomBonusPoolAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.RandomBonusRemaining(); ok {
+		_spec.SetField(promocode.FieldRandomBonusRemaining, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedRandomBonusRemaining(); ok {
+		_spec.AddField(promocode.FieldRandomBonusRemaining, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.MaxUses(); ok {
 		_spec.SetField(promocode.FieldMaxUses, field.TypeInt, value)
 	}
@@ -332,6 +400,9 @@ func (_u *PromoCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedUsedCount(); ok {
 		_spec.AddField(promocode.FieldUsedCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.LeaderboardEnabled(); ok {
+		_spec.SetField(promocode.FieldLeaderboardEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(promocode.FieldStatus, field.TypeString, value)
@@ -471,6 +542,48 @@ func (_u *PromoCodeUpdateOne) AddBonusAmount(v float64) *PromoCodeUpdateOne {
 	return _u
 }
 
+// SetRandomBonusPoolAmount sets the "random_bonus_pool_amount" field.
+func (_u *PromoCodeUpdateOne) SetRandomBonusPoolAmount(v float64) *PromoCodeUpdateOne {
+	_u.mutation.ResetRandomBonusPoolAmount()
+	_u.mutation.SetRandomBonusPoolAmount(v)
+	return _u
+}
+
+// SetNillableRandomBonusPoolAmount sets the "random_bonus_pool_amount" field if the given value is not nil.
+func (_u *PromoCodeUpdateOne) SetNillableRandomBonusPoolAmount(v *float64) *PromoCodeUpdateOne {
+	if v != nil {
+		_u.SetRandomBonusPoolAmount(*v)
+	}
+	return _u
+}
+
+// AddRandomBonusPoolAmount adds value to the "random_bonus_pool_amount" field.
+func (_u *PromoCodeUpdateOne) AddRandomBonusPoolAmount(v float64) *PromoCodeUpdateOne {
+	_u.mutation.AddRandomBonusPoolAmount(v)
+	return _u
+}
+
+// SetRandomBonusRemaining sets the "random_bonus_remaining" field.
+func (_u *PromoCodeUpdateOne) SetRandomBonusRemaining(v float64) *PromoCodeUpdateOne {
+	_u.mutation.ResetRandomBonusRemaining()
+	_u.mutation.SetRandomBonusRemaining(v)
+	return _u
+}
+
+// SetNillableRandomBonusRemaining sets the "random_bonus_remaining" field if the given value is not nil.
+func (_u *PromoCodeUpdateOne) SetNillableRandomBonusRemaining(v *float64) *PromoCodeUpdateOne {
+	if v != nil {
+		_u.SetRandomBonusRemaining(*v)
+	}
+	return _u
+}
+
+// AddRandomBonusRemaining adds value to the "random_bonus_remaining" field.
+func (_u *PromoCodeUpdateOne) AddRandomBonusRemaining(v float64) *PromoCodeUpdateOne {
+	_u.mutation.AddRandomBonusRemaining(v)
+	return _u
+}
+
 // SetMaxUses sets the "max_uses" field.
 func (_u *PromoCodeUpdateOne) SetMaxUses(v int) *PromoCodeUpdateOne {
 	_u.mutation.ResetMaxUses()
@@ -510,6 +623,20 @@ func (_u *PromoCodeUpdateOne) SetNillableUsedCount(v *int) *PromoCodeUpdateOne {
 // AddUsedCount adds value to the "used_count" field.
 func (_u *PromoCodeUpdateOne) AddUsedCount(v int) *PromoCodeUpdateOne {
 	_u.mutation.AddUsedCount(v)
+	return _u
+}
+
+// SetLeaderboardEnabled sets the "leaderboard_enabled" field.
+func (_u *PromoCodeUpdateOne) SetLeaderboardEnabled(v bool) *PromoCodeUpdateOne {
+	_u.mutation.SetLeaderboardEnabled(v)
+	return _u
+}
+
+// SetNillableLeaderboardEnabled sets the "leaderboard_enabled" field if the given value is not nil.
+func (_u *PromoCodeUpdateOne) SetNillableLeaderboardEnabled(v *bool) *PromoCodeUpdateOne {
+	if v != nil {
+		_u.SetLeaderboardEnabled(*v)
+	}
 	return _u
 }
 
@@ -744,6 +871,18 @@ func (_u *PromoCodeUpdateOne) sqlSave(ctx context.Context) (_node *PromoCode, er
 	if value, ok := _u.mutation.AddedBonusAmount(); ok {
 		_spec.AddField(promocode.FieldBonusAmount, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.RandomBonusPoolAmount(); ok {
+		_spec.SetField(promocode.FieldRandomBonusPoolAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedRandomBonusPoolAmount(); ok {
+		_spec.AddField(promocode.FieldRandomBonusPoolAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.RandomBonusRemaining(); ok {
+		_spec.SetField(promocode.FieldRandomBonusRemaining, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedRandomBonusRemaining(); ok {
+		_spec.AddField(promocode.FieldRandomBonusRemaining, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.MaxUses(); ok {
 		_spec.SetField(promocode.FieldMaxUses, field.TypeInt, value)
 	}
@@ -755,6 +894,9 @@ func (_u *PromoCodeUpdateOne) sqlSave(ctx context.Context) (_node *PromoCode, er
 	}
 	if value, ok := _u.mutation.AddedUsedCount(); ok {
 		_spec.AddField(promocode.FieldUsedCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.LeaderboardEnabled(); ok {
+		_spec.SetField(promocode.FieldLeaderboardEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(promocode.FieldStatus, field.TypeString, value)

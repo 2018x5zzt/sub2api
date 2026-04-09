@@ -146,11 +146,12 @@ func TestRedeemHandler_PromoDisabledReturnsRedeemNotFound(t *testing.T) {
 func TestRedeemHandler_BenefitFallbackWorksWhenPromoSettingDisabled(t *testing.T) {
 	env := newRedeemHandlerTestEnv(t)
 	env.userRepo.users[1] = &service.User{
-		ID:      1,
-		Email:   "benefit@test.local",
-		Role:    service.RoleUser,
-		Status:  service.StatusActive,
-		Balance: 2,
+		ID:       1,
+		Email:    "benefit@test.local",
+		Username: "benefit_user",
+		Role:     service.RoleUser,
+		Status:   service.StatusActive,
+		Balance:  2,
 	}
 	require.NoError(t, env.settingRepo.Set(context.Background(), service.SettingKeyPromoCodeEnabled, "false"))
 	env.promoRepo.addCode(&service.PromoCode{
@@ -180,6 +181,116 @@ func TestRedeemHandler_BenefitFallbackWorksWhenPromoSettingDisabled(t *testing.T
 	require.Equal(t, 12.0, user.Balance)
 }
 
+func TestRedeemHandler_BenefitRedPacketReturnsBreakdownAndLeaderboardFlag(t *testing.T) {
+	env := newRedeemHandlerTestEnv(t)
+	env.userRepo.users[1] = &service.User{
+		ID:       1,
+		Email:    "lucky@test.local",
+		Username: "lucky_user",
+		Role:     service.RoleUser,
+		Status:   service.StatusActive,
+	}
+	env.promoRepo.addCode(&service.PromoCode{
+		ID:                    402,
+		Code:                  "LUCKY100",
+		Scene:                 service.PromoCodeSceneBenefit,
+		BonusAmount:           20,
+		RandomBonusPoolAmount: 1000,
+		RandomBonusRemaining:  1000,
+		MaxUses:               1,
+		LeaderboardEnabled:    true,
+		Status:                service.PromoCodeStatusActive,
+		SuccessMessage:        "手气不错。",
+	})
+
+	rec := performRedeemRequest(t, env.handler, 1, "LUCKY100")
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var envelope testRedeemEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	require.Equal(t, 0, envelope.Code)
+
+	var payload RedeemResponse
+	require.NoError(t, json.Unmarshal(envelope.Data, &payload))
+	require.Equal(t, 1020.0, payload.Value)
+	require.Equal(t, 20.0, payload.FixedValue)
+	require.Equal(t, 1000.0, payload.RandomValue)
+	require.Equal(t, 1020.0, payload.TotalValue)
+	require.True(t, payload.LeaderboardEnabled)
+
+	user, err := env.userRepo.GetByID(context.Background(), 1)
+	require.NoError(t, err)
+	require.Equal(t, 1020.0, user.Balance)
+}
+
+func TestRedeemHandler_BenefitRedPacketRequiresUsername(t *testing.T) {
+	env := newRedeemHandlerTestEnv(t)
+	env.userRepo.users[1] = &service.User{
+		ID:     1,
+		Email:  "nousername@test.local",
+		Role:   service.RoleUser,
+		Status: service.StatusActive,
+	}
+	env.promoRepo.addCode(&service.PromoCode{
+		ID:                    403,
+		Code:                  "LUCKYNAME",
+		Scene:                 service.PromoCodeSceneBenefit,
+		BonusAmount:           20,
+		RandomBonusPoolAmount: 100,
+		RandomBonusRemaining:  100,
+		MaxUses:               10,
+		LeaderboardEnabled:    true,
+		Status:                service.PromoCodeStatusActive,
+	})
+
+	rec := performRedeemRequest(t, env.handler, 1, "LUCKYNAME")
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+
+	var envelope testRedeemEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	require.Equal(t, "PROMO_CODE_USERNAME_REQUIRED", envelope.Reason)
+}
+
+func TestRedeemHandler_GetBenefitLeaderboardAfterRedeem(t *testing.T) {
+	env := newRedeemHandlerTestEnv(t)
+	env.userRepo.users[1] = &service.User{
+		ID:       1,
+		Email:    "rank@test.local",
+		Username: "rank_user",
+		Role:     service.RoleUser,
+		Status:   service.StatusActive,
+	}
+	env.promoRepo.addCode(&service.PromoCode{
+		ID:                    404,
+		Code:                  "LUCKYRANK",
+		Scene:                 service.PromoCodeSceneBenefit,
+		BonusAmount:           20,
+		RandomBonusPoolAmount: 100,
+		RandomBonusRemaining:  100,
+		MaxUses:               1,
+		LeaderboardEnabled:    true,
+		Status:                service.PromoCodeStatusActive,
+	})
+
+	redeemRec := performRedeemRequest(t, env.handler, 1, "LUCKYRANK")
+	require.Equal(t, http.StatusOK, redeemRec.Code)
+
+	rec := performBenefitLeaderboardRequest(t, env.handler, 1, "LUCKYRANK")
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var envelope testRedeemEnvelope
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	require.Equal(t, 0, envelope.Code)
+
+	var payload BenefitLeaderboardResponse
+	require.NoError(t, json.Unmarshal(envelope.Data, &payload))
+	require.Len(t, payload.Entries, 1)
+	require.Equal(t, "rank_user", payload.Entries[0].DisplayName)
+	require.Equal(t, 1, payload.Entries[0].Rank)
+	require.NotNil(t, payload.CurrentUserRank)
+	require.Equal(t, 1, *payload.CurrentUserRank)
+}
+
 type redeemHandlerTestEnv struct {
 	handler     *RedeemHandler
 	userRepo    *testRedeemUserRepo
@@ -202,6 +313,7 @@ func newRedeemHandlerTestEnv(t *testing.T) *redeemHandlerTestEnv {
 		byCode:    make(map[string]*service.PromoCode),
 		usages:    make(map[int64]map[int64]*service.PromoCodeUsage),
 		nextUseID: 1,
+		userRepo:  userRepo,
 	}
 	settingRepo := &testSettingRepo{all: make(map[string]string)}
 
@@ -248,6 +360,22 @@ func performRedeemRequest(t *testing.T, h *RedeemHandler, userID int64, code str
 	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: userID, Concurrency: 1})
 
 	h.Redeem(c)
+	return rec
+}
+
+func performBenefitLeaderboardRequest(t *testing.T, h *RedeemHandler, userID int64, code string) *httptest.ResponseRecorder {
+	t.Helper()
+
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	body := []byte(`{"code":"` + code + `"}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/redeem/benefit-leaderboard", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+	c.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: userID, Concurrency: 1})
+
+	h.GetBenefitLeaderboard(c)
 	return rec
 }
 
@@ -449,6 +577,7 @@ type testPromoCodeRepo struct {
 	byCode    map[string]*service.PromoCode
 	usages    map[int64]map[int64]*service.PromoCodeUsage
 	nextUseID int64
+	userRepo  *testRedeemUserRepo
 }
 
 func (r *testPromoCodeRepo) addCode(code *service.PromoCode) {
@@ -484,7 +613,15 @@ func (r *testPromoCodeRepo) GetByCodeForUpdate(ctx context.Context, code string)
 }
 
 func (r *testPromoCodeRepo) Update(ctx context.Context, code *service.PromoCode) error {
-	return errors.New("not implemented")
+	if _, ok := r.byID[code.ID]; !ok {
+		return service.ErrPromoCodeNotFound
+	}
+	cloned := clonePromoCode(code)
+	normalized := strings.ToUpper(strings.TrimSpace(cloned.Code))
+	cloned.Code = normalized
+	r.byID[cloned.ID] = cloned
+	r.byCode[normalized] = cloned
+	return nil
 }
 
 func (r *testPromoCodeRepo) Delete(ctx context.Context, id int64) error {
@@ -524,6 +661,22 @@ func (r *testPromoCodeRepo) GetUsageByPromoCodeAndUser(ctx context.Context, prom
 	return &cloned, nil
 }
 
+func (r *testPromoCodeRepo) ListAllUsagesByPromoCode(ctx context.Context, promoCodeID int64) ([]service.PromoCodeUsage, error) {
+	byUser := r.usages[promoCodeID]
+	if byUser == nil {
+		return nil, nil
+	}
+	out := make([]service.PromoCodeUsage, 0, len(byUser))
+	for _, usage := range byUser {
+		cloned := *usage
+		if user, ok := r.findUser(usage.UserID); ok {
+			cloned.User = user
+		}
+		out = append(out, cloned)
+	}
+	return out, nil
+}
+
 func (r *testPromoCodeRepo) ListUsagesByPromoCode(ctx context.Context, promoCodeID int64, params pagination.PaginationParams) ([]service.PromoCodeUsage, *pagination.PaginationResult, error) {
 	return nil, nil, errors.New("not implemented")
 }
@@ -535,6 +688,14 @@ func (r *testPromoCodeRepo) IncrementUsedCount(ctx context.Context, id int64) er
 	}
 	code.UsedCount++
 	return nil
+}
+
+func (r *testPromoCodeRepo) findUser(userID int64) (*service.User, bool) {
+	if r.userRepo == nil {
+		return nil, false
+	}
+	user, err := r.userRepo.GetByID(context.Background(), userID)
+	return user, err == nil
 }
 
 type testSettingRepo struct {
