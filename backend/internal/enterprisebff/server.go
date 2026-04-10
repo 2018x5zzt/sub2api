@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -25,9 +26,10 @@ type Server struct {
 	router          *gin.Engine
 	adminKeySvc     AdminKeyStore
 	enterpriseStore EnterpriseStore
+	healthRepo      service.GroupHealthSnapshotRepository
 }
 
-func New(cfg *Config, adminKeySvc AdminKeyStore, enterpriseStore EnterpriseStore) *Server {
+func New(cfg *Config, adminKeySvc AdminKeyStore, enterpriseStore EnterpriseStore, healthRepo service.GroupHealthSnapshotRepository) *Server {
 	s := &Server{
 		cfg: cfg,
 		httpClient: &http.Client{
@@ -35,6 +37,7 @@ func New(cfg *Config, adminKeySvc AdminKeyStore, enterpriseStore EnterpriseStore
 		},
 		adminKeySvc:     adminKeySvc,
 		enterpriseStore: enterpriseStore,
+		healthRepo:      healthRepo,
 	}
 	s.router = s.newRouter()
 	return s
@@ -73,7 +76,8 @@ func (s *Server) newRouter() *gin.Engine {
 	r.POST("/auth/logout", func(c *gin.Context) { s.proxy(c, "/auth/logout", nil) })
 	r.GET("/auth/me", s.handleEnterpriseMe)
 	r.GET("/settings/public", s.handleEnterprisePublicSettings)
-	r.GET("/groups/pool-status", func(c *gin.Context) { s.proxy(c, "/groups/pool-status", nil) })
+	r.GET("/groups/available", s.handleEnterpriseVisibleGroups)
+	r.GET("/groups/pool-status", s.handleEnterprisePoolStatus)
 
 	r.GET("/usage", s.handleRoleAwareUsageList)
 	r.GET("/usage/stats", s.handleRoleAwareUsageStats)
@@ -486,6 +490,7 @@ func Run(ctx context.Context) error {
 		cfg,
 		NewAdminKeyStore(dbResources.Client, dbResources.SQLDB, sharedCfg),
 		newEntEnterpriseStore(dbResources.Client, cfg),
+		repository.NewGroupHealthSnapshotRepository(dbResources.Client, dbResources.SQLDB),
 	)
 	httpServer := &http.Server{
 		Addr:              cfg.ListenAddr,
