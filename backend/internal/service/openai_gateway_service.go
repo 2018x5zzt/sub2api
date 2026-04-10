@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -84,6 +85,8 @@ var openaiPassthroughAllowedHeaders = map[string]bool{
 	"x-codex-turn-state":    true,
 	"x-codex-turn-metadata": true,
 }
+
+var openAIPassthroughRequestIDSuffixRegex = regexp.MustCompile(`(?i)\s*\(request id:\s*([^)]+)\)`)
 
 // codex_cli_only 拒绝时记录的请求头白名单（仅用于诊断日志，不参与上游透传）
 var codexCLIOnlyDebugHeaderWhitelist = []string{
@@ -2623,6 +2626,8 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 	requestBody []byte,
 ) error {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	rawBody := append([]byte(nil), body...)
+	body = normalizeOpenAIPassthroughErrorBody(resp.StatusCode, body)
 
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
@@ -2632,7 +2637,7 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 		if maxBytes <= 0 {
 			maxBytes = 2048
 		}
-		upstreamDetail = truncateString(string(body), maxBytes)
+		upstreamDetail = truncateString(string(rawBody), maxBytes)
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 	logOpenAIInstructionsRequiredDebug(ctx, c, account, resp.StatusCode, upstreamMsg, requestBody, body)
@@ -2660,6 +2665,156 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 		return fmt.Errorf("upstream error: %d", resp.StatusCode)
 	}
 	return fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
+}
+
+func normalizeOpenAIPassthroughErrorBody(statusCode int, body []byte) []byte {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 || !gjson.ValidBytes(trimmed) || !gjson.GetBytes(trimmed, "error").Exists() {
+		return body
+	}
+
+	originalMsg := strings.TrimSpace(gjson.GetBytes(trimmed, "error.message").String())
+	normalizedMsg := strings.TrimSpace(extractUpstreamErrorMessage(trimmed))
+	normalizedMsg = sanitizeUpstreamErrorMessage(normalizedMsg)
+	normalizedMsg = collapseTrailingRequestIDSuffixes(normalizedMsg)
+
+	errType := strings.TrimSpace(extractUpstreamErrorType(trimmed))
+	shouldFixType := !isUsableOpenAIErrorType(errType)
+	if shouldFixType {
+		errType = fallbackOpenAIPassthroughErrorType(statusCode)
+	}
+
+	shouldFixMessage := normalizedMsg != "" && normalizedMsg != originalMsg
+	if !shouldFixType && !shouldFixMessage {
+		return body
+	}
+
+	normalized := append([]byte(nil), trimmed...)
+	var err error
+	if shouldFixType {
+		normalized, err = sjson.SetBytes(normalized, "error.type", errType)
+		if err != nil {
+			return body
+		}
+	}
+	if shouldFixMessage {
+		normalized, err = sjson.SetBytes(normalized, "error.message", normalizedMsg)
+		if err != nil {
+			return body
+		}
+	}
+	return normalized
+}
+
+func extractUpstreamErrorType(body []byte) string {
+	if errType := strings.TrimSpace(gjson.GetBytes(body, "error.type").String()); errType != "" {
+		return errType
+	}
+
+	inner := strings.TrimSpace(gjson.GetBytes(body, "error.message").String())
+	if !strings.HasPrefix(inner, "{") {
+		return ""
+	}
+
+	if errType := strings.TrimSpace(gjson.Get(inner, "error.type").String()); errType != "" {
+		return errType
+	}
+
+	if lastBrace := strings.LastIndex(inner, "}"); lastBrace >= 0 {
+		if errType := strings.TrimSpace(gjson.Get(inner[:lastBrace+1], "error.type").String()); errType != "" {
+			return errType
+		}
+	}
+
+	return ""
+}
+
+func isUsableOpenAIErrorType(errType string) bool {
+	lower := strings.ToLower(strings.TrimSpace(errType))
+	switch lower {
+	case "", "<nil>", "null":
+		return false
+	}
+	return !strings.Contains(lower, "<nil>")
+}
+
+func fallbackOpenAIPassthroughErrorType(statusCode int) string {
+	switch statusCode {
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
+		return "invalid_request_error"
+	case http.StatusUnauthorized:
+		return "authentication_error"
+	case http.StatusForbidden:
+		return "permission_error"
+	case http.StatusNotFound:
+		return "not_found_error"
+	case http.StatusTooManyRequests:
+		return "rate_limit_error"
+	default:
+		return "api_error"
+	}
+}
+
+func collapseTrailingRequestIDSuffixes(message string) string {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return message
+	}
+
+	matches := openAIPassthroughRequestIDSuffixRegex.FindAllStringSubmatchIndex(message, -1)
+	if len(matches) <= 1 {
+		return message
+	}
+
+	suffixStart := len(message)
+	ids := make([]string, 0, len(matches))
+	for i := len(matches) - 1; i >= 0; i-- {
+		match := matches[i]
+		if strings.TrimSpace(message[match[1]:suffixStart]) != "" {
+			break
+		}
+		suffixStart = match[0]
+		if len(match) >= 4 {
+			if requestID := strings.TrimSpace(message[match[2]:match[3]]); requestID != "" {
+				ids = append(ids, requestID)
+			}
+		}
+	}
+	if len(ids) <= 1 {
+		return message
+	}
+
+	for left, right := 0, len(ids)-1; left < right; left, right = left+1, right-1 {
+		ids[left], ids[right] = ids[right], ids[left]
+	}
+
+	uniq := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, requestID := range ids {
+		key := strings.ToLower(requestID)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		uniq = append(uniq, requestID)
+	}
+
+	prefix := strings.TrimSpace(message[:suffixStart])
+	switch len(uniq) {
+	case 0:
+		return prefix
+	case 1:
+		if prefix == "" {
+			return fmt.Sprintf("(request id: %s)", uniq[0])
+		}
+		return prefix + " (request id: " + uniq[0] + ")"
+	default:
+		joined := strings.Join(uniq, ", ")
+		if prefix == "" {
+			return fmt.Sprintf("(request ids: %s)", joined)
+		}
+		return prefix + " (request ids: " + joined + ")"
+	}
 }
 
 func isOpenAIPassthroughAllowedRequestHeader(lowerKey string, allowTimeoutHeaders bool) bool {
