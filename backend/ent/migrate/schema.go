@@ -449,6 +449,32 @@ var (
 			},
 		},
 	}
+	// GroupHealthSnapshotsColumns holds the columns for the "group_health_snapshots" table.
+	GroupHealthSnapshotsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "group_id", Type: field.TypeInt64},
+		{Name: "bucket_time", Type: field.TypeTime},
+		{Name: "health_percent", Type: field.TypeInt},
+		{Name: "health_state", Type: field.TypeEnum, Enums: []string{"healthy", "degraded", "down"}},
+	}
+	// GroupHealthSnapshotsTable holds the schema information for the "group_health_snapshots" table.
+	GroupHealthSnapshotsTable = &schema.Table{
+		Name:       "group_health_snapshots",
+		Columns:    GroupHealthSnapshotsColumns,
+		PrimaryKey: []*schema.Column{GroupHealthSnapshotsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "grouphealthsnapshot_group_id_bucket_time",
+				Unique:  true,
+				Columns: []*schema.Column{GroupHealthSnapshotsColumns[1], GroupHealthSnapshotsColumns[2]},
+			},
+			{
+				Name:    "grouphealthsnapshot_bucket_time",
+				Unique:  false,
+				Columns: []*schema.Column{GroupHealthSnapshotsColumns[2]},
+			},
+		},
+	}
 	// IdempotencyRecordsColumns holds the columns for the "idempotency_records" table.
 	IdempotencyRecordsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1110,6 +1136,7 @@ var (
 		AnnouncementReadsTable,
 		ErrorPassthroughRulesTable,
 		GroupsTable,
+		GroupHealthSnapshotsTable,
 		IdempotencyRecordsTable,
 		PromoCodesTable,
 		PromoCodeUsagesTable,
@@ -1155,6 +1182,9 @@ func init() {
 	}
 	GroupsTable.Annotation = &entsql.Annotation{
 		Table: "groups",
+	}
+	GroupHealthSnapshotsTable.Annotation = &entsql.Annotation{
+		Table: "group_health_snapshots",
 	}
 	IdempotencyRecordsTable.Annotation = &entsql.Annotation{
 		Table: "idempotency_records",
