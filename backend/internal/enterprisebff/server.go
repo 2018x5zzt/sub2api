@@ -1,9 +1,11 @@
 package enterprisebff
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -205,7 +207,7 @@ func (s *Server) handleRoleAwareKeyCreate(c *gin.Context) {
 		s.renderAdminKeyCreate(c, user)
 		return
 	}
-	s.proxy(c, "/keys", transformKeysEnvelope)
+	s.proxyValidatedKeyMutation(c, user, user.ID, "/keys", transformKeysEnvelope)
 }
 
 func (s *Server) handleRoleAwareKeyUpdate(c *gin.Context) {
@@ -214,10 +216,10 @@ func (s *Server) handleRoleAwareKeyUpdate(c *gin.Context) {
 		return
 	}
 	if user.Role == "admin" {
-		s.renderAdminKeyUpdate(c)
+		s.renderAdminKeyUpdate(c, user)
 		return
 	}
-	s.proxy(c, buildPathf("/keys/%s", c.Param("id")), transformKeysEnvelope)
+	s.proxyValidatedKeyMutation(c, user, user.ID, buildPathf("/keys/%s", c.Param("id")), transformKeysEnvelope)
 }
 
 func (s *Server) handleRoleAwareKeyDelete(c *gin.Context) {
@@ -248,10 +250,11 @@ func (s *Server) handleAdminKeyCreate(c *gin.Context) {
 }
 
 func (s *Server) handleAdminKeyUpdate(c *gin.Context) {
-	if _, ok := s.requireAdmin(c); !ok {
+	user, ok := s.requireAdmin(c)
+	if !ok {
 		return
 	}
-	s.renderAdminKeyUpdate(c)
+	s.renderAdminKeyUpdate(c, user)
 }
 
 func (s *Server) handleAdminKeyDelete(c *gin.Context) {
@@ -304,6 +307,19 @@ func (s *Server) renderAdminKeyGet(c *gin.Context) {
 }
 
 func (s *Server) renderAdminKeyCreate(c *gin.Context, currentUser *currentUser) {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		response.BadRequest(c, "Invalid request body")
+		return
+	}
+
+	binding, err := parseRequestedGroupBinding(body)
+	if err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	c.Request.Body = io.NopCloser(bytes.NewReader(body))
 	var req adminCreateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
@@ -313,6 +329,13 @@ func (s *Server) renderAdminKeyCreate(c *gin.Context, currentUser *currentUser) 
 	ownerID := currentUser.ID
 	if req.UserID != nil && *req.UserID > 0 {
 		ownerID = *req.UserID
+	}
+	if err := s.authorizeRequestedGroup(c.Request.Context(), currentUser, ownerID, binding); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":    http.StatusForbidden,
+			"message": err.Error(),
+		})
+		return
 	}
 
 	created, err := s.adminKeySvc.Create(c.Request.Context(), ownerID, service.CreateAPIKeyRequest{
@@ -335,7 +358,7 @@ func (s *Server) renderAdminKeyCreate(c *gin.Context, currentUser *currentUser) 
 	response.Success(c, compatKeyMap(dto.APIKeyFromService(created)))
 }
 
-func (s *Server) renderAdminKeyUpdate(c *gin.Context) {
+func (s *Server) renderAdminKeyUpdate(c *gin.Context, currentUser *currentUser) {
 	keyID, err := parsePathID(c.Param("id"))
 	if err != nil {
 		keyID, err = parsePathID(c.Param("keyId"))
@@ -345,6 +368,31 @@ func (s *Server) renderAdminKeyUpdate(c *gin.Context) {
 		return
 	}
 
+	existing, err := s.adminKeySvc.Get(c.Request.Context(), keyID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		response.BadRequest(c, "Invalid request body")
+		return
+	}
+	binding, err := parseRequestedGroupBinding(body)
+	if err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if err := s.authorizeRequestedGroup(c.Request.Context(), currentUser, existing.UserID, binding); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{
+			"code":    http.StatusForbidden,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.Request.Body = io.NopCloser(bytes.NewReader(body))
 	var req handler.UpdateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
