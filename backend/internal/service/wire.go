@@ -203,6 +203,12 @@ func ProvideSchedulerSnapshotService(
 	return svc
 }
 
+func ProvideGroupHealthHistoryService(groupRepo GroupRepository, snapshotRepo GroupHealthSnapshotRepository) *GroupHealthHistoryService {
+	svc := NewGroupHealthHistoryService(groupRepo, snapshotRepo, time.Minute, 30*24*time.Hour)
+	svc.Start()
+	return svc
+}
+
 // ProvideRateLimitService creates RateLimitService with optional dependencies.
 func ProvideRateLimitService(
 	accountRepo AccountRepository,
@@ -467,6 +473,7 @@ var ProviderSet = wire.NewSet(
 	ProvideUserMessageQueueService,
 	NewUsageRecordWorkerPool,
 	ProvideSchedulerSnapshotService,
+	ProvideGroupHealthHistoryService,
 	NewIdentityService,
 	NewCRSSyncService,
 	ProvideUpdateService,

@@ -46,6 +46,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, cfg)
 	idempotencyCleanupSvc := service.NewIdempotencyCleanupService(nil, cfg)
 	schedulerSnapshotSvc := service.NewSchedulerSnapshotService(nil, nil, nil, nil, cfg)
+	groupHealthHistorySvc := service.NewGroupHealthHistoryService(nil, nil, time.Second, time.Minute)
 	opsSystemLogSinkSvc := service.NewOpsSystemLogSink(nil)
 
 	cleanup := provideCleanup(
@@ -59,6 +60,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		opsSystemLogSinkSvc,
 		&service.SoraMediaCleanupService{},
 		schedulerSnapshotSvc,
+		groupHealthHistorySvc,
 		tokenRefreshSvc,
 		accountExpirySvc,
 		subscriptionExpirySvc,
