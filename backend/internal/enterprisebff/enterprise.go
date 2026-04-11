@@ -143,14 +143,8 @@ func (s *entEnterpriseStore) ListVisibleGroups(ctx context.Context, userID int64
 		return nil, err
 	}
 
-	visibleIDs := unionGroupIDs(assignedGroupIDs, subscribedGroupIDs)
-	if len(visibleIDs) == 0 {
-		return []EnterpriseVisibleGroup{}, nil
-	}
-
 	rows, err := s.client.Group.Query().
 		Where(
-			group.IDIn(visibleIDs...),
 			group.StatusEQ(service.StatusActive),
 		).
 		Order(dbent.Asc(group.FieldSortOrder), dbent.Asc(group.FieldID)).
@@ -159,15 +153,22 @@ func (s *entEnterpriseStore) ListVisibleGroups(ctx context.Context, userID int64
 		return nil, err
 	}
 
-	out := make([]EnterpriseVisibleGroup, 0, len(rows))
+	allGroups := make([]service.Group, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, EnterpriseVisibleGroup{
-			ID:       row.ID,
-			Name:     row.Name,
-			Platform: row.Platform,
+		allGroups = append(allGroups, service.Group{
+			ID:               row.ID,
+			Name:             row.Name,
+			Platform:         row.Platform,
+			Status:           row.Status,
+			IsExclusive:      row.IsExclusive,
+			SubscriptionType: row.SubscriptionType,
 		})
 	}
-	return out, nil
+	return selectEnterpriseVisibleGroups(
+		allGroups,
+		groupIDSet(assignedGroupIDs),
+		groupIDSet(subscribedGroupIDs),
+	), nil
 }
 
 func (s *entEnterpriseStore) SameEnterprise(ctx context.Context, actorUserID, targetUserID int64) (bool, error) {
@@ -227,6 +228,43 @@ func unionGroupIDs(left, right []int64) []int64 {
 		}
 		seen[id] = struct{}{}
 		out = append(out, id)
+	}
+	return out
+}
+
+func groupIDSet(ids []int64) map[int64]struct{} {
+	out := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		out[id] = struct{}{}
+	}
+	return out
+}
+
+func selectEnterpriseVisibleGroups(
+	groups []service.Group,
+	allowedGroupIDs map[int64]struct{},
+	subscribedGroupIDs map[int64]struct{},
+) []EnterpriseVisibleGroup {
+	out := make([]EnterpriseVisibleGroup, 0, len(groups))
+	for _, candidate := range groups {
+		if !candidate.IsActive() {
+			continue
+		}
+		if candidate.IsSubscriptionType() {
+			if _, ok := subscribedGroupIDs[candidate.ID]; !ok {
+				continue
+			}
+		} else if candidate.IsExclusive {
+			if _, ok := allowedGroupIDs[candidate.ID]; !ok {
+				continue
+			}
+		}
+
+		out = append(out, EnterpriseVisibleGroup{
+			ID:       candidate.ID,
+			Name:     candidate.Name,
+			Platform: candidate.Platform,
+		})
 	}
 	return out
 }
