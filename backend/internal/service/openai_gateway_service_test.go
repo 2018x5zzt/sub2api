@@ -1994,3 +1994,33 @@ func TestHandleOAuthSSEToJSON_ResponseFailedReturnsProtocolError(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "upstream rejected request")
 	require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 }
+
+func TestHandleNonStreamingResponse_APIKeySSEConvertsToJSON(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			`data: {"type":"response.created","response":{"id":"resp_apikey_sse","model":"gpt-4o","status":"in_progress"}}`,
+			`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"final answer"}`,
+			`data: {"type":"response.completed","response":{"id":"resp_apikey_sse","model":"gpt-4o","usage":{"input_tokens":7,"output_tokens":9,"input_tokens_details":{"cached_tokens":1}}}}`,
+			`data: [DONE]`,
+		}, "\n"))),
+	}
+	account := &Account{Type: AccountTypeAPIKey}
+
+	usage, err := svc.handleNonStreamingResponse(context.Background(), resp, c, account, "gpt-4o", "gpt-4o")
+	require.NoError(t, err)
+	require.NotNil(t, usage)
+	require.Equal(t, 7, usage.InputTokens)
+	require.Equal(t, 9, usage.OutputTokens)
+	require.Equal(t, 1, usage.CacheReadInputTokens)
+	require.Contains(t, rec.Body.String(), `"id":"resp_apikey_sse"`)
+	require.Contains(t, rec.Body.String(), `"text":"final answer"`)
+	require.NotContains(t, rec.Body.String(), `data: {"type":"response.completed"}`)
+}

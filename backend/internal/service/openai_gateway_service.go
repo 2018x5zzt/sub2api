@@ -3014,6 +3014,9 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 			usageParsed = true
 		}
 	}
+	if isEventStreamResponse(resp.Header) {
+		return s.handlePassthroughSSEToJSON(resp, c, body)
+	}
 	if !usageParsed {
 		// 兜底：尝试从 SSE 文本中解析 usage
 		usage = s.parseSSEUsageFromBody(string(body))
@@ -3025,6 +3028,42 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	if contentType == "" {
 		contentType = "application/json"
 	}
+	c.Data(resp.StatusCode, contentType, body)
+	return usage, nil
+}
+
+func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c *gin.Context, body []byte) (*OpenAIUsage, error) {
+	bodyText := string(body)
+	finalResponse, ok := extractCodexFinalResponse(bodyText)
+
+	usage := &OpenAIUsage{}
+	if ok {
+		if parsedUsage, parsed := extractOpenAIUsageFromJSONBytes(finalResponse); parsed {
+			*usage = parsedUsage
+		}
+		body = s.correctToolCallsInResponseBody(finalResponse)
+	} else {
+		terminalType, terminalPayload, terminalOK := extractOpenAISSETerminalEvent(bodyText)
+		if terminalOK && terminalType == "response.failed" {
+			msg := extractOpenAISSEErrorMessage(terminalPayload)
+			if msg == "" {
+				msg = "Upstream compact response failed"
+			}
+			return nil, s.writeOpenAINonStreamingProtocolError(resp, c, msg)
+		}
+		usage = s.parseSSEUsageFromBody(bodyText)
+	}
+
+	writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+
+	contentType := "application/json; charset=utf-8"
+	if !ok {
+		contentType = resp.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "text/event-stream"
+		}
+	}
+	c.Writer.Header().Set("Content-Type", contentType)
 	c.Data(resp.StatusCode, contentType, body)
 	return usage, nil
 }
@@ -3862,9 +3901,12 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		return nil, err
 	}
 
+	if isEventStreamResponse(resp.Header) {
+		return s.handleOAuthSSEToJSON(resp, c, body, originalModel, mappedModel)
+	}
 	if account.Type == AccountTypeOAuth {
 		bodyLooksLikeSSE := bytes.Contains(body, []byte("data:")) || bytes.Contains(body, []byte("event:"))
-		if isEventStreamResponse(resp.Header) || bodyLooksLikeSSE {
+		if bodyLooksLikeSSE {
 			return s.handleOAuthSSEToJSON(resp, c, body, originalModel, mappedModel)
 		}
 	}
