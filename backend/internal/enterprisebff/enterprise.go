@@ -5,15 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/user"
-	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
-	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -48,8 +45,9 @@ type EnterpriseStore interface {
 }
 
 type entEnterpriseStore struct {
-	client *dbent.Client
-	keys   []string
+	client                      *dbent.Client
+	keys                        []string
+	visibleGroupIDsByEnterprise map[string]map[int64]struct{}
 }
 
 func newEntEnterpriseStore(client *dbent.Client, cfg *Config) EnterpriseStore {
@@ -60,6 +58,7 @@ func newEntEnterpriseStore(client *dbent.Client, cfg *Config) EnterpriseStore {
 			cfg.EnterpriseDisplayNameAttributeKey,
 			cfg.EnterpriseSupportContactAttribute,
 		},
+		visibleGroupIDsByEnterprise: normalizeEnterpriseVisibleGroupIDsByEnterprise(cfg.EnterpriseVisibleGroupIDsByEnterprise),
 	}
 }
 
@@ -134,13 +133,13 @@ func (s *entEnterpriseStore) GetByUserID(ctx context.Context, userID int64) (*En
 }
 
 func (s *entEnterpriseStore) ListVisibleGroups(ctx context.Context, userID int64) ([]EnterpriseVisibleGroup, error) {
-	assignedGroupIDs, err := s.listExplicitAllowedGroupIDs(ctx, userID)
+	profile, err := s.GetByUserID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	subscribedGroupIDs, err := s.listActiveSubscriptionGroupIDs(ctx, userID)
-	if err != nil {
-		return nil, err
+	configuredGroupIDs := s.visibleGroupIDSetForEnterprise(profile)
+	if len(configuredGroupIDs) == 0 {
+		return []EnterpriseVisibleGroup{}, nil
 	}
 
 	rows, err := s.client.Group.Query().
@@ -166,8 +165,7 @@ func (s *entEnterpriseStore) ListVisibleGroups(ctx context.Context, userID int64
 	}
 	return selectEnterpriseVisibleGroups(
 		allGroups,
-		groupIDSet(assignedGroupIDs),
-		groupIDSet(subscribedGroupIDs),
+		configuredGroupIDs,
 	), nil
 }
 
@@ -185,79 +183,55 @@ func (s *entEnterpriseStore) SameEnterprise(ctx context.Context, actorUserID, ta
 	return normalizeCompanyName(actor.Name) == normalizeCompanyName(target.Name), nil
 }
 
-func (s *entEnterpriseStore) listExplicitAllowedGroupIDs(ctx context.Context, userID int64) ([]int64, error) {
-	rows, err := s.client.UserAllowedGroup.Query().
-		Where(userallowedgroup.UserIDEQ(userID)).
-		All(ctx)
-	if err != nil {
-		return nil, err
+func (s *entEnterpriseStore) visibleGroupIDSetForEnterprise(profile *EnterpriseProfile) map[int64]struct{} {
+	if profile == nil {
+		return nil
 	}
-
-	out := make([]int64, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, row.GroupID)
-	}
-	return out, nil
+	return s.visibleGroupIDsByEnterprise[normalizeCompanyName(profile.Name)]
 }
 
-func (s *entEnterpriseStore) listActiveSubscriptionGroupIDs(ctx context.Context, userID int64) ([]int64, error) {
-	rows, err := s.client.UserSubscription.Query().
-		Where(
-			usersubscription.UserIDEQ(userID),
-			usersubscription.StatusEQ(service.SubscriptionStatusActive),
-			usersubscription.ExpiresAtGT(time.Now()),
-		).
-		All(ctx)
-	if err != nil {
-		return nil, err
+func normalizeEnterpriseVisibleGroupIDsByEnterprise(raw map[string][]int64) map[string]map[int64]struct{} {
+	if len(raw) == 0 {
+		return nil
 	}
 
-	out := make([]int64, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, row.GroupID)
-	}
-	return out, nil
-}
-
-func unionGroupIDs(left, right []int64) []int64 {
-	seen := make(map[int64]struct{}, len(left)+len(right))
-	out := make([]int64, 0, len(left)+len(right))
-	for _, id := range append(append([]int64{}, left...), right...) {
-		if _, ok := seen[id]; ok {
+	out := make(map[string]map[int64]struct{}, len(raw))
+	for enterpriseName, ids := range raw {
+		normalizedName := normalizeCompanyName(enterpriseName)
+		if normalizedName == "" {
 			continue
 		}
-		seen[id] = struct{}{}
-		out = append(out, id)
+		if _, ok := out[normalizedName]; !ok {
+			out[normalizedName] = make(map[int64]struct{}, len(ids))
+		}
+		for _, id := range ids {
+			if id > 0 {
+				out[normalizedName][id] = struct{}{}
+			}
+		}
+		if len(out[normalizedName]) == 0 {
+			delete(out, normalizedName)
+		}
 	}
-	return out
-}
 
-func groupIDSet(ids []int64) map[int64]struct{} {
-	out := make(map[int64]struct{}, len(ids))
-	for _, id := range ids {
-		out[id] = struct{}{}
-	}
 	return out
 }
 
 func selectEnterpriseVisibleGroups(
 	groups []service.Group,
-	allowedGroupIDs map[int64]struct{},
-	subscribedGroupIDs map[int64]struct{},
+	configuredGroupIDs map[int64]struct{},
 ) []EnterpriseVisibleGroup {
+	if len(configuredGroupIDs) == 0 {
+		return []EnterpriseVisibleGroup{}
+	}
+
 	out := make([]EnterpriseVisibleGroup, 0, len(groups))
 	for _, candidate := range groups {
 		if !candidate.IsActive() {
 			continue
 		}
-		if candidate.IsSubscriptionType() {
-			if _, ok := subscribedGroupIDs[candidate.ID]; !ok {
-				continue
-			}
-		} else if candidate.IsExclusive {
-			if _, ok := allowedGroupIDs[candidate.ID]; !ok {
-				continue
-			}
+		if _, ok := configuredGroupIDs[candidate.ID]; !ok {
+			continue
 		}
 
 		out = append(out, EnterpriseVisibleGroup{

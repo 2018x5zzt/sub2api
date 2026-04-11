@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSelectEnterpriseVisibleGroups_IncludesPublicStandardGroupsByDefault(t *testing.T) {
+func TestSelectEnterpriseVisibleGroups_ReturnsOnlyConfiguredGroups(t *testing.T) {
 	groups := []service.Group{
 		{
 			ID:               1,
@@ -33,11 +33,41 @@ func TestSelectEnterpriseVisibleGroups_IncludesPublicStandardGroupsByDefault(t *
 			IsExclusive:      false,
 			SubscriptionType: service.SubscriptionTypeSubscription,
 		},
+		{
+			ID:               4,
+			Name:             "inactive-configured",
+			Platform:         service.PlatformOpenAI,
+			Status:           service.StatusDisabled,
+			IsExclusive:      false,
+			SubscriptionType: service.SubscriptionTypeStandard,
+		},
 	}
 
-	got := selectEnterpriseVisibleGroups(groups, map[int64]struct{}{}, map[int64]struct{}{})
+	got := selectEnterpriseVisibleGroups(groups, map[int64]struct{}{
+		2: {},
+		3: {},
+		4: {},
+	})
 
 	require.Equal(t, []EnterpriseVisibleGroup{
-		{ID: 1, Name: "public-default", Platform: service.PlatformAnthropic},
+		{ID: 2, Name: "exclusive-private", Platform: service.PlatformOpenAI},
+		{ID: 3, Name: "subscription-only", Platform: service.PlatformGemini},
 	}, got)
+}
+
+func TestSelectEnterpriseVisibleGroups_ReturnsEmptyWhenEnterpriseHasNoConfiguredGroups(t *testing.T) {
+	groups := []service.Group{
+		{
+			ID:               1,
+			Name:             "public-default",
+			Platform:         service.PlatformAnthropic,
+			Status:           service.StatusActive,
+			IsExclusive:      false,
+			SubscriptionType: service.SubscriptionTypeStandard,
+		},
+	}
+
+	got := selectEnterpriseVisibleGroups(groups, nil)
+
+	require.Empty(t, got)
 }
