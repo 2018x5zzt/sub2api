@@ -1,6 +1,7 @@
 package enterprisebff
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -19,13 +20,14 @@ const (
 )
 
 type Config struct {
-	ListenAddr                        string
-	CoreBaseURL                       *url.URL
-	RequestTimeout                    time.Duration
-	TrustedProxies                    []string
-	EnterpriseAttributeKey            string
-	EnterpriseDisplayNameAttributeKey string
-	EnterpriseSupportContactAttribute string
+	ListenAddr                            string
+	CoreBaseURL                           *url.URL
+	RequestTimeout                        time.Duration
+	TrustedProxies                        []string
+	EnterpriseAttributeKey                string
+	EnterpriseDisplayNameAttributeKey     string
+	EnterpriseSupportContactAttribute     string
+	EnterpriseVisibleGroupIDsByEnterprise map[string][]int64
 }
 
 func LoadConfig() (*Config, *coreconfig.Config, error) {
@@ -33,6 +35,10 @@ func LoadConfig() (*Config, *coreconfig.Config, error) {
 	port := getenvInt("ENTERPRISE_BFF_PORT", defaultPort)
 	rawCoreBaseURL := getenvTrimmed("ENTERPRISE_BFF_CORE_BASE_URL", defaultCoreBaseURL)
 	timeoutSeconds := getenvInt("ENTERPRISE_BFF_REQUEST_TIMEOUT_SECONDS", defaultTimeoutSeconds)
+	visibleGroupIDsByEnterprise, err := parseEnterpriseVisibleGroupIDsByEnterprise(os.Getenv("ENTERPRISE_BFF_VISIBLE_GROUP_IDS_BY_ENTERPRISE"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse ENTERPRISE_BFF_VISIBLE_GROUP_IDS_BY_ENTERPRISE: %w", err)
+	}
 
 	coreBaseURL, err := url.Parse(rawCoreBaseURL)
 	if err != nil {
@@ -48,13 +54,14 @@ func LoadConfig() (*Config, *coreconfig.Config, error) {
 	}
 
 	cfg := &Config{
-		ListenAddr:                        fmt.Sprintf("%s:%d", host, port),
-		CoreBaseURL:                       coreBaseURL,
-		RequestTimeout:                    time.Duration(timeoutSeconds) * time.Second,
-		TrustedProxies:                    splitCSV(os.Getenv("ENTERPRISE_BFF_TRUSTED_PROXIES")),
-		EnterpriseAttributeKey:            getenvTrimmed("ENTERPRISE_BFF_ENTERPRISE_ATTRIBUTE_KEY", "enterprise_name"),
-		EnterpriseDisplayNameAttributeKey: getenvTrimmed("ENTERPRISE_BFF_ENTERPRISE_DISPLAY_NAME_ATTRIBUTE_KEY", "enterprise_display_name"),
-		EnterpriseSupportContactAttribute: getenvTrimmed("ENTERPRISE_BFF_ENTERPRISE_SUPPORT_CONTACT_ATTRIBUTE_KEY", "enterprise_support_contact"),
+		ListenAddr:                            fmt.Sprintf("%s:%d", host, port),
+		CoreBaseURL:                           coreBaseURL,
+		RequestTimeout:                        time.Duration(timeoutSeconds) * time.Second,
+		TrustedProxies:                        splitCSV(os.Getenv("ENTERPRISE_BFF_TRUSTED_PROXIES")),
+		EnterpriseAttributeKey:                getenvTrimmed("ENTERPRISE_BFF_ENTERPRISE_ATTRIBUTE_KEY", "enterprise_name"),
+		EnterpriseDisplayNameAttributeKey:     getenvTrimmed("ENTERPRISE_BFF_ENTERPRISE_DISPLAY_NAME_ATTRIBUTE_KEY", "enterprise_display_name"),
+		EnterpriseSupportContactAttribute:     getenvTrimmed("ENTERPRISE_BFF_ENTERPRISE_SUPPORT_CONTACT_ATTRIBUTE_KEY", "enterprise_support_contact"),
+		EnterpriseVisibleGroupIDsByEnterprise: visibleGroupIDsByEnterprise,
 	}
 	return cfg, sharedCfg, nil
 }
@@ -92,4 +99,34 @@ func splitCSV(raw string) []string {
 		}
 	}
 	return out
+}
+
+func parseEnterpriseVisibleGroupIDsByEnterprise(raw string) (map[string][]int64, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+
+	parsed := make(map[string][]int64)
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		return nil, err
+	}
+
+	for enterpriseName, ids := range parsed {
+		seen := make(map[int64]struct{}, len(ids))
+		deduped := make([]int64, 0, len(ids))
+		for _, id := range ids {
+			if id <= 0 {
+				return nil, fmt.Errorf("enterprise %q has invalid group id %d", enterpriseName, id)
+			}
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			deduped = append(deduped, id)
+		}
+		parsed[enterpriseName] = deduped
+	}
+
+	return parsed, nil
 }
