@@ -90,6 +90,14 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireColumn(t, tx, "user_allowed_groups", "created_at", "timestamp with time zone", 0, false)
 }
 
+func TestMigrationsSchema_DynamicBudgetColumnsExist(t *testing.T) {
+	tx := testTx(t)
+
+	requireColumn(t, tx, "groups", "pricing_mode", "character varying", 20, false)
+	requireColumn(t, tx, "groups", "default_budget_multiplier", "numeric", 0, true)
+	requireColumn(t, tx, "api_keys", "budget_multiplier", "numeric", 0, true)
+}
+
 func requireIndex(t *testing.T, tx *sql.Tx, table, index string) {
 	t.Helper()
 

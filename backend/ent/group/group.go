@@ -27,6 +27,10 @@ const (
 	FieldDescription = "description"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
 	FieldRateMultiplier = "rate_multiplier"
+	// FieldPricingMode holds the string denoting the pricing_mode field in the database.
+	FieldPricingMode = "pricing_mode"
+	// FieldDefaultBudgetMultiplier holds the string denoting the default_budget_multiplier field in the database.
+	FieldDefaultBudgetMultiplier = "default_budget_multiplier"
 	// FieldIsExclusive holds the string denoting the is_exclusive field in the database.
 	FieldIsExclusive = "is_exclusive"
 	// FieldStatus holds the string denoting the status field in the database.
@@ -160,6 +164,8 @@ var Columns = []string{
 	FieldName,
 	FieldDescription,
 	FieldRateMultiplier,
+	FieldPricingMode,
+	FieldDefaultBudgetMultiplier,
 	FieldIsExclusive,
 	FieldStatus,
 	FieldPlatform,
@@ -225,6 +231,10 @@ var (
 	NameValidator func(string) error
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
 	DefaultRateMultiplier float64
+	// DefaultPricingMode holds the default value on creation for the "pricing_mode" field.
+	DefaultPricingMode string
+	// PricingModeValidator is a validator for the "pricing_mode" field. It is called by the builders before save.
+	PricingModeValidator func(string) error
 	// DefaultIsExclusive holds the default value on creation for the "is_exclusive" field.
 	DefaultIsExclusive bool
 	// DefaultStatus holds the default value on creation for the "status" field.
@@ -297,6 +307,16 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 // ByRateMultiplier orders the results by the rate_multiplier field.
 func ByRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRateMultiplier, opts...).ToFunc()
+}
+
+// ByPricingMode orders the results by the pricing_mode field.
+func ByPricingMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPricingMode, opts...).ToFunc()
+}
+
+// ByDefaultBudgetMultiplier orders the results by the default_budget_multiplier field.
+func ByDefaultBudgetMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDefaultBudgetMultiplier, opts...).ToFunc()
 }
 
 // ByIsExclusive orders the results by the is_exclusive field.

@@ -40,6 +40,8 @@ func (r *groupRepository) Create(ctx context.Context, groupIn *service.Group) er
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
+		SetPricingMode(groupIn.EffectivePricingMode()).
+		SetNillableDefaultBudgetMultiplier(groupIn.DefaultBudgetMultiplier).
 		SetIsExclusive(groupIn.IsExclusive).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
@@ -111,6 +113,7 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		SetDescription(groupIn.Description).
 		SetPlatform(groupIn.Platform).
 		SetRateMultiplier(groupIn.RateMultiplier).
+		SetPricingMode(groupIn.EffectivePricingMode()).
 		SetIsExclusive(groupIn.IsExclusive).
 		SetStatus(groupIn.Status).
 		SetSubscriptionType(groupIn.SubscriptionType).
@@ -147,6 +150,11 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		builder = builder.SetMonthlyLimitUsd(*groupIn.MonthlyLimitUSD)
 	} else {
 		builder = builder.ClearMonthlyLimitUsd()
+	}
+	if groupIn.DefaultBudgetMultiplier != nil {
+		builder = builder.SetDefaultBudgetMultiplier(*groupIn.DefaultBudgetMultiplier)
+	} else {
+		builder = builder.ClearDefaultBudgetMultiplier()
 	}
 	if groupIn.ImagePrice1K != nil {
 		builder = builder.SetImagePrice1k(*groupIn.ImagePrice1K)

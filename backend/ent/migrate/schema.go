@@ -17,6 +17,7 @@ var (
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "key", Type: field.TypeString, Unique: true, Size: 128},
 		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "budget_multiplier", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
 		{Name: "last_used_at", Type: field.TypeTime, Nullable: true},
 		{Name: "ip_whitelist", Type: field.TypeJSON, Nullable: true},
@@ -44,13 +45,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "api_keys_groups_api_keys",
-				Columns:    []*schema.Column{APIKeysColumns[22]},
+				Columns:    []*schema.Column{APIKeysColumns[23]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "api_keys_users_api_keys",
-				Columns:    []*schema.Column{APIKeysColumns[23]},
+				Columns:    []*schema.Column{APIKeysColumns[24]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -59,17 +60,17 @@ var (
 			{
 				Name:    "apikey_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[23]},
+				Columns: []*schema.Column{APIKeysColumns[24]},
 			},
 			{
 				Name:    "apikey_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[22]},
+				Columns: []*schema.Column{APIKeysColumns[23]},
 			},
 			{
 				Name:    "apikey_status",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[6]},
+				Columns: []*schema.Column{APIKeysColumns[7]},
 			},
 			{
 				Name:    "apikey_deleted_at",
@@ -79,17 +80,17 @@ var (
 			{
 				Name:    "apikey_last_used_at",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[7]},
+				Columns: []*schema.Column{APIKeysColumns[8]},
 			},
 			{
 				Name:    "apikey_quota_quota_used",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[10], APIKeysColumns[11]},
+				Columns: []*schema.Column{APIKeysColumns[11], APIKeysColumns[12]},
 			},
 			{
 				Name:    "apikey_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[12]},
+				Columns: []*schema.Column{APIKeysColumns[13]},
 			},
 		},
 	}
@@ -384,6 +385,8 @@ var (
 		{Name: "name", Type: field.TypeString, Size: 100},
 		{Name: "description", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "rate_multiplier", Type: field.TypeFloat64, Default: 1, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
+		{Name: "pricing_mode", Type: field.TypeString, Size: 20, Default: "fixed"},
+		{Name: "default_budget_multiplier", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
 		{Name: "is_exclusive", Type: field.TypeBool, Default: false},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
 		{Name: "platform", Type: field.TypeString, Size: 50, Default: "anthropic"},
@@ -420,22 +423,22 @@ var (
 			{
 				Name:    "group_status",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[8]},
+				Columns: []*schema.Column{GroupsColumns[10]},
 			},
 			{
 				Name:    "group_platform",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[9]},
+				Columns: []*schema.Column{GroupsColumns[11]},
 			},
 			{
 				Name:    "group_subscription_type",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[10]},
+				Columns: []*schema.Column{GroupsColumns[12]},
 			},
 			{
 				Name:    "group_is_exclusive",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[7]},
+				Columns: []*schema.Column{GroupsColumns[9]},
 			},
 			{
 				Name:    "group_deleted_at",
@@ -445,7 +448,7 @@ var (
 			{
 				Name:    "group_sort_order",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[30]},
+				Columns: []*schema.Column{GroupsColumns[32]},
 			},
 		},
 	}

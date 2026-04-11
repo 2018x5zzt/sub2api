@@ -44,6 +44,10 @@ func (APIKey) Fields() []ent.Field {
 		field.Int64("group_id").
 			Optional().
 			Nillable(),
+		field.Float("budget_multiplier").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),

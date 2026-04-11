@@ -11,9 +11,12 @@ type Group struct {
 	Description    string
 	Platform       string
 	RateMultiplier float64
-	IsExclusive    bool
-	Status         string
-	Hydrated       bool // indicates the group was loaded from a trusted repository source
+	PricingMode    string
+	// Dynamic pricing groups template new key budget multipliers from this value.
+	DefaultBudgetMultiplier *float64
+	IsExclusive             bool
+	Status                  string
+	Hydrated                bool // indicates the group was loaded from a trusted repository source
 
 	SubscriptionType    string
 	DailyLimitUSD       *float64
@@ -72,6 +75,17 @@ type Group struct {
 
 func (g *Group) IsActive() bool {
 	return g.Status == StatusActive
+}
+
+func (g *Group) EffectivePricingMode() string {
+	if g == nil {
+		return GroupPricingModeFixed
+	}
+	return normalizeGroupPricingMode(g.PricingMode)
+}
+
+func (g *Group) IsDynamicPricing() bool {
+	return g.EffectivePricingMode() == GroupPricingModeDynamic
 }
 
 func (g *Group) IsSubscriptionType() bool {
