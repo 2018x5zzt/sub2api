@@ -6177,7 +6177,18 @@ func (s *GatewayService) shouldFailoverOn400(respBody []byte) bool {
 	// 默认保守：无法识别则不切换。
 	msg := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
 	if msg == "" {
+		// 部分上游会直接返回纯文本错误体，而不是标准 JSON 错误对象。
+		// 这里回退到原始响应体，确保池内切号规则仍然能命中。
+		msg = strings.ToLower(strings.TrimSpace(string(respBody)))
+	}
+	if msg == "" {
 		return false
+	}
+
+	// Anthropic 侧的临时算力限制，本质上是可切换账号的瞬时错误。
+	if strings.Contains(msg, "官方算力限制") ||
+		(strings.Contains(msg, "算力限制") && strings.Contains(msg, "请等待一段时间")) {
+		return true
 	}
 
 	// 缺少/错误的 beta header：换账号/链路可能成功（尤其是混合调度时）。
