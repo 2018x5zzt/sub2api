@@ -67,6 +67,57 @@ func TestEnterpriseUserKeyCreateRejectsUnauthorizedGroupID(t *testing.T) {
 	require.False(t, upstreamCreateCalled)
 }
 
+func TestEnterpriseUserKeyUpdateRejectsGroupRebind(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var upstreamUpdateCalled bool
+	transport := roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		recorder := httptest.NewRecorder()
+		recorder.Header().Set("Content-Type", "application/json")
+
+		switch r.URL.Path {
+		case "/api/v1/auth/me":
+			_, _ = recorder.Write([]byte(`{"code":0,"message":"success","data":{"id":42,"email":"owner@example.com","username":"owner","role":"user","balance":12.5,"concurrency":3,"status":"active"}}`))
+		case "/api/v1/keys/11":
+			upstreamUpdateCalled = true
+			_, _ = recorder.Write([]byte(`{"code":0,"message":"success","data":{"id":11,"user_id":42,"key":"sk-test","name":"demo","group_id":2,"status":"active","quota":0,"quota_used":0,"created_at":"2026-04-10T12:00:00Z","updated_at":"2026-04-10T12:00:00Z"}}`))
+		default:
+			t.Fatalf("unexpected upstream path: %s", r.URL.Path)
+		}
+
+		return recorder.Result(), nil
+	})
+
+	baseURL, err := url.Parse("http://core.example/api/v1")
+	require.NoError(t, err)
+
+	store := newFakeEnterpriseStore()
+	store.profiles[42] = &EnterpriseProfile{Name: "acme", DisplayName: "ACME", UserID: 42}
+	store.visibleGroups[42] = []visibleGroupSeed{
+		{ID: 2, Name: "enterprise-private", Platform: "openai"},
+	}
+
+	server := New(&Config{
+		ListenAddr:     "127.0.0.1:0",
+		CoreBaseURL:    baseURL,
+		RequestTimeout: 0,
+	}, nil, store, newNoopGroupHealthSnapshotRepo())
+	server.httpClient = &http.Client{Transport: transport}
+
+	req := httptest.NewRequest(http.MethodPatch, "/keys/11", jsonBody(t, map[string]any{
+		"group_id": 2,
+	}))
+	req.Header.Set("Authorization", "Bearer token")
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusBadRequest, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "现有 Key 不支持修改绑定号池")
+	require.False(t, upstreamUpdateCalled)
+}
+
 func TestEnterpriseAdminKeyCreateRejectsCrossEnterpriseTargetUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

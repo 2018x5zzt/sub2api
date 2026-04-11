@@ -79,6 +79,7 @@ func (s *Server) proxyValidatedKeyMutation(
 	targetUserID int64,
 	upstreamPath string,
 	transformer responseTransformer,
+	allowGroupBinding bool,
 ) {
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -94,6 +95,13 @@ func (s *Server) proxyValidatedKeyMutation(
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code":    http.StatusBadRequest,
 			"message": "Invalid request: " + err.Error(),
+		})
+		return
+	}
+	if !allowGroupBinding && binding.Present {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"code":    http.StatusBadRequest,
+			"message": "现有 Key 不支持修改绑定号池",
 		})
 		return
 	}
