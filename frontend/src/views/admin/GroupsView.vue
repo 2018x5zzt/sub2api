@@ -148,8 +148,14 @@
             </div>
           </template>
 
-          <template #cell-rate_multiplier="{ value }">
-            <span class="text-sm text-gray-700 dark:text-gray-300">{{ value }}x</span>
+          <template #cell-rate_multiplier="{ value, row }">
+            <span class="text-sm text-gray-700 dark:text-gray-300">
+              {{
+                row.pricing_mode === 'dynamic'
+                  ? t('admin.groups.pricingMode.dynamicValue', { value: row.default_budget_multiplier ?? 8 })
+                  : `${value}x`
+              }}
+            </span>
           </template>
 
           <template #cell-is_exclusive="{ value }">
@@ -361,18 +367,37 @@
           </select>
           <p class="input-hint">{{ t('admin.groups.copyAccounts.hint') }}</p>
         </div>
-        <div>
-          <label class="input-label">{{ t('admin.groups.form.rateMultiplier') }}</label>
-          <input
-            v-model.number="createForm.rate_multiplier"
-            type="number"
-            step="0.001"
-            min="0.001"
-            required
-            class="input"
-            data-tour="group-form-multiplier"
-          />
-          <p class="input-hint">{{ t('admin.groups.rateMultiplierHint') }}</p>
+        <div class="space-y-4">
+          <div>
+            <label class="input-label">{{ t('admin.groups.pricingMode.label') }}</label>
+            <Select v-model="createForm.pricing_mode" :options="pricingModeOptions" />
+            <p class="input-hint">{{ t('admin.groups.pricingMode.hint') }}</p>
+          </div>
+          <div v-if="createForm.pricing_mode === 'fixed'">
+            <label class="input-label">{{ t('admin.groups.form.rateMultiplier') }}</label>
+            <input
+              v-model.number="createForm.rate_multiplier"
+              type="number"
+              step="0.001"
+              min="0.001"
+              required
+              class="input"
+              data-tour="group-form-multiplier"
+            />
+            <p class="input-hint">{{ t('admin.groups.rateMultiplierHint') }}</p>
+          </div>
+          <div v-else>
+            <label class="input-label">{{ t('admin.groups.pricingMode.defaultBudgetMultiplier') }}</label>
+            <input
+              v-model.number="createForm.default_budget_multiplier"
+              type="number"
+              step="0.1"
+              min="3"
+              max="50"
+              class="input"
+            />
+            <p class="input-hint">{{ t('admin.groups.pricingMode.defaultBudgetHint') }}</p>
+          </div>
         </div>
         <div v-if="createForm.subscription_type !== 'subscription'" data-tour="group-form-exclusive">
           <div class="mb-1.5 flex items-center gap-1">
@@ -1089,17 +1114,36 @@
           </select>
           <p class="input-hint">{{ t('admin.groups.copyAccounts.hintEdit') }}</p>
         </div>
-        <div>
-          <label class="input-label">{{ t('admin.groups.form.rateMultiplier') }}</label>
-          <input
-            v-model.number="editForm.rate_multiplier"
-            type="number"
-            step="0.001"
-            min="0.001"
-            required
-            class="input"
-            data-tour="group-form-multiplier"
-          />
+        <div class="space-y-4">
+          <div>
+            <label class="input-label">{{ t('admin.groups.pricingMode.label') }}</label>
+            <Select v-model="editForm.pricing_mode" :options="pricingModeOptions" />
+            <p class="input-hint">{{ t('admin.groups.pricingMode.hint') }}</p>
+          </div>
+          <div v-if="editForm.pricing_mode === 'fixed'">
+            <label class="input-label">{{ t('admin.groups.form.rateMultiplier') }}</label>
+            <input
+              v-model.number="editForm.rate_multiplier"
+              type="number"
+              step="0.001"
+              min="0.001"
+              required
+              class="input"
+              data-tour="group-form-multiplier"
+            />
+          </div>
+          <div v-else>
+            <label class="input-label">{{ t('admin.groups.pricingMode.defaultBudgetMultiplier') }}</label>
+            <input
+              v-model.number="editForm.default_budget_multiplier"
+              type="number"
+              step="0.1"
+              min="3"
+              max="50"
+              class="input"
+            />
+            <p class="input-hint">{{ t('admin.groups.pricingMode.defaultBudgetHint') }}</p>
+          </div>
         </div>
         <div v-if="editForm.subscription_type !== 'subscription'">
           <div class="mb-1.5 flex items-center gap-1">
@@ -1838,7 +1882,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useOnboardingStore } from '@/stores/onboarding'
 import { adminAPI } from '@/api/admin'
-import type { AdminGroup, GroupPlatform, SubscriptionType } from '@/types'
+import type { AdminGroup, GroupPlatform, GroupPricingMode, SubscriptionType } from '@/types'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -1856,6 +1900,7 @@ import { VueDraggable } from 'vue-draggable-plus'
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import { useKeyedDebouncedSearch } from '@/composables/useKeyedDebouncedSearch'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
+import { DEFAULT_DYNAMIC_BUDGET_MULTIPLIER, resolveGroupBudgetMultiplier } from '@/utils/dynamicPricing'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -1912,6 +1957,11 @@ const editStatusOptions = computed(() => [
 const subscriptionTypeOptions = computed(() => [
   { value: 'standard', label: t('admin.groups.subscription.standard') },
   { value: 'subscription', label: t('admin.groups.subscription.subscription') }
+])
+
+const pricingModeOptions = computed(() => [
+  { value: 'fixed' as GroupPricingMode, label: t('admin.groups.pricingMode.fixed') },
+  { value: 'dynamic' as GroupPricingMode, label: t('admin.groups.pricingMode.dynamic') }
 ])
 
 // 降级分组选项（创建时）- 仅包含 anthropic 平台且未启用 claude_code_only 的分组
@@ -2041,6 +2091,8 @@ const createForm = reactive({
   description: '',
   platform: 'anthropic' as GroupPlatform,
   rate_multiplier: 1.0,
+  pricing_mode: 'fixed' as GroupPricingMode,
+  default_budget_multiplier: DEFAULT_DYNAMIC_BUDGET_MULTIPLIER as number | null,
   is_exclusive: false,
   subscription_type: 'standard' as SubscriptionType,
   daily_limit_usd: null as number | null,
@@ -2284,6 +2336,8 @@ const editForm = reactive({
   description: '',
   platform: 'anthropic' as GroupPlatform,
   rate_multiplier: 1.0,
+  pricing_mode: 'fixed' as GroupPricingMode,
+  default_budget_multiplier: DEFAULT_DYNAMIC_BUDGET_MULTIPLIER as number | null,
   is_exclusive: false,
   status: 'active' as 'active' | 'inactive',
   subscription_type: 'standard' as SubscriptionType,
@@ -2435,6 +2489,8 @@ const closeCreateModal = () => {
   createForm.description = ''
   createForm.platform = 'anthropic'
   createForm.rate_multiplier = 1.0
+  createForm.pricing_mode = 'fixed'
+  createForm.default_budget_multiplier = DEFAULT_DYNAMIC_BUDGET_MULTIPLIER
   createForm.is_exclusive = false
   createForm.subscription_type = 'standard'
   createForm.daily_limit_usd = null
@@ -2481,12 +2537,22 @@ const handleCreateGroup = async () => {
     appStore.showError(t('admin.groups.nameRequired'))
     return
   }
+  const createDefaultBudget = createForm.default_budget_multiplier ?? 0
+  if (
+    createForm.pricing_mode === 'dynamic' &&
+    (createDefaultBudget < 3 || createDefaultBudget > 50)
+  ) {
+    appStore.showError(t('admin.groups.pricingMode.defaultBudgetRange'))
+    return
+  }
   submitting.value = true
   try {
     // 构建请求数据，包含模型路由配置
     const { sora_storage_quota_gb: createQuotaGb, ...createRest } = createForm
     const requestData = {
       ...createRest,
+      default_budget_multiplier:
+        createForm.pricing_mode === 'dynamic' ? createDefaultBudget : null,
       daily_limit_usd: normalizeOptionalLimit(createForm.daily_limit_usd as number | string | null),
       weekly_limit_usd: normalizeOptionalLimit(createForm.weekly_limit_usd as number | string | null),
       monthly_limit_usd: normalizeOptionalLimit(createForm.monthly_limit_usd as number | string | null),
@@ -2521,6 +2587,8 @@ const handleEdit = async (group: AdminGroup) => {
   editForm.description = group.description || ''
   editForm.platform = group.platform
   editForm.rate_multiplier = group.rate_multiplier
+  editForm.pricing_mode = group.pricing_mode
+  editForm.default_budget_multiplier = resolveGroupBudgetMultiplier(group) ?? DEFAULT_DYNAMIC_BUDGET_MULTIPLIER
   editForm.is_exclusive = group.is_exclusive
   editForm.status = group.status
   editForm.subscription_type = group.subscription_type || 'standard'
@@ -2566,6 +2634,14 @@ const handleUpdateGroup = async () => {
     appStore.showError(t('admin.groups.nameRequired'))
     return
   }
+  const editDefaultBudget = editForm.default_budget_multiplier ?? 0
+  if (
+    editForm.pricing_mode === 'dynamic' &&
+    (editDefaultBudget < 3 || editDefaultBudget > 50)
+  ) {
+    appStore.showError(t('admin.groups.pricingMode.defaultBudgetRange'))
+    return
+  }
 
   submitting.value = true
   try {
@@ -2573,6 +2649,8 @@ const handleUpdateGroup = async () => {
     const { sora_storage_quota_gb: editQuotaGb, ...editRest } = editForm
     const payload = {
       ...editRest,
+      default_budget_multiplier:
+        editForm.pricing_mode === 'dynamic' ? editDefaultBudget : null,
       daily_limit_usd: normalizeOptionalLimit(editForm.daily_limit_usd as number | string | null),
       weekly_limit_usd: normalizeOptionalLimit(editForm.weekly_limit_usd as number | string | null),
       monthly_limit_usd: normalizeOptionalLimit(editForm.monthly_limit_usd as number | string | null),
@@ -2633,6 +2711,24 @@ watch(
     if (newVal === 'subscription') {
       createForm.is_exclusive = true
       createForm.fallback_group_id_on_invalid_request = null
+    }
+  }
+)
+
+watch(
+  () => createForm.pricing_mode,
+  (newVal) => {
+    if (newVal === 'dynamic' && !createForm.default_budget_multiplier) {
+      createForm.default_budget_multiplier = DEFAULT_DYNAMIC_BUDGET_MULTIPLIER
+    }
+  }
+)
+
+watch(
+  () => editForm.pricing_mode,
+  (newVal) => {
+    if (newVal === 'dynamic' && !editForm.default_budget_multiplier) {
+      editForm.default_budget_multiplier = DEFAULT_DYNAMIC_BUDGET_MULTIPLIER
     }
   }
 )
