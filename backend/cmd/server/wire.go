@@ -78,6 +78,7 @@ func provideCleanup(
 	opsSystemLogSink *service.OpsSystemLogSink,
 	soraMediaCleanup *service.SoraMediaCleanupService,
 	schedulerSnapshot *service.SchedulerSnapshotService,
+	groupHealthHistory *service.GroupHealthHistoryService,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,
 	subscriptionExpiry *service.SubscriptionExpiryService,
@@ -152,6 +153,12 @@ func provideCleanup(
 			{"SchedulerSnapshotService", func() error {
 				if schedulerSnapshot != nil {
 					schedulerSnapshot.Stop()
+				}
+				return nil
+			}},
+			{"GroupHealthHistoryService", func() error {
+				if groupHealthHistory != nil {
+					groupHealthHistory.Stop()
 				}
 				return nil
 			}},

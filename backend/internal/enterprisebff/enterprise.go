@@ -5,11 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
+	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
 type EnterpriseProfile struct {
@@ -17,6 +22,12 @@ type EnterpriseProfile struct {
 	Name        string `json:"enterprise_name"`
 	DisplayName string `json:"enterprise_display_name,omitempty"`
 	SupportInfo string `json:"enterprise_support_contact,omitempty"`
+}
+
+type EnterpriseVisibleGroup struct {
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	Platform string `json:"platform"`
 }
 
 func (p *EnterpriseProfile) DisplayLabel() string {
@@ -32,6 +43,8 @@ func (p *EnterpriseProfile) DisplayLabel() string {
 type EnterpriseStore interface {
 	MatchUserByEmailAndCompany(ctx context.Context, email, companyName string) (*EnterpriseProfile, error)
 	GetByUserID(ctx context.Context, userID int64) (*EnterpriseProfile, error)
+	ListVisibleGroups(ctx context.Context, userID int64) ([]EnterpriseVisibleGroup, error)
+	SameEnterprise(ctx context.Context, actorUserID, targetUserID int64) (bool, error)
 }
 
 type entEnterpriseStore struct {
@@ -118,6 +131,104 @@ func (s *entEnterpriseStore) GetByUserID(ctx context.Context, userID int64) (*En
 		profile.DisplayName = profile.Name
 	}
 	return profile, nil
+}
+
+func (s *entEnterpriseStore) ListVisibleGroups(ctx context.Context, userID int64) ([]EnterpriseVisibleGroup, error) {
+	assignedGroupIDs, err := s.listExplicitAllowedGroupIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	subscribedGroupIDs, err := s.listActiveSubscriptionGroupIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	visibleIDs := unionGroupIDs(assignedGroupIDs, subscribedGroupIDs)
+	if len(visibleIDs) == 0 {
+		return []EnterpriseVisibleGroup{}, nil
+	}
+
+	rows, err := s.client.Group.Query().
+		Where(
+			group.IDIn(visibleIDs...),
+			group.StatusEQ(service.StatusActive),
+		).
+		Order(dbent.Asc(group.FieldSortOrder), dbent.Asc(group.FieldID)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]EnterpriseVisibleGroup, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, EnterpriseVisibleGroup{
+			ID:       row.ID,
+			Name:     row.Name,
+			Platform: row.Platform,
+		})
+	}
+	return out, nil
+}
+
+func (s *entEnterpriseStore) SameEnterprise(ctx context.Context, actorUserID, targetUserID int64) (bool, error) {
+	actor, err := s.GetByUserID(ctx, actorUserID)
+	if err != nil || actor == nil {
+		return false, err
+	}
+
+	target, err := s.GetByUserID(ctx, targetUserID)
+	if err != nil || target == nil {
+		return false, err
+	}
+
+	return normalizeCompanyName(actor.Name) == normalizeCompanyName(target.Name), nil
+}
+
+func (s *entEnterpriseStore) listExplicitAllowedGroupIDs(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := s.client.UserAllowedGroup.Query().
+		Where(userallowedgroup.UserIDEQ(userID)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.GroupID)
+	}
+	return out, nil
+}
+
+func (s *entEnterpriseStore) listActiveSubscriptionGroupIDs(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := s.client.UserSubscription.Query().
+		Where(
+			usersubscription.UserIDEQ(userID),
+			usersubscription.StatusEQ(service.SubscriptionStatusActive),
+			usersubscription.ExpiresAtGT(time.Now()),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.GroupID)
+	}
+	return out, nil
+}
+
+func unionGroupIDs(left, right []int64) []int64 {
+	seen := make(map[int64]struct{}, len(left)+len(right))
+	out := make([]int64, 0, len(left)+len(right))
+	for _, id := range append(append([]int64{}, left...), right...) {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
 }
 
 func injectEnterpriseIntoAuthResponse(body []byte, profile *EnterpriseProfile) ([]byte, error) {

@@ -12,6 +12,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/grouphealthsnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -463,6 +464,12 @@ func init() {
 	group.DefaultDefaultMappedModel = groupDescDefaultMappedModel.Default.(string)
 	// group.DefaultMappedModelValidator is a validator for the "default_mapped_model" field. It is called by the builders before save.
 	group.DefaultMappedModelValidator = groupDescDefaultMappedModel.Validators[0].(func(string) error)
+	grouphealthsnapshotFields := schema.GroupHealthSnapshot{}.Fields()
+	_ = grouphealthsnapshotFields
+	// grouphealthsnapshotDescHealthPercent is the schema descriptor for health_percent field.
+	grouphealthsnapshotDescHealthPercent := grouphealthsnapshotFields[2].Descriptor()
+	// grouphealthsnapshot.HealthPercentValidator is a validator for the "health_percent" field. It is called by the builders before save.
+	grouphealthsnapshot.HealthPercentValidator = grouphealthsnapshotDescHealthPercent.Validators[0].(func(int) error)
 	idempotencyrecordMixin := schema.IdempotencyRecord{}.Mixin()
 	idempotencyrecordMixinFields0 := idempotencyrecordMixin[0].Fields()
 	_ = idempotencyrecordMixinFields0

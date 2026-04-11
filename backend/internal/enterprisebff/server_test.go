@@ -9,7 +9,9 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -35,7 +37,7 @@ func TestProxyPreservesTraceHeadersAndTransformsUsage(t *testing.T) {
 		ListenAddr:     "127.0.0.1:0",
 		CoreBaseURL:    baseURL,
 		RequestTimeout: 0,
-	}, nil, newFakeEnterpriseStore())
+	}, nil, newFakeEnterpriseStore(), newNoopGroupHealthSnapshotRepo())
 	server.httpClient = &http.Client{Transport: transport}
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/usage", nil)
@@ -69,7 +71,7 @@ func TestTraceMiddlewareGeneratesRequestID(t *testing.T) {
 		ListenAddr:     "127.0.0.1:0",
 		CoreBaseURL:    baseURL,
 		RequestTimeout: 0,
-	}, nil, newFakeEnterpriseStore())
+	}, nil, newFakeEnterpriseStore(), newNoopGroupHealthSnapshotRepo())
 	server.httpClient = &http.Client{Transport: transport}
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBufferString(`{"email":"a@example.com","password":"pw"}`))
@@ -103,7 +105,7 @@ func TestEnterpriseLoginRejectsCompanyMismatch(t *testing.T) {
 		ListenAddr:     "127.0.0.1:0",
 		CoreBaseURL:    baseURL,
 		RequestTimeout: 0,
-	}, nil, store)
+	}, nil, store, newNoopGroupHealthSnapshotRepo())
 	server.httpClient = &http.Client{Transport: transport}
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBufferString(`{"company_name":"otherco","email":"owner@example.com","password":"pw"}`))
@@ -141,7 +143,7 @@ func TestAuthMeIncludesEnterpriseMetadata(t *testing.T) {
 		ListenAddr:     "127.0.0.1:0",
 		CoreBaseURL:    baseURL,
 		RequestTimeout: 0,
-	}, nil, store)
+	}, nil, store, newNoopGroupHealthSnapshotRepo())
 	server.httpClient = &http.Client{Transport: transport}
 
 	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
@@ -194,7 +196,7 @@ func TestPublicSettingsUseEnterpriseBrandingForAuthenticatedUser(t *testing.T) {
 		ListenAddr:     "127.0.0.1:0",
 		CoreBaseURL:    baseURL,
 		RequestTimeout: 0,
-	}, nil, store)
+	}, nil, store, newNoopGroupHealthSnapshotRepo())
 	server.httpClient = &http.Client{Transport: transport}
 
 	req := httptest.NewRequest(http.MethodGet, "/settings/public", nil)
@@ -219,15 +221,23 @@ func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+type visibleGroupSeed struct {
+	ID       int64
+	Name     string
+	Platform string
+}
+
 type fakeEnterpriseStore struct {
-	matchByEmail map[string]*EnterpriseProfile
-	profiles     map[int64]*EnterpriseProfile
+	matchByEmail  map[string]*EnterpriseProfile
+	profiles      map[int64]*EnterpriseProfile
+	visibleGroups map[int64][]visibleGroupSeed
 }
 
 func newFakeEnterpriseStore() *fakeEnterpriseStore {
 	return &fakeEnterpriseStore{
-		matchByEmail: map[string]*EnterpriseProfile{},
-		profiles:     map[int64]*EnterpriseProfile{},
+		matchByEmail:  map[string]*EnterpriseProfile{},
+		profiles:      map[int64]*EnterpriseProfile{},
+		visibleGroups: map[int64][]visibleGroupSeed{},
 	}
 }
 
@@ -241,4 +251,44 @@ func (s *fakeEnterpriseStore) MatchUserByEmailAndCompany(_ context.Context, emai
 
 func (s *fakeEnterpriseStore) GetByUserID(_ context.Context, userID int64) (*EnterpriseProfile, error) {
 	return s.profiles[userID], nil
+}
+
+func (s *fakeEnterpriseStore) ListVisibleGroups(_ context.Context, userID int64) ([]EnterpriseVisibleGroup, error) {
+	seeds := s.visibleGroups[userID]
+	out := make([]EnterpriseVisibleGroup, 0, len(seeds))
+	for _, seed := range seeds {
+		out = append(out, EnterpriseVisibleGroup{
+			ID:       seed.ID,
+			Name:     seed.Name,
+			Platform: seed.Platform,
+		})
+	}
+	return out, nil
+}
+
+func (s *fakeEnterpriseStore) SameEnterprise(_ context.Context, actorUserID, targetUserID int64) (bool, error) {
+	actor := s.profiles[actorUserID]
+	target := s.profiles[targetUserID]
+	if actor == nil || target == nil {
+		return false, nil
+	}
+	return normalizeCompanyName(actor.Name) == normalizeCompanyName(target.Name), nil
+}
+
+type noopGroupHealthSnapshotRepo struct{}
+
+func newNoopGroupHealthSnapshotRepo() *noopGroupHealthSnapshotRepo {
+	return &noopGroupHealthSnapshotRepo{}
+}
+
+func (noopGroupHealthSnapshotRepo) UpsertBatch(context.Context, []service.GroupHealthSnapshot) error {
+	return nil
+}
+
+func (noopGroupHealthSnapshotRepo) ListRecentByGroupIDs(context.Context, []int64, time.Time) (map[int64][]service.GroupHealthSnapshot, error) {
+	return map[int64][]service.GroupHealthSnapshot{}, nil
+}
+
+func (noopGroupHealthSnapshotRepo) DeleteBefore(context.Context, time.Time) (int, error) {
+	return 0, nil
 }

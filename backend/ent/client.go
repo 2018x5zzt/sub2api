@@ -22,6 +22,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/grouphealthsnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -59,6 +60,8 @@ type Client struct {
 	ErrorPassthroughRule *ErrorPassthroughRuleClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
+	// GroupHealthSnapshot is the client for interacting with the GroupHealthSnapshot builders.
+	GroupHealthSnapshot *GroupHealthSnapshotClient
 	// IdempotencyRecord is the client for interacting with the IdempotencyRecord builders.
 	IdempotencyRecord *IdempotencyRecordClient
 	// PromoCode is the client for interacting with the PromoCode builders.
@@ -105,6 +108,7 @@ func (c *Client) init() {
 	c.AnnouncementRead = NewAnnouncementReadClient(c.config)
 	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
 	c.Group = NewGroupClient(c.config)
+	c.GroupHealthSnapshot = NewGroupHealthSnapshotClient(c.config)
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
 	c.PromoCode = NewPromoCodeClient(c.config)
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
@@ -218,6 +222,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		AnnouncementRead:        NewAnnouncementReadClient(cfg),
 		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
 		Group:                   NewGroupClient(cfg),
+		GroupHealthSnapshot:     NewGroupHealthSnapshotClient(cfg),
 		IdempotencyRecord:       NewIdempotencyRecordClient(cfg),
 		PromoCode:               NewPromoCodeClient(cfg),
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
@@ -258,6 +263,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		AnnouncementRead:        NewAnnouncementReadClient(cfg),
 		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
 		Group:                   NewGroupClient(cfg),
+		GroupHealthSnapshot:     NewGroupHealthSnapshotClient(cfg),
 		IdempotencyRecord:       NewIdempotencyRecordClient(cfg),
 		PromoCode:               NewPromoCodeClient(cfg),
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
@@ -302,9 +308,9 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.ErrorPassthroughRule, c.Group, c.GroupHealthSnapshot, c.IdempotencyRecord,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
 		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Use(hooks...)
@@ -316,9 +322,9 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.ErrorPassthroughRule, c.Group, c.GroupHealthSnapshot, c.IdempotencyRecord,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
 		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
@@ -342,6 +348,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ErrorPassthroughRule.mutate(ctx, m)
 	case *GroupMutation:
 		return c.Group.mutate(ctx, m)
+	case *GroupHealthSnapshotMutation:
+		return c.GroupHealthSnapshot.mutate(ctx, m)
 	case *IdempotencyRecordMutation:
 		return c.IdempotencyRecord.mutate(ctx, m)
 	case *PromoCodeMutation:
@@ -1580,6 +1588,139 @@ func (c *GroupClient) mutate(ctx context.Context, m *GroupMutation) (Value, erro
 		return (&GroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Group mutation op: %q", m.Op())
+	}
+}
+
+// GroupHealthSnapshotClient is a client for the GroupHealthSnapshot schema.
+type GroupHealthSnapshotClient struct {
+	config
+}
+
+// NewGroupHealthSnapshotClient returns a client for the GroupHealthSnapshot from the given config.
+func NewGroupHealthSnapshotClient(c config) *GroupHealthSnapshotClient {
+	return &GroupHealthSnapshotClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `grouphealthsnapshot.Hooks(f(g(h())))`.
+func (c *GroupHealthSnapshotClient) Use(hooks ...Hook) {
+	c.hooks.GroupHealthSnapshot = append(c.hooks.GroupHealthSnapshot, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `grouphealthsnapshot.Intercept(f(g(h())))`.
+func (c *GroupHealthSnapshotClient) Intercept(interceptors ...Interceptor) {
+	c.inters.GroupHealthSnapshot = append(c.inters.GroupHealthSnapshot, interceptors...)
+}
+
+// Create returns a builder for creating a GroupHealthSnapshot entity.
+func (c *GroupHealthSnapshotClient) Create() *GroupHealthSnapshotCreate {
+	mutation := newGroupHealthSnapshotMutation(c.config, OpCreate)
+	return &GroupHealthSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of GroupHealthSnapshot entities.
+func (c *GroupHealthSnapshotClient) CreateBulk(builders ...*GroupHealthSnapshotCreate) *GroupHealthSnapshotCreateBulk {
+	return &GroupHealthSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GroupHealthSnapshotClient) MapCreateBulk(slice any, setFunc func(*GroupHealthSnapshotCreate, int)) *GroupHealthSnapshotCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GroupHealthSnapshotCreateBulk{err: fmt.Errorf("calling to GroupHealthSnapshotClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GroupHealthSnapshotCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GroupHealthSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for GroupHealthSnapshot.
+func (c *GroupHealthSnapshotClient) Update() *GroupHealthSnapshotUpdate {
+	mutation := newGroupHealthSnapshotMutation(c.config, OpUpdate)
+	return &GroupHealthSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GroupHealthSnapshotClient) UpdateOne(_m *GroupHealthSnapshot) *GroupHealthSnapshotUpdateOne {
+	mutation := newGroupHealthSnapshotMutation(c.config, OpUpdateOne, withGroupHealthSnapshot(_m))
+	return &GroupHealthSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GroupHealthSnapshotClient) UpdateOneID(id int64) *GroupHealthSnapshotUpdateOne {
+	mutation := newGroupHealthSnapshotMutation(c.config, OpUpdateOne, withGroupHealthSnapshotID(id))
+	return &GroupHealthSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for GroupHealthSnapshot.
+func (c *GroupHealthSnapshotClient) Delete() *GroupHealthSnapshotDelete {
+	mutation := newGroupHealthSnapshotMutation(c.config, OpDelete)
+	return &GroupHealthSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GroupHealthSnapshotClient) DeleteOne(_m *GroupHealthSnapshot) *GroupHealthSnapshotDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GroupHealthSnapshotClient) DeleteOneID(id int64) *GroupHealthSnapshotDeleteOne {
+	builder := c.Delete().Where(grouphealthsnapshot.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GroupHealthSnapshotDeleteOne{builder}
+}
+
+// Query returns a query builder for GroupHealthSnapshot.
+func (c *GroupHealthSnapshotClient) Query() *GroupHealthSnapshotQuery {
+	return &GroupHealthSnapshotQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGroupHealthSnapshot},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a GroupHealthSnapshot entity by its id.
+func (c *GroupHealthSnapshotClient) Get(ctx context.Context, id int64) (*GroupHealthSnapshot, error) {
+	return c.Query().Where(grouphealthsnapshot.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GroupHealthSnapshotClient) GetX(ctx context.Context, id int64) *GroupHealthSnapshot {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *GroupHealthSnapshotClient) Hooks() []Hook {
+	return c.hooks.GroupHealthSnapshot
+}
+
+// Interceptors returns the client interceptors.
+func (c *GroupHealthSnapshotClient) Interceptors() []Interceptor {
+	return c.inters.GroupHealthSnapshot
+}
+
+func (c *GroupHealthSnapshotClient) mutate(ctx context.Context, m *GroupHealthSnapshotMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GroupHealthSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GroupHealthSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GroupHealthSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GroupHealthSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown GroupHealthSnapshot mutation op: %q", m.Op())
 	}
 }
 
@@ -3888,16 +4029,16 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		ErrorPassthroughRule, Group, GroupHealthSnapshot, IdempotencyRecord, PromoCode,
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask,
+		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		ErrorPassthroughRule, Group, GroupHealthSnapshot, IdempotencyRecord, PromoCode,
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask,
+		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserSubscription []ent.Interceptor
 	}
 )

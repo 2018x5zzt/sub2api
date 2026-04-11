@@ -392,33 +392,10 @@ func buildUserVisibleGroupPoolStatus(group *service.Group) UserVisibleGroupPoolS
 		return UserVisibleGroupPoolStatus{}
 	}
 
+	health := service.ComputeGroupPoolHealth(group)
 	active := group.ActiveAccountCount
-	limited := group.RateLimitedAccountCount
 	if active < 0 {
 		active = 0
-	}
-	if limited < 0 {
-		limited = 0
-	}
-
-	available := active - limited
-	if available < 0 {
-		available = 0
-	}
-
-	ratio := 0.0
-	if denominator := available + limited; denominator > 0 {
-		ratio = float64(available) / float64(denominator)
-	} else if available > 0 {
-		ratio = 1
-	}
-
-	status := "healthy"
-	switch {
-	case available <= 0:
-		status = "down"
-	case limited > 0:
-		status = "degraded"
 	}
 
 	return UserVisibleGroupPoolStatus{
@@ -427,10 +404,10 @@ func buildUserVisibleGroupPoolStatus(group *service.Group) UserVisibleGroupPoolS
 		Platform:                group.Platform,
 		TotalAccounts:           group.AccountCount,
 		ActiveAccountCount:      active,
-		RateLimitedAccountCount: limited,
-		AvailableAccountCount:   available,
-		AvailabilityRatio:       ratio,
-		Status:                  status,
+		RateLimitedAccountCount: health.RateLimitedAccountCount,
+		AvailableAccountCount:   health.AvailableAccountCount,
+		AvailabilityRatio:       float64(health.HealthPercent) / 100,
+		Status:                  health.HealthState,
 	}
 }
 
