@@ -333,6 +333,8 @@ export default {
     modelHub: '模型广场',
     usage: '使用记录',
     redeem: '兑换',
+    invite: '邀请',
+    inviteOps: '邀请运营',
     profile: '个人资料',
     users: '用户管理',
     groups: '分组管理',
@@ -355,6 +357,24 @@ export default {
     buySubscription: '充值/订阅',
     docs: '文档',
     sora: 'Sora 创作'
+  },
+
+  invite: {
+    title: '邀请中心',
+    description: '分享邀请链接，成功绑定后双方同时获赠奖励',
+    myCode: '我的邀请码',
+    invitedUsers: '已邀请用户数',
+    totalRecharge: '邀请用户累计充值',
+    totalRewards: '我的邀请奖励',
+    totalRewardsCount: '{total} 条奖励记录',
+    link: '邀请链接',
+    copyLink: '复制链接',
+    rewardHistory: '奖励记录',
+    emptyRewards: '暂时还没有邀请奖励',
+    roles: {
+      inviter: '邀请人奖励',
+      invitee: '被邀请人奖励'
+    }
   },
 
   // Auth
@@ -1065,6 +1085,134 @@ export default {
       systemSettings: '系统设置',
       configureSystem: '配置系统设置',
       failedToLoad: '加载仪表盘数据失败'
+    },
+
+    invites: {
+      title: '邀请运营',
+      description: '查看邀请关系、奖励流水和修正操作',
+      summary: {
+        totalInvitedUsers: '邀请用户数',
+        qualifiedRewardUsers: '有奖励记录的用户数',
+        baseRewardsTotal: '基础奖励总额',
+        manualGrantsTotal: '手动补发总额',
+        recomputeAdjustmentsTotal: '重算调整总额'
+      },
+      riskPanelTitle: '高风险邀请操作',
+      riskPanelBody:
+        '历史奖励不会被自动改写。改绑只影响未来奖励，手动补发会立即追加奖励流水并调整余额，重算会以追加 delta 的方式修正历史。',
+      rebind: {
+        title: '改绑邀请人',
+        description: '仅调整未来合格奖励的有效邀请人，不回写历史奖励。',
+        inviteeUserId: '被邀请用户 ID',
+        newInviterUserId: '新邀请人用户 ID',
+        reason: '原因',
+        confirmHelp: '改绑后，历史奖励保持不变。',
+        submit: '执行改绑',
+        success: '邀请关系已改绑',
+        failure: '改绑邀请关系失败'
+      },
+      manualGrant: {
+        title: '手动补发奖励',
+        description: '追加奖励流水，并立即把金额记入对应用户余额。',
+        targetUserId: '目标用户 ID',
+        inviterUserId: '邀请人用户 ID',
+        inviteeUserId: '被邀请用户 ID',
+        rewardTargetUserId: '奖励到账用户 ID',
+        rewardAmount: '奖励金额',
+        rewardRole: '奖励角色',
+        notes: '备注',
+        reason: '原因',
+        confirmHelp: '手动补发会新增流水，不会直接修改旧记录。',
+        submit: '创建手动补发',
+        success: '手动补发已创建',
+        failure: '手动补发失败'
+      },
+      recompute: {
+        title: '重算邀请奖励',
+        description: '先预览，再把修正结果以追加 delta 的方式写入。',
+        inviteeUserId: '被邀请用户 ID',
+        inviterUserId: '邀请人用户 ID',
+        startAt: '开始时间',
+        endAt: '结束时间',
+        reason: '原因',
+        scopeHint: '请至少填写一个作用域条件后再预览。',
+        preview: '预览重算',
+        execute: '执行重算',
+        qualifyingEventCount: '合格事件数',
+        currentLedgerTotal: '当前流水总额',
+        expectedLedgerTotal: '重算后应得总额',
+        netDelta: '净调整',
+        noPreview: '请先运行预览，查看将要写入的奖励差额。',
+        previewStale: '预览后输入已变化，请重新预览后再执行。',
+        success: '邀请奖励重算已执行',
+        failure: '执行邀请奖励重算失败'
+      },
+      tables: {
+        relationships: {
+          title: '邀请关系',
+          description: '查看当前邀请绑定和最近一次关系事件。',
+          search: '搜索被邀请用户邮箱...',
+          columns: {
+            invitee: '被邀请用户',
+            inviteCode: '邀请码',
+            currentInviter: '当前邀请人',
+            boundAt: '绑定时间',
+            lastEvent: '最近事件',
+            lastEventAt: '最近事件时间'
+          }
+        },
+        rewards: {
+          title: '奖励流水',
+          description: '查看基础奖励、手动补发和重算 delta 记录。',
+          search: '搜索被邀请人 / 邀请人 / 目标邮箱...',
+          columns: {
+            targetUser: '到账用户',
+            inviter: '邀请人',
+            invitee: '被邀请人',
+            rewardRole: '奖励角色',
+            rewardType: '奖励类型',
+            amount: '金额',
+            createdAt: '创建时间',
+            trigger: '触发源'
+          }
+        },
+        actions: {
+          title: '操作审计日志',
+          description: '记录谁因为何种原因修改了邀请账务。',
+          columns: {
+            id: '操作 ID',
+            actionType: '操作类型',
+            operatorUserId: '操作人 ID',
+            targetUserId: '目标用户 ID',
+            reason: '原因',
+            createdAt: '创建时间'
+          }
+        }
+      },
+      filters: {
+        all: '全部',
+        baseReward: '基础奖励',
+        manualGrant: '手动补发',
+        recomputeDelta: '重算调整'
+      },
+      roles: {
+        inviter: '邀请人',
+        invitee: '被邀请人'
+      },
+      rewardTypes: {
+        base_invite_reward: '基础奖励',
+        manual_invite_grant: '手动补发',
+        recompute_delta: '重算调整'
+      },
+      actionTypes: {
+        rebind_inviter: '改绑邀请人',
+        manual_reward_grant: '手动奖励补发',
+        recompute_rewards: '重算奖励'
+      },
+      eventTypes: {
+        register_bind: '注册绑定',
+        admin_rebind: '管理员改绑'
+      }
     },
 
     backup: {
@@ -3211,7 +3359,8 @@ export default {
       concurrency: '并发数',
       subscription: '订阅',
       invitation: '邀请码',
-      invitationHint: '邀请码用于限制用户注册，使用后自动标记为已使用。',
+      sourceType: '充值来源',
+      sourceTypeHint: '只有“商业售卖”的余额码会触发邀请充值奖励，内部发放请保持为系统发放。',
       allTypes: '全部类型',
       allStatus: '全部状态',
       unused: '未使用',
@@ -3240,6 +3389,12 @@ export default {
       failedToExport: '导出兑换码失败',
       failedToDeleteUnused: '删除未使用的兑换码失败',
       failedToCopy: '复制失败',
+      sourceTypes: {
+        commercial: '商业售卖',
+        benefit: '福利发放',
+        compensation: '补偿发放',
+        system_grant: '系统发放'
+      },
       selectGroup: '选择分组',
       selectGroupPlaceholder: '选择订阅分组',
       validityDays: '有效天数',

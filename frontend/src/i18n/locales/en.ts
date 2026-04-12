@@ -333,6 +333,8 @@ export default {
     modelHub: 'Model Hub',
     usage: 'Usage',
     redeem: 'Redeem',
+    invite: 'Invite',
+    inviteOps: 'Invite Ops',
     profile: 'Profile',
     users: 'Users',
     groups: 'Groups',
@@ -355,6 +357,24 @@ export default {
     buySubscription: 'Recharge / Subscription',
     docs: 'Docs',
     sora: 'Sora Studio'
+  },
+
+  invite: {
+    title: 'Invite Center',
+    description: 'Share your invite link so both sides receive rewards after a successful bind',
+    myCode: 'My Invite Code',
+    invitedUsers: 'Invited Users',
+    totalRecharge: 'Invitees Recharge Total',
+    totalRewards: 'My Invite Rewards',
+    totalRewardsCount: '{total} reward records',
+    link: 'Invite Link',
+    copyLink: 'Copy Link',
+    rewardHistory: 'Reward History',
+    emptyRewards: 'No invite rewards yet',
+    roles: {
+      inviter: 'Inviter Reward',
+      invitee: 'Invitee Bonus'
+    }
   },
 
   // Auth
@@ -1043,6 +1063,134 @@ export default {
       requestsShort: 'Req',
       tokensShort: 'Tok',
       failedToLoad: 'Failed to load dashboard statistics'
+    },
+
+    invites: {
+      title: 'Invite Operations',
+      description: 'Review relationships, reward ledgers, and correction actions',
+      summary: {
+        totalInvitedUsers: 'Invited Users',
+        qualifiedRewardUsers: 'Qualified Reward Users',
+        baseRewardsTotal: 'Base Rewards',
+        manualGrantsTotal: 'Manual Grants',
+        recomputeAdjustmentsTotal: 'Recompute Adjustments'
+      },
+      riskPanelTitle: 'High-risk invite operations',
+      riskPanelBody:
+        'Historical rewards are not rewritten automatically. Rebind only affects future rewards, manual grants append ledger rows immediately, and recompute writes append-only delta corrections.',
+      rebind: {
+        title: 'Rebind Inviter',
+        description: 'Change the effective inviter for future qualifying rewards only.',
+        inviteeUserId: 'Invitee User ID',
+        newInviterUserId: 'New Inviter User ID',
+        reason: 'Reason',
+        confirmHelp: 'Historical rewards remain unchanged after rebind.',
+        submit: 'Apply Rebind',
+        success: 'Inviter rebind applied',
+        failure: 'Failed to rebind inviter'
+      },
+      manualGrant: {
+        title: 'Manual Grant',
+        description: 'Append reward ledger rows and update balances immediately.',
+        targetUserId: 'Target User ID',
+        inviterUserId: 'Inviter User ID',
+        inviteeUserId: 'Invitee User ID',
+        rewardTargetUserId: 'Reward Target User ID',
+        rewardAmount: 'Reward Amount',
+        rewardRole: 'Reward Role',
+        notes: 'Notes',
+        reason: 'Reason',
+        confirmHelp: 'Manual grants create new ledger entries instead of changing history.',
+        submit: 'Create Manual Grant',
+        success: 'Manual invite grant created',
+        failure: 'Failed to create manual grant'
+      },
+      recompute: {
+        title: 'Recompute Rewards',
+        description: 'Preview append-only corrections before executing them.',
+        inviteeUserId: 'Invitee User ID',
+        inviterUserId: 'Inviter User ID',
+        startAt: 'Start At',
+        endAt: 'End At',
+        reason: 'Reason',
+        scopeHint: 'Provide at least one scope field before previewing.',
+        preview: 'Preview recompute',
+        execute: 'Execute recompute',
+        qualifyingEventCount: 'Qualifying Events',
+        currentLedgerTotal: 'Current Ledger Total',
+        expectedLedgerTotal: 'Expected Ledger Total',
+        netDelta: 'Net Delta',
+        noPreview: 'Run a preview to inspect the computed reward deltas.',
+        previewStale: 'Inputs changed after preview. Preview again before executing.',
+        success: 'Invite recompute applied',
+        failure: 'Failed to execute recompute'
+      },
+      tables: {
+        relationships: {
+          title: 'Relationship Explorer',
+          description: 'Inspect current inviter bindings and the latest relationship events.',
+          search: 'Search invitee email...',
+          columns: {
+            invitee: 'Invitee',
+            inviteCode: 'Invite Code',
+            currentInviter: 'Current Inviter',
+            boundAt: 'Bound At',
+            lastEvent: 'Last Event',
+            lastEventAt: 'Last Event At'
+          }
+        },
+        rewards: {
+          title: 'Reward Ledger',
+          description: 'Review automatic rewards, manual grants, and recompute delta rows.',
+          search: 'Search invitee / inviter / target email...',
+          columns: {
+            targetUser: 'Target User',
+            inviter: 'Inviter',
+            invitee: 'Invitee',
+            rewardRole: 'Reward Role',
+            rewardType: 'Reward Type',
+            amount: 'Amount',
+            createdAt: 'Created At',
+            trigger: 'Trigger'
+          }
+        },
+        actions: {
+          title: 'Action Audit Log',
+          description: 'Track who changed invite accounting and why.',
+          columns: {
+            id: 'Action ID',
+            actionType: 'Action Type',
+            operatorUserId: 'Operator User ID',
+            targetUserId: 'Target User ID',
+            reason: 'Reason',
+            createdAt: 'Created At'
+          }
+        }
+      },
+      filters: {
+        all: 'All',
+        baseReward: 'Base Reward',
+        manualGrant: 'Manual Grant',
+        recomputeDelta: 'Recompute Delta'
+      },
+      roles: {
+        inviter: 'Inviter',
+        invitee: 'Invitee'
+      },
+      rewardTypes: {
+        base_invite_reward: 'Base Reward',
+        manual_invite_grant: 'Manual Grant',
+        recompute_delta: 'Recompute Delta'
+      },
+      actionTypes: {
+        rebind_inviter: 'Rebind Inviter',
+        manual_reward_grant: 'Manual Reward Grant',
+        recompute_rewards: 'Recompute Rewards'
+      },
+      eventTypes: {
+        register_bind: 'Register Bind',
+        admin_rebind: 'Admin Rebind'
+      }
     },
 
     backup: {
@@ -3067,7 +3215,9 @@ export default {
       concurrency: 'Concurrency',
       subscription: 'Subscription',
       invitation: 'Invitation',
-      invitationHint: 'Invitation codes are used to restrict user registration. They are automatically marked as used after use.',
+      sourceType: 'Recharge Source',
+      sourceTypeHint:
+        'Only commercial balance codes will trigger invite recharge rewards. Internal grants should stay on system grant.',
       unused: 'Unused',
       used: 'Used',
       columns: {
@@ -3118,6 +3268,12 @@ export default {
         // Admin adjustment types (created when admin modifies user balance/concurrency)
         admin_balance: 'Balance (Admin)',
         admin_concurrency: 'Concurrency (Admin)'
+      },
+      sourceTypes: {
+        commercial: 'Commercial Sale',
+        benefit: 'Benefit',
+        compensation: 'Compensation',
+        system_grant: 'System Grant'
       },
       selectGroup: 'Select Group',
       selectGroupPlaceholder: 'Choose a subscription group',
