@@ -96,9 +96,12 @@
         </div>
 
         <!-- Invitation Code Input (Required when enabled) -->
-        <div v-if="invitationCodeEnabled">
+        <div>
           <label for="invitation_code" class="input-label">
             {{ t('auth.invitationCodeLabel') }}
+            <span class="ml-1 text-xs font-normal text-gray-400 dark:text-dark-500">
+              ({{ t(invitationCodeEnabled ? 'common.required' : 'common.optional') }})
+            </span>
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
@@ -108,11 +111,14 @@
               id="invitation_code"
               v-model="formData.invitation_code"
               type="text"
+              :required="invitationCodeEnabled"
               :disabled="isLoading"
+              :readonly="inviteCodeLocked"
               class="input pl-11 pr-10"
               :class="{
                 'border-green-500 focus:border-green-500 focus:ring-green-500': invitationValidation.valid,
-                'border-red-500 focus:border-red-500 focus:ring-red-500': invitationValidation.invalid || errors.invitation_code
+                'border-red-500 focus:border-red-500 focus:ring-red-500': invitationValidation.invalid || errors.invitation_code,
+                'bg-gray-50 text-gray-500 dark:bg-dark-800/70 dark:text-dark-300': inviteCodeLocked
               }"
               :placeholder="t('auth.invitationCodePlaceholder')"
               @input="handleInvitationCodeInput"
@@ -146,6 +152,9 @@
               {{ errors.invitation_code }}
             </p>
           </transition>
+          <p v-if="inviteCodeLocked" class="input-hint mt-2">
+            {{ t('auth.invitationCodeLockedFromLink') }}
+          </p>
         </div>
 
         <!-- Promo Code Input (Optional) -->
@@ -284,7 +293,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
@@ -294,6 +303,7 @@ import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import { getPublicSettings, validatePromoCode, validateInvitationCode } from '@/api/auth'
 import { buildAuthErrorMessage } from '@/utils/authError'
+import { getInviteCodeFromQuery } from '@/utils/inviteQuery'
 import {
   isRegistrationEmailSuffixAllowed,
   normalizeRegistrationEmailSuffixWhitelist
@@ -325,6 +335,8 @@ const turnstileSiteKey = ref<string>('')
 const siteName = ref<string>('Sub2API')
 const linuxdoOAuthEnabled = ref<boolean>(false)
 const registrationEmailSuffixWhitelist = ref<string[]>([])
+const lockedInviteCode = computed(() => getInviteCodeFromQuery(route.query.invite))
+const inviteCodeLocked = computed(() => lockedInviteCode.value !== '')
 
 // Turnstile
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
@@ -388,6 +400,11 @@ onMounted(async () => {
         // Validate the promo code from URL
         await validatePromoCodeDebounced(promoParam)
       }
+    }
+
+    if (inviteCodeLocked.value && !formData.invitation_code) {
+      formData.invitation_code = lockedInviteCode.value
+      await validateInvitationCodeDebounced(lockedInviteCode.value)
     }
   } catch (error) {
     console.error('Failed to load public settings:', error)
@@ -481,6 +498,11 @@ function getPromoErrorMessage(errorCode?: string): string {
 // ==================== Invitation Code Validation ====================
 
 function handleInvitationCodeInput(): void {
+  if (inviteCodeLocked.value) {
+    formData.invitation_code = lockedInviteCode.value
+    return
+  }
+
   const code = formData.invitation_code.trim()
 
   // Clear previous validation
@@ -537,6 +559,8 @@ function getInvitationErrorMessage(errorCode?: string): string {
       return t('auth.invitationCodeInvalid')
     case 'INVITATION_CODE_DISABLED':
       return t('auth.invitationCodeInvalid')
+    case 'INVITATION_CODE_REMOVED':
+      return t('auth.invitationCodeRemoved')
     default:
       return t('auth.invitationCodeInvalid')
   }
@@ -611,17 +635,14 @@ function validateForm(): boolean {
     isValid = false
   }
 
-  // Invitation code validation (required when enabled)
-  if (invitationCodeEnabled.value) {
-    if (!formData.invitation_code.trim()) {
-      errors.invitation_code = t('auth.invitationCodeRequired')
-      isValid = false
-    }
-  }
-
   // Turnstile validation
   if (turnstileEnabled.value && !turnstileToken.value) {
     errors.turnstile = t('auth.completeVerification')
+    isValid = false
+  }
+
+  if (invitationCodeEnabled.value && !formData.invitation_code.trim()) {
+    errors.invitation_code = t('auth.invitationCodeRequired')
     isValid = false
   }
 
@@ -653,22 +674,18 @@ async function handleRegister(): Promise<void> {
     }
   }
 
-  // Check invitation code validation status (if enabled and code provided)
-  if (invitationCodeEnabled.value) {
-    // If still validating, wait
+  // Check invitation code validation status when the user explicitly supplied one.
+  if (formData.invitation_code.trim()) {
     if (invitationValidating.value) {
       errorMessage.value = t('auth.invitationCodeValidating')
       return
     }
-    // If invitation code is invalid, block submission
     if (invitationValidation.invalid) {
       errorMessage.value = t('auth.invitationCodeInvalidCannotRegister')
       return
     }
-    // If invitation code is required but not validated yet
-    if (formData.invitation_code.trim() && !invitationValidation.valid) {
+    if (!invitationValidation.valid) {
       errorMessage.value = t('auth.invitationCodeValidating')
-      // Trigger validation
       await validateInvitationCodeDebounced(formData.invitation_code.trim())
       if (!invitationValidation.valid) {
         errorMessage.value = t('auth.invitationCodeInvalidCannotRegister')

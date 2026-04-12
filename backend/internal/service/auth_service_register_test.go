@@ -62,6 +62,23 @@ type defaultSubscriptionAssignerStub struct {
 	err   error
 }
 
+type legacyInvitationLookupStub struct {
+	code     *RedeemCode
+	err      error
+	lastCode string
+}
+
+func (s *legacyInvitationLookupStub) GetByCode(_ context.Context, code string) (*RedeemCode, error) {
+	s.lastCode = code
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.code == nil {
+		return nil, ErrRedeemCodeNotFound
+	}
+	return s.code, nil
+}
+
 func (s *defaultSubscriptionAssignerStub) AssignOrExtendSubscription(_ context.Context, input *AssignSubscriptionInput) (*UserSubscription, bool, error) {
 	if input != nil {
 		s.calls = append(s.calls, *input)
@@ -129,6 +146,13 @@ func newAuthService(repo *userRepoStub, settings map[string]string, emailCache E
 		emailService = NewEmailService(&settingRepoStub{values: settings}, emailCache)
 	}
 
+	inviteService := NewInviteService(repo, &inviteRewardRepoStub{
+		totalBase: 0,
+	})
+	inviteService.codeGenerator = func() (string, error) {
+		return "DEFAULT01", nil
+	}
+
 	return NewAuthService(
 		nil, // entClient
 		repo,
@@ -141,6 +165,93 @@ func newAuthService(repo *userRepoStub, settings map[string]string, emailCache E
 		nil,
 		nil, // promoService
 		nil, // defaultSubAssigner
+		inviteService,
+	)
+}
+
+type inviteAuthUserRepoStub struct {
+	userRepoStub
+	usersByEmail      map[string]*User
+	usersByInviteCode map[string]*User
+}
+
+func (s *inviteAuthUserRepoStub) Create(ctx context.Context, user *User) error {
+	if err := s.userRepoStub.Create(ctx, user); err != nil {
+		return err
+	}
+	if s.usersByEmail == nil {
+		s.usersByEmail = map[string]*User{}
+	}
+	s.usersByEmail[user.Email] = user
+	if s.usersByInviteCode == nil {
+		s.usersByInviteCode = map[string]*User{}
+	}
+	if user.InviteCode != "" {
+		s.usersByInviteCode[user.InviteCode] = user
+	}
+	return nil
+}
+
+func (s *inviteAuthUserRepoStub) GetByEmail(_ context.Context, email string) (*User, error) {
+	u, ok := s.usersByEmail[email]
+	if !ok {
+		return nil, ErrUserNotFound
+	}
+	return u, nil
+}
+
+func (s *inviteAuthUserRepoStub) GetByInviteCode(_ context.Context, code string) (*User, error) {
+	u, ok := s.usersByInviteCode[code]
+	if !ok {
+		return nil, ErrUserNotFound
+	}
+	return u, nil
+}
+
+func (s *inviteAuthUserRepoStub) ExistsByInviteCode(_ context.Context, code string) (bool, error) {
+	_, ok := s.usersByInviteCode[code]
+	return ok, nil
+}
+
+func (s *inviteAuthUserRepoStub) CountInviteesByInviter(_ context.Context, _ int64) (int64, error) {
+	return 0, nil
+}
+
+func newAuthServiceWithInvite(repo *inviteAuthUserRepoStub, inviteSvc *InviteService, settings map[string]string, emailCache EmailCache) *AuthService {
+	cfg := &config.Config{
+		JWT: config.JWTConfig{
+			Secret:     "test-secret",
+			ExpireHour: 1,
+		},
+		Default: config.DefaultConfig{
+			UserBalance:     3.5,
+			UserConcurrency: 2,
+		},
+	}
+
+	var settingService *SettingService
+	if settings != nil {
+		settingService = NewSettingService(&settingRepoStub{values: settings}, cfg)
+	}
+
+	var emailService *EmailService
+	if emailCache != nil {
+		emailService = NewEmailService(&settingRepoStub{values: settings}, emailCache)
+	}
+
+	return NewAuthService(
+		nil,
+		repo,
+		nil,
+		nil,
+		cfg,
+		settingService,
+		emailService,
+		nil,
+		nil,
+		nil,
+		nil,
+		inviteSvc,
 	)
 }
 
@@ -463,4 +574,155 @@ func TestAuthService_Register_AssignsDefaultSubscriptions(t *testing.T) {
 	require.Equal(t, 30, assigner.calls[0].ValidityDays)
 	require.Equal(t, int64(12), assigner.calls[1].GroupID)
 	require.Equal(t, 7, assigner.calls[1].ValidityDays)
+}
+
+func TestAuthService_RegisterWithVerification_AssignsInviteCodeAndBindsInviter(t *testing.T) {
+	repo := &inviteAuthUserRepoStub{
+		userRepoStub: userRepoStub{nextID: 8},
+		usersByInviteCode: map[string]*User{
+			"INVITER07": {ID: 7, Email: "inviter@test.com", Status: StatusActive, InviteCode: "INVITER07"},
+		},
+	}
+	inviteSvc := &InviteService{
+		userRepo: repo,
+		codeGenerator: func() (string, error) {
+			return "NEWCODE08", nil
+		},
+	}
+	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil)
+
+	_, user, err := service.RegisterWithVerification(context.Background(), "user@test.com", "password", "", "", "INVITER07")
+	require.NoError(t, err)
+	require.Equal(t, "NEWCODE08", user.InviteCode)
+	require.NotNil(t, user.InvitedByUserID)
+	require.EqualValues(t, 7, *user.InvitedByUserID)
+	require.NotNil(t, user.InviteBoundAt)
+}
+
+func TestAuthService_RegisterWithVerification_RejectsUnknownPermanentInviteCode(t *testing.T) {
+	repo := &inviteAuthUserRepoStub{userRepoStub: userRepoStub{nextID: 9}}
+	inviteSvc := &InviteService{
+		userRepo: repo,
+		codeGenerator: func() (string, error) {
+			return "NEWCODE09", nil
+		},
+	}
+	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil)
+
+	_, _, err := service.RegisterWithVerification(context.Background(), "user@test.com", "password", "", "", "MISSING")
+	require.ErrorIs(t, err, ErrInvitationCodeInvalid)
+}
+
+func TestAuthService_RegisterWithVerification_RejectsInactivePermanentInviteCode(t *testing.T) {
+	repo := &inviteAuthUserRepoStub{
+		userRepoStub: userRepoStub{nextID: 10},
+		usersByInviteCode: map[string]*User{
+			"INVITER10": {ID: 10, Email: "disabled-inviter@test.com", Status: StatusDisabled, InviteCode: "INVITER10"},
+		},
+	}
+	inviteSvc := &InviteService{
+		userRepo: repo,
+		codeGenerator: func() (string, error) {
+			return "NEWCODE10", nil
+		},
+	}
+	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil)
+
+	_, _, err := service.RegisterWithVerification(context.Background(), "user@test.com", "password", "", "", "INVITER10")
+	require.ErrorIs(t, err, ErrInvitationCodeInvalid)
+}
+
+func TestAuthService_RegisterWithVerification_ReturnsRemovedErrorForLegacyInvitationRedeemCode(t *testing.T) {
+	repo := &inviteAuthUserRepoStub{userRepoStub: userRepoStub{nextID: 10}}
+	inviteSvc := &InviteService{
+		userRepo: repo,
+		codeGenerator: func() (string, error) {
+			return "NEWCODE10", nil
+		},
+	}
+	legacyRepo := &legacyInvitationLookupStub{
+		code: &RedeemCode{
+			Code: "LEGACY-A1B2",
+			Type: RedeemTypeInvitation,
+		},
+	}
+	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil)
+	service.redeemRepo = legacyRepo
+
+	_, user, err := service.RegisterWithVerification(context.Background(), "legacy-invite@test.com", "password", "", "", " legacy-a1b2 ")
+	require.ErrorIs(t, err, ErrInvitationCodeRemoved)
+	require.Equal(t, "LEGACY-A1B2", legacyRepo.lastCode)
+	require.Nil(t, user)
+}
+
+type refreshTokenCacheStub struct{}
+
+func (s *refreshTokenCacheStub) StoreRefreshToken(ctx context.Context, tokenHash string, data *RefreshTokenData, ttl time.Duration) error {
+	return nil
+}
+
+func (s *refreshTokenCacheStub) GetRefreshToken(ctx context.Context, tokenHash string) (*RefreshTokenData, error) {
+	return nil, ErrRefreshTokenNotFound
+}
+
+func (s *refreshTokenCacheStub) DeleteRefreshToken(ctx context.Context, tokenHash string) error {
+	return nil
+}
+
+func (s *refreshTokenCacheStub) DeleteUserRefreshTokens(ctx context.Context, userID int64) error {
+	return nil
+}
+
+func (s *refreshTokenCacheStub) DeleteTokenFamily(ctx context.Context, familyID string) error {
+	return nil
+}
+
+func (s *refreshTokenCacheStub) AddToUserTokenSet(ctx context.Context, userID int64, tokenHash string, ttl time.Duration) error {
+	return nil
+}
+
+func (s *refreshTokenCacheStub) AddToFamilyTokenSet(ctx context.Context, familyID string, tokenHash string, ttl time.Duration) error {
+	return nil
+}
+
+func (s *refreshTokenCacheStub) GetUserTokenHashes(ctx context.Context, userID int64) ([]string, error) {
+	return nil, nil
+}
+
+func (s *refreshTokenCacheStub) GetFamilyTokenHashes(ctx context.Context, familyID string) ([]string, error) {
+	return nil, nil
+}
+
+func (s *refreshTokenCacheStub) IsTokenInFamily(ctx context.Context, familyID string, tokenHash string) (bool, error) {
+	return false, nil
+}
+
+func TestAuthService_LoginOrRegisterOAuthWithTokenPair_IgnoresRetiredInvitationToggle(t *testing.T) {
+	repo := &inviteAuthUserRepoStub{userRepoStub: userRepoStub{nextID: 11}}
+	inviteSvc := &InviteService{
+		userRepo: repo,
+		codeGenerator: func() (string, error) {
+			return "NEWCODE11", nil
+		},
+	}
+	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
+		SettingKeyRegistrationEnabled:   "true",
+		SettingKeyInvitationCodeEnabled: "true",
+	}, nil)
+	service.refreshTokenCache = &refreshTokenCacheStub{}
+	service.cfg.JWT.RefreshTokenExpireDays = 7
+
+	tokenPair, user, err := service.LoginOrRegisterOAuthWithTokenPair(context.Background(), "oauth-no-invite@test.com", "oauth-user", "")
+	require.NoError(t, err)
+	require.NotNil(t, tokenPair)
+	require.NotNil(t, user)
+	require.Nil(t, user.InvitedByUserID)
 }

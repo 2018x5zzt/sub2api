@@ -446,8 +446,10 @@ export default {
     invitationCodeRequired: '请输入邀请码',
     invitationCodeValid: '邀请码有效',
     invitationCodeInvalid: '邀请码无效或已被使用',
+    invitationCodeRemoved: '旧邀请码注册功能已下线，请使用用户分享的邀请码链接重新进入',
     invitationCodeValidating: '正在验证邀请码...',
     invitationCodeInvalidCannotRegister: '邀请码无效，请检查后重试',
+    invitationCodeLockedFromLink: '该邀请码来自邀请链接。如需更换，请修改链接后重新进入注册页。',
     linuxdo: {
       signIn: '使用 Linux.do 登录',
       orContinue: '或使用邮箱密码继续',

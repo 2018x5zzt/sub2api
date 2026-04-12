@@ -447,8 +447,10 @@ export default {
     invitationCodeRequired: 'Invitation code is required',
     invitationCodeValid: 'Invitation code is valid',
     invitationCodeInvalid: 'Invalid or used invitation code',
+    invitationCodeRemoved: 'Legacy invitation-code registration has been removed. Please use a shared user invite link instead.',
     invitationCodeValidating: 'Validating invitation code...',
     invitationCodeInvalidCannotRegister: 'Invalid invitation code. Please check and try again',
+    invitationCodeLockedFromLink: 'This invite code came from the shared invite link. To change it, edit the link and reopen the registration page.',
     linuxdo: {
       signIn: 'Continue with Linux.do',
       orContinue: 'or continue with email',
