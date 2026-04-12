@@ -4355,8 +4355,10 @@ export default {
         emailSuffixWhitelistInputHint: 'Leave empty for no restriction',
         promoCode: 'Promo Code',
         promoCodeHint: 'Allow users to use promo codes during registration',
-        invitationCode: 'Invitation Code Registration',
-        invitationCodeHint: 'When enabled, users must enter a valid invitation code to register',
+        invitationCodeRemovedTitle: 'Invitation Code Registration',
+        invitationCodeRemovedBadge: 'Removed',
+        invitationCodeRemovedDescription:
+          'The legacy one-time invitation-code registration flow has been retired. Only user invite sharing and invite operations remain active.',
         passwordReset: 'Password Reset',
         passwordResetHint: 'Allow users to reset their password via email',
         frontendUrl: 'Frontend URL',

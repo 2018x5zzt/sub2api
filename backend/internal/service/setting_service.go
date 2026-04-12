@@ -134,7 +134,6 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyRegistrationEmailSuffixWhitelist,
 		SettingKeyPromoCodeEnabled,
 		SettingKeyPasswordResetEnabled,
-		SettingKeyInvitationCodeEnabled,
 		SettingKeyTotpEnabled,
 		SettingKeyTurnstileEnabled,
 		SettingKeyTurnstileSiteKey,
@@ -179,7 +178,6 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		RegistrationEmailSuffixWhitelist: registrationEmailSuffixWhitelist,
 		PromoCodeEnabled:                 settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:             passwordResetEnabled,
-		InvitationCodeEnabled:            settings[SettingKeyInvitationCodeEnabled] == "true",
 		TotpEnabled:                      settings[SettingKeyTotpEnabled] == "true",
 		TurnstileEnabled:                 settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
@@ -231,7 +229,6 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		RegistrationEmailSuffixWhitelist []string        `json:"registration_email_suffix_whitelist"`
 		PromoCodeEnabled                 bool            `json:"promo_code_enabled"`
 		PasswordResetEnabled             bool            `json:"password_reset_enabled"`
-		InvitationCodeEnabled            bool            `json:"invitation_code_enabled"`
 		TotpEnabled                      bool            `json:"totp_enabled"`
 		TurnstileEnabled                 bool            `json:"turnstile_enabled"`
 		TurnstileSiteKey                 string          `json:"turnstile_site_key,omitempty"`
@@ -256,7 +253,6 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		RegistrationEmailSuffixWhitelist: settings.RegistrationEmailSuffixWhitelist,
 		PromoCodeEnabled:                 settings.PromoCodeEnabled,
 		PasswordResetEnabled:             settings.PasswordResetEnabled,
-		InvitationCodeEnabled:            settings.InvitationCodeEnabled,
 		TotpEnabled:                      settings.TotpEnabled,
 		TurnstileEnabled:                 settings.TurnstileEnabled,
 		TurnstileSiteKey:                 settings.TurnstileSiteKey,
@@ -412,7 +408,6 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyPromoCodeEnabled] = strconv.FormatBool(settings.PromoCodeEnabled)
 	updates[SettingKeyPasswordResetEnabled] = strconv.FormatBool(settings.PasswordResetEnabled)
 	updates[SettingKeyFrontendURL] = settings.FrontendURL
-	updates[SettingKeyInvitationCodeEnabled] = strconv.FormatBool(settings.InvitationCodeEnabled)
 	updates[SettingKeyTotpEnabled] = strconv.FormatBool(settings.TotpEnabled)
 
 	// 邮件服务设置（只有非空才更新密码）
@@ -636,15 +631,6 @@ func (s *SettingService) IsPromoCodeEnabled(ctx context.Context) bool {
 	return value != "false"
 }
 
-// IsInvitationCodeEnabled 检查是否启用邀请码注册功能
-func (s *SettingService) IsInvitationCodeEnabled(ctx context.Context) bool {
-	value, err := s.settingRepo.GetValue(ctx, SettingKeyInvitationCodeEnabled)
-	if err != nil {
-		return false // 默认关闭
-	}
-	return value == "true"
-}
-
 // IsPasswordResetEnabled 检查是否启用密码重置功能
 // 要求：必须同时开启邮件验证
 func (s *SettingService) IsPasswordResetEnabled(ctx context.Context) bool {
@@ -782,7 +768,6 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		PromoCodeEnabled:                 settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:             emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
 		FrontendURL:                      settings[SettingKeyFrontendURL],
-		InvitationCodeEnabled:            settings[SettingKeyInvitationCodeEnabled] == "true",
 		TotpEnabled:                      settings[SettingKeyTotpEnabled] == "true",
 		SMTPHost:                         settings[SettingKeySMTPHost],
 		SMTPUsername:                     settings[SettingKeySMTPUsername],

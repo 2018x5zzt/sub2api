@@ -714,8 +714,7 @@ func TestAuthService_LoginOrRegisterOAuthWithTokenPair_IgnoresRetiredInvitationT
 		},
 	}
 	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
-		SettingKeyRegistrationEnabled:   "true",
-		SettingKeyInvitationCodeEnabled: "true",
+		SettingKeyRegistrationEnabled: "true",
 	}, nil)
 	service.refreshTokenCache = &refreshTokenCacheStub{}
 	service.cfg.JWT.RefreshTokenExpireDays = 7

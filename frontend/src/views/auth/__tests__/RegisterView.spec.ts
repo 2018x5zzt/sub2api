@@ -62,7 +62,6 @@ describe('RegisterView', () => {
       registration_enabled: true,
       email_verify_enabled: false,
       promo_code_enabled: false,
-      invitation_code_enabled: false,
       turnstile_enabled: false,
       turnstile_site_key: '',
       site_name: 'Sub2API',

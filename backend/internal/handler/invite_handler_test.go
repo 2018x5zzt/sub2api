@@ -124,6 +124,7 @@ func TestInviteHandler_GetSummary(t *testing.T) {
 		},
 		&inviteHandlerRewardRepoStub{totalBase: 9},
 		settingService,
+		nil,
 	))
 
 	handler.GetSummary(c)
@@ -174,6 +175,7 @@ func TestInviteHandler_ListRewards(t *testing.T) {
 			},
 		},
 		settingService,
+		nil,
 	))
 
 	handler.ListRewards(c)

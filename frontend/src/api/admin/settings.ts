@@ -22,7 +22,6 @@ export interface SystemSettings {
   promo_code_enabled: boolean
   password_reset_enabled: boolean
   frontend_url: string
-  invitation_code_enabled: boolean
   totp_enabled: boolean // TOTP 双因素认证
   totp_encryption_key_configured: boolean // TOTP 加密密钥是否已配置
   // Default settings
@@ -94,7 +93,6 @@ export interface UpdateSettingsRequest {
   promo_code_enabled?: boolean
   password_reset_enabled?: boolean
   frontend_url?: string
-  invitation_code_enabled?: boolean
   totp_enabled?: boolean // TOTP 双因素认证
   default_balance?: number
   default_concurrency?: number

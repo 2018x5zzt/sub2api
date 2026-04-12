@@ -709,6 +709,22 @@
               <Toggle v-model="form.promo_code_enabled" />
             </div>
 
+            <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+              <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-4 dark:border-dark-600 dark:bg-dark-800/70">
+                <div class="flex items-center justify-between gap-3">
+                  <h3 class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ t('admin.settings.registration.invitationCodeRemovedTitle') }}
+                  </h3>
+                  <span class="rounded-full border border-gray-300 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:border-dark-500 dark:text-gray-300">
+                    {{ t('admin.settings.registration.invitationCodeRemovedBadge') }}
+                  </span>
+                </div>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.registration.invitationCodeRemovedDescription') }}
+                </p>
+              </div>
+            </div>
+
             <!-- Password Reset - Only show when email verification is enabled -->
             <div
               v-if="form.email_verify_enabled"
@@ -1911,7 +1927,6 @@ const form = reactive<SettingsForm>({
   email_verify_enabled: false,
   registration_email_suffix_whitelist: [],
   promo_code_enabled: true,
-  invitation_code_enabled: false,
   password_reset_enabled: false,
   totp_enabled: false,
   totp_encryption_key_configured: false,
@@ -2191,7 +2206,6 @@ async function saveSettings() {
         (suffix) => `@${suffix}`
       ),
       promo_code_enabled: form.promo_code_enabled,
-      invitation_code_enabled: form.invitation_code_enabled,
       password_reset_enabled: form.password_reset_enabled,
       totp_enabled: form.totp_enabled,
       default_balance: form.default_balance,

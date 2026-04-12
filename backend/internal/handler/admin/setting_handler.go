@@ -81,7 +81,6 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		PromoCodeEnabled:                     settings.PromoCodeEnabled,
 		PasswordResetEnabled:                 settings.PasswordResetEnabled,
 		FrontendURL:                          settings.FrontendURL,
-		InvitationCodeEnabled:                settings.InvitationCodeEnabled,
 		TotpEnabled:                          settings.TotpEnabled,
 		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
 		SMTPHost:                             settings.SMTPHost,
@@ -140,7 +139,6 @@ type UpdateSettingsRequest struct {
 	PromoCodeEnabled                 bool     `json:"promo_code_enabled"`
 	PasswordResetEnabled             bool     `json:"password_reset_enabled"`
 	FrontendURL                      string   `json:"frontend_url"`
-	InvitationCodeEnabled            bool     `json:"invitation_code_enabled"`
 	TotpEnabled                      bool     `json:"totp_enabled"` // TOTP 双因素认证
 
 	// 邮件服务设置
@@ -467,7 +465,6 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PromoCodeEnabled:                 req.PromoCodeEnabled,
 		PasswordResetEnabled:             req.PasswordResetEnabled,
 		FrontendURL:                      req.FrontendURL,
-		InvitationCodeEnabled:            req.InvitationCodeEnabled,
 		TotpEnabled:                      req.TotpEnabled,
 		SMTPHost:                         req.SMTPHost,
 		SMTPPort:                         req.SMTPPort,
@@ -563,7 +560,6 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PromoCodeEnabled:                     updatedSettings.PromoCodeEnabled,
 		PasswordResetEnabled:                 updatedSettings.PasswordResetEnabled,
 		FrontendURL:                          updatedSettings.FrontendURL,
-		InvitationCodeEnabled:                updatedSettings.InvitationCodeEnabled,
 		TotpEnabled:                          updatedSettings.TotpEnabled,
 		TotpEncryptionKeyConfigured:          h.settingService.IsTotpEncryptionKeyConfigured(),
 		SMTPHost:                             updatedSettings.SMTPHost,

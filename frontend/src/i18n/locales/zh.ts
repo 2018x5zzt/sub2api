@@ -4520,8 +4520,10 @@ export default {
         emailSuffixWhitelistInputHint: '留空则不限制',
         promoCode: '优惠码',
         promoCodeHint: '允许用户在注册时使用优惠码',
-        invitationCode: '邀请码注册',
-        invitationCodeHint: '开启后，用户注册时需要填写有效的邀请码',
+        invitationCodeRemovedTitle: '邀请码注册',
+        invitationCodeRemovedBadge: '已移除',
+        invitationCodeRemovedDescription:
+          '旧的一次性邀请码注册功能已下线。当前仅保留用户邀请码分享和邀请关系运营能力。',
         passwordReset: '忘记密码',
         passwordResetHint: '允许用户通过邮箱重置密码',
         frontendUrl: '前端地址',

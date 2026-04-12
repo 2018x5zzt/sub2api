@@ -16,10 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type inviteValidationSettingRepoStub struct {
-	invitationCodeEnabled bool
-}
-
 type inviteValidationUserRepoStub struct {
 	usersByInviteCode map[string]*service.User
 }
@@ -82,40 +78,6 @@ func (s *inviteValidationRewardRepoStub) SumBaseRewardsByTargetAndRole(ctx conte
 	return 0, nil
 }
 
-func (s *inviteValidationSettingRepoStub) Get(ctx context.Context, key string) (*service.Setting, error) {
-	panic("unexpected Get")
-}
-
-func (s *inviteValidationSettingRepoStub) GetValue(ctx context.Context, key string) (string, error) {
-	if key == service.SettingKeyInvitationCodeEnabled {
-		if s.invitationCodeEnabled {
-			return "true", nil
-		}
-		return "false", nil
-	}
-	return "", service.ErrSettingNotFound
-}
-
-func (s *inviteValidationSettingRepoStub) Set(ctx context.Context, key, value string) error {
-	panic("unexpected Set")
-}
-
-func (s *inviteValidationSettingRepoStub) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
-	panic("unexpected GetMultiple")
-}
-
-func (s *inviteValidationSettingRepoStub) SetMultiple(ctx context.Context, settings map[string]string) error {
-	panic("unexpected SetMultiple")
-}
-
-func (s *inviteValidationSettingRepoStub) GetAll(ctx context.Context) (map[string]string, error) {
-	panic("unexpected GetAll")
-}
-
-func (s *inviteValidationSettingRepoStub) Delete(ctx context.Context, key string) error {
-	panic("unexpected Delete")
-}
-
 func TestValidateInvitationCode_UsesPermanentInviteCodes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
@@ -143,7 +105,6 @@ func TestValidateInvitationCode_UsesPermanentInviteCodes(t *testing.T) {
 		inviteSvc,
 	)
 	handler := &AuthHandler{
-		settingSvc:  service.NewSettingService(&inviteValidationSettingRepoStub{invitationCodeEnabled: true}, &config.Config{}),
 		authService: authService,
 	}
 
@@ -179,7 +140,6 @@ func TestValidateInvitationCode_IgnoresLegacyToggleWhenPermanentInviteCodeExists
 		inviteSvc,
 	)
 	handler := &AuthHandler{
-		settingSvc:  service.NewSettingService(&inviteValidationSettingRepoStub{invitationCodeEnabled: false}, &config.Config{}),
 		authService: authService,
 	}
 
