@@ -329,7 +329,7 @@ func getNormalizedCodexModel(modelID string) string {
 }
 
 // extractTextFromContent extracts plain text from a content value that is either
-// a Go string or a []any of content-part maps with type:"text".
+// a Go string or a []any of content-part maps with type:"text"/"input_text".
 func extractTextFromContent(content any) string {
 	switch v := content.(type) {
 	case string:
@@ -341,7 +341,7 @@ func extractTextFromContent(content any) string {
 			if !ok {
 				continue
 			}
-			if t, _ := m["type"].(string); t == "text" {
+			if t, _ := m["type"].(string); t == "text" || t == "input_text" {
 				if text, ok := m["text"].(string); ok {
 					parts = append(parts, text)
 				}

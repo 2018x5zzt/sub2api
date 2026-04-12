@@ -494,6 +494,34 @@ func TestExtractSystemMessagesFromInput(t *testing.T) {
 		require.Len(t, input, 0)
 	})
 
+	t.Run("input_text content system message", func(t *testing.T) {
+		reqBody := map[string]any{
+			"input": []any{
+				map[string]any{
+					"role": "system",
+					"type": "message",
+					"content": []any{
+						map[string]any{"type": "input_text", "text": "System prompt from responses input."},
+					},
+				},
+				map[string]any{
+					"role":    "user",
+					"type":    "message",
+					"content": "hello",
+				},
+			},
+		}
+		result := extractSystemMessagesFromInput(reqBody)
+		require.True(t, result)
+		require.Equal(t, "System prompt from responses input.", reqBody["instructions"])
+		input, ok := reqBody["input"].([]any)
+		require.True(t, ok)
+		require.Len(t, input, 1)
+		msg, ok := input[0].(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, "user", msg["role"])
+	})
+
 	t.Run("multiple system messages concatenated", func(t *testing.T) {
 		reqBody := map[string]any{
 			"input": []any{
