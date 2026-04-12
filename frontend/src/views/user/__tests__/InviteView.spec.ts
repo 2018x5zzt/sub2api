@@ -37,6 +37,7 @@ describe('InviteView', () => {
       legacy: false,
       locale: 'zh',
       messages: { zh },
+      // Vitest uses the runtime-only vue-i18n build, so tests provide a tiny compiler for plain strings.
       messageCompiler: (message: string) => (ctx: any) =>
         message.replace(/\{(\w+)\}/g, (_match, key) => String(ctx?.values?.[key] ?? `{${key}}`))
     })
@@ -51,8 +52,7 @@ describe('InviteView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('HELLO123')
-    expect(wrapper.text()).toContain('双方同时获赠奖励')
-    expect(wrapper.text()).not.toContain('5%')
-    expect(wrapper.text()).not.toContain('3%')
+    expect(wrapper.text()).toContain(zh.invite.description)
+    expect(wrapper.text()).not.toMatch(/\d+(\.\d+)?%/)
   })
 })
