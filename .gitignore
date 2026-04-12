@@ -30,7 +30,9 @@ backend/.gocache/
 # ===================
 # Node.js / Vue 前端
 # ===================
+node_modules
 node_modules/
+frontend/node_modules
 frontend/node_modules/
 frontend/dist/
 *.local
@@ -132,4 +134,3 @@ docs/*
 frontend/coverage/
 aicodex
 output/
-

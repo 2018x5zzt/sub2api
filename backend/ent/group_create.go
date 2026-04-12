@@ -104,6 +104,34 @@ func (_c *GroupCreate) SetNillableRateMultiplier(v *float64) *GroupCreate {
 	return _c
 }
 
+// SetPricingMode sets the "pricing_mode" field.
+func (_c *GroupCreate) SetPricingMode(v string) *GroupCreate {
+	_c.mutation.SetPricingMode(v)
+	return _c
+}
+
+// SetNillablePricingMode sets the "pricing_mode" field if the given value is not nil.
+func (_c *GroupCreate) SetNillablePricingMode(v *string) *GroupCreate {
+	if v != nil {
+		_c.SetPricingMode(*v)
+	}
+	return _c
+}
+
+// SetDefaultBudgetMultiplier sets the "default_budget_multiplier" field.
+func (_c *GroupCreate) SetDefaultBudgetMultiplier(v float64) *GroupCreate {
+	_c.mutation.SetDefaultBudgetMultiplier(v)
+	return _c
+}
+
+// SetNillableDefaultBudgetMultiplier sets the "default_budget_multiplier" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableDefaultBudgetMultiplier(v *float64) *GroupCreate {
+	if v != nil {
+		_c.SetDefaultBudgetMultiplier(*v)
+	}
+	return _c
+}
+
 // SetIsExclusive sets the "is_exclusive" field.
 func (_c *GroupCreate) SetIsExclusive(v bool) *GroupCreate {
 	_c.mutation.SetIsExclusive(v)
@@ -597,6 +625,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultRateMultiplier
 		_c.mutation.SetRateMultiplier(v)
 	}
+	if _, ok := _c.mutation.PricingMode(); !ok {
+		v := group.DefaultPricingMode
+		_c.mutation.SetPricingMode(v)
+	}
 	if _, ok := _c.mutation.IsExclusive(); !ok {
 		v := group.DefaultIsExclusive
 		_c.mutation.SetIsExclusive(v)
@@ -670,6 +702,14 @@ func (_c *GroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.RateMultiplier(); !ok {
 		return &ValidationError{Name: "rate_multiplier", err: errors.New(`ent: missing required field "Group.rate_multiplier"`)}
+	}
+	if _, ok := _c.mutation.PricingMode(); !ok {
+		return &ValidationError{Name: "pricing_mode", err: errors.New(`ent: missing required field "Group.pricing_mode"`)}
+	}
+	if v, ok := _c.mutation.PricingMode(); ok {
+		if err := group.PricingModeValidator(v); err != nil {
+			return &ValidationError{Name: "pricing_mode", err: fmt.Errorf(`ent: validator failed for field "Group.pricing_mode": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.IsExclusive(); !ok {
 		return &ValidationError{Name: "is_exclusive", err: errors.New(`ent: missing required field "Group.is_exclusive"`)}
@@ -780,6 +820,14 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.RateMultiplier(); ok {
 		_spec.SetField(group.FieldRateMultiplier, field.TypeFloat64, value)
 		_node.RateMultiplier = value
+	}
+	if value, ok := _c.mutation.PricingMode(); ok {
+		_spec.SetField(group.FieldPricingMode, field.TypeString, value)
+		_node.PricingMode = value
+	}
+	if value, ok := _c.mutation.DefaultBudgetMultiplier(); ok {
+		_spec.SetField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64, value)
+		_node.DefaultBudgetMultiplier = &value
 	}
 	if value, ok := _c.mutation.IsExclusive(); ok {
 		_spec.SetField(group.FieldIsExclusive, field.TypeBool, value)
@@ -1116,6 +1164,42 @@ func (u *GroupUpsert) UpdateRateMultiplier() *GroupUpsert {
 // AddRateMultiplier adds v to the "rate_multiplier" field.
 func (u *GroupUpsert) AddRateMultiplier(v float64) *GroupUpsert {
 	u.Add(group.FieldRateMultiplier, v)
+	return u
+}
+
+// SetPricingMode sets the "pricing_mode" field.
+func (u *GroupUpsert) SetPricingMode(v string) *GroupUpsert {
+	u.Set(group.FieldPricingMode, v)
+	return u
+}
+
+// UpdatePricingMode sets the "pricing_mode" field to the value that was provided on create.
+func (u *GroupUpsert) UpdatePricingMode() *GroupUpsert {
+	u.SetExcluded(group.FieldPricingMode)
+	return u
+}
+
+// SetDefaultBudgetMultiplier sets the "default_budget_multiplier" field.
+func (u *GroupUpsert) SetDefaultBudgetMultiplier(v float64) *GroupUpsert {
+	u.Set(group.FieldDefaultBudgetMultiplier, v)
+	return u
+}
+
+// UpdateDefaultBudgetMultiplier sets the "default_budget_multiplier" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateDefaultBudgetMultiplier() *GroupUpsert {
+	u.SetExcluded(group.FieldDefaultBudgetMultiplier)
+	return u
+}
+
+// AddDefaultBudgetMultiplier adds v to the "default_budget_multiplier" field.
+func (u *GroupUpsert) AddDefaultBudgetMultiplier(v float64) *GroupUpsert {
+	u.Add(group.FieldDefaultBudgetMultiplier, v)
+	return u
+}
+
+// ClearDefaultBudgetMultiplier clears the value of the "default_budget_multiplier" field.
+func (u *GroupUpsert) ClearDefaultBudgetMultiplier() *GroupUpsert {
+	u.SetNull(group.FieldDefaultBudgetMultiplier)
 	return u
 }
 
@@ -1732,6 +1816,48 @@ func (u *GroupUpsertOne) AddRateMultiplier(v float64) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateRateMultiplier() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetPricingMode sets the "pricing_mode" field.
+func (u *GroupUpsertOne) SetPricingMode(v string) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetPricingMode(v)
+	})
+}
+
+// UpdatePricingMode sets the "pricing_mode" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdatePricingMode() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdatePricingMode()
+	})
+}
+
+// SetDefaultBudgetMultiplier sets the "default_budget_multiplier" field.
+func (u *GroupUpsertOne) SetDefaultBudgetMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetDefaultBudgetMultiplier(v)
+	})
+}
+
+// AddDefaultBudgetMultiplier adds v to the "default_budget_multiplier" field.
+func (u *GroupUpsertOne) AddDefaultBudgetMultiplier(v float64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddDefaultBudgetMultiplier(v)
+	})
+}
+
+// UpdateDefaultBudgetMultiplier sets the "default_budget_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateDefaultBudgetMultiplier() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateDefaultBudgetMultiplier()
+	})
+}
+
+// ClearDefaultBudgetMultiplier clears the value of the "default_budget_multiplier" field.
+func (u *GroupUpsertOne) ClearDefaultBudgetMultiplier() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearDefaultBudgetMultiplier()
 	})
 }
 
@@ -2594,6 +2720,48 @@ func (u *GroupUpsertBulk) AddRateMultiplier(v float64) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateRateMultiplier() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateRateMultiplier()
+	})
+}
+
+// SetPricingMode sets the "pricing_mode" field.
+func (u *GroupUpsertBulk) SetPricingMode(v string) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetPricingMode(v)
+	})
+}
+
+// UpdatePricingMode sets the "pricing_mode" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdatePricingMode() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdatePricingMode()
+	})
+}
+
+// SetDefaultBudgetMultiplier sets the "default_budget_multiplier" field.
+func (u *GroupUpsertBulk) SetDefaultBudgetMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetDefaultBudgetMultiplier(v)
+	})
+}
+
+// AddDefaultBudgetMultiplier adds v to the "default_budget_multiplier" field.
+func (u *GroupUpsertBulk) AddDefaultBudgetMultiplier(v float64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddDefaultBudgetMultiplier(v)
+	})
+}
+
+// UpdateDefaultBudgetMultiplier sets the "default_budget_multiplier" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateDefaultBudgetMultiplier() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateDefaultBudgetMultiplier()
+	})
+}
+
+// ClearDefaultBudgetMultiplier clears the value of the "default_budget_multiplier" field.
+func (u *GroupUpsertBulk) ClearDefaultBudgetMultiplier() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearDefaultBudgetMultiplier()
 	})
 }
 

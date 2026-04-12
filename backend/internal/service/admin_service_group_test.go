@@ -177,6 +177,26 @@ func TestAdminService_CreateGroup_NilImagePricing(t *testing.T) {
 	require.Nil(t, repo.created.ImagePrice4K)
 }
 
+func TestAdminService_CreateGroup_DynamicPricingCarriesDefaultBudget(t *testing.T) {
+	repo := &groupRepoStubForAdmin{}
+	svc := &adminServiceImpl{groupRepo: repo}
+	defaultBudget := 8.0
+
+	group, err := svc.CreateGroup(context.Background(), &CreateGroupInput{
+		Name:                    "claude-dynamic",
+		Platform:                PlatformAnthropic,
+		RateMultiplier:          1.0,
+		PricingMode:             GroupPricingModeDynamic,
+		DefaultBudgetMultiplier: &defaultBudget,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, group)
+	require.NotNil(t, repo.created)
+	require.Equal(t, GroupPricingModeDynamic, repo.created.PricingMode)
+	require.NotNil(t, repo.created.DefaultBudgetMultiplier)
+	require.InDelta(t, 8.0, *repo.created.DefaultBudgetMultiplier, 0.0001)
+}
+
 // TestAdminService_UpdateGroup_WithImagePricing 测试更新分组时 ImagePrice 字段正确更新
 func TestAdminService_UpdateGroup_WithImagePricing(t *testing.T) {
 	existingGroup := &Group{

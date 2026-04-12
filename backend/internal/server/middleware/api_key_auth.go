@@ -113,6 +113,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		if cfg.RunMode == config.RunModeSimple {
 			c.Set(string(ContextKeyAPIKey), apiKey)
+			setAPIKeyContext(c, apiKey)
 			c.Set(string(ContextKeyUser), AuthSubject{
 				UserID:      apiKey.User.ID,
 				Concurrency: apiKey.User.Concurrency,
@@ -208,6 +209,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			c.Set(string(ContextKeySubscription), subscription)
 		}
 		c.Set(string(ContextKeyAPIKey), apiKey)
+		setAPIKeyContext(c, apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{
 			UserID:      apiKey.User.ID,
 			Concurrency: apiKey.User.Concurrency,
@@ -248,5 +250,16 @@ func setGroupContext(c *gin.Context, group *service.Group) {
 		return
 	}
 	ctx := context.WithValue(c.Request.Context(), ctxkey.Group, group)
+	c.Request = c.Request.WithContext(ctx)
+}
+
+func setAPIKeyContext(c *gin.Context, apiKey *service.APIKey) {
+	if apiKey == nil {
+		return
+	}
+	if existing, ok := c.Request.Context().Value(ctxkey.APIKey).(*service.APIKey); ok && existing != nil && existing.ID == apiKey.ID {
+		return
+	}
+	ctx := context.WithValue(c.Request.Context(), ctxkey.APIKey, apiKey)
 	c.Request = c.Request.WithContext(ctx)
 }

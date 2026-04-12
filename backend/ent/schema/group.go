@@ -45,6 +45,13 @@ func (Group) Fields() []ent.Field {
 		field.Float("rate_multiplier").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
 			Default(1.0),
+		field.String("pricing_mode").
+			MaxLen(20).
+			Default("fixed"),
+		field.Float("default_budget_multiplier").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}),
 		field.Bool("is_exclusive").
 			Default(false),
 		field.String("status").

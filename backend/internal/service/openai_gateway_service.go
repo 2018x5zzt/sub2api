@@ -1142,6 +1142,7 @@ func (s *OpenAIGatewayService) SelectAccountForModelWithExclusions(ctx context.C
 }
 
 func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, stickyAccountID int64) (*Account, error) {
+	ctx = withDynamicPricingBudgetState(ctx, groupID, s.usageLogRepo)
 	// 1. 尝试粘性会话命中
 	// Try sticky session hit
 	if account := s.tryStickySessionHit(ctx, groupID, sessionHash, requestedModel, excludedIDs, stickyAccountID); account != nil {
@@ -1157,7 +1158,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 
 	// 3. 按优先级 + LRU 选择最佳账号
 	// Select by priority + LRU
-	selected := s.selectBestAccount(ctx, accounts, requestedModel, excludedIDs)
+	selected := s.selectBestAccount(ctx, accounts, groupID, requestedModel, excludedIDs)
 
 	if selected == nil {
 		if requestedModel != "" {
@@ -1218,6 +1219,9 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 	if requestedModel != "" && !account.IsModelSupported(requestedModel) {
 		return nil
 	}
+	if !s.isAccountSchedulableForDynamicPricing(ctx, account, groupID) {
+		return nil
+	}
 
 	// 刷新会话 TTL 并返回账号
 	// Refresh session TTL and return account
@@ -1230,7 +1234,7 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 //
 // selectBestAccount selects the best account from candidates (priority + LRU).
 // Returns nil if no available account.
-func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, accounts []Account, requestedModel string, excludedIDs map[int64]struct{}) *Account {
+func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, accounts []Account, groupID *int64, requestedModel string, excludedIDs map[int64]struct{}) *Account {
 	var selected *Account
 
 	for i := range accounts {
@@ -1244,6 +1248,9 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, accounts [
 
 		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, requestedModel)
 		if fresh == nil {
+			continue
+		}
+		if !s.isAccountSchedulableForDynamicPricing(ctx, fresh, groupID) {
 			continue
 		}
 
@@ -1297,6 +1304,7 @@ func (s *OpenAIGatewayService) isBetterAccount(candidate, current *Account) bool
 
 // SelectAccountWithLoadAwareness selects an account with load-awareness and wait plan.
 func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
+	ctx = withDynamicPricingBudgetState(ctx, groupID, s.usageLogRepo)
 	cfg := s.schedulingConfig()
 	var stickyAccountID int64
 	if sessionHash != "" && s.cache != nil {
@@ -1369,7 +1377,8 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 					_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 				}
 				if !clearSticky && account.IsSchedulable() && account.IsOpenAI() &&
-					(requestedModel == "" || account.IsModelSupported(requestedModel)) {
+					(requestedModel == "" || account.IsModelSupported(requestedModel)) &&
+					s.isAccountSchedulableForDynamicPricing(ctx, account, groupID) {
 					result, err := s.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
 					if err == nil && result.Acquired {
 						_ = s.refreshStickySessionTTL(ctx, groupID, sessionHash, openaiStickySessionTTL)
@@ -1411,6 +1420,9 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 			continue
 		}
 		if requestedModel != "" && !acc.IsModelSupported(requestedModel) {
+			continue
+		}
+		if !s.isAccountSchedulableForDynamicPricing(ctx, acc, groupID) {
 			continue
 		}
 		candidates = append(candidates, acc)
@@ -1606,6 +1618,21 @@ func (s *OpenAIGatewayService) schedulingConfig() config.GatewaySchedulingConfig
 		LoadBatchEnabled:         true,
 		SlotCleanupInterval:      30 * time.Second,
 	}
+}
+
+func (s *OpenAIGatewayService) getUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
+	if s == nil {
+		return groupDefaultMultiplier
+	}
+	resolver := s.userGroupRateResolver
+	if resolver == nil {
+		resolver = newUserGroupRateResolver(nil, nil, resolveUserGroupRateCacheTTL(s.cfg), nil, "service.openai_gateway")
+	}
+	return resolver.Resolve(ctx, userID, groupID, groupDefaultMultiplier)
+}
+
+func (s *OpenAIGatewayService) isAccountSchedulableForDynamicPricing(ctx context.Context, account *Account, groupID *int64) bool {
+	return isAccountWithinDynamicBudget(ctx, groupID, account, s.getUserGroupRateMultiplier)
 }
 
 // GetAccessToken gets the access token for an OpenAI account

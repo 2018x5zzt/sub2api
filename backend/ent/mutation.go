@@ -80,51 +80,53 @@ const (
 // APIKeyMutation represents an operation that mutates the APIKey nodes in the graph.
 type APIKeyMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *int64
-	created_at         *time.Time
-	updated_at         *time.Time
-	deleted_at         *time.Time
-	key                *string
-	name               *string
-	status             *string
-	last_used_at       *time.Time
-	ip_whitelist       *[]string
-	appendip_whitelist []string
-	ip_blacklist       *[]string
-	appendip_blacklist []string
-	quota              *float64
-	addquota           *float64
-	quota_used         *float64
-	addquota_used      *float64
-	expires_at         *time.Time
-	rate_limit_5h      *float64
-	addrate_limit_5h   *float64
-	rate_limit_1d      *float64
-	addrate_limit_1d   *float64
-	rate_limit_7d      *float64
-	addrate_limit_7d   *float64
-	usage_5h           *float64
-	addusage_5h        *float64
-	usage_1d           *float64
-	addusage_1d        *float64
-	usage_7d           *float64
-	addusage_7d        *float64
-	window_5h_start    *time.Time
-	window_1d_start    *time.Time
-	window_7d_start    *time.Time
-	clearedFields      map[string]struct{}
-	user               *int64
-	cleareduser        bool
-	group              *int64
-	clearedgroup       bool
-	usage_logs         map[int64]struct{}
-	removedusage_logs  map[int64]struct{}
-	clearedusage_logs  bool
-	done               bool
-	oldValue           func(context.Context) (*APIKey, error)
-	predicates         []predicate.APIKey
+	op                   Op
+	typ                  string
+	id                   *int64
+	created_at           *time.Time
+	updated_at           *time.Time
+	deleted_at           *time.Time
+	key                  *string
+	name                 *string
+	budget_multiplier    *float64
+	addbudget_multiplier *float64
+	status               *string
+	last_used_at         *time.Time
+	ip_whitelist         *[]string
+	appendip_whitelist   []string
+	ip_blacklist         *[]string
+	appendip_blacklist   []string
+	quota                *float64
+	addquota             *float64
+	quota_used           *float64
+	addquota_used        *float64
+	expires_at           *time.Time
+	rate_limit_5h        *float64
+	addrate_limit_5h     *float64
+	rate_limit_1d        *float64
+	addrate_limit_1d     *float64
+	rate_limit_7d        *float64
+	addrate_limit_7d     *float64
+	usage_5h             *float64
+	addusage_5h          *float64
+	usage_1d             *float64
+	addusage_1d          *float64
+	usage_7d             *float64
+	addusage_7d          *float64
+	window_5h_start      *time.Time
+	window_1d_start      *time.Time
+	window_7d_start      *time.Time
+	clearedFields        map[string]struct{}
+	user                 *int64
+	cleareduser          bool
+	group                *int64
+	clearedgroup         bool
+	usage_logs           map[int64]struct{}
+	removedusage_logs    map[int64]struct{}
+	clearedusage_logs    bool
+	done                 bool
+	oldValue             func(context.Context) (*APIKey, error)
+	predicates           []predicate.APIKey
 }
 
 var _ ent.Mutation = (*APIKeyMutation)(nil)
@@ -501,6 +503,76 @@ func (m *APIKeyMutation) GroupIDCleared() bool {
 func (m *APIKeyMutation) ResetGroupID() {
 	m.group = nil
 	delete(m.clearedFields, apikey.FieldGroupID)
+}
+
+// SetBudgetMultiplier sets the "budget_multiplier" field.
+func (m *APIKeyMutation) SetBudgetMultiplier(f float64) {
+	m.budget_multiplier = &f
+	m.addbudget_multiplier = nil
+}
+
+// BudgetMultiplier returns the value of the "budget_multiplier" field in the mutation.
+func (m *APIKeyMutation) BudgetMultiplier() (r float64, exists bool) {
+	v := m.budget_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBudgetMultiplier returns the old "budget_multiplier" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldBudgetMultiplier(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBudgetMultiplier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBudgetMultiplier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBudgetMultiplier: %w", err)
+	}
+	return oldValue.BudgetMultiplier, nil
+}
+
+// AddBudgetMultiplier adds f to the "budget_multiplier" field.
+func (m *APIKeyMutation) AddBudgetMultiplier(f float64) {
+	if m.addbudget_multiplier != nil {
+		*m.addbudget_multiplier += f
+	} else {
+		m.addbudget_multiplier = &f
+	}
+}
+
+// AddedBudgetMultiplier returns the value that was added to the "budget_multiplier" field in this mutation.
+func (m *APIKeyMutation) AddedBudgetMultiplier() (r float64, exists bool) {
+	v := m.addbudget_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBudgetMultiplier clears the value of the "budget_multiplier" field.
+func (m *APIKeyMutation) ClearBudgetMultiplier() {
+	m.budget_multiplier = nil
+	m.addbudget_multiplier = nil
+	m.clearedFields[apikey.FieldBudgetMultiplier] = struct{}{}
+}
+
+// BudgetMultiplierCleared returns if the "budget_multiplier" field was cleared in this mutation.
+func (m *APIKeyMutation) BudgetMultiplierCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldBudgetMultiplier]
+	return ok
+}
+
+// ResetBudgetMultiplier resets all changes to the "budget_multiplier" field.
+func (m *APIKeyMutation) ResetBudgetMultiplier() {
+	m.budget_multiplier = nil
+	m.addbudget_multiplier = nil
+	delete(m.clearedFields, apikey.FieldBudgetMultiplier)
 }
 
 // SetStatus sets the "status" field.
@@ -1504,7 +1576,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 24)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1525,6 +1597,9 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.group != nil {
 		fields = append(fields, apikey.FieldGroupID)
+	}
+	if m.budget_multiplier != nil {
+		fields = append(fields, apikey.FieldBudgetMultiplier)
 	}
 	if m.status != nil {
 		fields = append(fields, apikey.FieldStatus)
@@ -1596,6 +1671,8 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case apikey.FieldGroupID:
 		return m.GroupID()
+	case apikey.FieldBudgetMultiplier:
+		return m.BudgetMultiplier()
 	case apikey.FieldStatus:
 		return m.Status()
 	case apikey.FieldLastUsedAt:
@@ -1651,6 +1728,8 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldName(ctx)
 	case apikey.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case apikey.FieldBudgetMultiplier:
+		return m.OldBudgetMultiplier(ctx)
 	case apikey.FieldStatus:
 		return m.OldStatus(ctx)
 	case apikey.FieldLastUsedAt:
@@ -1740,6 +1819,13 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetGroupID(v)
+		return nil
+	case apikey.FieldBudgetMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBudgetMultiplier(v)
 		return nil
 	case apikey.FieldStatus:
 		v, ok := value.(string)
@@ -1861,6 +1947,9 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *APIKeyMutation) AddedFields() []string {
 	var fields []string
+	if m.addbudget_multiplier != nil {
+		fields = append(fields, apikey.FieldBudgetMultiplier)
+	}
 	if m.addquota != nil {
 		fields = append(fields, apikey.FieldQuota)
 	}
@@ -1893,6 +1982,8 @@ func (m *APIKeyMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case apikey.FieldBudgetMultiplier:
+		return m.AddedBudgetMultiplier()
 	case apikey.FieldQuota:
 		return m.AddedQuota()
 	case apikey.FieldQuotaUsed:
@@ -1918,6 +2009,13 @@ func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *APIKeyMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case apikey.FieldBudgetMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBudgetMultiplier(v)
+		return nil
 	case apikey.FieldQuota:
 		v, ok := value.(float64)
 		if !ok {
@@ -1988,6 +2086,9 @@ func (m *APIKeyMutation) ClearedFields() []string {
 	if m.FieldCleared(apikey.FieldGroupID) {
 		fields = append(fields, apikey.FieldGroupID)
 	}
+	if m.FieldCleared(apikey.FieldBudgetMultiplier) {
+		fields = append(fields, apikey.FieldBudgetMultiplier)
+	}
 	if m.FieldCleared(apikey.FieldLastUsedAt) {
 		fields = append(fields, apikey.FieldLastUsedAt)
 	}
@@ -2028,6 +2129,9 @@ func (m *APIKeyMutation) ClearField(name string) error {
 		return nil
 	case apikey.FieldGroupID:
 		m.ClearGroupID()
+		return nil
+	case apikey.FieldBudgetMultiplier:
+		m.ClearBudgetMultiplier()
 		return nil
 	case apikey.FieldLastUsedAt:
 		m.ClearLastUsedAt()
@@ -2078,6 +2182,9 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case apikey.FieldBudgetMultiplier:
+		m.ResetBudgetMultiplier()
 		return nil
 	case apikey.FieldStatus:
 		m.ResetStatus()
@@ -8218,6 +8325,9 @@ type GroupMutation struct {
 	description                             *string
 	rate_multiplier                         *float64
 	addrate_multiplier                      *float64
+	pricing_mode                            *string
+	default_budget_multiplier               *float64
+	adddefault_budget_multiplier            *float64
 	is_exclusive                            *bool
 	status                                  *string
 	platform                                *string
@@ -8642,6 +8752,112 @@ func (m *GroupMutation) AddedRateMultiplier() (r float64, exists bool) {
 func (m *GroupMutation) ResetRateMultiplier() {
 	m.rate_multiplier = nil
 	m.addrate_multiplier = nil
+}
+
+// SetPricingMode sets the "pricing_mode" field.
+func (m *GroupMutation) SetPricingMode(s string) {
+	m.pricing_mode = &s
+}
+
+// PricingMode returns the value of the "pricing_mode" field in the mutation.
+func (m *GroupMutation) PricingMode() (r string, exists bool) {
+	v := m.pricing_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPricingMode returns the old "pricing_mode" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldPricingMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPricingMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPricingMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPricingMode: %w", err)
+	}
+	return oldValue.PricingMode, nil
+}
+
+// ResetPricingMode resets all changes to the "pricing_mode" field.
+func (m *GroupMutation) ResetPricingMode() {
+	m.pricing_mode = nil
+}
+
+// SetDefaultBudgetMultiplier sets the "default_budget_multiplier" field.
+func (m *GroupMutation) SetDefaultBudgetMultiplier(f float64) {
+	m.default_budget_multiplier = &f
+	m.adddefault_budget_multiplier = nil
+}
+
+// DefaultBudgetMultiplier returns the value of the "default_budget_multiplier" field in the mutation.
+func (m *GroupMutation) DefaultBudgetMultiplier() (r float64, exists bool) {
+	v := m.default_budget_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefaultBudgetMultiplier returns the old "default_budget_multiplier" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldDefaultBudgetMultiplier(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefaultBudgetMultiplier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefaultBudgetMultiplier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefaultBudgetMultiplier: %w", err)
+	}
+	return oldValue.DefaultBudgetMultiplier, nil
+}
+
+// AddDefaultBudgetMultiplier adds f to the "default_budget_multiplier" field.
+func (m *GroupMutation) AddDefaultBudgetMultiplier(f float64) {
+	if m.adddefault_budget_multiplier != nil {
+		*m.adddefault_budget_multiplier += f
+	} else {
+		m.adddefault_budget_multiplier = &f
+	}
+}
+
+// AddedDefaultBudgetMultiplier returns the value that was added to the "default_budget_multiplier" field in this mutation.
+func (m *GroupMutation) AddedDefaultBudgetMultiplier() (r float64, exists bool) {
+	v := m.adddefault_budget_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearDefaultBudgetMultiplier clears the value of the "default_budget_multiplier" field.
+func (m *GroupMutation) ClearDefaultBudgetMultiplier() {
+	m.default_budget_multiplier = nil
+	m.adddefault_budget_multiplier = nil
+	m.clearedFields[group.FieldDefaultBudgetMultiplier] = struct{}{}
+}
+
+// DefaultBudgetMultiplierCleared returns if the "default_budget_multiplier" field was cleared in this mutation.
+func (m *GroupMutation) DefaultBudgetMultiplierCleared() bool {
+	_, ok := m.clearedFields[group.FieldDefaultBudgetMultiplier]
+	return ok
+}
+
+// ResetDefaultBudgetMultiplier resets all changes to the "default_budget_multiplier" field.
+func (m *GroupMutation) ResetDefaultBudgetMultiplier() {
+	m.default_budget_multiplier = nil
+	m.adddefault_budget_multiplier = nil
+	delete(m.clearedFields, group.FieldDefaultBudgetMultiplier)
 }
 
 // SetIsExclusive sets the "is_exclusive" field.
@@ -10434,7 +10650,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 32)
+	fields := make([]string, 0, 34)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -10452,6 +10668,12 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.rate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
+	}
+	if m.pricing_mode != nil {
+		fields = append(fields, group.FieldPricingMode)
+	}
+	if m.default_budget_multiplier != nil {
+		fields = append(fields, group.FieldDefaultBudgetMultiplier)
 	}
 	if m.is_exclusive != nil {
 		fields = append(fields, group.FieldIsExclusive)
@@ -10551,6 +10773,10 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.Description()
 	case group.FieldRateMultiplier:
 		return m.RateMultiplier()
+	case group.FieldPricingMode:
+		return m.PricingMode()
+	case group.FieldDefaultBudgetMultiplier:
+		return m.DefaultBudgetMultiplier()
 	case group.FieldIsExclusive:
 		return m.IsExclusive()
 	case group.FieldStatus:
@@ -10624,6 +10850,10 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldDescription(ctx)
 	case group.FieldRateMultiplier:
 		return m.OldRateMultiplier(ctx)
+	case group.FieldPricingMode:
+		return m.OldPricingMode(ctx)
+	case group.FieldDefaultBudgetMultiplier:
+		return m.OldDefaultBudgetMultiplier(ctx)
 	case group.FieldIsExclusive:
 		return m.OldIsExclusive(ctx)
 	case group.FieldStatus:
@@ -10726,6 +10956,20 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRateMultiplier(v)
+		return nil
+	case group.FieldPricingMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPricingMode(v)
+		return nil
+	case group.FieldDefaultBudgetMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefaultBudgetMultiplier(v)
 		return nil
 	case group.FieldIsExclusive:
 		v, ok := value.(bool)
@@ -10920,6 +11164,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addrate_multiplier != nil {
 		fields = append(fields, group.FieldRateMultiplier)
 	}
+	if m.adddefault_budget_multiplier != nil {
+		fields = append(fields, group.FieldDefaultBudgetMultiplier)
+	}
 	if m.adddaily_limit_usd != nil {
 		fields = append(fields, group.FieldDailyLimitUsd)
 	}
@@ -10975,6 +11222,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case group.FieldRateMultiplier:
 		return m.AddedRateMultiplier()
+	case group.FieldDefaultBudgetMultiplier:
+		return m.AddedDefaultBudgetMultiplier()
 	case group.FieldDailyLimitUsd:
 		return m.AddedDailyLimitUsd()
 	case group.FieldWeeklyLimitUsd:
@@ -11020,6 +11269,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddRateMultiplier(v)
+		return nil
+	case group.FieldDefaultBudgetMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDefaultBudgetMultiplier(v)
 		return nil
 	case group.FieldDailyLimitUsd:
 		v, ok := value.(float64)
@@ -11140,6 +11396,9 @@ func (m *GroupMutation) ClearedFields() []string {
 	if m.FieldCleared(group.FieldDescription) {
 		fields = append(fields, group.FieldDescription)
 	}
+	if m.FieldCleared(group.FieldDefaultBudgetMultiplier) {
+		fields = append(fields, group.FieldDefaultBudgetMultiplier)
+	}
 	if m.FieldCleared(group.FieldDailyLimitUsd) {
 		fields = append(fields, group.FieldDailyLimitUsd)
 	}
@@ -11198,6 +11457,9 @@ func (m *GroupMutation) ClearField(name string) error {
 		return nil
 	case group.FieldDescription:
 		m.ClearDescription()
+		return nil
+	case group.FieldDefaultBudgetMultiplier:
+		m.ClearDefaultBudgetMultiplier()
 		return nil
 	case group.FieldDailyLimitUsd:
 		m.ClearDailyLimitUsd()
@@ -11263,6 +11525,12 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldRateMultiplier:
 		m.ResetRateMultiplier()
+		return nil
+	case group.FieldPricingMode:
+		m.ResetPricingMode()
+		return nil
+	case group.FieldDefaultBudgetMultiplier:
+		m.ResetDefaultBudgetMultiplier()
 		return nil
 	case group.FieldIsExclusive:
 		m.ResetIsExclusive()

@@ -149,11 +149,12 @@ type APIKeyAuthCacheInvalidator interface {
 
 // CreateAPIKeyRequest 创建API Key请求
 type CreateAPIKeyRequest struct {
-	Name        string   `json:"name"`
-	GroupID     *int64   `json:"group_id"`
-	CustomKey   *string  `json:"custom_key"`   // 可选的自定义key
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
+	Name             string   `json:"name"`
+	GroupID          *int64   `json:"group_id"`
+	BudgetMultiplier *float64 `json:"budget_multiplier"`
+	CustomKey        *string  `json:"custom_key"`   // 可选的自定义key
+	IPWhitelist      []string `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist      []string `json:"ip_blacklist"` // IP 黑名单
 
 	// Quota fields
 	Quota         float64 `json:"quota"`           // Quota limit in USD (0 = unlimited)
@@ -167,11 +168,12 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
-	Name        *string  `json:"name"`
-	GroupID     *int64   `json:"group_id"`
-	Status      *string  `json:"status"`
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
+	Name             *string  `json:"name"`
+	GroupID          *int64   `json:"group_id"`
+	BudgetMultiplier *float64 `json:"budget_multiplier"`
+	Status           *string  `json:"status"`
+	IPWhitelist      []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
+	IPBlacklist      []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
 
 	// Quota fields
 	Quota           *float64   `json:"quota"`       // Quota limit in USD (nil = no change, 0 = unlimited)
@@ -333,6 +335,8 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		return nil, fmt.Errorf("get user: %w", err)
 	}
 
+	var boundGroup *Group
+
 	// 验证 IP 白名单格式
 	if len(req.IPWhitelist) > 0 {
 		if invalid := ip.ValidateIPPatterns(req.IPWhitelist); len(invalid) > 0 {
@@ -353,6 +357,7 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		if err != nil {
 			return nil, fmt.Errorf("get group: %w", err)
 		}
+		boundGroup = group
 
 		// 检查用户是否可以绑定该分组
 		if !s.canUserBindGroup(ctx, user, group) {
@@ -397,18 +402,31 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 
 	// 创建API Key记录
 	apiKey := &APIKey{
-		UserID:      userID,
-		Key:         key,
-		Name:        req.Name,
-		GroupID:     req.GroupID,
-		Status:      StatusActive,
-		IPWhitelist: req.IPWhitelist,
-		IPBlacklist: req.IPBlacklist,
-		Quota:       req.Quota,
-		QuotaUsed:   0,
-		RateLimit5h: req.RateLimit5h,
-		RateLimit1d: req.RateLimit1d,
-		RateLimit7d: req.RateLimit7d,
+		UserID:           userID,
+		Key:              key,
+		Name:             req.Name,
+		GroupID:          req.GroupID,
+		Status:           StatusActive,
+		IPWhitelist:      req.IPWhitelist,
+		IPBlacklist:      req.IPBlacklist,
+		Quota:            req.Quota,
+		QuotaUsed:        0,
+		RateLimit5h:      req.RateLimit5h,
+		RateLimit1d:      req.RateLimit1d,
+		RateLimit7d:      req.RateLimit7d,
+		BudgetMultiplier: nil,
+	}
+
+	if boundGroup != nil && boundGroup.IsDynamicPricing() {
+		budgetMultiplier := req.BudgetMultiplier
+		if budgetMultiplier == nil {
+			budgetMultiplier = boundGroup.DefaultBudgetMultiplier
+		}
+		validatedBudget, err := validateBudgetMultiplier(budgetMultiplier, ErrAPIKeyBudgetRequired)
+		if err != nil {
+			return nil, err
+		}
+		apiKey.BudgetMultiplier = validatedBudget
 	}
 
 	// Set expiration time if specified
@@ -542,22 +560,22 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 	}
 
 	if req.GroupID != nil {
-		// 验证分组权限
-		user, err := s.userRepo.GetByID(ctx, userID)
+		currentGroupID := int64(0)
+		requestedGroupID := *req.GroupID
+		if apiKey.GroupID != nil {
+			currentGroupID = *apiKey.GroupID
+		}
+		if apiKey.GroupID == nil || requestedGroupID != currentGroupID {
+			return nil, ErrAPIKeyGroupImmutable
+		}
+	}
+
+	if apiKey.Group != nil && apiKey.Group.IsDynamicPricing() && req.BudgetMultiplier != nil {
+		validatedBudget, err := validateBudgetMultiplier(req.BudgetMultiplier, ErrAPIKeyBudgetRequired)
 		if err != nil {
-			return nil, fmt.Errorf("get user: %w", err)
+			return nil, err
 		}
-
-		group, err := s.groupRepo.GetByID(ctx, *req.GroupID)
-		if err != nil {
-			return nil, fmt.Errorf("get group: %w", err)
-		}
-
-		if !s.canUserBindGroup(ctx, user, group) {
-			return nil, ErrGroupNotAllowed
-		}
-
-		apiKey.GroupID = req.GroupID
+		apiKey.BudgetMultiplier = validatedBudget
 	}
 
 	if req.Status != nil {

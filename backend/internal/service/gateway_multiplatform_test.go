@@ -11,6 +11,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/stretchr/testify/require"
 )
 
@@ -299,6 +300,25 @@ func (m *mockGroupRepoForGateway) UpdateSortOrders(ctx context.Context, updates 
 
 func ptr[T any](v T) *T {
 	return &v
+}
+
+type dynamicPricingUsageLogRepoStub struct {
+	UsageLogRepository
+	stats       *usagestats.UsageStats
+	err         error
+	lastFilters usagestats.UsageLogFilters
+}
+
+func (s *dynamicPricingUsageLogRepoStub) GetStatsWithFilters(_ context.Context, filters usagestats.UsageLogFilters) (*usagestats.UsageStats, error) {
+	s.lastFilters = filters
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.stats == nil {
+		return &usagestats.UsageStats{}, nil
+	}
+	clone := *s.stats
+	return &clone, nil
 }
 
 // TestGatewayService_SelectAccountForModelWithPlatform_Anthropic 测试 anthropic 单平台选择
@@ -907,6 +927,301 @@ func TestGatewayService_SelectAccountForModelWithPlatform_GeminiPreferOAuth(t *t
 	require.NoError(t, err)
 	require.NotNil(t, acc)
 	require.Equal(t, int64(2), acc.ID)
+}
+
+func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingSkipsAccountsAboveBudget(t *testing.T) {
+	groupID := int64(42)
+	defaultBudget := 5.0
+	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
+		ID:                      groupID,
+		Platform:                PlatformAnthropic,
+		Status:                  StatusActive,
+		Hydrated:                true,
+		PricingMode:             GroupPricingModeDynamic,
+		DefaultBudgetMultiplier: &defaultBudget,
+		RateMultiplier:          1.0,
+	})
+
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformAnthropic,
+				Priority:    0,
+				Status:      StatusActive,
+				Schedulable: true,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 7.0},
+				},
+			},
+			{
+				ID:          2,
+				Platform:    PlatformAnthropic,
+				Priority:    1,
+				Status:      StatusActive,
+				Schedulable: true,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 4.0},
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+
+	svc := &GatewayService{
+		accountRepo: repo,
+		cfg:         testConfig(),
+	}
+
+	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
+	require.NoError(t, err)
+	require.NotNil(t, acc)
+	require.Equal(t, int64(2), acc.ID)
+}
+
+func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingReturnsNoAvailableAccountsWhenBudgetExhausted(t *testing.T) {
+	groupID := int64(42)
+	defaultBudget := 3.0
+	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
+		ID:                      groupID,
+		Platform:                PlatformAnthropic,
+		Status:                  StatusActive,
+		Hydrated:                true,
+		PricingMode:             GroupPricingModeDynamic,
+		DefaultBudgetMultiplier: &defaultBudget,
+		RateMultiplier:          1.0,
+	})
+
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformAnthropic,
+				Priority:    0,
+				Status:      StatusActive,
+				Schedulable: true,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 7.0},
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+
+	svc := &GatewayService{
+		accountRepo: repo,
+		cfg:         testConfig(),
+	}
+
+	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
+	require.ErrorIs(t, err, ErrNoAvailableAccounts)
+	require.Nil(t, acc)
+}
+
+func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingUsesAPIKeyBudgetOverride(t *testing.T) {
+	groupID := int64(42)
+	defaultBudget := 8.0
+	group := &Group{
+		ID:                      groupID,
+		Platform:                PlatformAnthropic,
+		Status:                  StatusActive,
+		Hydrated:                true,
+		PricingMode:             GroupPricingModeDynamic,
+		DefaultBudgetMultiplier: &defaultBudget,
+		RateMultiplier:          1.0,
+	}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+	keyBudget := 4.0
+	ctx = context.WithValue(ctx, ctxkey.APIKey, &APIKey{
+		ID:               9,
+		UserID:           7,
+		GroupID:          &groupID,
+		Group:            group,
+		BudgetMultiplier: &keyBudget,
+	})
+
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformAnthropic,
+				Priority:    0,
+				Status:      StatusActive,
+				Schedulable: true,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 6.0},
+				},
+			},
+			{
+				ID:          2,
+				Platform:    PlatformAnthropic,
+				Priority:    1,
+				Status:      StatusActive,
+				Schedulable: true,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 3.0},
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+
+	svc := &GatewayService{
+		accountRepo: repo,
+		cfg:         testConfig(),
+	}
+
+	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
+	require.NoError(t, err)
+	require.NotNil(t, acc)
+	require.Equal(t, int64(2), acc.ID)
+}
+
+func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingAllowsCompatibleHigherMultiplierBy7dAverage(t *testing.T) {
+	groupID := int64(42)
+	defaultBudget := 5.0
+	group := &Group{
+		ID:                      groupID,
+		Platform:                PlatformAnthropic,
+		Status:                  StatusActive,
+		Hydrated:                true,
+		PricingMode:             GroupPricingModeDynamic,
+		DefaultBudgetMultiplier: &defaultBudget,
+		RateMultiplier:          1.0,
+	}
+	now := time.Now()
+	apiKey := &APIKey{
+		ID:               9,
+		UserID:           7,
+		GroupID:          &groupID,
+		Group:            group,
+		BudgetMultiplier: &defaultBudget,
+		CreatedAt:        now.Add(-48 * time.Hour),
+	}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+	ctx = context.WithValue(ctx, ctxkey.APIKey, apiKey)
+
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformAnthropic,
+				Priority:    0,
+				Status:      StatusActive,
+				Schedulable: true,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 6.0},
+				},
+			},
+			{
+				ID:          2,
+				Platform:    PlatformAnthropic,
+				Priority:    1,
+				Status:      StatusActive,
+				Schedulable: true,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 4.0},
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+
+	usageRepo := &dynamicPricingUsageLogRepoStub{
+		stats: &usagestats.UsageStats{
+			TotalRequests:   10,
+			TotalCost:       100,
+			TotalActualCost: 400,
+		},
+	}
+
+	svc := &GatewayService{
+		accountRepo:  repo,
+		usageLogRepo: usageRepo,
+		cfg:          testConfig(),
+	}
+
+	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
+	require.NoError(t, err)
+	require.NotNil(t, acc)
+	require.Equal(t, int64(1), acc.ID)
+}
+
+func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingUsesKeyAgeWhenUnder7Days(t *testing.T) {
+	groupID := int64(42)
+	defaultBudget := 5.0
+	group := &Group{
+		ID:                      groupID,
+		Platform:                PlatformAnthropic,
+		Status:                  StatusActive,
+		Hydrated:                true,
+		PricingMode:             GroupPricingModeDynamic,
+		DefaultBudgetMultiplier: &defaultBudget,
+		RateMultiplier:          1.0,
+	}
+	now := time.Now()
+	createdAt := now.Add(-48 * time.Hour)
+	apiKey := &APIKey{
+		ID:               9,
+		UserID:           7,
+		GroupID:          &groupID,
+		Group:            group,
+		BudgetMultiplier: &defaultBudget,
+		CreatedAt:        createdAt,
+	}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+	ctx = context.WithValue(ctx, ctxkey.APIKey, apiKey)
+
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformAnthropic,
+				Priority:    0,
+				Status:      StatusActive,
+				Schedulable: true,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 4.0},
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+
+	usageRepo := &dynamicPricingUsageLogRepoStub{
+		stats: &usagestats.UsageStats{
+			TotalRequests:   1,
+			TotalCost:       10,
+			TotalActualCost: 40,
+		},
+	}
+
+	svc := &GatewayService{
+		accountRepo:  repo,
+		usageLogRepo: usageRepo,
+		cfg:          testConfig(),
+	}
+
+	_, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastFilters.StartTime)
+	require.WithinDuration(t, createdAt, *usageRepo.lastFilters.StartTime, time.Second)
+	require.NotNil(t, usageRepo.lastFilters.EndTime)
 }
 
 func TestGatewayService_SelectAccountForModelWithPlatform_GeminiAPIKeyModelMappingFilter(t *testing.T) {

@@ -133,15 +133,17 @@ type UpdateUserInput struct {
 }
 
 type CreateGroupInput struct {
-	Name             string
-	Description      string
-	Platform         string
-	RateMultiplier   float64
-	IsExclusive      bool
-	SubscriptionType string   // standard/subscription
-	DailyLimitUSD    *float64 // 日限额 (USD)
-	WeeklyLimitUSD   *float64 // 周限额 (USD)
-	MonthlyLimitUSD  *float64 // 月限额 (USD)
+	Name                    string
+	Description             string
+	Platform                string
+	RateMultiplier          float64
+	PricingMode             string
+	DefaultBudgetMultiplier *float64
+	IsExclusive             bool
+	SubscriptionType        string   // standard/subscription
+	DailyLimitUSD           *float64 // 日限额 (USD)
+	WeeklyLimitUSD          *float64 // 周限额 (USD)
+	MonthlyLimitUSD         *float64 // 月限额 (USD)
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	ImagePrice1K *float64
 	ImagePrice2K *float64
@@ -171,16 +173,18 @@ type CreateGroupInput struct {
 }
 
 type UpdateGroupInput struct {
-	Name             string
-	Description      string
-	Platform         string
-	RateMultiplier   *float64 // 使用指针以支持设置为0
-	IsExclusive      *bool
-	Status           string
-	SubscriptionType string   // standard/subscription
-	DailyLimitUSD    *float64 // 日限额 (USD)
-	WeeklyLimitUSD   *float64 // 周限额 (USD)
-	MonthlyLimitUSD  *float64 // 月限额 (USD)
+	Name                    string
+	Description             string
+	Platform                string
+	RateMultiplier          *float64 // 使用指针以支持设置为0
+	PricingMode             string
+	DefaultBudgetMultiplier *float64
+	IsExclusive             *bool
+	Status                  string
+	SubscriptionType        string   // standard/subscription
+	DailyLimitUSD           *float64 // 日限额 (USD)
+	WeeklyLimitUSD          *float64 // 周限额 (USD)
+	MonthlyLimitUSD         *float64 // 月限额 (USD)
 	// 图片生成计费配置（仅 antigravity 平台使用）
 	ImagePrice1K *float64
 	ImagePrice2K *float64
@@ -916,6 +920,23 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		platform = PlatformAnthropic
 	}
 
+	pricingMode, err := validateGroupPricingMode(input.PricingMode)
+	if err != nil {
+		return nil, err
+	}
+	defaultBudgetMultiplier, err := validateBudgetMultiplier(input.DefaultBudgetMultiplier, nil)
+	if err != nil {
+		return nil, err
+	}
+	if pricingMode == GroupPricingModeDynamic {
+		defaultBudgetMultiplier, err = validateBudgetMultiplier(input.DefaultBudgetMultiplier, ErrGroupDefaultBudgetRequired)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		defaultBudgetMultiplier = nil
+	}
+
 	subscriptionType := input.SubscriptionType
 	if subscriptionType == "" {
 		subscriptionType = SubscriptionTypeStandard
@@ -995,6 +1016,8 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		Description:                     input.Description,
 		Platform:                        platform,
 		RateMultiplier:                  input.RateMultiplier,
+		PricingMode:                     pricingMode,
+		DefaultBudgetMultiplier:         defaultBudgetMultiplier,
 		IsExclusive:                     input.IsExclusive,
 		Status:                          StatusActive,
 		SubscriptionType:                subscriptionType,
@@ -1136,6 +1159,21 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if input.RateMultiplier != nil {
 		group.RateMultiplier = *input.RateMultiplier
 	}
+	if input.PricingMode != "" {
+		pricingMode, err := validateGroupPricingMode(input.PricingMode)
+		if err != nil {
+			return nil, err
+		}
+		group.PricingMode = pricingMode
+	}
+	group.PricingMode = normalizeGroupPricingMode(group.PricingMode)
+	if input.DefaultBudgetMultiplier != nil {
+		validatedBudget, err := validateBudgetMultiplier(input.DefaultBudgetMultiplier, nil)
+		if err != nil {
+			return nil, err
+		}
+		group.DefaultBudgetMultiplier = validatedBudget
+	}
 	if input.IsExclusive != nil {
 		group.IsExclusive = *input.IsExclusive
 	}
@@ -1176,6 +1214,15 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.SoraStorageQuotaBytes != nil {
 		group.SoraStorageQuotaBytes = *input.SoraStorageQuotaBytes
+	}
+	if group.IsDynamicPricing() {
+		validatedBudget, err := validateBudgetMultiplier(group.DefaultBudgetMultiplier, ErrGroupDefaultBudgetRequired)
+		if err != nil {
+			return nil, err
+		}
+		group.DefaultBudgetMultiplier = validatedBudget
+	} else {
+		group.DefaultBudgetMultiplier = nil
 	}
 
 	// Claude Code 客户端限制

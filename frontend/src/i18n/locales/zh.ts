@@ -580,6 +580,7 @@ export default {
     namePlaceholder: '我的 API 密钥',
     groupLabel: '分组',
     selectGroup: '选择分组',
+    groupImmutableHint: '密钥创建后不可更换分组，如需切换请新建密钥。',
     statusLabel: '状态',
     selectStatus: '选择状态',
     saving: '保存中...',
@@ -598,6 +599,10 @@ export default {
     groupChangedSuccess: '分组更换成功',
     failedToChangeGroup: '更换分组失败',
     groupRequired: '请选择分组',
+    budgetMultiplierLabel: '预算倍率',
+    budgetMultiplierHint: '系统会按最近 7 天标准成本加权平均倍率，尽量控制在该预算倍率以内。低倍率号池不足时，请求可能失败。',
+    budgetMultiplierRequired: '请输入预算倍率',
+    budgetMultiplierRange: '预算倍率必须在 3 到 50 之间',
     usage: '用量',
     today: '今日',
     total: '近30天',
@@ -1785,7 +1790,7 @@ export default {
       columns: {
         name: '名称',
         platform: '平台',
-        rateMultiplier: '费率倍数',
+        rateMultiplier: '计价配置',
         exclusive: '独占',
         type: '类型',
         priority: '优先级',
@@ -1829,6 +1834,16 @@ export default {
         priorityLabel: '优先级',
         priorityHint: '数值越小优先级越高，用于账号调度',
         statusLabel: '状态'
+      },
+      pricingMode: {
+        label: '计价模式',
+        hint: '固定计价使用费率倍数；动态计价会按号池倍率动态调度，并按预算倍率控制成本。',
+        fixed: '固定计价',
+        dynamic: '动态计价',
+        dynamicValue: '预算 {value}x',
+        defaultBudgetMultiplier: '默认预算倍率',
+        defaultBudgetHint: '新建密钥时会默认填入该预算倍率。允许小数，建议范围 3.0 到 50.0。',
+        defaultBudgetRange: '默认预算倍率必须在 3 到 50 之间'
       },
       exclusiveObj: {
         yes: '是',
