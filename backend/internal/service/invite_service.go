@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	dbinviterewardrecord "github.com/Wei-Shaw/sub2api/ent/inviterewardrecord"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
@@ -28,17 +29,14 @@ type InviteRewardRecordRepository interface {
 	SumBaseRewardsByTargetAndRole(ctx context.Context, userID int64, rewardRole string) (float64, error)
 }
 
-type inviteBaseRewardDuplicateChecker interface {
-	ExistsBaseRewardByRedeemCodeID(ctx context.Context, redeemCodeID int64) (bool, error)
-}
-
 type InviteService struct {
-	userRepo        InviteUserRepository
-	rewardRepo      InviteRewardRecordRepository
-	settingService  *SettingService
-	entClient       *dbent.Client
-	registerURLBase string
-	codeGenerator   func() (string, error)
+	userRepo           InviteUserRepository
+	rewardRepo         InviteRewardRecordRepository
+	settingService     *SettingService
+	entClient          *dbent.Client
+	registerURLBase    string
+	codeGenerator      func() (string, error)
+	baseRewardExistsFn func(ctx context.Context, redeemCodeID int64) (bool, error)
 }
 
 func NewInviteService(userRepo InviteUserRepository, rewardRepo InviteRewardRecordRepository, entClient ...*dbent.Client) *InviteService {
@@ -74,6 +72,36 @@ func (s *InviteService) withInviteWriteTx(ctx context.Context, fn func(context.C
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 	return nil
+}
+
+func (s *InviteService) existsBaseRewardByRedeemCodeID(ctx context.Context, redeemCodeID int64) (bool, error) {
+	if redeemCodeID <= 0 {
+		return false, nil
+	}
+	if s.baseRewardExistsFn != nil {
+		return s.baseRewardExistsFn(ctx, redeemCodeID)
+	}
+
+	var client *dbent.Client
+	if tx := dbent.TxFromContext(ctx); tx != nil {
+		client = tx.Client()
+	} else {
+		client = s.entClient
+	}
+	if client == nil {
+		return false, nil
+	}
+
+	count, err := client.InviteRewardRecord.Query().
+		Where(
+			dbinviterewardrecord.TriggerRedeemCodeIDEQ(redeemCodeID),
+			dbinviterewardrecord.RewardTypeEQ(InviteRewardTypeBase),
+		).
+		Count(ctx)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 func defaultInviteCodeGenerator() (string, error) {
@@ -184,16 +212,12 @@ func (s *InviteService) ApplyBaseRechargeRewards(ctx context.Context, inviteeID 
 	if sourceType != RedeemSourceCommercial {
 		return nil
 	}
-	if redeemCode.ID > 0 {
-		if checker, ok := s.rewardRepo.(inviteBaseRewardDuplicateChecker); ok {
-			exists, err := checker.ExistsBaseRewardByRedeemCodeID(ctx, redeemCode.ID)
-			if err != nil {
-				return err
-			}
-			if exists {
-				return nil
-			}
-		}
+	exists, err := s.existsBaseRewardByRedeemCodeID(ctx, redeemCode.ID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
 	}
 
 	invitee, err := s.userRepo.GetByID(ctx, inviteeID)

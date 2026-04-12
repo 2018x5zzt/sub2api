@@ -20,11 +20,10 @@ type inviteUserRepoStub struct {
 }
 
 type inviteRewardRepoStub struct {
-	created                []InviteRewardRecord
-	totalBase              float64
-	createErr              error
-	createBatchCalls       int
-	existingBaseByRedeemID map[int64]bool
+	created          []InviteRewardRecord
+	totalBase        float64
+	createErr        error
+	createBatchCalls int
 }
 
 func (s *inviteUserRepoStub) Create(context.Context, *User) error {
@@ -126,10 +125,6 @@ func (s *inviteRewardRepoStub) CreateBatch(_ context.Context, records []InviteRe
 	}
 	s.created = append(s.created, records...)
 	return nil
-}
-
-func (s *inviteRewardRepoStub) ExistsBaseRewardByRedeemCodeID(_ context.Context, redeemCodeID int64) (bool, error) {
-	return s.existingBaseByRedeemID[redeemCodeID], nil
 }
 
 func (s *inviteRewardRepoStub) ListByRewardTarget(_ context.Context, _ int64, _ pagination.PaginationParams) ([]InviteRewardRecord, *pagination.PaginationResult, error) {
@@ -359,9 +354,15 @@ func TestInviteService_ApplyBaseRechargeRewardsSkipsDuplicateRewardRecord(t *tes
 		},
 	}
 	rewardRepo := &inviteRewardRepoStub{
-		existingBaseByRedeemID: map[int64]bool{101: true},
+		createErr: nil,
 	}
-	svc := &InviteService{userRepo: userRepo, rewardRepo: rewardRepo}
+	svc := &InviteService{
+		userRepo:   userRepo,
+		rewardRepo: rewardRepo,
+		baseRewardExistsFn: func(_ context.Context, redeemCodeID int64) (bool, error) {
+			return redeemCodeID == 101, nil
+		},
+	}
 
 	err := svc.ApplyBaseRechargeRewards(context.Background(), 8, &RedeemCode{
 		ID: 101, Type: RedeemTypeBalance, SourceType: RedeemSourceCommercial, Value: 100,
