@@ -20,6 +20,9 @@ func (userRepoNoop) GetByID(context.Context, int64) (*User, error) {
 func (userRepoNoop) GetByEmail(context.Context, string) (*User, error) {
 	panic("unexpected GetByEmail call")
 }
+func (userRepoNoop) GetByInviteCode(context.Context, string) (*User, error) {
+	panic("unexpected GetByInviteCode call")
+}
 func (userRepoNoop) GetFirstAdmin(context.Context) (*User, error) {
 	panic("unexpected GetFirstAdmin call")
 }
@@ -42,6 +45,12 @@ func (userRepoNoop) UpdateConcurrency(context.Context, int64, int) error {
 }
 func (userRepoNoop) ExistsByEmail(context.Context, string) (bool, error) {
 	panic("unexpected ExistsByEmail call")
+}
+func (userRepoNoop) ExistsByInviteCode(context.Context, string) (bool, error) {
+	panic("unexpected ExistsByInviteCode call")
+}
+func (userRepoNoop) CountInviteesByInviter(context.Context, int64) (int64, error) {
+	panic("unexpected CountInviteesByInviter call")
 }
 func (userRepoNoop) AddGroupToAllowedGroups(context.Context, int64, int64) error {
 	panic("unexpected AddGroupToAllowedGroups call")
