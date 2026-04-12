@@ -23,6 +23,14 @@ func newCreateAndRedeemHandler() *RedeemHandler {
 	}
 }
 
+func newGenerateHandler() (*RedeemHandler, *stubAdminService) {
+	adminSvc := newStubAdminService()
+	return &RedeemHandler{
+		adminService:  adminSvc,
+		redeemService: &service.RedeemService{},
+	}, adminSvc
+}
+
 // postCreateAndRedeemValidation calls CreateAndRedeem and returns the response
 // status code. For cases that pass validation and proceed into the service layer,
 // a panic may occur (because RedeemService internals are nil); this is expected
@@ -46,6 +54,21 @@ func postCreateAndRedeemValidation(t *testing.T, handler *RedeemHandler, body an
 	}()
 	handler.CreateAndRedeem(c)
 	return w.Code
+}
+
+func postGenerate(t *testing.T, handler *RedeemHandler, body any) *httptest.ResponseRecorder {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	jsonBytes, err := json.Marshal(body)
+	require.NoError(t, err)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/api/v1/admin/redeem-codes/generate", bytes.NewReader(jsonBytes))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	handler.Generate(c)
+	return w
 }
 
 func TestCreateAndRedeem_TypeDefaultsToBalance(t *testing.T) {
@@ -132,4 +155,54 @@ func TestCreateAndRedeem_BalanceIgnoresSubscriptionFields(t *testing.T) {
 
 	assert.NotEqual(t, http.StatusBadRequest, code,
 		"balance type should not require group_id or validity_days")
+}
+
+func TestCreateAndRedeem_RejectsLegacyInvitationType(t *testing.T) {
+	h := newCreateAndRedeemHandler()
+	code := postCreateAndRedeemValidation(t, h, map[string]any{
+		"code":    "legacy-invitation",
+		"type":    "invitation",
+		"value":   0,
+		"user_id": 1,
+	})
+
+	assert.Equal(t, http.StatusBadRequest, code)
+}
+
+func TestGenerateRedeemCodes_DefaultsSourceTypeToSystemGrant(t *testing.T) {
+	h, adminSvc := newGenerateHandler()
+	w := postGenerate(t, h, map[string]any{
+		"count": 1,
+		"type":  "balance",
+		"value": 10,
+	})
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NotNil(t, adminSvc.lastGenerateRedeem)
+	require.Equal(t, service.RedeemSourceSystemGrant, adminSvc.lastGenerateRedeem.SourceType)
+}
+
+func TestGenerateRedeemCodes_PassesExplicitCommercialSourceType(t *testing.T) {
+	h, adminSvc := newGenerateHandler()
+	w := postGenerate(t, h, map[string]any{
+		"count":       1,
+		"type":        "balance",
+		"value":       10,
+		"source_type": "commercial",
+	})
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NotNil(t, adminSvc.lastGenerateRedeem)
+	require.Equal(t, service.RedeemSourceCommercial, adminSvc.lastGenerateRedeem.SourceType)
+}
+
+func TestGenerateRedeemCodes_RejectsLegacyInvitationType(t *testing.T) {
+	h, _ := newGenerateHandler()
+	w := postGenerate(t, h, map[string]any{
+		"count": 1,
+		"type":  "invitation",
+		"value": 0,
+	})
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
 }

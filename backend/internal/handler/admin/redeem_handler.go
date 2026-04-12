@@ -34,8 +34,9 @@ func NewRedeemHandler(adminService service.AdminService, redeemService *service.
 // GenerateRedeemCodesRequest represents generate redeem codes request
 type GenerateRedeemCodesRequest struct {
 	Count        int     `json:"count" binding:"required,min=1,max=100"`
-	Type         string  `json:"type" binding:"required,oneof=balance concurrency subscription invitation"`
+	Type         string  `json:"type" binding:"required,oneof=balance concurrency subscription"`
 	Value        float64 `json:"value" binding:"min=0"`
+	SourceType   string  `json:"source_type" binding:"omitempty,oneof=commercial benefit compensation system_grant"`
 	GroupID      *int64  `json:"group_id"`                                    // 订阅类型必填
 	ValidityDays int     `json:"validity_days" binding:"omitempty,max=36500"` // 订阅类型使用，默认30天，最大100年
 }
@@ -44,7 +45,8 @@ type GenerateRedeemCodesRequest struct {
 // Type 为 omitempty 而非 required 是为了向后兼容旧版调用方（不传 type 时默认 balance）。
 type CreateAndRedeemCodeRequest struct {
 	Code         string  `json:"code" binding:"required,min=3,max=128"`
-	Type         string  `json:"type" binding:"omitempty,oneof=balance concurrency subscription invitation"` // 不传时默认 balance（向后兼容）
+	Type         string  `json:"type" binding:"omitempty,oneof=balance concurrency subscription"` // 不传时默认 balance（向后兼容）
+	SourceType   string  `json:"source_type" binding:"omitempty,oneof=commercial benefit compensation system_grant"`
 	Value        float64 `json:"value" binding:"required,gt=0"`
 	UserID       int64   `json:"user_id" binding:"required,gt=0"`
 	GroupID      *int64  `json:"group_id"`                                    // subscription 类型必填
@@ -106,10 +108,15 @@ func (h *RedeemHandler) Generate(c *gin.Context) {
 	}
 
 	executeAdminIdempotentJSON(c, "admin.redeem_codes.generate", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
+		sourceType := req.SourceType
+		if sourceType == "" {
+			sourceType = service.RedeemSourceSystemGrant
+		}
 		codes, execErr := h.adminService.GenerateRedeemCodes(ctx, &service.GenerateRedeemCodesInput{
 			Count:        req.Count,
 			Type:         req.Type,
 			Value:        req.Value,
+			SourceType:   sourceType,
 			GroupID:      req.GroupID,
 			ValidityDays: req.ValidityDays,
 		})
@@ -144,6 +151,12 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 	if req.Type == "" {
 		req.Type = "balance"
 	}
+	if req.SourceType == "" {
+		req.SourceType = service.RedeemSourceSystemGrant
+		if req.Type == service.RedeemTypeBalance {
+			req.SourceType = service.RedeemSourceCommercial
+		}
+	}
 
 	if req.Type == "subscription" {
 		if req.GroupID == nil {
@@ -168,6 +181,7 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 		createErr := h.redeemService.CreateCode(ctx, &service.RedeemCode{
 			Code:         req.Code,
 			Type:         req.Type,
+			SourceType:   req.SourceType,
 			Value:        req.Value,
 			Status:       service.StatusUnused,
 			Notes:        req.Notes,

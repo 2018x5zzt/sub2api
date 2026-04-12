@@ -1162,6 +1162,16 @@ func (a *Account) IsOpenAIWSAllowStoreRecoveryEnabled() bool {
 	return ok && enabled
 }
 
+// IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled 返回 OAuth/Codex 兼容过滤开关。
+// 字段：accounts.extra.openai_oauth_drop_store_false_native_item_references。
+func (a *Account) IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled() bool {
+	if a == nil || !a.IsOpenAIOAuth() || a.Extra == nil {
+		return false
+	}
+	enabled, ok := a.Extra["openai_oauth_drop_store_false_native_item_references"].(bool)
+	return ok && enabled
+}
+
 // IsOpenAIOAuthPassthroughEnabled 兼容旧接口，等价于 OAuth 账号的 IsOpenAIPassthroughEnabled。
 func (a *Account) IsOpenAIOAuthPassthroughEnabled() bool {
 	return a != nil && a.IsOpenAIOAuth() && a.IsOpenAIPassthroughEnabled()

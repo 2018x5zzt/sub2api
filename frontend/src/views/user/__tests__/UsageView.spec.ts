@@ -41,6 +41,7 @@ const messages: Record<string, string> = {
   'usage.duration': 'Duration',
   'usage.time': 'Time',
   'usage.userAgent': 'User Agent',
+  'usage.cacheCreationUnavailableHint': 'OpenAI cache creation may be unavailable',
 }
 
 vi.mock('@/api', () => ({
@@ -262,5 +263,50 @@ describe('user UsageView tooltip', () => {
     window.URL.createObjectURL = originalCreateObjectURL
     window.URL.revokeObjectURL = originalRevokeObjectURL
     clickSpy.mockRestore()
+  })
+
+  it('shows cache creation availability hint for OpenAI-like token rows', async () => {
+    query.mockResolvedValue({
+      items: [],
+      total: 0,
+      pages: 0,
+    })
+    getStatsByDateRange.mockResolvedValue({
+      total_requests: 0,
+      total_tokens: 0,
+      total_cost: 0,
+      avg_duration_ms: 0,
+    })
+    list.mockResolvedValue({ items: [] })
+
+    const wrapper = mount(UsageView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          TablePageLayout: TablePageLayoutStub,
+          Pagination: true,
+          EmptyState: true,
+          Select: true,
+          DateRangePicker: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await nextTick()
+
+    const setupState = (wrapper.vm as any).$?.setupState
+    setupState.tokenTooltipData = {
+      cache_creation_tokens: 0,
+      cache_read_tokens: 512,
+      upstream_endpoint: '/v1/responses',
+      model: 'gpt-5.4',
+    }
+    setupState.tokenTooltipVisible = true
+    await nextTick()
+
+    expect(wrapper.text()).toContain('OpenAI cache creation may be unavailable')
   })
 })

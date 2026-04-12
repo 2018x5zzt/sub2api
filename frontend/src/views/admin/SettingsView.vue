@@ -709,20 +709,6 @@
               <Toggle v-model="form.promo_code_enabled" />
             </div>
 
-            <!-- Invitation Code -->
-            <div
-              class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
-            >
-              <div>
-                <label class="font-medium text-gray-900 dark:text-white">{{
-                  t('admin.settings.registration.invitationCode')
-                }}</label>
-                <p class="text-sm text-gray-500 dark:text-gray-400">
-                  {{ t('admin.settings.registration.invitationCodeHint') }}
-                </p>
-              </div>
-              <Toggle v-model="form.invitation_code_enabled" />
-            </div>
             <!-- Password Reset - Only show when email verification is enabled -->
             <div
               v-if="form.email_verify_enabled"

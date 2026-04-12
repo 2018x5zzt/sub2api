@@ -179,3 +179,56 @@ func TestForwardAsAnthropic_BufferedDoneTerminalResponsePreservesUsageInResult(t
 	require.Equal(t, 4, result.Usage.OutputTokens)
 	require.Equal(t, 1, result.Usage.CacheReadInputTokens)
 }
+
+func TestForwardAsAnthropic_BufferedDoneTerminalResponsePreservesOptionalCacheCreationUsageInResult(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(nil))
+
+	body := []byte(`{"model":"claude-opus-4-1","max_tokens":1024,"messages":[{"role":"user","content":"Hi"}],"stream":false}`)
+	upstreamSSE := strings.Join([]string{
+		`data: {"type":"response.created","response":{"id":"resp_messages_cache_create","model":"gpt-5.1","status":"in_progress"}}`,
+		"",
+		`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"final answer"}`,
+		"",
+		`data: {"type":"response.done","response":{"id":"resp_messages_cache_create","model":"gpt-5.1","status":"completed","usage":{"input_tokens":10,"output_tokens":4,"cache_creation_input_tokens":7,"input_tokens_details":{"cached_tokens":1}}}}`,
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid-messages-cache-create"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamSSE)),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{}},
+		httpUpstream: upstream,
+	}
+
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeOAuth,
+		Concurrency:    1,
+		Credentials:    map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.ForwardAsAnthropic(context.Background(), c, account, body, "", "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	require.Equal(t, "final answer", gjson.GetBytes(rec.Body.Bytes(), "content.0.text").String())
+	require.Equal(t, 10, result.Usage.InputTokens)
+	require.Equal(t, 4, result.Usage.OutputTokens)
+	require.Equal(t, 7, result.Usage.CacheCreationInputTokens)
+	require.Equal(t, 1, result.Usage.CacheReadInputTokens)
+}

@@ -22,6 +22,7 @@ type stubAdminService struct {
 	updatedProxyIDs      []int64
 	updatedProxies       []*service.UpdateProxyInput
 	testedProxyIDs       []int64
+	lastGenerateRedeem   *service.GenerateRedeemCodesInput
 	createAccountErr     error
 	updateAccountErr     error
 	bulkUpdateAccountErr error
@@ -33,6 +34,8 @@ type stubAdminService struct {
 	}
 	mu sync.Mutex
 }
+
+func int64Ptr(v int64) *int64 { return &v }
 
 func newStubAdminService() *stubAdminService {
 	now := time.Now().UTC()
@@ -395,6 +398,10 @@ func (s *stubAdminService) GetRedeemCode(ctx context.Context, id int64) (*servic
 }
 
 func (s *stubAdminService) GenerateRedeemCodes(ctx context.Context, input *service.GenerateRedeemCodesInput) ([]service.RedeemCode, error) {
+	if input != nil {
+		copied := *input
+		s.lastGenerateRedeem = &copied
+	}
 	return s.redeems, nil
 }
 
@@ -438,6 +445,93 @@ func (s *stubAdminService) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 }
 
 func (s *stubAdminService) ResetAccountQuota(ctx context.Context, id int64) error {
+	return nil
+}
+
+func (s *stubAdminService) GetInviteStats(ctx context.Context) (*service.AdminInviteStats, error) {
+	return &service.AdminInviteStats{
+		TotalInvitedUsers:         3,
+		QualifiedRewardUsersTotal: 2,
+		BaseRewardsTotal:          15,
+		ManualGrantsTotal:         5,
+		RecomputeAdjustmentsTotal: -2,
+	}, nil
+}
+
+func (s *stubAdminService) ListInviteRelationships(ctx context.Context, page, pageSize int, filters service.AdminInviteRelationshipFilters) ([]service.AdminInviteRelationship, int64, error) {
+	rows := []service.AdminInviteRelationship{
+		{
+			InviteeUserID:        8,
+			InviteeEmail:         "invitee@example.com",
+			InviteCode:           "IV00000001",
+			CurrentInviterUserID: int64Ptr(7),
+			CurrentInviterEmail:  "inviter@example.com",
+		},
+	}
+	return rows, int64(len(rows)), nil
+}
+
+func (s *stubAdminService) ListInviteRewards(ctx context.Context, page, pageSize int, filters service.AdminInviteRewardFilters) ([]service.AdminInviteRewardRow, int64, error) {
+	rows := []service.AdminInviteRewardRow{
+		{
+			RewardTargetUserID: 8,
+			RewardTargetEmail:  "invitee@example.com",
+			InviterUserID:      7,
+			InviterEmail:       "inviter@example.com",
+			InviteeUserID:      8,
+			InviteeEmail:       "invitee@example.com",
+			RewardRole:         service.InviteRewardRoleInvitee,
+			RewardType:         service.InviteRewardTypeBase,
+			RewardAmount:       5,
+			CreatedAt:          time.Now().UTC(),
+		},
+	}
+	return rows, int64(len(rows)), nil
+}
+
+func (s *stubAdminService) ListInviteActions(ctx context.Context, page, pageSize int, filters service.InviteAdminActionFilters) ([]service.InviteAdminAction, int64, error) {
+	rows := []service.InviteAdminAction{
+		{
+			ID:                  1,
+			ActionType:          service.InviteAdminActionTypeManualGrant,
+			OperatorUserID:      1,
+			TargetUserID:        8,
+			Reason:              "operator repair",
+			RequestSnapshotJSON: map[string]any{},
+			ResultSnapshotJSON:  map[string]any{},
+			CreatedAt:           time.Now().UTC(),
+		},
+	}
+	return rows, int64(len(rows)), nil
+}
+
+func (s *stubAdminService) RebindInviter(ctx context.Context, input service.RebindInviterInput) error {
+	return nil
+}
+
+func (s *stubAdminService) CreateManualInviteGrant(ctx context.Context, input service.ManualInviteGrantInput) error {
+	return nil
+}
+
+func (s *stubAdminService) PreviewInviteRecompute(ctx context.Context, input service.InviteRecomputeInput) (*service.InviteRecomputePreview, error) {
+	return &service.InviteRecomputePreview{
+		ScopeHash:            "stub-scope-hash",
+		QualifyingEventCount: 1,
+		Deltas: []service.InviteRecomputeDelta{
+			{
+				InviterUserID:      7,
+				InviteeUserID:      8,
+				RewardTargetUserID: 7,
+				RewardRole:         service.InviteRewardRoleInviter,
+				CurrentAmount:      0,
+				ExpectedAmount:     5,
+				DeltaAmount:        5,
+			},
+		},
+	}, nil
+}
+
+func (s *stubAdminService) ExecuteInviteRecompute(ctx context.Context, input service.InviteRecomputeExecuteInput) error {
 	return nil
 }
 

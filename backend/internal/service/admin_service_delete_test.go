@@ -49,6 +49,10 @@ func (s *userRepoStub) GetByEmail(ctx context.Context, email string) (*User, err
 	panic("unexpected GetByEmail call")
 }
 
+func (s *userRepoStub) GetByInviteCode(ctx context.Context, code string) (*User, error) {
+	panic("unexpected GetByInviteCode call")
+}
+
 func (s *userRepoStub) GetFirstAdmin(ctx context.Context) (*User, error) {
 	panic("unexpected GetFirstAdmin call")
 }
@@ -87,6 +91,14 @@ func (s *userRepoStub) ExistsByEmail(ctx context.Context, email string) (bool, e
 		return false, s.existsErr
 	}
 	return s.exists, nil
+}
+
+func (s *userRepoStub) ExistsByInviteCode(context.Context, string) (bool, error) {
+	return false, nil
+}
+
+func (s *userRepoStub) CountInviteesByInviter(context.Context, int64) (int64, error) {
+	return 0, nil
 }
 
 func (s *userRepoStub) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {

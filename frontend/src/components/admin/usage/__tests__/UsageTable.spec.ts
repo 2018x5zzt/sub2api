@@ -22,6 +22,7 @@ const messages: Record<string, string> = {
   'usage.original': 'Original',
   'usage.userBilled': 'User billed',
   'usage.accountBilled': 'Account billed',
+  'usage.cacheCreationUnavailableHint': 'OpenAI cache creation may be unavailable',
 }
 
 vi.mock('vue-i18n', async () => {
@@ -107,5 +108,35 @@ describe('admin UsageTable tooltip', () => {
     expect(text).toContain('$5.0000 / 1M tokens')
     expect(text).toContain('$30.0000 / 1M tokens')
     expect(text).toContain('$0.069568')
+  })
+
+  it('shows cache creation availability hint for OpenAI-like token rows', async () => {
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [],
+        loading: false,
+        columns: [],
+      },
+      global: {
+        stubs: {
+          DataTable: DataTableStub,
+          EmptyState: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    const setupState = (wrapper.vm as any).$?.setupState
+    setupState.tokenTooltipData = {
+      cache_creation_tokens: 0,
+      cache_read_tokens: 512,
+      upstream_endpoint: '/v1/responses',
+      model: 'gpt-5.4',
+    }
+    setupState.tokenTooltipVisible = true
+    await nextTick()
+
+    expect(wrapper.text()).toContain('OpenAI cache creation may be unavailable')
   })
 })

@@ -12,7 +12,7 @@ func TestApplyCodexOAuthTransform_ToolContinuationPreservesInput(t *testing.T) {
 	reqBody := map[string]any{
 		"model": "gpt-5.2",
 		"input": []any{
-			map[string]any{"type": "item_reference", "id": "ref1", "text": "x"},
+			map[string]any{"type": "item_reference", "id": "call_1", "text": "x"},
 			map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "ok", "id": "o1"},
 		},
 		"tool_choice": "auto",
@@ -33,7 +33,7 @@ func TestApplyCodexOAuthTransform_ToolContinuationPreservesInput(t *testing.T) {
 	first, ok := input[0].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "item_reference", first["type"])
-	require.Equal(t, "ref1", first["id"])
+	require.Equal(t, "fc1", first["id"])
 
 	// 校验 input[1] 为 map，确保后续字段断言安全。
 	second, ok := input[1].(map[string]any)
@@ -42,7 +42,7 @@ func TestApplyCodexOAuthTransform_ToolContinuationPreservesInput(t *testing.T) {
 	require.Equal(t, "fc1", second["call_id"])
 }
 
-func TestApplyCodexOAuthTransform_ToolContinuationPreservesNativeMessageAndReasoningIDs(t *testing.T) {
+func TestApplyCodexOAuthTransform_StoreFalseKeepsNativeItemReferencesByDefault(t *testing.T) {
 	reqBody := map[string]any{
 		"model": "gpt-5.2",
 		"input": []any{
@@ -65,6 +65,30 @@ func TestApplyCodexOAuthTransform_ToolContinuationPreservesNativeMessageAndReaso
 	second, ok := input[1].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "rs_123", second["id"])
+}
+
+func TestApplyCodexOAuthTransform_StoreFalseDropsNativeItemReferencesWhenFlagEnabled(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.2",
+		"input": []any{
+			map[string]any{"type": "message", "id": "msg_0", "role": "user", "content": "hi"},
+			map[string]any{"type": "item_reference", "id": "rs_123"},
+		},
+		"tool_choice": "auto",
+	}
+
+	result := applyCodexOAuthTransformWithOptions(reqBody, false, false, codexTransformOptions{
+		DropStoreFalseNativeItemReferences: true,
+	})
+
+	input, ok := reqBody["input"].([]any)
+	require.True(t, ok)
+	require.Len(t, input, 1)
+
+	first, ok := input[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "msg_0", first["id"])
+	require.Equal(t, 1, result.DroppedNativeItemReferenceCount)
 }
 
 func TestApplyCodexOAuthTransform_ToolContinuationNormalizesToolReferenceIDsOnly(t *testing.T) {
@@ -178,14 +202,40 @@ func TestFilterCodexInput_RemovesItemReferenceWhenNotPreserved(t *testing.T) {
 		map[string]any{"type": "text", "id": "t1", "text": "hi"},
 	}
 
-	filtered := filterCodexInput(input, false)
+	filtered, droppedCount := filterCodexInput(input, false, false, false)
 	require.Len(t, filtered, 1)
+	require.Zero(t, droppedCount)
 	// 校验 filtered[0] 为 map，确保字段检查可靠。
 	item, ok := filtered[0].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "text", item["type"])
 	_, hasID := item["id"]
 	require.False(t, hasID)
+}
+
+func TestFilterCodexInput_StoreFalseDropsOnlyNativeItemReferencesWhenFlagEnabled(t *testing.T) {
+	input := []any{
+		map[string]any{"type": "message", "id": "msg_0", "role": "user", "content": "hi"},
+		map[string]any{"type": "item_reference", "id": "rs_123"},
+		map[string]any{"type": "item_reference", "id": "call_1"},
+		map[string]any{"type": "function_call_output", "call_id": "call_1", "output": "ok"},
+	}
+
+	filtered, droppedCount := filterCodexInput(input, true, true, true)
+	require.Len(t, filtered, 3)
+	require.Equal(t, 1, droppedCount)
+
+	first, ok := filtered[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "msg_0", first["id"])
+
+	second, ok := filtered[1].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "fc1", second["id"])
+
+	third, ok := filtered[2].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "fc1", third["call_id"])
 }
 
 func TestApplyCodexOAuthTransform_NormalizeCodexTools_PreservesResponsesFunctionTools(t *testing.T) {

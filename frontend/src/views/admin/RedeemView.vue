@@ -211,7 +211,7 @@
               <Select v-model="generateForm.type" :options="typeOptions" />
             </div>
             <!-- 余额/并发类型：显示数值输入 -->
-            <div v-if="generateForm.type !== 'subscription' && generateForm.type !== 'invitation'">
+            <div v-if="generateForm.type !== 'subscription'">
               <label class="input-label">
                 {{
                   generateForm.type === 'balance'
@@ -228,10 +228,11 @@
                 class="input"
               />
             </div>
-            <!-- 邀请码类型：显示提示信息 -->
-            <div v-if="generateForm.type === 'invitation'" class="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-              <p class="text-sm text-blue-700 dark:text-blue-300">
-                {{ t('admin.redeem.invitationHint') }}
+            <div v-if="generateForm.type === 'balance'">
+              <label class="input-label">{{ t('admin.redeem.sourceType') }}</label>
+              <Select v-model="generateForm.source_type" :options="sourceTypeOptions" />
+              <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+                {{ t('admin.redeem.sourceTypeHint') }}
               </p>
             </div>
             <!-- 订阅类型：显示分组选择和有效天数 -->
@@ -398,7 +399,14 @@ import { useClipboard } from '@/composables/useClipboard'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { adminAPI } from '@/api/admin'
 import { formatDateTime } from '@/utils/format'
-import type { RedeemCode, RedeemCodeType, Group, GroupPlatform, SubscriptionType } from '@/types'
+import type {
+  RedeemCode,
+  RedeemCodeType,
+  RedeemCodeSourceType,
+  Group,
+  GroupPlatform,
+  SubscriptionType
+} from '@/types'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -504,16 +512,21 @@ const columns = computed<Column[]>(() => [
 const typeOptions = computed(() => [
   { value: 'balance', label: t('admin.redeem.balance') },
   { value: 'concurrency', label: t('admin.redeem.concurrency') },
-  { value: 'subscription', label: t('admin.redeem.subscription') },
-  { value: 'invitation', label: t('admin.redeem.invitation') }
+  { value: 'subscription', label: t('admin.redeem.subscription') }
 ])
 
 const filterTypeOptions = computed(() => [
   { value: '', label: t('admin.redeem.allTypes') },
   { value: 'balance', label: t('admin.redeem.balance') },
   { value: 'concurrency', label: t('admin.redeem.concurrency') },
-  { value: 'subscription', label: t('admin.redeem.subscription') },
-  { value: 'invitation', label: t('admin.redeem.invitation') }
+  { value: 'subscription', label: t('admin.redeem.subscription') }
+])
+
+const sourceTypeOptions = computed(() => [
+  { value: 'system_grant', label: t('admin.redeem.sourceTypes.system_grant') },
+  { value: 'commercial', label: t('admin.redeem.sourceTypes.commercial') },
+  { value: 'benefit', label: t('admin.redeem.sourceTypes.benefit') },
+  { value: 'compensation', label: t('admin.redeem.sourceTypes.compensation') }
 ])
 
 const filterStatusOptions = computed(() => [
@@ -547,20 +560,24 @@ const copiedCode = ref<string | null>(null)
 
 const generateForm = reactive({
   type: 'balance' as RedeemCodeType,
+  source_type: 'system_grant' as RedeemCodeSourceType,
   value: 10,
   count: 1,
   group_id: null as number | null,
   validity_days: 30
 })
 
-// 监听类型变化，邀请码类型时自动设置 value 为 0
+// 监听类型变化，保持数值类兑换码的默认面值，并避免旧 invitation 入口残留状态。
 watch(
   () => generateForm.type,
   (newType) => {
-    if (newType === 'invitation') {
-      generateForm.value = 0
-    } else if (generateForm.value === 0) {
+    if (newType === 'balance' && generateForm.value === 0) {
       generateForm.value = 10
+    } else if (newType !== 'subscription' && generateForm.value === 0) {
+      generateForm.value = 10
+    }
+    if (newType !== 'balance') {
+      generateForm.source_type = 'system_grant'
     }
   }
 )
@@ -642,6 +659,7 @@ const handleGenerateCodes = async () => {
       generateForm.count,
       generateForm.type,
       generateForm.value,
+      generateForm.type === 'balance' ? generateForm.source_type : 'system_grant',
       generateForm.type === 'subscription' ? generateForm.group_id : undefined,
       generateForm.type === 'subscription' ? generateForm.validity_days : undefined
     )
@@ -649,6 +667,7 @@ const handleGenerateCodes = async () => {
     generatedCodes.value = result
     showResultDialog.value = true
     // 重置表单
+    generateForm.source_type = 'system_grant'
     generateForm.group_id = null
     generateForm.validity_days = 30
     loadCodes()

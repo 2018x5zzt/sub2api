@@ -236,6 +236,106 @@ func TestOpenAIGatewayService_OAuthPassthrough_StreamKeepsToolNameAndBodyNormali
 	require.NotContains(t, body, "\"name\":\"edit\"")
 }
 
+func TestOpenAIGatewayService_OAuthPassthrough_OptionalStoreFalseNativeItemReferenceFilter(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	t.Run("default_disabled_preserves_native_item_reference", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+		c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+
+		originalBody := []byte(`{"model":"gpt-5.2","input":[{"type":"message","role":"user","content":"hi","id":"msg_0"},{"type":"item_reference","id":"rs_123"}]}`)
+		upstreamSSE := strings.Join([]string{
+			`data: {"type":"response.completed","response":{"id":"resp_1"}}`,
+			"",
+			"data: [DONE]",
+			"",
+		}, "\n")
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+			Body:       io.NopCloser(strings.NewReader(upstreamSSE)),
+		}
+		upstream := &httpUpstreamRecorder{resp: resp}
+
+		svc := &OpenAIGatewayService{
+			cfg:                 &config.Config{Gateway: config.GatewayConfig{}},
+			httpUpstream:        upstream,
+			openAITokenProvider: nil,
+		}
+		account := &Account{
+			ID:             123,
+			Name:           "acc",
+			Platform:       PlatformOpenAI,
+			Type:           AccountTypeOAuth,
+			Concurrency:    1,
+			Credentials:    map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"},
+			Extra:          map[string]any{"openai_passthrough": true},
+			Status:         StatusActive,
+			Schedulable:    true,
+			RateMultiplier: f64p(1),
+		}
+
+		_, err := svc.Forward(context.Background(), c, account, originalBody)
+		require.NoError(t, err)
+		require.Equal(t, "rs_123", gjson.GetBytes(upstream.lastBody, "input.1.id").String())
+	})
+
+	t.Run("flag_enabled_drops_native_item_reference_and_logs", func(t *testing.T) {
+		logSink, restoreLogs := captureStructuredLog(t)
+		defer restoreLogs()
+
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+		c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+
+		originalBody := []byte(`{"model":"gpt-5.2","input":[{"type":"message","role":"user","content":"hi","id":"msg_0"},{"type":"item_reference","id":"rs_123"}]}`)
+		upstreamSSE := strings.Join([]string{
+			`data: {"type":"response.completed","response":{"id":"resp_1"}}`,
+			"",
+			"data: [DONE]",
+			"",
+		}, "\n")
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+			Body:       io.NopCloser(strings.NewReader(upstreamSSE)),
+		}
+		upstream := &httpUpstreamRecorder{resp: resp}
+
+		svc := &OpenAIGatewayService{
+			cfg:                 &config.Config{Gateway: config.GatewayConfig{}},
+			httpUpstream:        upstream,
+			openAITokenProvider: nil,
+		}
+		account := &Account{
+			ID:          456,
+			Name:        "acc-flagged",
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeOAuth,
+			Concurrency: 1,
+			Credentials: map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"},
+			Extra: map[string]any{
+				"openai_passthrough": true,
+				"openai_oauth_drop_store_false_native_item_references": true,
+			},
+			Status:         StatusActive,
+			Schedulable:    true,
+			RateMultiplier: f64p(1),
+		}
+
+		_, err := svc.Forward(context.Background(), c, account, originalBody)
+		require.NoError(t, err)
+		require.Len(t, gjson.GetBytes(upstream.lastBody, "input").Array(), 1)
+		require.False(t, gjson.GetBytes(upstream.lastBody, "input.1.id").Exists())
+		require.True(t, logSink.ContainsMessage("dropped store=false native item references"))
+		require.True(t, logSink.ContainsFieldValue("account_id", "456"))
+		require.True(t, logSink.ContainsFieldValue("dropped_native_item_reference_count", "1"))
+	})
+}
+
 func TestOpenAIGatewayService_OAuthPassthrough_CompactUsesJSONAndKeepsNonStreaming(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

@@ -93,6 +93,16 @@ type AdminService interface {
 	BatchDeleteRedeemCodes(ctx context.Context, ids []int64) (int64, error)
 	ExpireRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
 	ResetAccountQuota(ctx context.Context, id int64) error
+
+	// Invite read management
+	GetInviteStats(ctx context.Context) (*AdminInviteStats, error)
+	ListInviteRelationships(ctx context.Context, page, pageSize int, filters AdminInviteRelationshipFilters) ([]AdminInviteRelationship, int64, error)
+	ListInviteRewards(ctx context.Context, page, pageSize int, filters AdminInviteRewardFilters) ([]AdminInviteRewardRow, int64, error)
+	ListInviteActions(ctx context.Context, page, pageSize int, filters InviteAdminActionFilters) ([]InviteAdminAction, int64, error)
+	RebindInviter(ctx context.Context, input RebindInviterInput) error
+	CreateManualInviteGrant(ctx context.Context, input ManualInviteGrantInput) error
+	PreviewInviteRecompute(ctx context.Context, input InviteRecomputeInput) (*InviteRecomputePreview, error)
+	ExecuteInviteRecompute(ctx context.Context, input InviteRecomputeExecuteInput) error
 }
 
 // CreateUserInput represents input for creating a new user via admin operations.
@@ -312,6 +322,7 @@ type GenerateRedeemCodesInput struct {
 	Count        int
 	Type         string
 	Value        float64
+	SourceType   string
 	GroupID      *int64 // 订阅类型专用：关联的分组ID
 	ValidityDays int    // 订阅类型专用：有效天数
 }
@@ -476,23 +487,31 @@ func validateAccountGroupBindings(bindings []AccountGroupBindingInput) error {
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
-	userRepo             UserRepository
-	groupRepo            GroupRepository
-	accountRepo          AccountRepository
-	soraAccountRepo      SoraAccountRepository // Sora 账号扩展表仓储
-	proxyRepo            ProxyRepository
-	apiKeyRepo           APIKeyRepository
-	redeemCodeRepo       RedeemCodeRepository
-	userGroupRateRepo    UserGroupRateRepository
-	billingCacheService  *BillingCacheService
-	proxyProber          ProxyExitInfoProber
-	proxyLatencyCache    ProxyLatencyCache
-	authCacheInvalidator APIKeyAuthCacheInvalidator
-	entClient            *dbent.Client // 用于开启数据库事务
-	settingService       *SettingService
-	defaultSubAssigner   DefaultSubscriptionAssigner
-	userSubRepo          UserSubscriptionRepository
-	privacyClientFactory PrivacyClientFactory
+	userRepo                     UserRepository
+	groupRepo                    GroupRepository
+	accountRepo                  AccountRepository
+	soraAccountRepo              SoraAccountRepository // Sora 账号扩展表仓储
+	proxyRepo                    ProxyRepository
+	apiKeyRepo                   APIKeyRepository
+	redeemCodeRepo               RedeemCodeRepository
+	inviteAdminQueryRepo         InviteAdminQueryRepository
+	inviteRewardRecordRepo       InviteRewardAdminRepository
+	inviteRelationshipEventRepo  InviteRelationshipEventAdminRepository
+	inviteAdminActionRepo        InviteAdminActionRepository
+	inviteQualifyingRechargeRepo InviteQualifyingRechargeRepository
+	userGroupRateRepo            UserGroupRateRepository
+	billingCacheService          *BillingCacheService
+	proxyProber                  ProxyExitInfoProber
+	proxyLatencyCache            ProxyLatencyCache
+	authCacheInvalidator         APIKeyAuthCacheInvalidator
+	entClient                    *dbent.Client // 用于开启数据库事务
+	settingService               *SettingService
+	defaultSubAssigner           DefaultSubscriptionAssigner
+	userSubRepo                  UserSubscriptionRepository
+	privacyClientFactory         PrivacyClientFactory
+	inviteBindingUserRepo        interface {
+		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
+	}
 }
 
 type userGroupRateBatchReader interface {
@@ -508,6 +527,11 @@ func NewAdminService(
 	proxyRepo ProxyRepository,
 	apiKeyRepo APIKeyRepository,
 	redeemCodeRepo RedeemCodeRepository,
+	inviteAdminQueryRepo InviteAdminQueryRepository,
+	inviteRewardRecordRepo InviteRewardAdminRepository,
+	inviteRelationshipEventRepo InviteRelationshipEventAdminRepository,
+	inviteAdminActionRepo InviteAdminActionRepository,
+	inviteQualifyingRechargeRepo InviteQualifyingRechargeRepository,
 	userGroupRateRepo UserGroupRateRepository,
 	billingCacheService *BillingCacheService,
 	proxyProber ProxyExitInfoProber,
@@ -519,24 +543,39 @@ func NewAdminService(
 	userSubRepo UserSubscriptionRepository,
 	privacyClientFactory PrivacyClientFactory,
 ) AdminService {
+	var inviteBindingUserRepo interface {
+		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
+	}
+	if binder, ok := userRepo.(interface {
+		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
+	}); ok {
+		inviteBindingUserRepo = binder
+	}
+
 	return &adminServiceImpl{
-		userRepo:             userRepo,
-		groupRepo:            groupRepo,
-		accountRepo:          accountRepo,
-		soraAccountRepo:      soraAccountRepo,
-		proxyRepo:            proxyRepo,
-		apiKeyRepo:           apiKeyRepo,
-		redeemCodeRepo:       redeemCodeRepo,
-		userGroupRateRepo:    userGroupRateRepo,
-		billingCacheService:  billingCacheService,
-		proxyProber:          proxyProber,
-		proxyLatencyCache:    proxyLatencyCache,
-		authCacheInvalidator: authCacheInvalidator,
-		entClient:            entClient,
-		settingService:       settingService,
-		defaultSubAssigner:   defaultSubAssigner,
-		userSubRepo:          userSubRepo,
-		privacyClientFactory: privacyClientFactory,
+		userRepo:                     userRepo,
+		groupRepo:                    groupRepo,
+		accountRepo:                  accountRepo,
+		soraAccountRepo:              soraAccountRepo,
+		proxyRepo:                    proxyRepo,
+		apiKeyRepo:                   apiKeyRepo,
+		redeemCodeRepo:               redeemCodeRepo,
+		inviteAdminQueryRepo:         inviteAdminQueryRepo,
+		inviteRewardRecordRepo:       inviteRewardRecordRepo,
+		inviteRelationshipEventRepo:  inviteRelationshipEventRepo,
+		inviteAdminActionRepo:        inviteAdminActionRepo,
+		inviteQualifyingRechargeRepo: inviteQualifyingRechargeRepo,
+		userGroupRateRepo:            userGroupRateRepo,
+		billingCacheService:          billingCacheService,
+		proxyProber:                  proxyProber,
+		proxyLatencyCache:            proxyLatencyCache,
+		authCacheInvalidator:         authCacheInvalidator,
+		entClient:                    entClient,
+		settingService:               settingService,
+		defaultSubAssigner:           defaultSubAssigner,
+		userSubRepo:                  userSubRepo,
+		privacyClientFactory:         privacyClientFactory,
+		inviteBindingUserRepo:        inviteBindingUserRepo,
 	}
 }
 
@@ -2121,6 +2160,9 @@ func (s *adminServiceImpl) GetRedeemCode(ctx context.Context, id int64) (*Redeem
 }
 
 func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *GenerateRedeemCodesInput) ([]RedeemCode, error) {
+	if input.Type == RedeemTypeInvitation {
+		return nil, errors.New("legacy invitation redeem codes are no longer supported")
+	}
 	// 如果是订阅类型，验证必须有 GroupID
 	if input.Type == RedeemTypeSubscription {
 		if input.GroupID == nil {
@@ -2135,6 +2177,7 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			return nil, errors.New("group must be subscription type")
 		}
 	}
+	sourceType := NormalizeRedeemSourceType(input.SourceType, RedeemSourceSystemGrant)
 
 	codes := make([]RedeemCode, 0, input.Count)
 	for i := 0; i < input.Count; i++ {
@@ -2143,10 +2186,11 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			return nil, err
 		}
 		code := RedeemCode{
-			Code:   codeValue,
-			Type:   input.Type,
-			Value:  input.Value,
-			Status: StatusUnused,
+			Code:       codeValue,
+			Type:       input.Type,
+			Value:      input.Value,
+			Status:     StatusUnused,
+			SourceType: sourceType,
 		}
 		// 订阅类型专用字段
 		if input.Type == RedeemTypeSubscription {

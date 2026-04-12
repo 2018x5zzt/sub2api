@@ -89,12 +89,15 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
 			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
 		}
-		codexResult := applyCodexOAuthTransform(reqBody, false, false)
+		codexResult := applyCodexOAuthTransformWithOptions(reqBody, false, false, codexTransformOptions{
+			DropStoreFalseNativeItemReferences: account.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled(),
+		})
 		if codexResult.PromptCacheKey != "" {
 			promptCacheKey = codexResult.PromptCacheKey
 		} else if promptCacheKey != "" {
 			reqBody["prompt_cache_key"] = promptCacheKey
 		}
+		logOpenAICodexDroppedNativeItemReferences(account, "chat_completions", codexResult.DroppedNativeItemReferenceCount)
 		responsesBody, err = json.Marshal(reqBody)
 		if err != nil {
 			return nil, fmt.Errorf("remarshal after codex transform: %w", err)
@@ -247,6 +250,7 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 			continue
 		}
 		payload := line[6:]
+		s.parseSSEUsageBytes([]byte(payload), &usage)
 
 		var event apicompat.ResponsesStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
@@ -274,7 +278,7 @@ func (s *OpenAIGatewayService) handleChatBufferedStreamingResponse(
 		return nil, fmt.Errorf("upstream stream ended without terminal event")
 	}
 	if finalUsage, ok := openAIUsageFromResponsesResponse(finalResponse); ok {
-		usage = finalUsage
+		mergeOpenAIUsageFillZero(&usage, finalUsage)
 	}
 
 	chatResp := apicompat.ResponsesToChatCompletions(finalResponse, originalModel)
@@ -351,6 +355,8 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 			firstTokenMs = &ms
 		}
 
+		s.parseSSEUsageBytes([]byte(payload), &usage)
+
 		var event apicompat.ResponsesStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
 			logger.L().Warn("openai chat_completions stream: failed to parse event",
@@ -358,13 +364,6 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 				zap.String("request_id", requestID),
 			)
 			return false
-		}
-
-		// Extract usage from completion events
-		if isResponsesTerminalUsageEvent(event.Type) {
-			if eventUsage, ok := openAIUsageFromResponsesResponse(event.Response); ok {
-				usage = eventUsage
-			}
 		}
 
 		chunks := apicompat.ResponsesEventToChatChunks(&event, state)

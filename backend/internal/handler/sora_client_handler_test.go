@@ -923,6 +923,9 @@ func (r *stubUserRepoForHandler) Create(context.Context, *service.User) error { 
 func (r *stubUserRepoForHandler) GetByEmail(context.Context, string) (*service.User, error) {
 	return nil, nil
 }
+func (r *stubUserRepoForHandler) GetByInviteCode(context.Context, string) (*service.User, error) {
+	return nil, nil
+}
 func (r *stubUserRepoForHandler) GetFirstAdmin(context.Context) (*service.User, error) {
 	return nil, nil
 }
@@ -938,6 +941,12 @@ func (r *stubUserRepoForHandler) DeductBalance(context.Context, int64, float64) 
 func (r *stubUserRepoForHandler) UpdateConcurrency(context.Context, int64, int) error { return nil }
 func (r *stubUserRepoForHandler) ExistsByEmail(context.Context, string) (bool, error) {
 	return false, nil
+}
+func (r *stubUserRepoForHandler) ExistsByInviteCode(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (r *stubUserRepoForHandler) CountInviteesByInviter(context.Context, int64) (int64, error) {
+	return 0, nil
 }
 func (r *stubUserRepoForHandler) RemoveGroupFromAllowedGroups(context.Context, int64) (int64, error) {
 	return 0, nil

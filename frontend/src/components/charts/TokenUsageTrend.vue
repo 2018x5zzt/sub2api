@@ -15,6 +15,9 @@
     >
       {{ t('admin.dashboard.noDataAvailable') }}
     </div>
+    <p class="mt-3 text-xs leading-5 text-gray-500 dark:text-gray-400">
+      {{ t('usage.cacheCreationMetricNote') }}
+    </p>
   </div>
 </template>
 

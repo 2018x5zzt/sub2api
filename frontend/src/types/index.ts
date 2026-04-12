@@ -122,6 +122,115 @@ export interface CurrentUserResponse extends User {
   run_mode?: 'standard' | 'simple'
 }
 
+export interface InviteSummary {
+  invite_code: string
+  invite_link: string
+  invited_users_total: number
+  invitees_recharge_total: number
+  base_rewards_total: number
+}
+
+export interface InviteRewardRecord {
+  reward_role: 'inviter' | 'invitee'
+  reward_type: 'base_invite_reward'
+  reward_amount: number
+  created_at: string
+}
+
+export interface AdminInviteStats {
+  total_invited_users: number
+  qualified_reward_users_total: number
+  base_rewards_total: number
+  manual_grants_total: number
+  recompute_adjustments_total: number
+}
+
+export interface AdminInviteRelationshipRow {
+  invitee_user_id: number
+  invitee_email: string
+  invite_code: string
+  current_inviter_user_id: number | null
+  current_inviter_email: string
+  invite_bound_at: string | null
+  last_event_type: string
+  last_event_at: string | null
+}
+
+export interface AdminInviteRewardRow {
+  reward_target_user_id: number
+  reward_target_email: string
+  inviter_user_id: number
+  inviter_email: string
+  invitee_user_id: number
+  invitee_email: string
+  reward_role: 'inviter' | 'invitee'
+  reward_type: 'base_invite_reward' | 'manual_invite_grant' | 'recompute_delta'
+  reward_amount: number
+  created_at: string
+  admin_action_id?: number
+  trigger_redeem_code_id?: number
+}
+
+export interface AdminInviteAction {
+  id: number
+  action_type: 'rebind_inviter' | 'manual_reward_grant' | 'recompute_rewards'
+  operator_user_id: number
+  target_user_id: number
+  reason: string
+  request_snapshot_json: Record<string, unknown>
+  result_snapshot_json: Record<string, unknown>
+  created_at: string
+}
+
+export interface AdminInviteRecomputeDelta {
+  inviter_user_id: number
+  invitee_user_id: number
+  reward_target_user_id: number
+  reward_role: 'inviter' | 'invitee'
+  current_amount: number
+  expected_amount: number
+  delta_amount: number
+}
+
+export interface AdminInviteRecomputePreview {
+  scope_hash: string
+  qualifying_event_count: number
+  deltas: AdminInviteRecomputeDelta[]
+}
+
+export interface AdminInviteRebindRequest {
+  invitee_user_id: number
+  new_inviter_user_id: number
+  reason: string
+}
+
+export interface AdminManualInviteGrantLine {
+  inviter_user_id: number
+  invitee_user_id: number
+  reward_target_user_id: number
+  reward_role: 'inviter' | 'invitee'
+  reward_amount: number
+  notes?: string
+}
+
+export interface AdminManualInviteGrantRequest {
+  target_user_id: number
+  reason: string
+  lines: AdminManualInviteGrantLine[]
+}
+
+export interface AdminInviteRecomputePreviewRequest {
+  reason: string
+  invitee_user_id?: number
+  inviter_user_id?: number
+  start_at?: string
+  end_at?: string
+}
+
+export interface AdminInviteRecomputeExecuteRequest extends AdminInviteRecomputePreviewRequest {
+  scope_hash: string
+}
+
 // ==================== Subscription Types ====================
 
 export interface Subscription {
@@ -1001,6 +1110,11 @@ export interface AdminDataImportResult {
 // ==================== Usage & Redeem Types ====================
 
 export type RedeemCodeType = 'balance' | 'concurrency' | 'subscription' | 'invitation'
+export type RedeemCodeSourceType =
+  | 'commercial'
+  | 'benefit'
+  | 'compensation'
+  | 'system_grant'
 export type UsageRequestType = 'unknown' | 'sync' | 'stream' | 'ws_v2'
 
 export interface UsageLog {
@@ -1107,6 +1221,7 @@ export interface RedeemCode {
   id: number
   code: string
   type: RedeemCodeType
+  source_type?: RedeemCodeSourceType | null
   value: number
   status: 'active' | 'used' | 'expired' | 'unused'
   used_by: number | null
@@ -1123,6 +1238,7 @@ export interface GenerateRedeemCodesRequest {
   count: number
   type: RedeemCodeType
   value: number
+  source_type?: RedeemCodeSourceType
   group_id?: number | null // 订阅类型专用
   validity_days?: number // 订阅类型专用
 }

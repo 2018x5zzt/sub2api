@@ -80,12 +80,15 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
 			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
 		}
-		codexResult := applyCodexOAuthTransform(reqBody, false, false)
+		codexResult := applyCodexOAuthTransformWithOptions(reqBody, false, false, codexTransformOptions{
+			DropStoreFalseNativeItemReferences: account.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled(),
+		})
 		if codexResult.PromptCacheKey != "" {
 			promptCacheKey = codexResult.PromptCacheKey
 		} else if promptCacheKey != "" {
 			reqBody["prompt_cache_key"] = promptCacheKey
 		}
+		logOpenAICodexDroppedNativeItemReferences(account, "anthropic_messages", codexResult.DroppedNativeItemReferenceCount)
 		// OAuth codex transform forces stream=true upstream, so always use
 		// the streaming response handler regardless of what the client asked.
 		isStream = true
@@ -251,6 +254,7 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 			continue
 		}
 		payload := line[6:]
+		s.parseSSEUsageBytes([]byte(payload), &usage)
 
 		var event apicompat.ResponsesStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
@@ -278,7 +282,7 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 		return nil, fmt.Errorf("upstream stream ended without terminal event")
 	}
 	if finalUsage, ok := openAIUsageFromResponsesResponse(finalResponse); ok {
-		usage = finalUsage
+		mergeOpenAIUsageFillZero(&usage, finalUsage)
 	}
 
 	anthropicResp := apicompat.ResponsesToAnthropic(finalResponse, originalModel)
@@ -358,6 +362,8 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 			firstTokenMs = &ms
 		}
 
+		s.parseSSEUsageBytes([]byte(payload), &usage)
+
 		var event apicompat.ResponsesStreamEvent
 		if err := json.Unmarshal([]byte(payload), &event); err != nil {
 			logger.L().Warn("openai messages stream: failed to parse event",
@@ -365,12 +371,6 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 				zap.String("request_id", requestID),
 			)
 			return false
-		}
-
-		if isResponsesTerminalUsageEvent(event.Type) {
-			if eventUsage, ok := openAIUsageFromResponsesResponse(event.Response); ok {
-				usage = eventUsage
-			}
 		}
 
 		// Convert to Anthropic events

@@ -287,6 +287,9 @@
                 <div class="text-sm font-semibold tabular-nums text-gray-900 dark:text-white">{{ cell.value }}</div>
               </div>
             </div>
+            <div class="border-t border-gray-200 px-6 py-4 text-xs leading-5 text-gray-500 dark:border-dark-700 dark:text-dark-400">
+              {{ t('keyUsage.cacheMetricNote') }}
+            </div>
           </div>
 
           <!-- Model Stats Table -->

@@ -24,9 +24,12 @@ type mockUserRepo struct {
 func (m *mockUserRepo) Create(context.Context, *User) error               { return nil }
 func (m *mockUserRepo) GetByID(context.Context, int64) (*User, error)     { return &User{}, nil }
 func (m *mockUserRepo) GetByEmail(context.Context, string) (*User, error) { return &User{}, nil }
-func (m *mockUserRepo) GetFirstAdmin(context.Context) (*User, error)      { return &User{}, nil }
-func (m *mockUserRepo) Update(context.Context, *User) error               { return nil }
-func (m *mockUserRepo) Delete(context.Context, int64) error               { return nil }
+func (m *mockUserRepo) GetByInviteCode(context.Context, string) (*User, error) {
+	return &User{}, nil
+}
+func (m *mockUserRepo) GetFirstAdmin(context.Context) (*User, error) { return &User{}, nil }
+func (m *mockUserRepo) Update(context.Context, *User) error          { return nil }
+func (m *mockUserRepo) Delete(context.Context, int64) error          { return nil }
 func (m *mockUserRepo) List(context.Context, pagination.PaginationParams) ([]User, *pagination.PaginationResult, error) {
 	return nil, nil, nil
 }
@@ -42,6 +45,12 @@ func (m *mockUserRepo) UpdateBalance(ctx context.Context, id int64, amount float
 func (m *mockUserRepo) DeductBalance(context.Context, int64, float64) error { return nil }
 func (m *mockUserRepo) UpdateConcurrency(context.Context, int64, int) error { return nil }
 func (m *mockUserRepo) ExistsByEmail(context.Context, string) (bool, error) { return false, nil }
+func (m *mockUserRepo) ExistsByInviteCode(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (m *mockUserRepo) CountInviteesByInviter(context.Context, int64) (int64, error) {
+	return 0, nil
+}
 func (m *mockUserRepo) RemoveGroupFromAllowedGroups(context.Context, int64) (int64, error) {
 	return 0, nil
 }

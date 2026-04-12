@@ -392,6 +392,9 @@
               <span class="text-gray-400">{{ t('admin.usage.cacheReadTokens') }}</span>
               <span class="font-medium text-white">{{ tokenTooltipData.cache_read_tokens.toLocaleString() }}</span>
             </div>
+            <div v-if="tokenTooltipData && shouldShowCacheCreationUnavailableHint(tokenTooltipData)" class="max-w-[260px] pt-1 text-[11px] leading-4 text-amber-300">
+              {{ t('usage.cacheCreationUnavailableHint') }}
+            </div>
           </div>
           <!-- Total -->
           <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
@@ -500,6 +503,7 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatTokenPricePerMillion } from '@/utils/usagePricing'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
+import { isLikelyOpenAICacheCreationMetricUnavailable } from '@/utils/cacheMetrics'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -888,6 +892,9 @@ const hideTokenTooltip = () => {
   tokenTooltipVisible.value = false
   tokenTooltipData.value = null
 }
+
+const shouldShowCacheCreationUnavailableHint = (row: UsageLog | null): boolean =>
+  isLikelyOpenAICacheCreationMetricUnavailable(row)
 
 onMounted(() => {
   loadApiKeys()

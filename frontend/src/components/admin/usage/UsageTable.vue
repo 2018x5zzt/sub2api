@@ -223,6 +223,9 @@
               <span class="text-gray-400">{{ t('admin.usage.cacheReadTokens') }}</span>
               <span class="font-medium text-white">{{ tokenTooltipData.cache_read_tokens.toLocaleString() }}</span>
             </div>
+            <div v-if="tokenTooltipData && shouldShowCacheCreationUnavailableHint(tokenTooltipData)" class="max-w-[260px] pt-1 text-[11px] leading-4 text-amber-300">
+              {{ t('usage.cacheCreationUnavailableHint') }}
+            </div>
           </div>
           <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
             <span class="text-gray-400">{{ t('usage.totalTokens') }}</span>
@@ -311,6 +314,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { isLikelyOpenAICacheCreationMetricUnavailable } from '@/utils/cacheMetrics'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { formatTokenPricePerMillion } from '@/utils/usagePricing'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
@@ -395,4 +399,7 @@ const hideTokenTooltip = () => {
   tokenTooltipVisible.value = false
   tokenTooltipData.value = null
 }
+
+const shouldShowCacheCreationUnavailableHint = (row: AdminUsageLog | null): boolean =>
+  isLikelyOpenAICacheCreationMetricUnavailable(row)
 </script>

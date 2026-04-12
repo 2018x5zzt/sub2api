@@ -37,6 +37,9 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		return nil
 	}
 
+	inviteCode := normalizedInviteCode(userIn.InviteCode)
+	inviteBoundAt := normalizedInviteBoundAt(userIn.InvitedByUserID, userIn.InviteBoundAt)
+
 	// 统一使用 ent 的事务：保证用户与允许分组的更新原子化，
 	// 并避免基于 *sql.Tx 手动构造 ent client 导致的 ExecQuerier 断言错误。
 	tx, err := r.client.Tx(ctx)
@@ -62,6 +65,9 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
+		SetNillableInviteCode(stringPtrOrNil(inviteCode)).
+		SetNillableInvitedByUserID(userIn.InvitedByUserID).
+		SetNillableInviteBoundAt(inviteBoundAt).
 		SetSoraStorageQuotaBytes(userIn.SoraStorageQuotaBytes).
 		Save(ctx)
 	if err != nil {
@@ -70,6 +76,21 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 
 	if err := r.syncUserAllowedGroupsWithClient(ctx, txClient, created.ID, userIn.AllowedGroups); err != nil {
 		return err
+	}
+
+	if created.InvitedByUserID != nil {
+		effectiveAt := created.CreatedAt
+		if created.InviteBoundAt != nil {
+			effectiveAt = *created.InviteBoundAt
+		}
+		if _, err := txClient.InviteRelationshipEvent.Create().
+			SetInviteeUserID(created.ID).
+			SetNewInviterUserID(*created.InvitedByUserID).
+			SetEventType(service.InviteRelationshipEventTypeRegisterBind).
+			SetEffectiveAt(effectiveAt).
+			Save(ctx); err != nil {
+			return err
+		}
 	}
 
 	if tx != nil {
@@ -116,10 +137,30 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 	return out, nil
 }
 
+func (r *userRepository) GetByInviteCode(ctx context.Context, code string) (*service.User, error) {
+	m, err := r.client.User.Query().Where(dbuser.InviteCodeEQ(normalizedInviteCode(code))).Only(ctx)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+
+	out := userEntityToService(m)
+	groups, err := r.loadAllowedGroups(ctx, []int64{m.ID})
+	if err != nil {
+		return nil, err
+	}
+	if v, ok := groups[m.ID]; ok {
+		out.AllowedGroups = v
+	}
+	return out, nil
+}
+
 func (r *userRepository) Update(ctx context.Context, userIn *service.User) error {
 	if userIn == nil {
 		return nil
 	}
+
+	inviteCode := normalizedInviteCode(userIn.InviteCode)
+	inviteBoundAt := normalizedInviteBoundAt(userIn.InvitedByUserID, userIn.InviteBoundAt)
 
 	// 使用 ent 事务包裹用户更新与 allowed_groups 同步，避免跨层事务不一致。
 	tx, err := r.client.Tx(ctx)
@@ -145,6 +186,9 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
+		SetNillableInviteCode(stringPtrOrNil(inviteCode)).
+		SetNillableInvitedByUserID(userIn.InvitedByUserID).
+		SetNillableInviteBoundAt(inviteBoundAt).
 		SetSoraStorageQuotaBytes(userIn.SoraStorageQuotaBytes).
 		SetSoraStorageUsedBytes(userIn.SoraStorageUsedBytes).
 		Save(ctx)
@@ -163,6 +207,22 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 	}
 
 	userIn.UpdatedAt = updated.UpdatedAt
+	return nil
+}
+
+func (r *userRepository) UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error {
+	client := clientFromContext(ctx, r.client)
+	update := client.User.UpdateOneID(inviteeUserID)
+	if inviterUserID != nil {
+		update.SetInvitedByUserID(*inviterUserID)
+	} else {
+		update.ClearInvitedByUserID()
+	}
+	updated, err := update.Save(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	_ = updated
 	return nil
 }
 
@@ -439,6 +499,18 @@ func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 	return r.client.User.Query().Where(dbuser.EmailEQ(email)).Exist(ctx)
 }
 
+func (r *userRepository) ExistsByInviteCode(ctx context.Context, code string) (bool, error) {
+	return r.client.User.Query().Where(dbuser.InviteCodeEQ(normalizedInviteCode(code))).Exist(ctx)
+}
+
+func (r *userRepository) CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error) {
+	total, err := r.client.User.Query().Where(dbuser.InvitedByUserIDEQ(inviterID)).Count(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return int64(total), nil
+}
+
 func (r *userRepository) AddGroupToAllowedGroups(ctx context.Context, userID int64, groupID int64) error {
 	client := clientFromContext(ctx, r.client)
 	return client.UserAllowedGroup.Create().
@@ -558,8 +630,33 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 		return
 	}
 	dst.ID = src.ID
+	dst.InviteCode = normalizedInviteCode(derefString(src.InviteCode))
+	dst.InvitedByUserID = src.InvitedByUserID
+	dst.InviteBoundAt = src.InviteBoundAt
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
+}
+
+func normalizedInviteCode(code string) string {
+	return strings.ToUpper(strings.TrimSpace(code))
+}
+
+func normalizedInviteBoundAt(invitedByUserID *int64, inviteBoundAt *time.Time) *time.Time {
+	if invitedByUserID == nil {
+		return inviteBoundAt
+	}
+	if inviteBoundAt != nil {
+		return inviteBoundAt
+	}
+	now := time.Now()
+	return &now
+}
+
+func stringPtrOrNil(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
 }
 
 // UpdateTotpSecret 更新用户的 TOTP 加密密钥

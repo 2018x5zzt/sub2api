@@ -211,22 +211,8 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 		email = linuxDoSyntheticEmail(subject)
 	}
 
-	// 传入空邀请码；如果需要邀请码，服务层返回 ErrOAuthInvitationRequired
 	tokenPair, _, err := h.authService.LoginOrRegisterOAuthWithTokenPair(c.Request.Context(), email, username, "")
 	if err != nil {
-		if errors.Is(err, service.ErrOAuthInvitationRequired) {
-			pendingToken, tokenErr := h.authService.CreatePendingOAuthToken(email, username)
-			if tokenErr != nil {
-				redirectOAuthError(c, frontendCallback, "login_failed", "service_error", "")
-				return
-			}
-			fragment := url.Values{}
-			fragment.Set("error", "invitation_required")
-			fragment.Set("pending_oauth_token", pendingToken)
-			fragment.Set("redirect", redirectTo)
-			redirectWithFragment(c, frontendCallback, fragment)
-			return
-		}
 		// 避免把内部细节泄露给客户端；给前端保留结构化原因与提示信息即可。
 		redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(err), infraerrors.Message(err))
 		return
@@ -243,11 +229,11 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 
 type completeLinuxDoOAuthRequest struct {
 	PendingOAuthToken string `json:"pending_oauth_token" binding:"required"`
-	InvitationCode    string `json:"invitation_code"     binding:"required"`
+	InvitationCode    string `json:"invitation_code"`
 }
 
-// CompleteLinuxDoOAuthRegistration completes a pending OAuth registration by validating
-// the invitation code and creating the user account.
+// CompleteLinuxDoOAuthRegistration completes a pending OAuth registration and
+// optionally binds an inviter when an invitation code is supplied.
 // POST /api/v1/auth/oauth/linuxdo/complete-registration
 func (h *AuthHandler) CompleteLinuxDoOAuthRegistration(c *gin.Context) {
 	var req completeLinuxDoOAuthRequest

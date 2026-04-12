@@ -173,6 +173,8 @@ export default {
     totalCacheRead: 'Total Cache Read',
     totalCost: 'Total Cost',
     avgDuration: 'Avg Duration',
+    cacheMetricNote:
+      'For GPT/OpenAI routes, upstream usage often reports cache reads but not cache creation. A zero cache creation value may mean unavailable, not uncached.',
     // Messages
     enterApiKey: 'Please enter an API Key',
     querySuccess: 'Query successful',
@@ -803,6 +805,10 @@ export default {
     perMillionTokens: '/ 1M tokens',
     cacheRead: 'Read',
     cacheWrite: 'Write',
+    cacheCreationMetricNote:
+      'OpenAI/GPT upstream usage may under-report cache creation. Treat zero cache creation as unavailable unless another upstream explicitly reports it.',
+    cacheCreationUnavailableHint:
+      'This request looks like an OpenAI/GPT route. Upstream usage can report cache reads without exposing cache creation, so zero write tokens here may mean unavailable rather than uncached.',
     serviceTier: 'Service tier',
     serviceTierPriority: 'Fast',
     serviceTierFlex: 'Flex',

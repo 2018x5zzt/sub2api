@@ -57,6 +57,7 @@ var ProviderSet = wire.NewSet(
 	ProvideInviteRewardAdminRepository,
 	ProvideInviteRelationshipEventAdminRepository,
 	ProvideInviteQualifyingRechargeRepository,
+	ProvideInvitationCodeLookupRepository,
 	NewAPIKeyRepository,
 	NewGroupRepository,
 	NewGroupHealthSnapshotRepository,
@@ -133,6 +134,11 @@ var ProviderSet = wire.NewSet(
 
 // ProvideInviteQualifyingRechargeRepository narrows redeem repository capability for invite recompute wiring.
 func ProvideInviteQualifyingRechargeRepository(client *ent.Client) service.InviteQualifyingRechargeRepository {
+	return &redeemCodeRepository{client: client}
+}
+
+// ProvideInvitationCodeLookupRepository narrows redeem repository capability for auth service wiring.
+func ProvideInvitationCodeLookupRepository(client *ent.Client) service.InvitationCodeLookupRepository {
 	return &redeemCodeRepository{client: client}
 }
 

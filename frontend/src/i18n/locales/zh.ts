@@ -173,6 +173,8 @@ export default {
     totalCacheRead: '累计缓存读取',
     totalCost: '累计费用',
     avgDuration: '平均耗时',
+    cacheMetricNote:
+      '对于 GPT/OpenAI 链路，上游 usage 往往只返回缓存读取，不返回缓存创建。缓存创建显示为 0 时，可能代表指标不可用，不一定代表没有缓存。',
     // Messages
     enterApiKey: '请输入 API Key',
     querySuccess: '查询成功',
@@ -808,6 +810,10 @@ export default {
     perMillionTokens: '/ 1M Token',
     cacheRead: '读取',
     cacheWrite: '写入',
+    cacheCreationMetricNote:
+      'OpenAI/GPT 上游 usage 可能低报缓存创建。除非该上游明确返回该指标，否则缓存创建为 0 更应理解为“指标不可用”，而不是“没有缓存”。',
+    cacheCreationUnavailableHint:
+      '这条请求看起来走的是 OpenAI/GPT 链路。上游 usage 可能只返回缓存读取而不暴露缓存创建，所以这里写入为 0 不一定代表没有缓存，也可能只是上游未提供该指标。',
     serviceTier: '服务档位',
     serviceTierPriority: 'Fast',
     serviceTierFlex: 'Flex',

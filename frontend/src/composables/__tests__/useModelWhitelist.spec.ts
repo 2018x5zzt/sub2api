@@ -41,6 +41,12 @@ describe('useModelWhitelist', () => {
     expect(models.indexOf('gemini-2.5-flash-image')).toBeLessThan(models.indexOf('gemini-2.5-flash-lite'))
   })
 
+  it('anthropic 模型列表包含 claude-haiku-4-5-20251001', () => {
+    const models = getModelsByPlatform('anthropic')
+
+    expect(models).toContain('claude-haiku-4-5-20251001')
+  })
+
   it('whitelist 模式会忽略通配符条目', () => {
     const mapping = buildModelMappingObject('whitelist', ['claude-*', 'gemini-3.1-flash-image'], [])
     expect(mapping).toEqual({

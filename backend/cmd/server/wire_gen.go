@@ -44,7 +44,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		return nil, err
 	}
 	userRepository := repository.NewUserRepository(client, db)
-	redeemCodeRepository := repository.NewRedeemCodeRepository(client)
+	invitationCodeLookupRepository := repository.ProvideInvitationCodeLookupRepository(client)
 	redisClient := repository.ProvideRedis(configConfig)
 	refreshTokenCache := repository.NewRefreshTokenCache(redisClient)
 	settingRepository := repository.NewSettingRepository(client)
@@ -68,9 +68,10 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	subscriptionService := service.NewSubscriptionService(groupRepository, userSubscriptionRepository, billingCacheService, client, configConfig)
 	inviteUserRepository := service.ProvideInviteUserRepository(userRepository)
 	inviteRewardRecordRepository := repository.NewInviteRewardRecordRepository(client)
-	inviteService := service.ProvideInviteService(inviteUserRepository, inviteRewardRecordRepository, settingService)
-	authService := service.NewAuthService(client, userRepository, redeemCodeRepository, refreshTokenCache, configConfig, settingService, emailService, turnstileService, emailQueueService, promoService, subscriptionService, inviteService)
+	inviteService := service.ProvideInviteService(inviteUserRepository, inviteRewardRecordRepository, settingService, client)
+	authService := service.NewAuthService(client, userRepository, invitationCodeLookupRepository, refreshTokenCache, configConfig, settingService, emailService, turnstileService, emailQueueService, promoService, subscriptionService, inviteService)
 	userService := service.NewUserService(userRepository, apiKeyAuthCacheInvalidator, billingCache)
+	redeemCodeRepository := repository.NewRedeemCodeRepository(client)
 	redeemCache := repository.NewRedeemCache(redisClient)
 	redeemService := service.NewRedeemService(redeemCodeRepository, userRepository, inviteService, subscriptionService, redeemCache, billingCacheService, client, apiKeyAuthCacheInvalidator)
 	secretEncryptor, err := repository.NewAESEncryptor(configConfig)

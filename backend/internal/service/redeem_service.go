@@ -58,9 +58,10 @@ type RedeemCodeRepository interface {
 
 // GenerateCodesRequest 生成兑换码请求
 type GenerateCodesRequest struct {
-	Count int     `json:"count"`
-	Value float64 `json:"value"`
-	Type  string  `json:"type"`
+	Count      int     `json:"count"`
+	Value      float64 `json:"value"`
+	Type       string  `json:"type"`
+	SourceType string  `json:"source_type"`
 }
 
 // RedeemCodeResponse 兑换码响应
@@ -75,6 +76,7 @@ type RedeemCodeResponse struct {
 type RedeemService struct {
 	redeemRepo           RedeemCodeRepository
 	userRepo             UserRepository
+	inviteService        *InviteService
 	subscriptionService  *SubscriptionService
 	cache                RedeemCache
 	billingCacheService  *BillingCacheService
@@ -86,6 +88,7 @@ type RedeemService struct {
 func NewRedeemService(
 	redeemRepo RedeemCodeRepository,
 	userRepo UserRepository,
+	inviteService *InviteService,
 	subscriptionService *SubscriptionService,
 	cache RedeemCache,
 	billingCacheService *BillingCacheService,
@@ -95,6 +98,7 @@ func NewRedeemService(
 	return &RedeemService{
 		redeemRepo:           redeemRepo,
 		userRepo:             userRepo,
+		inviteService:        inviteService,
 		subscriptionService:  subscriptionService,
 		cache:                cache,
 		billingCacheService:  billingCacheService,
@@ -144,12 +148,12 @@ func (s *RedeemService) GenerateCodes(ctx context.Context, req GenerateCodesRequ
 	if codeType == "" {
 		codeType = RedeemTypeBalance
 	}
-
-	// 邀请码类型的 value 设为 0
-	value := req.Value
 	if codeType == RedeemTypeInvitation {
-		value = 0
+		return nil, errors.New("legacy invitation redeem codes are no longer supported")
 	}
+
+	value := req.Value
+	sourceType := NormalizeRedeemSourceType(req.SourceType, RedeemSourceSystemGrant)
 
 	codes := make([]RedeemCode, 0, req.Count)
 	for i := 0; i < req.Count; i++ {
@@ -159,10 +163,11 @@ func (s *RedeemService) GenerateCodes(ctx context.Context, req GenerateCodesRequ
 		}
 
 		codes = append(codes, RedeemCode{
-			Code:   code,
-			Type:   codeType,
-			Value:  value,
-			Status: StatusUnused,
+			Code:       code,
+			Type:       codeType,
+			Value:      value,
+			Status:     StatusUnused,
+			SourceType: sourceType,
 		})
 	}
 
@@ -188,12 +193,16 @@ func (s *RedeemService) CreateCode(ctx context.Context, code *RedeemCode) error 
 	if code.Type == "" {
 		code.Type = RedeemTypeBalance
 	}
-	if code.Type != RedeemTypeInvitation && code.Value <= 0 {
+	if code.Type == RedeemTypeInvitation {
+		return errors.New("legacy invitation redeem codes are no longer supported")
+	}
+	if code.Value <= 0 {
 		return errors.New("value must be greater than 0")
 	}
 	if code.Status == "" {
 		code.Status = StatusUnused
 	}
+	code.SourceType = NormalizeRedeemSourceType(code.SourceType, RedeemSourceSystemGrant)
 
 	if err := s.redeemRepo.Create(ctx, code); err != nil {
 		return fmt.Errorf("create redeem code: %w", err)
@@ -319,6 +328,11 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		// 增加用户余额
 		if err := s.userRepo.UpdateBalance(txCtx, userID, redeemCode.Value); err != nil {
 			return nil, fmt.Errorf("update user balance: %w", err)
+		}
+		if s.inviteService != nil {
+			if err := s.inviteService.ApplyBaseRechargeRewards(txCtx, userID, redeemCode); err != nil {
+				return nil, fmt.Errorf("apply invite rewards: %w", err)
+			}
 		}
 
 	case RedeemTypeConcurrency:

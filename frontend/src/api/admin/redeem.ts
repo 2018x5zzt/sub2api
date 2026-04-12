@@ -8,6 +8,7 @@ import type {
   RedeemCode,
   GenerateRedeemCodesRequest,
   RedeemCodeType,
+  RedeemCodeSourceType,
   PaginatedResponse
 } from '@/types'
 
@@ -64,13 +65,15 @@ export async function generate(
   count: number,
   type: RedeemCodeType,
   value: number,
+  sourceType?: RedeemCodeSourceType,
   groupId?: number | null,
   validityDays?: number
 ): Promise<RedeemCode[]> {
   const payload: GenerateRedeemCodesRequest = {
     count,
     type,
-    value
+    value,
+    source_type: sourceType
   }
 
   // 订阅类型专用字段

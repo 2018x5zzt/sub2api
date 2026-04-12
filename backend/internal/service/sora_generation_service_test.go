@@ -145,6 +145,9 @@ func (r *stubUserRepoForQuota) Create(context.Context, *User) error { return nil
 func (r *stubUserRepoForQuota) GetByEmail(context.Context, string) (*User, error) {
 	return nil, nil
 }
+func (r *stubUserRepoForQuota) GetByInviteCode(context.Context, string) (*User, error) {
+	return nil, nil
+}
 func (r *stubUserRepoForQuota) GetFirstAdmin(context.Context) (*User, error) { return nil, nil }
 func (r *stubUserRepoForQuota) Delete(context.Context, int64) error          { return nil }
 func (r *stubUserRepoForQuota) List(context.Context, pagination.PaginationParams) ([]User, *pagination.PaginationResult, error) {
@@ -158,6 +161,12 @@ func (r *stubUserRepoForQuota) DeductBalance(context.Context, int64, float64) er
 func (r *stubUserRepoForQuota) UpdateConcurrency(context.Context, int64, int) error { return nil }
 func (r *stubUserRepoForQuota) ExistsByEmail(context.Context, string) (bool, error) {
 	return false, nil
+}
+func (r *stubUserRepoForQuota) ExistsByInviteCode(context.Context, string) (bool, error) {
+	return false, nil
+}
+func (r *stubUserRepoForQuota) CountInviteesByInviter(context.Context, int64) (int64, error) {
+	return 0, nil
 }
 func (r *stubUserRepoForQuota) RemoveGroupFromAllowedGroups(context.Context, int64) (int64, error) {
 	return 0, nil

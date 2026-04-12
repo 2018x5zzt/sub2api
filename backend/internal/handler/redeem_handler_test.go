@@ -369,7 +369,7 @@ func newRedeemHandlerTestEnv(t *testing.T) *redeemHandlerTestEnv {
 	}
 	settingRepo := &testSettingRepo{all: make(map[string]string)}
 
-	redeemService := service.NewRedeemService(redeemRepo, userRepo, nil, nil, nil, client, nil)
+	redeemService := service.NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, client, nil)
 	promoService := service.NewPromoService(promoRepo, userRepo, nil, client, nil)
 	settingService := service.NewSettingService(settingRepo, &config.Config{})
 
@@ -465,6 +465,16 @@ func (r *testRedeemUserRepo) GetByEmail(ctx context.Context, email string) (*ser
 	return nil, service.ErrUserNotFound
 }
 
+func (r *testRedeemUserRepo) GetByInviteCode(ctx context.Context, code string) (*service.User, error) {
+	for _, user := range r.users {
+		if user.InviteCode == code {
+			clone := *user
+			return &clone, nil
+		}
+	}
+	return nil, service.ErrUserNotFound
+}
+
 func (r *testRedeemUserRepo) GetFirstAdmin(ctx context.Context) (*service.User, error) {
 	return nil, service.ErrUserNotFound
 }
@@ -519,6 +529,25 @@ func (r *testRedeemUserRepo) ExistsByEmail(ctx context.Context, email string) (b
 		}
 	}
 	return false, nil
+}
+
+func (r *testRedeemUserRepo) ExistsByInviteCode(ctx context.Context, code string) (bool, error) {
+	for _, user := range r.users {
+		if user.InviteCode == code {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *testRedeemUserRepo) CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error) {
+	var total int64
+	for _, user := range r.users {
+		if user.InvitedByUserID != nil && *user.InvitedByUserID == inviterID {
+			total++
+		}
+	}
+	return total, nil
 }
 
 func (r *testRedeemUserRepo) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {

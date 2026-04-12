@@ -44,6 +44,14 @@ const (
 	RedeemTypeInvitation   = domain.RedeemTypeInvitation
 )
 
+// Redeem source type constants
+const (
+	RedeemSourceCommercial   = domain.RedeemSourceCommercial
+	RedeemSourceBenefit      = domain.RedeemSourceBenefit
+	RedeemSourceCompensation = domain.RedeemSourceCompensation
+	RedeemSourceSystemGrant  = domain.RedeemSourceSystemGrant
+)
+
 // PromoCode status constants
 const (
 	PromoCodeStatusActive   = domain.PromoCodeStatusActive
