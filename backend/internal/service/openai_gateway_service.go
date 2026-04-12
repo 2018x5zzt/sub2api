@@ -59,6 +59,19 @@ const (
 	openAICodexSnapshotPersistMinInterval = 30 * time.Second
 )
 
+func logOpenAICodexDroppedNativeItemReferences(account *Account, source string, droppedCount int) {
+	if account == nil || droppedCount <= 0 {
+		return
+	}
+	logger.L().Info("openai oauth: dropped store=false native item references",
+		zap.Int64("account_id", account.ID),
+		zap.String("account_name", account.Name),
+		zap.String("account_type", account.Type),
+		zap.String("source", strings.TrimSpace(source)),
+		zap.Int("dropped_native_item_reference_count", droppedCount),
+	)
+}
+
 // OpenAI allowed headers whitelist (for non-passthrough).
 var openaiAllowedHeaders = map[string]bool{
 	"accept-language":       true,
@@ -1823,7 +1836,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 
 	if account.Type == AccountTypeOAuth {
-		codexResult := applyCodexOAuthTransform(reqBody, isCodexCLI, isOpenAIResponsesCompactPath(c))
+		codexResult := applyCodexOAuthTransformWithOptions(reqBody, isCodexCLI, isOpenAIResponsesCompactPath(c), codexTransformOptions{
+			DropStoreFalseNativeItemReferences: account.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled(),
+		})
 		if codexResult.Modified {
 			bodyModified = true
 			disablePatch()
@@ -1834,6 +1849,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		if codexResult.PromptCacheKey != "" {
 			promptCacheKey = codexResult.PromptCacheKey
 		}
+		logOpenAICodexDroppedNativeItemReferences(account, "responses_forward", codexResult.DroppedNativeItemReferenceCount)
 	}
 
 	if ensureOpenAIResponsesReasoning(reqBody, reasoningModel) {
@@ -2322,13 +2338,18 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			return nil, fmt.Errorf("openai passthrough rejected before upstream: %s", rejectReason)
 		}
 
-		normalizedBody, normalized, err := normalizeOpenAIPassthroughOAuthBody(body, isOpenAIResponsesCompactPath(c))
+		normalizedBody, normalized, droppedCount, err := normalizeOpenAIPassthroughOAuthBody(
+			body,
+			isOpenAIResponsesCompactPath(c),
+			account.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled(),
+		)
 		if err != nil {
 			return nil, err
 		}
 		if normalized {
 			body = normalizedBody
 		}
+		logOpenAICodexDroppedNativeItemReferences(account, "oauth_passthrough", droppedCount)
 		reqStream = gjson.GetBytes(body, "stream").Bool()
 	}
 
@@ -4804,19 +4825,24 @@ func extractOpenAIRequestMetaFromBody(body []byte) (model string, stream bool, p
 
 // normalizeOpenAIPassthroughOAuthBody 将透传 OAuth 请求体收敛为旧链路关键行为：
 // 1) store=false 2) 非 compact 保持 stream=true；compact 强制 stream=false
-func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, bool, error) {
+func normalizeOpenAIPassthroughOAuthBody(
+	body []byte,
+	compact bool,
+	dropStoreFalseNativeItemReferences bool,
+) ([]byte, bool, int, error) {
 	if len(body) == 0 {
-		return body, false, nil
+		return body, false, 0, nil
 	}
 
 	normalized := body
 	changed := false
+	droppedNativeItemReferenceCount := 0
 
 	if compact {
 		if store := gjson.GetBytes(normalized, "store"); store.Exists() {
 			next, err := sjson.DeleteBytes(normalized, "store")
 			if err != nil {
-				return body, false, fmt.Errorf("normalize passthrough body delete store: %w", err)
+				return body, false, 0, fmt.Errorf("normalize passthrough body delete store: %w", err)
 			}
 			normalized = next
 			changed = true
@@ -4824,7 +4850,7 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 		if stream := gjson.GetBytes(normalized, "stream"); stream.Exists() {
 			next, err := sjson.DeleteBytes(normalized, "stream")
 			if err != nil {
-				return body, false, fmt.Errorf("normalize passthrough body delete stream: %w", err)
+				return body, false, 0, fmt.Errorf("normalize passthrough body delete stream: %w", err)
 			}
 			normalized = next
 			changed = true
@@ -4833,7 +4859,7 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 		if store := gjson.GetBytes(normalized, "store"); !store.Exists() || store.Type != gjson.False {
 			next, err := sjson.SetBytes(normalized, "store", false)
 			if err != nil {
-				return body, false, fmt.Errorf("normalize passthrough body store=false: %w", err)
+				return body, false, 0, fmt.Errorf("normalize passthrough body store=false: %w", err)
 			}
 			normalized = next
 			changed = true
@@ -4841,7 +4867,7 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 		if stream := gjson.GetBytes(normalized, "stream"); !stream.Exists() || stream.Type != gjson.True {
 			next, err := sjson.SetBytes(normalized, "stream", true)
 			if err != nil {
-				return body, false, fmt.Errorf("normalize passthrough body stream=true: %w", err)
+				return body, false, 0, fmt.Errorf("normalize passthrough body stream=true: %w", err)
 			}
 			normalized = next
 			changed = true
@@ -4850,14 +4876,38 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 
 	reasoningBody, reasoningChanged, err := normalizeOpenAIPassthroughReasoningBody(normalized)
 	if err != nil {
-		return body, false, err
+		return body, false, 0, err
 	}
 	if reasoningChanged {
 		normalized = reasoningBody
 		changed = true
 	}
 
-	return normalized, changed, nil
+	if dropStoreFalseNativeItemReferences {
+		var reqBody map[string]any
+		if err := json.Unmarshal(normalized, &reqBody); err != nil {
+			return body, false, 0, fmt.Errorf("normalize passthrough body parse json: %w", err)
+		}
+		storeDisabled := false
+		if store, ok := reqBody["store"].(bool); ok && !store {
+			storeDisabled = true
+		}
+		if input, ok := reqBody["input"].([]any); ok {
+			filteredInput, droppedCount := filterCodexInput(input, NeedsToolContinuation(reqBody), storeDisabled, true)
+			if droppedCount > 0 {
+				reqBody["input"] = filteredInput
+				serialized, marshalErr := json.Marshal(reqBody)
+				if marshalErr != nil {
+					return body, false, 0, fmt.Errorf("normalize passthrough body serialize filtered input: %w", marshalErr)
+				}
+				normalized = serialized
+				changed = true
+				droppedNativeItemReferenceCount += droppedCount
+			}
+		}
+	}
+
+	return normalized, changed, droppedNativeItemReferenceCount, nil
 }
 
 func normalizeOpenAIPassthroughReasoningBody(body []byte) ([]byte, bool, error) {

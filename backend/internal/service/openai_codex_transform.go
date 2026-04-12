@@ -62,12 +62,26 @@ var codexModelMap = map[string]string{
 }
 
 type codexTransformResult struct {
-	Modified        bool
-	NormalizedModel string
-	PromptCacheKey  string
+	Modified                        bool
+	NormalizedModel                 string
+	PromptCacheKey                  string
+	DroppedNativeItemReferenceCount int
 }
 
 func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact bool) codexTransformResult {
+	return applyCodexOAuthTransformWithOptions(reqBody, isCodexCLI, isCompact, codexTransformOptions{})
+}
+
+type codexTransformOptions struct {
+	DropStoreFalseNativeItemReferences bool
+}
+
+func applyCodexOAuthTransformWithOptions(
+	reqBody map[string]any,
+	isCodexCLI bool,
+	isCompact bool,
+	opts codexTransformOptions,
+) codexTransformResult {
 	result := codexTransformResult{}
 	// 工具续链需求会影响存储策略与 input 过滤逻辑。
 	needsToolContinuation := NeedsToolContinuation(reqBody)
@@ -175,10 +189,23 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 		result.Modified = true
 	}
 
-	// 续链场景保留 item_reference 与 id，避免 call_id 上下文丢失。
+	storeDisabled := false
+	if store, ok := reqBody["store"].(bool); ok && !store {
+		storeDisabled = true
+	}
+
+	// 续链场景仅保留有效的工具续链引用与必要 id；
+	// 是否过滤 store=false 下的 native item_reference 由账号级开关控制。
 	if input, ok := reqBody["input"].([]any); ok {
-		input = filterCodexInput(input, needsToolContinuation)
+		var droppedCount int
+		input, droppedCount = filterCodexInput(
+			input,
+			needsToolContinuation,
+			storeDisabled,
+			opts.DropStoreFalseNativeItemReferences,
+		)
 		reqBody["input"] = input
+		result.DroppedNativeItemReferenceCount += droppedCount
 		result.Modified = true
 	} else if inputStr, ok := reqBody["input"].(string); ok {
 		// ChatGPT codex endpoint requires input to be a list, not a string.
@@ -395,9 +422,16 @@ func isInstructionsEmpty(reqBody map[string]any) bool {
 }
 
 // filterCodexInput 按需过滤 item_reference 与 id。
-// preserveReferences 为 true 时保持引用与 id，以满足续链请求对上下文的依赖。
-func filterCodexInput(input []any, preserveReferences bool) []any {
+// preserveReferences 为 true 时保持必要的工具续链引用与 id；
+// storeDisabled + dropStoreFalseNativeItemReferences 为 true 时丢弃依赖服务端持久化的 native item_reference（如 rs_*）。
+func filterCodexInput(
+	input []any,
+	preserveReferences bool,
+	storeDisabled bool,
+	dropStoreFalseNativeItemReferences bool,
+) ([]any, int) {
 	filtered := make([]any, 0, len(input))
+	droppedNativeItemReferenceCount := 0
 	for _, item := range input {
 		m, ok := item.(map[string]any)
 		if !ok {
@@ -417,6 +451,10 @@ func filterCodexInput(input []any, preserveReferences bool) []any {
 			}
 			return "fc_" + id
 		}
+		isToolReferenceID := func(id string) bool {
+			id = strings.TrimSpace(id)
+			return strings.HasPrefix(id, "call_") || strings.HasPrefix(id, "fc")
+		}
 
 		if typ == "item_reference" {
 			if !preserveReferences {
@@ -426,8 +464,14 @@ func filterCodexInput(input []any, preserveReferences bool) []any {
 			for key, value := range m {
 				newItem[key] = value
 			}
-			if id, ok := newItem["id"].(string); ok && strings.HasPrefix(id, "call_") {
-				newItem["id"] = fixCallIDPrefix(id)
+			if id, ok := newItem["id"].(string); ok {
+				if storeDisabled && dropStoreFalseNativeItemReferences && !isToolReferenceID(id) {
+					droppedNativeItemReferenceCount++
+					continue
+				}
+				if isToolReferenceID(id) {
+					newItem["id"] = fixCallIDPrefix(id)
+				}
 			}
 			filtered = append(filtered, newItem)
 			continue
@@ -476,7 +520,7 @@ func filterCodexInput(input []any, preserveReferences bool) []any {
 
 		filtered = append(filtered, newItem)
 	}
-	return filtered
+	return filtered, droppedNativeItemReferenceCount
 }
 
 func isCodexToolCallItemType(typ string) bool {
