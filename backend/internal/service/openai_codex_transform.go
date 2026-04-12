@@ -329,7 +329,7 @@ func getNormalizedCodexModel(modelID string) string {
 }
 
 // extractTextFromContent extracts plain text from a content value that is either
-// a Go string or a []any of content-part maps with type:"text".
+// a Go string or a []any of content-part maps with type:"text"/"input_text".
 func extractTextFromContent(content any) string {
 	switch v := content.(type) {
 	case string:
@@ -341,7 +341,7 @@ func extractTextFromContent(content any) string {
 			if !ok {
 				continue
 			}
-			if t, _ := m["type"].(string); t == "text" {
+			if t, _ := m["type"].(string); t == "text" || t == "input_text" {
 				if text, ok := m["text"].(string); ok {
 					parts = append(parts, text)
 				}
@@ -451,6 +451,12 @@ func filterCodexInput(
 			}
 			return "fc_" + id
 		}
+		normalizeLegacyMessageID := func(id string) string {
+			if len(id) < len("item_") || !strings.EqualFold(id[:len("item_")], "item_") {
+				return id
+			}
+			return "msg_" + id[len("item_"):]
+		}
 		isToolReferenceID := func(id string) bool {
 			id = strings.TrimSpace(id)
 			return strings.HasPrefix(id, "call_") || strings.HasPrefix(id, "fc")
@@ -506,6 +512,16 @@ func filterCodexInput(
 				if fixedCallID != callID {
 					ensureCopy()
 					newItem["call_id"] = fixedCallID
+				}
+			}
+		}
+
+		if typ == "message" {
+			if id, ok := m["id"].(string); ok {
+				normalizedID := normalizeLegacyMessageID(id)
+				if normalizedID != id {
+					ensureCopy()
+					newItem["id"] = normalizedID
 				}
 			}
 		}
