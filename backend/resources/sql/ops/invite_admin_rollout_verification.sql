@@ -52,3 +52,136 @@ WITH metrics AS (
 SELECT metric_name, metric_value
 FROM metrics
 ORDER BY ord;
+
+WITH bound_users AS (
+  SELECT
+    id AS invitee_user_id,
+    invited_by_user_id AS current_inviter_user_id,
+    COALESCE(invite_bound_at, created_at) AS expected_effective_at
+  FROM users
+  WHERE invited_by_user_id IS NOT NULL
+),
+register_bind_events AS (
+  SELECT
+    invitee_user_id,
+    new_inviter_user_id AS event_inviter_user_id,
+    effective_at AS event_effective_at
+  FROM invite_relationship_events
+  WHERE event_type = 'register_bind'
+),
+register_bind_counts AS (
+  SELECT invitee_user_id, COUNT(*) AS register_bind_count
+  FROM register_bind_events
+  GROUP BY invitee_user_id
+),
+single_register_bind_events AS (
+  SELECT e.invitee_user_id, e.event_inviter_user_id, e.event_effective_at
+  FROM register_bind_events e
+  INNER JOIN register_bind_counts c ON c.invitee_user_id = e.invitee_user_id
+  WHERE c.register_bind_count = 1
+),
+metrics AS (
+  SELECT 1 AS ord, 'bound_users_missing_register_bind_total' AS metric_name, COUNT(*)::text AS metric_value
+  FROM bound_users b
+  LEFT JOIN register_bind_events e ON e.invitee_user_id = b.invitee_user_id
+  WHERE e.invitee_user_id IS NULL
+
+  UNION ALL
+
+  SELECT 2, 'register_bind_without_bound_user_total', COUNT(*)::text
+  FROM register_bind_events e
+  LEFT JOIN bound_users b ON b.invitee_user_id = e.invitee_user_id
+  WHERE b.invitee_user_id IS NULL
+
+  UNION ALL
+
+  SELECT 3, 'register_bind_duplicate_invitee_total', COUNT(*)::text
+  FROM register_bind_counts
+  WHERE register_bind_count > 1
+
+  UNION ALL
+
+  SELECT 4, 'register_bind_inviter_mismatch_total', COUNT(*)::text
+  FROM bound_users b
+  INNER JOIN single_register_bind_events e ON e.invitee_user_id = b.invitee_user_id
+  WHERE b.current_inviter_user_id IS DISTINCT FROM e.event_inviter_user_id
+
+  UNION ALL
+
+  SELECT 5, 'register_bind_effective_at_mismatch_total', COUNT(*)::text
+  FROM bound_users b
+  INNER JOIN single_register_bind_events e ON e.invitee_user_id = b.invitee_user_id
+  WHERE b.expected_effective_at IS DISTINCT FROM e.event_effective_at
+)
+SELECT metric_name, metric_value
+FROM metrics
+ORDER BY ord;
+
+WITH bound_users AS (
+  SELECT
+    id AS invitee_user_id,
+    invited_by_user_id AS current_inviter_user_id,
+    COALESCE(invite_bound_at, created_at) AS expected_effective_at
+  FROM users
+  WHERE invited_by_user_id IS NOT NULL
+)
+SELECT
+  b.invitee_user_id,
+  b.current_inviter_user_id,
+  b.expected_effective_at
+FROM bound_users b
+LEFT JOIN invite_relationship_events e
+  ON e.invitee_user_id = b.invitee_user_id
+ AND e.event_type = 'register_bind'
+WHERE e.invitee_user_id IS NULL
+ORDER BY b.invitee_user_id;
+
+SELECT
+  invitee_user_id,
+  COUNT(*) AS register_bind_count,
+  MIN(effective_at) AS first_effective_at,
+  MAX(effective_at) AS last_effective_at
+FROM invite_relationship_events
+WHERE event_type = 'register_bind'
+GROUP BY invitee_user_id
+HAVING COUNT(*) > 1
+ORDER BY invitee_user_id;
+
+WITH bound_users AS (
+  SELECT
+    id AS invitee_user_id,
+    invited_by_user_id AS current_inviter_user_id,
+    COALESCE(invite_bound_at, created_at) AS expected_effective_at
+  FROM users
+  WHERE invited_by_user_id IS NOT NULL
+),
+register_bind_events AS (
+  SELECT
+    invitee_user_id,
+    new_inviter_user_id AS event_inviter_user_id,
+    effective_at AS event_effective_at
+  FROM invite_relationship_events
+  WHERE event_type = 'register_bind'
+),
+register_bind_counts AS (
+  SELECT invitee_user_id, COUNT(*) AS register_bind_count
+  FROM register_bind_events
+  GROUP BY invitee_user_id
+),
+single_register_bind_events AS (
+  SELECT e.invitee_user_id, e.event_inviter_user_id, e.event_effective_at
+  FROM register_bind_events e
+  INNER JOIN register_bind_counts c ON c.invitee_user_id = e.invitee_user_id
+  WHERE c.register_bind_count = 1
+)
+SELECT
+  b.invitee_user_id,
+  b.current_inviter_user_id,
+  e.event_inviter_user_id,
+  b.expected_effective_at,
+  e.event_effective_at
+FROM bound_users b
+INNER JOIN single_register_bind_events e ON e.invitee_user_id = b.invitee_user_id
+WHERE b.current_inviter_user_id IS DISTINCT FROM e.event_inviter_user_id
+   OR b.expected_effective_at IS DISTINCT FROM e.event_effective_at
+ORDER BY b.invitee_user_id;

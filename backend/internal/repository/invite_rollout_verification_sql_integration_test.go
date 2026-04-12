@@ -44,6 +44,35 @@ func TestInviteRolloutVerificationSQL_OverviewMetricsAndReadOnlyStatements(t *te
 	require.Equal(t, "1", metrics["recompute_delta_rows_total"])
 }
 
+func TestInviteRolloutVerificationSQL_BindingChecksExposeDriftSamples(t *testing.T) {
+	tx := testTx(t)
+	seedInviteVerificationBindingFixture(t, tx)
+
+	statements := executableVerificationStatements(t, readInviteRolloutVerificationSQL(t))
+	require.GreaterOrEqual(t, len(statements), 5, "expected statements 1-5 to exist")
+
+	results := executeVerificationStatements(t, tx, statements[:5])
+
+	bindingMetrics := metricMap(t, results[1])
+	require.Equal(t, "1", bindingMetrics["bound_users_missing_register_bind_total"])
+	require.Equal(t, "1", bindingMetrics["register_bind_without_bound_user_total"])
+	require.Equal(t, "1", bindingMetrics["register_bind_duplicate_invitee_total"])
+	require.Equal(t, "1", bindingMetrics["register_bind_inviter_mismatch_total"])
+	require.Equal(t, "1", bindingMetrics["register_bind_effective_at_mismatch_total"])
+
+	missingRegisterBindSamples := results[2]
+	requireColumns(t, missingRegisterBindSamples, "invitee_user_id", "current_inviter_user_id", "expected_effective_at")
+	require.Equal(t, []string{"1105"}, columnValues(t, missingRegisterBindSamples, "invitee_user_id"))
+
+	duplicateRegisterBindSamples := results[3]
+	requireColumns(t, duplicateRegisterBindSamples, "invitee_user_id", "register_bind_count", "first_effective_at", "last_effective_at")
+	require.Equal(t, []string{"1107"}, columnValues(t, duplicateRegisterBindSamples, "invitee_user_id"))
+
+	mismatchSamples := results[4]
+	requireColumns(t, mismatchSamples, "invitee_user_id", "current_inviter_user_id", "event_inviter_user_id", "expected_effective_at", "event_effective_at")
+	require.Equal(t, []string{"1108", "1109"}, columnValues(t, mismatchSamples, "invitee_user_id"))
+}
+
 func readInviteRolloutVerificationSQL(t *testing.T) string {
 	t.Helper()
 
@@ -237,6 +266,39 @@ func seedInviteVerificationOverviewFixture(t *testing.T, tx *sql.Tx) {
 	})
 }
 
+func seedInviteVerificationBindingFixture(t *testing.T, tx *sql.Tx) {
+	t.Helper()
+
+	base := time.Date(2026, 4, 2, 9, 0, 0, 0, time.UTC)
+
+	insertVerificationUser(t, tx, 1101, "binding-inviter-a@example.com", "IV-BD-1101", nil, nil, base)
+	insertVerificationUser(t, tx, 1102, "binding-inviter-b@example.com", "IV-BD-1102", nil, nil, base)
+
+	boundAt1104 := base.Add(1 * time.Hour)
+	boundAt1105 := base.Add(2 * time.Hour)
+	boundAt1107 := base.Add(4 * time.Hour)
+	boundAt1108 := base.Add(5 * time.Hour)
+	boundAt1109 := base.Add(6 * time.Hour)
+
+	insertVerificationUser(t, tx, 1104, "binding-matched@example.com", "IV-BD-1104", int64Ptr(1101), timePtr(boundAt1104), base)
+	insertVerificationRelationshipEvent(t, tx, 4101, 1104, nil, int64Ptr(1101), "register_bind", boundAt1104, nil, "")
+
+	insertVerificationUser(t, tx, 1105, "binding-missing-event@example.com", "IV-BD-1105", int64Ptr(1101), timePtr(boundAt1105), base)
+
+	insertVerificationUser(t, tx, 1106, "binding-orphan-event@example.com", "IV-BD-1106", nil, nil, base)
+	insertVerificationRelationshipEvent(t, tx, 4102, 1106, nil, int64Ptr(1101), "register_bind", base.Add(3*time.Hour), nil, "")
+
+	insertVerificationUser(t, tx, 1107, "binding-duplicate@example.com", "IV-BD-1107", int64Ptr(1101), timePtr(boundAt1107), base)
+	insertVerificationRelationshipEvent(t, tx, 4103, 1107, nil, int64Ptr(1101), "register_bind", boundAt1107, nil, "")
+	insertVerificationRelationshipEvent(t, tx, 4104, 1107, nil, int64Ptr(1101), "register_bind", boundAt1107.Add(10*time.Minute), nil, "")
+
+	insertVerificationUser(t, tx, 1108, "binding-inviter-mismatch@example.com", "IV-BD-1108", int64Ptr(1101), timePtr(boundAt1108), base)
+	insertVerificationRelationshipEvent(t, tx, 4105, 1108, nil, int64Ptr(1102), "register_bind", boundAt1108, nil, "")
+
+	insertVerificationUser(t, tx, 1109, "binding-effective-at-mismatch@example.com", "IV-BD-1109", int64Ptr(1101), timePtr(boundAt1109), base)
+	insertVerificationRelationshipEvent(t, tx, 4106, 1109, nil, int64Ptr(1101), "register_bind", boundAt1109.Add(15*time.Minute), nil, "")
+}
+
 type verificationRewardRecord struct {
 	ID                  int64
 	InviterUserID       int64
@@ -304,5 +366,9 @@ func insertVerificationRewardRecord(t *testing.T, tx *sql.Tx, row verificationRe
 }
 
 func int64Ptr(v int64) *int64 {
+	return &v
+}
+
+func timePtr(v time.Time) *time.Time {
 	return &v
 }
