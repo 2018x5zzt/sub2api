@@ -178,6 +178,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/invite',
+    name: 'Invite',
+    component: () => import('@/views/user/InviteView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Invite Center',
+      titleKey: 'invite.title',
+      descriptionKey: 'invite.description'
+    }
+  },
+  {
     path: '/profile',
     name: 'Profile',
     component: () => import('@/views/user/ProfileView.vue'),
@@ -348,6 +360,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Redeem Code Management',
       titleKey: 'admin.redeem.title',
       descriptionKey: 'admin.redeem.description'
+    }
+  },
+  {
+    path: '/admin/invites',
+    name: 'AdminInvites',
+    component: () => import('@/views/admin/InvitesView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Invite Operations',
+      titleKey: 'admin.invites.title',
+      descriptionKey: 'admin.invites.description'
     }
   },
   {

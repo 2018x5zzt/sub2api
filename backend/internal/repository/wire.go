@@ -50,11 +50,19 @@ func ProvideSessionLimitCache(rdb *redis.Client, cfg *config.Config) service.Ses
 // ProviderSet is the Wire provider set for all repositories
 var ProviderSet = wire.NewSet(
 	NewUserRepository,
+	NewInviteRewardRecordRepository,
+	NewInviteRelationshipEventRepository,
+	NewInviteAdminActionRepository,
+	NewInviteAdminQueryRepository,
+	ProvideInviteRewardAdminRepository,
+	ProvideInviteRelationshipEventAdminRepository,
+	ProvideInviteQualifyingRechargeRepository,
 	NewAPIKeyRepository,
 	NewGroupRepository,
 	NewGroupHealthSnapshotRepository,
 	NewAccountRepository,
 	NewSoraAccountRepository,         // Sora 账号扩展表仓储
+	NewSoraGenerationRepository,      // Sora 生成记录仓储
 	NewScheduledTestPlanRepository,   // 定时测试计划仓储
 	NewScheduledTestResultRepository, // 定时测试结果仓储
 	NewProxyRepository,
@@ -122,6 +130,21 @@ var ProviderSet = wire.NewSet(
 	ProvideSQLDB,
 	ProvideRedis,
 )
+
+// ProvideInviteQualifyingRechargeRepository narrows redeem repository capability for invite recompute wiring.
+func ProvideInviteQualifyingRechargeRepository(client *ent.Client) service.InviteQualifyingRechargeRepository {
+	return &redeemCodeRepository{client: client}
+}
+
+// ProvideInviteRewardAdminRepository narrows invite reward repository capability for admin service wiring.
+func ProvideInviteRewardAdminRepository(client *ent.Client) service.InviteRewardAdminRepository {
+	return &inviteRewardRecordRepository{client: client}
+}
+
+// ProvideInviteRelationshipEventAdminRepository narrows invite relationship event capability for admin service wiring.
+func ProvideInviteRelationshipEventAdminRepository(client *ent.Client) service.InviteRelationshipEventAdminRepository {
+	return &inviteRelationshipEventRepository{client: client}
+}
 
 // ProvideEnt 为依赖注入提供 Ent 客户端。
 //

@@ -21,6 +21,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/grouphealthsnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
+	"github.com/Wei-Shaw/sub2api/ent/inviteadminaction"
+	"github.com/Wei-Shaw/sub2api/ent/inviterelationshipevent"
+	"github.com/Wei-Shaw/sub2api/ent/inviterewardrecord"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
@@ -103,6 +106,9 @@ func checkColumn(t, c string) error {
 			group.Table:                   group.ValidColumn,
 			grouphealthsnapshot.Table:     grouphealthsnapshot.ValidColumn,
 			idempotencyrecord.Table:       idempotencyrecord.ValidColumn,
+			inviteadminaction.Table:       inviteadminaction.ValidColumn,
+			inviterelationshipevent.Table: inviterelationshipevent.ValidColumn,
+			inviterewardrecord.Table:      inviterewardrecord.ValidColumn,
 			promocode.Table:               promocode.ValidColumn,
 			promocodeusage.Table:          promocodeusage.ValidColumn,
 			proxy.Table:                   proxy.ValidColumn,

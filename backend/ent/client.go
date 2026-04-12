@@ -24,6 +24,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/grouphealthsnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
+	"github.com/Wei-Shaw/sub2api/ent/inviteadminaction"
+	"github.com/Wei-Shaw/sub2api/ent/inviterelationshipevent"
+	"github.com/Wei-Shaw/sub2api/ent/inviterewardrecord"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
@@ -64,6 +67,12 @@ type Client struct {
 	GroupHealthSnapshot *GroupHealthSnapshotClient
 	// IdempotencyRecord is the client for interacting with the IdempotencyRecord builders.
 	IdempotencyRecord *IdempotencyRecordClient
+	// InviteAdminAction is the client for interacting with the InviteAdminAction builders.
+	InviteAdminAction *InviteAdminActionClient
+	// InviteRelationshipEvent is the client for interacting with the InviteRelationshipEvent builders.
+	InviteRelationshipEvent *InviteRelationshipEventClient
+	// InviteRewardRecord is the client for interacting with the InviteRewardRecord builders.
+	InviteRewardRecord *InviteRewardRecordClient
 	// PromoCode is the client for interacting with the PromoCode builders.
 	PromoCode *PromoCodeClient
 	// PromoCodeUsage is the client for interacting with the PromoCodeUsage builders.
@@ -110,6 +119,9 @@ func (c *Client) init() {
 	c.Group = NewGroupClient(c.config)
 	c.GroupHealthSnapshot = NewGroupHealthSnapshotClient(c.config)
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
+	c.InviteAdminAction = NewInviteAdminActionClient(c.config)
+	c.InviteRelationshipEvent = NewInviteRelationshipEventClient(c.config)
+	c.InviteRewardRecord = NewInviteRewardRecordClient(c.config)
 	c.PromoCode = NewPromoCodeClient(c.config)
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
 	c.Proxy = NewProxyClient(c.config)
@@ -224,6 +236,9 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Group:                   NewGroupClient(cfg),
 		GroupHealthSnapshot:     NewGroupHealthSnapshotClient(cfg),
 		IdempotencyRecord:       NewIdempotencyRecordClient(cfg),
+		InviteAdminAction:       NewInviteAdminActionClient(cfg),
+		InviteRelationshipEvent: NewInviteRelationshipEventClient(cfg),
+		InviteRewardRecord:      NewInviteRewardRecordClient(cfg),
 		PromoCode:               NewPromoCodeClient(cfg),
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
 		Proxy:                   NewProxyClient(cfg),
@@ -265,6 +280,9 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Group:                   NewGroupClient(cfg),
 		GroupHealthSnapshot:     NewGroupHealthSnapshotClient(cfg),
 		IdempotencyRecord:       NewIdempotencyRecordClient(cfg),
+		InviteAdminAction:       NewInviteAdminActionClient(cfg),
+		InviteRelationshipEvent: NewInviteRelationshipEventClient(cfg),
+		InviteRewardRecord:      NewInviteRewardRecordClient(cfg),
 		PromoCode:               NewPromoCodeClient(cfg),
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
 		Proxy:                   NewProxyClient(cfg),
@@ -309,6 +327,7 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.ErrorPassthroughRule, c.Group, c.GroupHealthSnapshot, c.IdempotencyRecord,
+		c.InviteAdminAction, c.InviteRelationshipEvent, c.InviteRewardRecord,
 		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
 		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
 		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
@@ -323,6 +342,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.ErrorPassthroughRule, c.Group, c.GroupHealthSnapshot, c.IdempotencyRecord,
+		c.InviteAdminAction, c.InviteRelationshipEvent, c.InviteRewardRecord,
 		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
 		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
 		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
@@ -352,6 +372,12 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.GroupHealthSnapshot.mutate(ctx, m)
 	case *IdempotencyRecordMutation:
 		return c.IdempotencyRecord.mutate(ctx, m)
+	case *InviteAdminActionMutation:
+		return c.InviteAdminAction.mutate(ctx, m)
+	case *InviteRelationshipEventMutation:
+		return c.InviteRelationshipEvent.mutate(ctx, m)
+	case *InviteRewardRecordMutation:
+		return c.InviteRewardRecord.mutate(ctx, m)
 	case *PromoCodeMutation:
 		return c.PromoCode.mutate(ctx, m)
 	case *PromoCodeUsageMutation:
@@ -1854,6 +1880,405 @@ func (c *IdempotencyRecordClient) mutate(ctx context.Context, m *IdempotencyReco
 		return (&IdempotencyRecordDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown IdempotencyRecord mutation op: %q", m.Op())
+	}
+}
+
+// InviteAdminActionClient is a client for the InviteAdminAction schema.
+type InviteAdminActionClient struct {
+	config
+}
+
+// NewInviteAdminActionClient returns a client for the InviteAdminAction from the given config.
+func NewInviteAdminActionClient(c config) *InviteAdminActionClient {
+	return &InviteAdminActionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `inviteadminaction.Hooks(f(g(h())))`.
+func (c *InviteAdminActionClient) Use(hooks ...Hook) {
+	c.hooks.InviteAdminAction = append(c.hooks.InviteAdminAction, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `inviteadminaction.Intercept(f(g(h())))`.
+func (c *InviteAdminActionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.InviteAdminAction = append(c.inters.InviteAdminAction, interceptors...)
+}
+
+// Create returns a builder for creating a InviteAdminAction entity.
+func (c *InviteAdminActionClient) Create() *InviteAdminActionCreate {
+	mutation := newInviteAdminActionMutation(c.config, OpCreate)
+	return &InviteAdminActionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of InviteAdminAction entities.
+func (c *InviteAdminActionClient) CreateBulk(builders ...*InviteAdminActionCreate) *InviteAdminActionCreateBulk {
+	return &InviteAdminActionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *InviteAdminActionClient) MapCreateBulk(slice any, setFunc func(*InviteAdminActionCreate, int)) *InviteAdminActionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &InviteAdminActionCreateBulk{err: fmt.Errorf("calling to InviteAdminActionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*InviteAdminActionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &InviteAdminActionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for InviteAdminAction.
+func (c *InviteAdminActionClient) Update() *InviteAdminActionUpdate {
+	mutation := newInviteAdminActionMutation(c.config, OpUpdate)
+	return &InviteAdminActionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *InviteAdminActionClient) UpdateOne(_m *InviteAdminAction) *InviteAdminActionUpdateOne {
+	mutation := newInviteAdminActionMutation(c.config, OpUpdateOne, withInviteAdminAction(_m))
+	return &InviteAdminActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *InviteAdminActionClient) UpdateOneID(id int64) *InviteAdminActionUpdateOne {
+	mutation := newInviteAdminActionMutation(c.config, OpUpdateOne, withInviteAdminActionID(id))
+	return &InviteAdminActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for InviteAdminAction.
+func (c *InviteAdminActionClient) Delete() *InviteAdminActionDelete {
+	mutation := newInviteAdminActionMutation(c.config, OpDelete)
+	return &InviteAdminActionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *InviteAdminActionClient) DeleteOne(_m *InviteAdminAction) *InviteAdminActionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *InviteAdminActionClient) DeleteOneID(id int64) *InviteAdminActionDeleteOne {
+	builder := c.Delete().Where(inviteadminaction.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &InviteAdminActionDeleteOne{builder}
+}
+
+// Query returns a query builder for InviteAdminAction.
+func (c *InviteAdminActionClient) Query() *InviteAdminActionQuery {
+	return &InviteAdminActionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeInviteAdminAction},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a InviteAdminAction entity by its id.
+func (c *InviteAdminActionClient) Get(ctx context.Context, id int64) (*InviteAdminAction, error) {
+	return c.Query().Where(inviteadminaction.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *InviteAdminActionClient) GetX(ctx context.Context, id int64) *InviteAdminAction {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *InviteAdminActionClient) Hooks() []Hook {
+	return c.hooks.InviteAdminAction
+}
+
+// Interceptors returns the client interceptors.
+func (c *InviteAdminActionClient) Interceptors() []Interceptor {
+	return c.inters.InviteAdminAction
+}
+
+func (c *InviteAdminActionClient) mutate(ctx context.Context, m *InviteAdminActionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&InviteAdminActionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&InviteAdminActionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&InviteAdminActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&InviteAdminActionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown InviteAdminAction mutation op: %q", m.Op())
+	}
+}
+
+// InviteRelationshipEventClient is a client for the InviteRelationshipEvent schema.
+type InviteRelationshipEventClient struct {
+	config
+}
+
+// NewInviteRelationshipEventClient returns a client for the InviteRelationshipEvent from the given config.
+func NewInviteRelationshipEventClient(c config) *InviteRelationshipEventClient {
+	return &InviteRelationshipEventClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `inviterelationshipevent.Hooks(f(g(h())))`.
+func (c *InviteRelationshipEventClient) Use(hooks ...Hook) {
+	c.hooks.InviteRelationshipEvent = append(c.hooks.InviteRelationshipEvent, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `inviterelationshipevent.Intercept(f(g(h())))`.
+func (c *InviteRelationshipEventClient) Intercept(interceptors ...Interceptor) {
+	c.inters.InviteRelationshipEvent = append(c.inters.InviteRelationshipEvent, interceptors...)
+}
+
+// Create returns a builder for creating a InviteRelationshipEvent entity.
+func (c *InviteRelationshipEventClient) Create() *InviteRelationshipEventCreate {
+	mutation := newInviteRelationshipEventMutation(c.config, OpCreate)
+	return &InviteRelationshipEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of InviteRelationshipEvent entities.
+func (c *InviteRelationshipEventClient) CreateBulk(builders ...*InviteRelationshipEventCreate) *InviteRelationshipEventCreateBulk {
+	return &InviteRelationshipEventCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *InviteRelationshipEventClient) MapCreateBulk(slice any, setFunc func(*InviteRelationshipEventCreate, int)) *InviteRelationshipEventCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &InviteRelationshipEventCreateBulk{err: fmt.Errorf("calling to InviteRelationshipEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*InviteRelationshipEventCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &InviteRelationshipEventCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for InviteRelationshipEvent.
+func (c *InviteRelationshipEventClient) Update() *InviteRelationshipEventUpdate {
+	mutation := newInviteRelationshipEventMutation(c.config, OpUpdate)
+	return &InviteRelationshipEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *InviteRelationshipEventClient) UpdateOne(_m *InviteRelationshipEvent) *InviteRelationshipEventUpdateOne {
+	mutation := newInviteRelationshipEventMutation(c.config, OpUpdateOne, withInviteRelationshipEvent(_m))
+	return &InviteRelationshipEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *InviteRelationshipEventClient) UpdateOneID(id int64) *InviteRelationshipEventUpdateOne {
+	mutation := newInviteRelationshipEventMutation(c.config, OpUpdateOne, withInviteRelationshipEventID(id))
+	return &InviteRelationshipEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for InviteRelationshipEvent.
+func (c *InviteRelationshipEventClient) Delete() *InviteRelationshipEventDelete {
+	mutation := newInviteRelationshipEventMutation(c.config, OpDelete)
+	return &InviteRelationshipEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *InviteRelationshipEventClient) DeleteOne(_m *InviteRelationshipEvent) *InviteRelationshipEventDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *InviteRelationshipEventClient) DeleteOneID(id int64) *InviteRelationshipEventDeleteOne {
+	builder := c.Delete().Where(inviterelationshipevent.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &InviteRelationshipEventDeleteOne{builder}
+}
+
+// Query returns a query builder for InviteRelationshipEvent.
+func (c *InviteRelationshipEventClient) Query() *InviteRelationshipEventQuery {
+	return &InviteRelationshipEventQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeInviteRelationshipEvent},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a InviteRelationshipEvent entity by its id.
+func (c *InviteRelationshipEventClient) Get(ctx context.Context, id int64) (*InviteRelationshipEvent, error) {
+	return c.Query().Where(inviterelationshipevent.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *InviteRelationshipEventClient) GetX(ctx context.Context, id int64) *InviteRelationshipEvent {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *InviteRelationshipEventClient) Hooks() []Hook {
+	return c.hooks.InviteRelationshipEvent
+}
+
+// Interceptors returns the client interceptors.
+func (c *InviteRelationshipEventClient) Interceptors() []Interceptor {
+	return c.inters.InviteRelationshipEvent
+}
+
+func (c *InviteRelationshipEventClient) mutate(ctx context.Context, m *InviteRelationshipEventMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&InviteRelationshipEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&InviteRelationshipEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&InviteRelationshipEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&InviteRelationshipEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown InviteRelationshipEvent mutation op: %q", m.Op())
+	}
+}
+
+// InviteRewardRecordClient is a client for the InviteRewardRecord schema.
+type InviteRewardRecordClient struct {
+	config
+}
+
+// NewInviteRewardRecordClient returns a client for the InviteRewardRecord from the given config.
+func NewInviteRewardRecordClient(c config) *InviteRewardRecordClient {
+	return &InviteRewardRecordClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `inviterewardrecord.Hooks(f(g(h())))`.
+func (c *InviteRewardRecordClient) Use(hooks ...Hook) {
+	c.hooks.InviteRewardRecord = append(c.hooks.InviteRewardRecord, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `inviterewardrecord.Intercept(f(g(h())))`.
+func (c *InviteRewardRecordClient) Intercept(interceptors ...Interceptor) {
+	c.inters.InviteRewardRecord = append(c.inters.InviteRewardRecord, interceptors...)
+}
+
+// Create returns a builder for creating a InviteRewardRecord entity.
+func (c *InviteRewardRecordClient) Create() *InviteRewardRecordCreate {
+	mutation := newInviteRewardRecordMutation(c.config, OpCreate)
+	return &InviteRewardRecordCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of InviteRewardRecord entities.
+func (c *InviteRewardRecordClient) CreateBulk(builders ...*InviteRewardRecordCreate) *InviteRewardRecordCreateBulk {
+	return &InviteRewardRecordCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *InviteRewardRecordClient) MapCreateBulk(slice any, setFunc func(*InviteRewardRecordCreate, int)) *InviteRewardRecordCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &InviteRewardRecordCreateBulk{err: fmt.Errorf("calling to InviteRewardRecordClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*InviteRewardRecordCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &InviteRewardRecordCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for InviteRewardRecord.
+func (c *InviteRewardRecordClient) Update() *InviteRewardRecordUpdate {
+	mutation := newInviteRewardRecordMutation(c.config, OpUpdate)
+	return &InviteRewardRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *InviteRewardRecordClient) UpdateOne(_m *InviteRewardRecord) *InviteRewardRecordUpdateOne {
+	mutation := newInviteRewardRecordMutation(c.config, OpUpdateOne, withInviteRewardRecord(_m))
+	return &InviteRewardRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *InviteRewardRecordClient) UpdateOneID(id int64) *InviteRewardRecordUpdateOne {
+	mutation := newInviteRewardRecordMutation(c.config, OpUpdateOne, withInviteRewardRecordID(id))
+	return &InviteRewardRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for InviteRewardRecord.
+func (c *InviteRewardRecordClient) Delete() *InviteRewardRecordDelete {
+	mutation := newInviteRewardRecordMutation(c.config, OpDelete)
+	return &InviteRewardRecordDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *InviteRewardRecordClient) DeleteOne(_m *InviteRewardRecord) *InviteRewardRecordDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *InviteRewardRecordClient) DeleteOneID(id int64) *InviteRewardRecordDeleteOne {
+	builder := c.Delete().Where(inviterewardrecord.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &InviteRewardRecordDeleteOne{builder}
+}
+
+// Query returns a query builder for InviteRewardRecord.
+func (c *InviteRewardRecordClient) Query() *InviteRewardRecordQuery {
+	return &InviteRewardRecordQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeInviteRewardRecord},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a InviteRewardRecord entity by its id.
+func (c *InviteRewardRecordClient) Get(ctx context.Context, id int64) (*InviteRewardRecord, error) {
+	return c.Query().Where(inviterewardrecord.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *InviteRewardRecordClient) GetX(ctx context.Context, id int64) *InviteRewardRecord {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *InviteRewardRecordClient) Hooks() []Hook {
+	return c.hooks.InviteRewardRecord
+}
+
+// Interceptors returns the client interceptors.
+func (c *InviteRewardRecordClient) Interceptors() []Interceptor {
+	return c.inters.InviteRewardRecord
+}
+
+func (c *InviteRewardRecordClient) mutate(ctx context.Context, m *InviteRewardRecordMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&InviteRewardRecordCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&InviteRewardRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&InviteRewardRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&InviteRewardRecordDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown InviteRewardRecord mutation op: %q", m.Op())
 	}
 }
 
@@ -4029,14 +4454,16 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		ErrorPassthroughRule, Group, GroupHealthSnapshot, IdempotencyRecord, PromoCode,
+		ErrorPassthroughRule, Group, GroupHealthSnapshot, IdempotencyRecord,
+		InviteAdminAction, InviteRelationshipEvent, InviteRewardRecord, PromoCode,
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask,
 		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		ErrorPassthroughRule, Group, GroupHealthSnapshot, IdempotencyRecord, PromoCode,
+		ErrorPassthroughRule, Group, GroupHealthSnapshot, IdempotencyRecord,
+		InviteAdminAction, InviteRelationshipEvent, InviteRewardRecord, PromoCode,
 		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask,
 		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserSubscription []ent.Interceptor

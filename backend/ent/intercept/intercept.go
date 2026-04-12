@@ -17,6 +17,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/grouphealthsnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
+	"github.com/Wei-Shaw/sub2api/ent/inviteadminaction"
+	"github.com/Wei-Shaw/sub2api/ent/inviterelationshipevent"
+	"github.com/Wei-Shaw/sub2api/ent/inviterewardrecord"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -330,6 +333,87 @@ func (f TraverseIdempotencyRecord) Traverse(ctx context.Context, q ent.Query) er
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.IdempotencyRecordQuery", q)
+}
+
+// The InviteAdminActionFunc type is an adapter to allow the use of ordinary function as a Querier.
+type InviteAdminActionFunc func(context.Context, *ent.InviteAdminActionQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f InviteAdminActionFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.InviteAdminActionQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.InviteAdminActionQuery", q)
+}
+
+// The TraverseInviteAdminAction type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseInviteAdminAction func(context.Context, *ent.InviteAdminActionQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseInviteAdminAction) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseInviteAdminAction) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.InviteAdminActionQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.InviteAdminActionQuery", q)
+}
+
+// The InviteRelationshipEventFunc type is an adapter to allow the use of ordinary function as a Querier.
+type InviteRelationshipEventFunc func(context.Context, *ent.InviteRelationshipEventQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f InviteRelationshipEventFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.InviteRelationshipEventQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.InviteRelationshipEventQuery", q)
+}
+
+// The TraverseInviteRelationshipEvent type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseInviteRelationshipEvent func(context.Context, *ent.InviteRelationshipEventQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseInviteRelationshipEvent) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseInviteRelationshipEvent) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.InviteRelationshipEventQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.InviteRelationshipEventQuery", q)
+}
+
+// The InviteRewardRecordFunc type is an adapter to allow the use of ordinary function as a Querier.
+type InviteRewardRecordFunc func(context.Context, *ent.InviteRewardRecordQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f InviteRewardRecordFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.InviteRewardRecordQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.InviteRewardRecordQuery", q)
+}
+
+// The TraverseInviteRewardRecord type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseInviteRewardRecord func(context.Context, *ent.InviteRewardRecordQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseInviteRewardRecord) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseInviteRewardRecord) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.InviteRewardRecordQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.InviteRewardRecordQuery", q)
 }
 
 // The PromoCodeFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -704,6 +788,12 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.GroupHealthSnapshotQuery, predicate.GroupHealthSnapshot, grouphealthsnapshot.OrderOption]{typ: ent.TypeGroupHealthSnapshot, tq: q}, nil
 	case *ent.IdempotencyRecordQuery:
 		return &query[*ent.IdempotencyRecordQuery, predicate.IdempotencyRecord, idempotencyrecord.OrderOption]{typ: ent.TypeIdempotencyRecord, tq: q}, nil
+	case *ent.InviteAdminActionQuery:
+		return &query[*ent.InviteAdminActionQuery, predicate.InviteAdminAction, inviteadminaction.OrderOption]{typ: ent.TypeInviteAdminAction, tq: q}, nil
+	case *ent.InviteRelationshipEventQuery:
+		return &query[*ent.InviteRelationshipEventQuery, predicate.InviteRelationshipEvent, inviterelationshipevent.OrderOption]{typ: ent.TypeInviteRelationshipEvent, tq: q}, nil
+	case *ent.InviteRewardRecordQuery:
+		return &query[*ent.InviteRewardRecordQuery, predicate.InviteRewardRecord, inviterewardrecord.OrderOption]{typ: ent.TypeInviteRewardRecord, tq: q}, nil
 	case *ent.PromoCodeQuery:
 		return &query[*ent.PromoCodeQuery, predicate.PromoCode, promocode.OrderOption]{typ: ent.TypePromoCode, tq: q}, nil
 	case *ent.PromoCodeUsageQuery:

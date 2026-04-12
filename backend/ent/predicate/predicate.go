@@ -33,6 +33,15 @@ type GroupHealthSnapshot func(*sql.Selector)
 // IdempotencyRecord is the predicate function for idempotencyrecord builders.
 type IdempotencyRecord func(*sql.Selector)
 
+// InviteAdminAction is the predicate function for inviteadminaction builders.
+type InviteAdminAction func(*sql.Selector)
+
+// InviteRelationshipEvent is the predicate function for inviterelationshipevent builders.
+type InviteRelationshipEvent func(*sql.Selector)
+
+// InviteRewardRecord is the predicate function for inviterewardrecord builders.
+type InviteRewardRecord func(*sql.Selector)
+
 // PromoCode is the predicate function for promocode builders.
 type PromoCode func(*sql.Selector)
 

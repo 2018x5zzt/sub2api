@@ -32,6 +32,12 @@ type Tx struct {
 	GroupHealthSnapshot *GroupHealthSnapshotClient
 	// IdempotencyRecord is the client for interacting with the IdempotencyRecord builders.
 	IdempotencyRecord *IdempotencyRecordClient
+	// InviteAdminAction is the client for interacting with the InviteAdminAction builders.
+	InviteAdminAction *InviteAdminActionClient
+	// InviteRelationshipEvent is the client for interacting with the InviteRelationshipEvent builders.
+	InviteRelationshipEvent *InviteRelationshipEventClient
+	// InviteRewardRecord is the client for interacting with the InviteRewardRecord builders.
+	InviteRewardRecord *InviteRewardRecordClient
 	// PromoCode is the client for interacting with the PromoCode builders.
 	PromoCode *PromoCodeClient
 	// PromoCodeUsage is the client for interacting with the PromoCodeUsage builders.
@@ -198,6 +204,9 @@ func (tx *Tx) init() {
 	tx.Group = NewGroupClient(tx.config)
 	tx.GroupHealthSnapshot = NewGroupHealthSnapshotClient(tx.config)
 	tx.IdempotencyRecord = NewIdempotencyRecordClient(tx.config)
+	tx.InviteAdminAction = NewInviteAdminActionClient(tx.config)
+	tx.InviteRelationshipEvent = NewInviteRelationshipEventClient(tx.config)
+	tx.InviteRewardRecord = NewInviteRewardRecordClient(tx.config)
 	tx.PromoCode = NewPromoCodeClient(tx.config)
 	tx.PromoCodeUsage = NewPromoCodeUsageClient(tx.config)
 	tx.Proxy = NewProxyClient(tx.config)

@@ -46,6 +46,9 @@ func RegisterAdminRoutes(
 		// 代理管理
 		registerProxyRoutes(admin, h)
 
+		// 邀请管理
+		registerInviteRoutes(admin, h)
+
 		// 卡密管理
 		registerRedeemCodeRoutes(admin, h)
 
@@ -91,6 +94,20 @@ func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	apiKeys := admin.Group("/api-keys")
 	{
 		apiKeys.PUT("/:id", h.Admin.APIKey.UpdateGroup)
+	}
+}
+
+func registerInviteRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	invites := admin.Group("/invites")
+	{
+		invites.GET("/stats", h.Admin.Invite.GetStats)
+		invites.GET("/relationships", h.Admin.Invite.ListRelationships)
+		invites.GET("/rewards", h.Admin.Invite.ListRewards)
+		invites.GET("/actions", h.Admin.Invite.ListActions)
+		invites.POST("/rebind", h.Admin.Invite.Rebind)
+		invites.POST("/manual-grants", h.Admin.Invite.CreateManualGrant)
+		invites.POST("/recompute/preview", h.Admin.Invite.PreviewRecompute)
+		invites.POST("/recompute/execute", h.Admin.Invite.ExecuteRecompute)
 	}
 }
 

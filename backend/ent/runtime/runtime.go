@@ -14,6 +14,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/grouphealthsnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
+	"github.com/Wei-Shaw/sub2api/ent/inviteadminaction"
+	"github.com/Wei-Shaw/sub2api/ent/inviterelationshipevent"
+	"github.com/Wei-Shaw/sub2api/ent/inviterewardrecord"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
@@ -505,6 +508,54 @@ func init() {
 	idempotencyrecordDescErrorReason := idempotencyrecordFields[6].Descriptor()
 	// idempotencyrecord.ErrorReasonValidator is a validator for the "error_reason" field. It is called by the builders before save.
 	idempotencyrecord.ErrorReasonValidator = idempotencyrecordDescErrorReason.Validators[0].(func(string) error)
+	inviteadminactionFields := schema.InviteAdminAction{}.Fields()
+	_ = inviteadminactionFields
+	// inviteadminactionDescActionType is the schema descriptor for action_type field.
+	inviteadminactionDescActionType := inviteadminactionFields[0].Descriptor()
+	// inviteadminaction.ActionTypeValidator is a validator for the "action_type" field. It is called by the builders before save.
+	inviteadminaction.ActionTypeValidator = inviteadminactionDescActionType.Validators[0].(func(string) error)
+	// inviteadminactionDescRequestSnapshotJSON is the schema descriptor for request_snapshot_json field.
+	inviteadminactionDescRequestSnapshotJSON := inviteadminactionFields[4].Descriptor()
+	// inviteadminaction.DefaultRequestSnapshotJSON holds the default value on creation for the request_snapshot_json field.
+	inviteadminaction.DefaultRequestSnapshotJSON = inviteadminactionDescRequestSnapshotJSON.Default.(func() map[string]interface{})
+	// inviteadminactionDescResultSnapshotJSON is the schema descriptor for result_snapshot_json field.
+	inviteadminactionDescResultSnapshotJSON := inviteadminactionFields[5].Descriptor()
+	// inviteadminaction.DefaultResultSnapshotJSON holds the default value on creation for the result_snapshot_json field.
+	inviteadminaction.DefaultResultSnapshotJSON = inviteadminactionDescResultSnapshotJSON.Default.(func() map[string]interface{})
+	// inviteadminactionDescCreatedAt is the schema descriptor for created_at field.
+	inviteadminactionDescCreatedAt := inviteadminactionFields[6].Descriptor()
+	// inviteadminaction.DefaultCreatedAt holds the default value on creation for the created_at field.
+	inviteadminaction.DefaultCreatedAt = inviteadminactionDescCreatedAt.Default.(func() time.Time)
+	inviterelationshipeventFields := schema.InviteRelationshipEvent{}.Fields()
+	_ = inviterelationshipeventFields
+	// inviterelationshipeventDescEventType is the schema descriptor for event_type field.
+	inviterelationshipeventDescEventType := inviterelationshipeventFields[3].Descriptor()
+	// inviterelationshipevent.EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
+	inviterelationshipevent.EventTypeValidator = inviterelationshipeventDescEventType.Validators[0].(func(string) error)
+	// inviterelationshipeventDescCreatedAt is the schema descriptor for created_at field.
+	inviterelationshipeventDescCreatedAt := inviterelationshipeventFields[7].Descriptor()
+	// inviterelationshipevent.DefaultCreatedAt holds the default value on creation for the created_at field.
+	inviterelationshipevent.DefaultCreatedAt = inviterelationshipeventDescCreatedAt.Default.(func() time.Time)
+	inviterewardrecordFields := schema.InviteRewardRecord{}.Fields()
+	_ = inviterewardrecordFields
+	// inviterewardrecordDescRewardRole is the schema descriptor for reward_role field.
+	inviterewardrecordDescRewardRole := inviterewardrecordFields[5].Descriptor()
+	// inviterewardrecord.RewardRoleValidator is a validator for the "reward_role" field. It is called by the builders before save.
+	inviterewardrecord.RewardRoleValidator = inviterewardrecordDescRewardRole.Validators[0].(func(string) error)
+	// inviterewardrecordDescRewardType is the schema descriptor for reward_type field.
+	inviterewardrecordDescRewardType := inviterewardrecordFields[6].Descriptor()
+	// inviterewardrecord.RewardTypeValidator is a validator for the "reward_type" field. It is called by the builders before save.
+	inviterewardrecord.RewardTypeValidator = inviterewardrecordDescRewardType.Validators[0].(func(string) error)
+	// inviterewardrecordDescStatus is the schema descriptor for status field.
+	inviterewardrecordDescStatus := inviterewardrecordFields[9].Descriptor()
+	// inviterewardrecord.DefaultStatus holds the default value on creation for the status field.
+	inviterewardrecord.DefaultStatus = inviterewardrecordDescStatus.Default.(string)
+	// inviterewardrecord.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	inviterewardrecord.StatusValidator = inviterewardrecordDescStatus.Validators[0].(func(string) error)
+	// inviterewardrecordDescCreatedAt is the schema descriptor for created_at field.
+	inviterewardrecordDescCreatedAt := inviterewardrecordFields[12].Descriptor()
+	// inviterewardrecord.DefaultCreatedAt holds the default value on creation for the created_at field.
+	inviterewardrecord.DefaultCreatedAt = inviterewardrecordDescCreatedAt.Default.(func() time.Time)
 	promocodeFields := schema.PromoCode{}.Fields()
 	_ = promocodeFields
 	// promocodeDescCode is the schema descriptor for code field.
@@ -708,12 +759,18 @@ func init() {
 	redeemcode.DefaultStatus = redeemcodeDescStatus.Default.(string)
 	// redeemcode.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	redeemcode.StatusValidator = redeemcodeDescStatus.Validators[0].(func(string) error)
+	// redeemcodeDescSourceType is the schema descriptor for source_type field.
+	redeemcodeDescSourceType := redeemcodeFields[4].Descriptor()
+	// redeemcode.DefaultSourceType holds the default value on creation for the source_type field.
+	redeemcode.DefaultSourceType = redeemcodeDescSourceType.Default.(string)
+	// redeemcode.SourceTypeValidator is a validator for the "source_type" field. It is called by the builders before save.
+	redeemcode.SourceTypeValidator = redeemcodeDescSourceType.Validators[0].(func(string) error)
 	// redeemcodeDescCreatedAt is the schema descriptor for created_at field.
-	redeemcodeDescCreatedAt := redeemcodeFields[7].Descriptor()
+	redeemcodeDescCreatedAt := redeemcodeFields[8].Descriptor()
 	// redeemcode.DefaultCreatedAt holds the default value on creation for the created_at field.
 	redeemcode.DefaultCreatedAt = redeemcodeDescCreatedAt.Default.(func() time.Time)
 	// redeemcodeDescValidityDays is the schema descriptor for validity_days field.
-	redeemcodeDescValidityDays := redeemcodeFields[9].Descriptor()
+	redeemcodeDescValidityDays := redeemcodeFields[10].Descriptor()
 	// redeemcode.DefaultValidityDays holds the default value on creation for the validity_days field.
 	redeemcode.DefaultValidityDays = redeemcodeDescValidityDays.Default.(int)
 	securitysecretMixin := schema.SecuritySecret{}.Mixin()
@@ -1021,26 +1078,30 @@ func init() {
 	user.DefaultStatus = userDescStatus.Default.(string)
 	// user.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	user.StatusValidator = userDescStatus.Validators[0].(func(string) error)
+	// userDescInviteCode is the schema descriptor for invite_code field.
+	userDescInviteCode := userFields[6].Descriptor()
+	// user.InviteCodeValidator is a validator for the "invite_code" field. It is called by the builders before save.
+	user.InviteCodeValidator = userDescInviteCode.Validators[0].(func(string) error)
 	// userDescUsername is the schema descriptor for username field.
-	userDescUsername := userFields[6].Descriptor()
+	userDescUsername := userFields[9].Descriptor()
 	// user.DefaultUsername holds the default value on creation for the username field.
 	user.DefaultUsername = userDescUsername.Default.(string)
 	// user.UsernameValidator is a validator for the "username" field. It is called by the builders before save.
 	user.UsernameValidator = userDescUsername.Validators[0].(func(string) error)
 	// userDescNotes is the schema descriptor for notes field.
-	userDescNotes := userFields[7].Descriptor()
+	userDescNotes := userFields[10].Descriptor()
 	// user.DefaultNotes holds the default value on creation for the notes field.
 	user.DefaultNotes = userDescNotes.Default.(string)
 	// userDescTotpEnabled is the schema descriptor for totp_enabled field.
-	userDescTotpEnabled := userFields[9].Descriptor()
+	userDescTotpEnabled := userFields[12].Descriptor()
 	// user.DefaultTotpEnabled holds the default value on creation for the totp_enabled field.
 	user.DefaultTotpEnabled = userDescTotpEnabled.Default.(bool)
 	// userDescSoraStorageQuotaBytes is the schema descriptor for sora_storage_quota_bytes field.
-	userDescSoraStorageQuotaBytes := userFields[11].Descriptor()
+	userDescSoraStorageQuotaBytes := userFields[14].Descriptor()
 	// user.DefaultSoraStorageQuotaBytes holds the default value on creation for the sora_storage_quota_bytes field.
 	user.DefaultSoraStorageQuotaBytes = userDescSoraStorageQuotaBytes.Default.(int64)
 	// userDescSoraStorageUsedBytes is the schema descriptor for sora_storage_used_bytes field.
-	userDescSoraStorageUsedBytes := userFields[12].Descriptor()
+	userDescSoraStorageUsedBytes := userFields[15].Descriptor()
 	// user.DefaultSoraStorageUsedBytes holds the default value on creation for the sora_storage_used_bytes field.
 	user.DefaultSoraStorageUsedBytes = userDescSoraStorageUsedBytes.Default.(int64)
 	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()

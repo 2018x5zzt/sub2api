@@ -21,6 +21,7 @@ func ProvideAdminHandlers(
 	geminiOAuthHandler *admin.GeminiOAuthHandler,
 	antigravityOAuthHandler *admin.AntigravityOAuthHandler,
 	proxyHandler *admin.ProxyHandler,
+	inviteHandler *admin.InviteHandler,
 	redeemHandler *admin.RedeemHandler,
 	promoHandler *admin.PromoHandler,
 	settingHandler *admin.SettingHandler,
@@ -46,6 +47,7 @@ func ProvideAdminHandlers(
 		GeminiOAuth:      geminiOAuthHandler,
 		AntigravityOAuth: antigravityOAuthHandler,
 		Proxy:            proxyHandler,
+		Invite:           inviteHandler,
 		Redeem:           redeemHandler,
 		Promo:            promoHandler,
 		Setting:          settingHandler,
@@ -74,6 +76,7 @@ func ProvideSettingHandler(settingService *service.SettingService, buildInfo Bui
 func ProvideHandlers(
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
+	inviteHandler *InviteHandler,
 	apiKeyHandler *APIKeyHandler,
 	usageHandler *UsageHandler,
 	redeemHandler *RedeemHandler,
@@ -92,6 +95,7 @@ func ProvideHandlers(
 	return &Handlers{
 		Auth:          authHandler,
 		User:          userHandler,
+		Invite:        inviteHandler,
 		APIKey:        apiKeyHandler,
 		Usage:         usageHandler,
 		Redeem:        redeemHandler,
@@ -112,6 +116,7 @@ var ProviderSet = wire.NewSet(
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,
+	NewInviteHandler,
 	NewAPIKeyHandler,
 	NewUsageHandler,
 	NewRedeemHandler,
@@ -120,6 +125,7 @@ var ProviderSet = wire.NewSet(
 	NewGatewayHandler,
 	NewOpenAIGatewayHandler,
 	NewSoraGatewayHandler,
+	NewSoraClientHandler,
 	NewTotpHandler,
 	ProvideSettingHandler,
 
@@ -136,6 +142,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewGeminiOAuthHandler,
 	admin.NewAntigravityOAuthHandler,
 	admin.NewProxyHandler,
+	admin.NewInviteHandler,
 	admin.NewRedeemHandler,
 	admin.NewPromoHandler,
 	admin.NewSettingHandler,
