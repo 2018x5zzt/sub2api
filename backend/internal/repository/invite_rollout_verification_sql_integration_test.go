@@ -344,9 +344,18 @@ func executeVerificationStatements(t *testing.T, tx *sql.Tx, statements []string
 
 func resetInviteVerificationTables(t *testing.T, tx *sql.Tx) {
 	t.Helper()
-	_, err := tx.ExecContext(context.Background(), `
-		TRUNCATE invite_reward_records, invite_relationship_events, invite_admin_actions, redeem_codes, users RESTART IDENTITY CASCADE
-	`)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := tx.ExecContext(ctx, `DELETE FROM invite_reward_records`)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `DELETE FROM invite_relationship_events`)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `DELETE FROM invite_admin_actions`)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `DELETE FROM redeem_codes`)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, `DELETE FROM users`)
 	require.NoError(t, err)
 }
 

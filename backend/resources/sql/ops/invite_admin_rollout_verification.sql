@@ -19,7 +19,7 @@
 --   7) reward anomaly metrics
 --   8) reward anomaly samples (admin-correction focused)
 --   9) base reward observation samples
--- Keep statement order fixed do not insert/reorder statements 1-9, only append after statement 9.
+-- Keep statement order fixed: do not insert/reorder statements 1-9, only append after statement 9.
 
 WITH metrics AS (
   SELECT 1 AS ord, 'bound_users_total' AS metric_name, COUNT(*)::text AS metric_value
