@@ -63,8 +63,17 @@ That permanent code is used for:
 
 - invite links
 - registration-time inviter binding
-- first-time OAuth registration inviter binding
 - user invite-center sharing
+
+For the active product, ordinary registration is the only required invite-link landing flow.
+
+If a visitor lands on the registration page through an invite link:
+
+- the invite code field is auto-filled from the link
+- the auto-filled value is locked in the UI and cannot be edited or cleared in place
+- the visitor can return to a normal registration flow only by changing or removing the URL parameter and re-entering the page
+
+LinuxDo OAuth registration is not an active product path and will not be expanded to carry invite-link lock semantics.
 
 Legacy one-time registration invitation codes are no longer part of the active product model.
 
@@ -140,7 +149,9 @@ It remains responsible for:
 - showing the user’s invite reward total
 - showing reward history
 
-Registration and first-time OAuth registration continue to support inviter binding through the permanent invite code.
+Ordinary registration continues to support inviter binding through the permanent invite code.
+
+When a user enters through a shared invite link, the registration form should preserve that inviter binding by locking the prefilled invite code field instead of allowing in-place edits.
 
 ### Admin side
 
@@ -199,11 +210,15 @@ The frontend change has five parts:
 
 4. **Retire legacy invitation-code UI**
    - remove legacy invitation-code entry points from the end-user registration product flow
+   - when `?invite=` is present, prefill the permanent invite code and render the field as locked read-only state
+   - do not provide an in-form clear or replace action for invite-link-prefilled codes
+   - allow ordinary manual invite-code entry only when the page was not entered through an invite link
    - if legacy admin navigation remains, label it clearly as removed
 
 5. **Tighten regression tests**
    - test the invite center using real locale bundles
    - enforce the “no percentage in user-facing invite copy” rule in both zh and en
+   - cover the locked invite-link registration state versus the normal editable registration state
 
 ### Database and Records
 
@@ -261,7 +276,8 @@ After this change:
 
 The completed implementation should verify:
 
-- permanent user invite codes remain valid across registration and OAuth binding
+- permanent user invite codes remain valid across ordinary registration
+- invite-link-prefilled registration locks the invite code field while non-link registration remains editable
 - legacy one-time invitation-code submissions return the removed-feature error
 - only `balance + commercial` redeem codes trigger base invite rewards
 - subscription redeem codes do not trigger invite rewards
