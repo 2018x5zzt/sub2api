@@ -516,6 +516,21 @@ func ensureAntigravityDefaultPassthroughs(mapping map[string]string, models []st
 	}
 }
 
+func (a *Account) normalizeOpenAIRequestedModelForMapping(requestedModel string) string {
+	if a == nil || !a.IsOpenAI() {
+		return ""
+	}
+	requestedModel = strings.TrimSpace(requestedModel)
+	if requestedModel == "" {
+		return ""
+	}
+	normalized := normalizeCodexModel(requestedModel)
+	if normalized == "" || normalized == requestedModel {
+		return ""
+	}
+	return normalized
+}
+
 // IsModelSupported 检查模型是否在 model_mapping 中（支持通配符）
 // 如果未配置 mapping，返回 true（允许所有模型）
 func (a *Account) IsModelSupported(requestedModel string) bool {
@@ -531,6 +546,16 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 	for pattern := range mapping {
 		if matchWildcard(pattern, requestedModel) {
 			return true
+		}
+	}
+	if normalized := a.normalizeOpenAIRequestedModelForMapping(requestedModel); normalized != "" {
+		if _, exists := mapping[normalized]; exists {
+			return true
+		}
+		for pattern := range mapping {
+			if matchWildcard(pattern, normalized) {
+				return true
+			}
 		}
 	}
 	return false
@@ -555,7 +580,18 @@ func (a *Account) ResolveMappedModel(requestedModel string) (mappedModel string,
 		return mappedModel, true
 	}
 	// 通配符匹配（最长优先）
-	return matchWildcardMappingResult(mapping, requestedModel)
+	if mappedModel, matched = matchWildcardMappingResult(mapping, requestedModel); matched {
+		return mappedModel, true
+	}
+	if normalized := a.normalizeOpenAIRequestedModelForMapping(requestedModel); normalized != "" {
+		if mappedModel, exists := mapping[normalized]; exists {
+			return mappedModel, true
+		}
+		if mappedModel, matched = matchWildcardMappingResult(mapping, normalized); matched {
+			return mappedModel, true
+		}
+	}
+	return requestedModel, false
 }
 
 func (a *Account) GetBaseURL() string {

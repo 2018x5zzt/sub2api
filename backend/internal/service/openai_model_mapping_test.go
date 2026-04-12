@@ -48,6 +48,7 @@ func TestResolveOpenAIForwardModel(t *testing.T) {
 		{
 			name: "uses account remap when explicit target differs",
 			account: &Account{
+				Platform: PlatformOpenAI,
 				Credentials: map[string]any{
 					"model_mapping": map[string]any{
 						"gpt-5": "gpt-5.4",
@@ -57,6 +58,20 @@ func TestResolveOpenAIForwardModel(t *testing.T) {
 			requestedModel:     "gpt-5",
 			defaultMappedModel: "gpt-4o-mini",
 			expectedModel:      "gpt-5.4",
+		},
+		{
+			name: "matches canonical codex mapping for spark alias",
+			account: &Account{
+				Platform: PlatformOpenAI,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"gpt-5.3-codex": "gpt-4.1",
+					},
+				},
+			},
+			requestedModel:     "gpt-5.3-codex-spark",
+			defaultMappedModel: "gpt-4o-mini",
+			expectedModel:      "gpt-4.1",
 		},
 	}
 
