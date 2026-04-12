@@ -451,6 +451,12 @@ func filterCodexInput(
 			}
 			return "fc_" + id
 		}
+		normalizeLegacyMessageID := func(id string) string {
+			if len(id) < len("item_") || !strings.EqualFold(id[:len("item_")], "item_") {
+				return id
+			}
+			return "msg_" + id[len("item_"):]
+		}
 		isToolReferenceID := func(id string) bool {
 			id = strings.TrimSpace(id)
 			return strings.HasPrefix(id, "call_") || strings.HasPrefix(id, "fc")
@@ -506,6 +512,16 @@ func filterCodexInput(
 				if fixedCallID != callID {
 					ensureCopy()
 					newItem["call_id"] = fixedCallID
+				}
+			}
+		}
+
+		if typ == "message" {
+			if id, ok := m["id"].(string); ok {
+				normalizedID := normalizeLegacyMessageID(id)
+				if normalizedID != id {
+					ensureCopy()
+					newItem["id"] = normalizedID
 				}
 			}
 		}
