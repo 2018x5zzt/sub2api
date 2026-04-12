@@ -97,6 +97,87 @@ func TestInviteRolloutVerificationSQL_BindingChecksExposeDriftSamples(t *testing
 	require.NotEqual(t, *row1109["expected_effective_at"], *row1109["event_effective_at"])
 }
 
+func TestInviteRolloutVerificationSQL_RewardChecksSeparateAdminCorrections(t *testing.T) {
+	tx := testTx(t)
+	seedInviteVerificationRewardFixture(t, tx)
+
+	statements := executableVerificationStatements(t, readInviteRolloutVerificationSQL(t))
+	require.GreaterOrEqual(t, len(statements), 9, "expected statements 1-9 to exist")
+
+	results := executeVerificationStatements(t, tx, statements[:9])
+
+	rewardSummary := results[5]
+	requireColumns(t, rewardSummary,
+		"reward_type",
+		"status",
+		"rows_total",
+		"reward_amount_total",
+		"distinct_invitees_total",
+		"distinct_reward_targets_total",
+		"rows_with_admin_action_total",
+		"rows_with_null_trigger_code_total",
+	)
+
+	summaryByType := make(map[string]map[string]*string, len(rewardSummary.Rows))
+	for _, row := range rewardSummary.Rows {
+		rewardType := row["reward_type"]
+		status := row["status"]
+		require.NotNil(t, rewardType, "reward_type must not be null")
+		require.NotNil(t, status, "status must not be null")
+		summaryByType[*rewardType+"|"+*status] = row
+	}
+
+	baseApplied, ok := summaryByType["base_invite_reward|applied"]
+	require.True(t, ok, "expected summary row for base_invite_reward applied")
+	require.Equal(t, "3", requireRowValue(t, baseApplied, "rows_total"))
+	require.Equal(t, "15.00000000", requireRowValue(t, baseApplied, "reward_amount_total"))
+	require.Equal(t, "1", requireRowValue(t, baseApplied, "rows_with_null_trigger_code_total"))
+	require.Equal(t, "1", requireRowValue(t, baseApplied, "rows_with_admin_action_total"))
+
+	manualApplied, ok := summaryByType["manual_invite_grant|applied"]
+	require.True(t, ok, "expected summary row for manual_invite_grant applied")
+	require.Equal(t, "2", requireRowValue(t, manualApplied, "rows_total"))
+	require.Equal(t, "27.50000000", requireRowValue(t, manualApplied, "reward_amount_total"))
+	require.Equal(t, "1", requireRowValue(t, manualApplied, "rows_with_admin_action_total"))
+
+	recomputeApplied, ok := summaryByType["recompute_delta|applied"]
+	require.True(t, ok, "expected summary row for recompute_delta applied")
+	require.Equal(t, "2", requireRowValue(t, recomputeApplied, "rows_total"))
+	require.Equal(t, "3.00000000", requireRowValue(t, recomputeApplied, "reward_amount_total"))
+	require.Equal(t, "1", requireRowValue(t, recomputeApplied, "rows_with_admin_action_total"))
+
+	rewardAnomalyMetrics := metricMap(t, results[6])
+	require.Equal(t, "1", rewardAnomalyMetrics["base_reward_with_admin_action_total"])
+	require.Equal(t, "1", rewardAnomalyMetrics["manual_grant_without_admin_action_total"])
+	require.Equal(t, "1", rewardAnomalyMetrics["recompute_delta_without_admin_action_total"])
+	require.Equal(t, "1", rewardAnomalyMetrics["base_reward_without_trigger_code_total"])
+
+	rewardAnomalySamples := results[7]
+	requireColumns(t, rewardAnomalySamples,
+		"id",
+		"reward_type",
+		"reward_role",
+		"reward_amount",
+		"admin_action_id",
+		"trigger_redeem_code_id",
+		"created_at",
+	)
+	require.Equal(t, []string{"5202", "5205", "5207"}, columnValues(t, rewardAnomalySamples, "id"))
+
+	baseRewardObservationSamples := results[8]
+	requireColumns(t, baseRewardObservationSamples,
+		"id",
+		"inviter_user_id",
+		"invitee_user_id",
+		"reward_target_user_id",
+		"reward_role",
+		"reward_amount",
+		"trigger_redeem_code_id",
+		"created_at",
+	)
+	require.Equal(t, []string{"5201", "5202", "5203"}, columnValues(t, baseRewardObservationSamples, "id"))
+}
+
 func readInviteRolloutVerificationSQL(t *testing.T) string {
 	t.Helper()
 
@@ -232,6 +313,13 @@ func columnValues(t *testing.T, result sqlQueryResult, column string) []string {
 	return values
 }
 
+func requireRowValue(t *testing.T, row map[string]*string, column string) string {
+	t.Helper()
+	value := row[column]
+	require.NotNilf(t, value, "column %s must not be null", column)
+	return *value
+}
+
 func seedInviteVerificationOverviewFixture(t *testing.T, tx *sql.Tx) {
 	t.Helper()
 
@@ -321,6 +409,111 @@ func seedInviteVerificationBindingFixture(t *testing.T, tx *sql.Tx) {
 
 	insertVerificationUser(t, tx, 1109, "binding-effective-at-mismatch@example.com", "IV-BD-1109", int64Ptr(1101), timePtr(boundAt1109), base)
 	insertVerificationRelationshipEvent(t, tx, 4106, 1109, nil, int64Ptr(1101), "register_bind", boundAt1109.Add(15*time.Minute), nil, "")
+}
+
+func seedInviteVerificationRewardFixture(t *testing.T, tx *sql.Tx) {
+	t.Helper()
+
+	base := time.Date(2026, 4, 3, 9, 0, 0, 0, time.UTC)
+	boundAt1202 := base.Add(1 * time.Hour)
+	boundAt1203 := base.Add(2 * time.Hour)
+
+	insertVerificationUser(t, tx, 1201, "reward-inviter@example.com", "IV-RW-1201", nil, nil, base)
+	insertVerificationUser(t, tx, 1202, "reward-invitee-a@example.com", "IV-RW-1202", int64Ptr(1201), timePtr(boundAt1202), base)
+	insertVerificationUser(t, tx, 1203, "reward-invitee-b@example.com", "IV-RW-1203", int64Ptr(1201), timePtr(boundAt1203), base)
+	insertVerificationUser(t, tx, 1204, "reward-operator@example.com", "IV-RW-1204", nil, nil, base)
+
+	insertVerificationRedeemCode(t, tx, 2201, "REWARD-CODE-2201", "balance", 100, "unused", "commercial", base)
+	insertVerificationRedeemCode(t, tx, 2202, "REWARD-CODE-2202", "balance", 100, "unused", "commercial", base)
+
+	insertVerificationAdminAction(t, tx, 3201, "manual_reward_grant", 1204, 1202, "manual grant sample", base.Add(3*time.Hour))
+	insertVerificationAdminAction(t, tx, 3202, "recompute_rewards", 1204, 1201, "recompute sample", base.Add(4*time.Hour))
+	insertVerificationAdminAction(t, tx, 3203, "manual_reward_grant", 1204, 1201, "bad base linkage sample", base.Add(5*time.Hour))
+
+	insertVerificationRewardRecord(t, tx, verificationRewardRecord{
+		ID:                  5201,
+		InviterUserID:       1201,
+		InviteeUserID:       1202,
+		TriggerRedeemCodeID: int64Ptr(2201),
+		TriggerValue:        100,
+		RewardTargetUserID:  1201,
+		RewardRole:          "inviter",
+		RewardType:          "base_invite_reward",
+		RewardAmount:        "5.00000000",
+		Status:              "applied",
+		CreatedAt:           base.Add(6 * time.Hour),
+	})
+	insertVerificationRewardRecord(t, tx, verificationRewardRecord{
+		ID:                  5202,
+		InviterUserID:       1201,
+		InviteeUserID:       1203,
+		TriggerRedeemCodeID: int64Ptr(2202),
+		TriggerValue:        100,
+		RewardTargetUserID:  1201,
+		RewardRole:          "inviter",
+		RewardType:          "base_invite_reward",
+		RewardAmount:        "7.00000000",
+		Status:              "applied",
+		AdminActionID:       int64Ptr(3203),
+		CreatedAt:           base.Add(7 * time.Hour),
+	})
+	insertVerificationRewardRecord(t, tx, verificationRewardRecord{
+		ID:                 5203,
+		InviterUserID:      1201,
+		InviteeUserID:      1203,
+		RewardTargetUserID: 1203,
+		RewardRole:         "invitee",
+		RewardType:         "base_invite_reward",
+		RewardAmount:       "3.00000000",
+		Status:             "applied",
+		CreatedAt:          base.Add(8 * time.Hour),
+	})
+	insertVerificationRewardRecord(t, tx, verificationRewardRecord{
+		ID:                 5204,
+		InviterUserID:      1201,
+		InviteeUserID:      1202,
+		RewardTargetUserID: 1202,
+		RewardRole:         "invitee",
+		RewardType:         "manual_invite_grant",
+		RewardAmount:       "18.50000000",
+		Status:             "applied",
+		AdminActionID:      int64Ptr(3201),
+		CreatedAt:          base.Add(9 * time.Hour),
+	})
+	insertVerificationRewardRecord(t, tx, verificationRewardRecord{
+		ID:                 5205,
+		InviterUserID:      1201,
+		InviteeUserID:      1203,
+		RewardTargetUserID: 1203,
+		RewardRole:         "invitee",
+		RewardType:         "manual_invite_grant",
+		RewardAmount:       "9.00000000",
+		Status:             "applied",
+		CreatedAt:          base.Add(10 * time.Hour),
+	})
+	insertVerificationRewardRecord(t, tx, verificationRewardRecord{
+		ID:                 5206,
+		InviterUserID:      1201,
+		InviteeUserID:      1202,
+		RewardTargetUserID: 1201,
+		RewardRole:         "inviter",
+		RewardType:         "recompute_delta",
+		RewardAmount:       "1.00000000",
+		Status:             "applied",
+		AdminActionID:      int64Ptr(3202),
+		CreatedAt:          base.Add(11 * time.Hour),
+	})
+	insertVerificationRewardRecord(t, tx, verificationRewardRecord{
+		ID:                 5207,
+		InviterUserID:      1201,
+		InviteeUserID:      1203,
+		RewardTargetUserID: 1203,
+		RewardRole:         "invitee",
+		RewardType:         "recompute_delta",
+		RewardAmount:       "2.00000000",
+		Status:             "applied",
+		CreatedAt:          base.Add(12 * time.Hour),
+	})
 }
 
 type verificationRewardRecord struct {

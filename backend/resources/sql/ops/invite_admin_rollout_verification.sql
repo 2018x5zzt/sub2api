@@ -7,7 +7,11 @@
 --   3) missing register_bind samples
 --   4) duplicate register_bind samples
 --   5) inviter/effective_at mismatch samples
--- Later tasks must append new statements after statement 5, never insert before statements 1-5.
+--   6) reward summary by type/status
+--   7) reward anomaly metrics
+--   8) reward anomaly samples (admin-correction focused)
+--   9) base reward observation samples
+-- Later tasks must append new statements after statement 9, never insert before statements 1-5.
 
 WITH metrics AS (
   SELECT 1 AS ord, 'bound_users_total' AS metric_name, COUNT(*)::text AS metric_value
@@ -197,3 +201,74 @@ INNER JOIN single_register_bind_events e ON e.invitee_user_id = b.invitee_user_i
 WHERE b.current_inviter_user_id IS DISTINCT FROM e.event_inviter_user_id
    OR b.expected_effective_at IS DISTINCT FROM e.event_effective_at
 ORDER BY b.invitee_user_id;
+
+SELECT
+  reward_type,
+  status,
+  COUNT(*)::text AS rows_total,
+  COALESCE(SUM(reward_amount), 0)::text AS reward_amount_total,
+  COUNT(DISTINCT invitee_user_id)::text AS distinct_invitees_total,
+  COUNT(DISTINCT reward_target_user_id)::text AS distinct_reward_targets_total,
+  COUNT(*) FILTER (WHERE admin_action_id IS NOT NULL)::text AS rows_with_admin_action_total,
+  COUNT(*) FILTER (WHERE trigger_redeem_code_id IS NULL)::text AS rows_with_null_trigger_code_total
+FROM invite_reward_records
+GROUP BY reward_type, status
+ORDER BY reward_type, status;
+
+WITH metrics AS (
+  SELECT 1 AS ord, 'base_reward_with_admin_action_total' AS metric_name, COUNT(*)::text AS metric_value
+  FROM invite_reward_records
+  WHERE reward_type = 'base_invite_reward'
+    AND admin_action_id IS NOT NULL
+
+  UNION ALL
+
+  SELECT 2, 'manual_grant_without_admin_action_total', COUNT(*)::text
+  FROM invite_reward_records
+  WHERE reward_type = 'manual_invite_grant'
+    AND admin_action_id IS NULL
+
+  UNION ALL
+
+  SELECT 3, 'recompute_delta_without_admin_action_total', COUNT(*)::text
+  FROM invite_reward_records
+  WHERE reward_type = 'recompute_delta'
+    AND admin_action_id IS NULL
+
+  UNION ALL
+
+  SELECT 4, 'base_reward_without_trigger_code_total', COUNT(*)::text
+  FROM invite_reward_records
+  WHERE reward_type = 'base_invite_reward'
+    AND trigger_redeem_code_id IS NULL
+)
+SELECT metric_name, metric_value
+FROM metrics
+ORDER BY ord;
+
+SELECT
+  id,
+  reward_type,
+  reward_role,
+  reward_amount,
+  admin_action_id,
+  trigger_redeem_code_id,
+  created_at
+FROM invite_reward_records
+WHERE (reward_type = 'base_invite_reward' AND admin_action_id IS NOT NULL)
+   OR (reward_type = 'manual_invite_grant' AND admin_action_id IS NULL)
+   OR (reward_type = 'recompute_delta' AND admin_action_id IS NULL)
+ORDER BY id;
+
+SELECT
+  id,
+  inviter_user_id,
+  invitee_user_id,
+  reward_target_user_id,
+  reward_role,
+  reward_amount,
+  trigger_redeem_code_id,
+  created_at
+FROM invite_reward_records
+WHERE reward_type = 'base_invite_reward'
+ORDER BY id;
