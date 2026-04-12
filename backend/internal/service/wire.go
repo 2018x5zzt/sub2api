@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/google/wire"
@@ -25,6 +26,12 @@ func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient)
 		println("[Service] Warning: Pricing service initialization failed:", err.Error())
 	}
 	return svc, nil
+}
+
+func ProvideInviteService(userRepo InviteUserRepository, rewardRepo InviteRewardRecordRepository, settingService *SettingService, entClient *dbent.Client) *InviteService {
+	svc := NewInviteService(userRepo, rewardRepo, entClient)
+	svc.settingService = settingService
+	return svc
 }
 
 // ProvideUpdateService creates UpdateService with BuildInfo
@@ -411,10 +418,17 @@ func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupReposit
 	return svc
 }
 
+// ProvideInviteUserRepository narrows the full UserRepository to the invite-specific interface for Wire.
+func ProvideInviteUserRepository(userRepo UserRepository) InviteUserRepository {
+	return userRepo
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
 	NewAuthService,
+	ProvideInviteService,
+	ProvideInviteUserRepository,
 	NewUserService,
 	NewAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
@@ -490,6 +504,9 @@ var ProviderSet = wire.NewSet(
 	NewTotpService,
 	NewErrorPassthroughService,
 	NewDigestSessionStore,
+	NewSoraS3Storage,
+	NewSoraQuotaService,
+	NewSoraGenerationService,
 	ProvideIdempotencyCoordinator,
 	ProvideSystemOperationLockService,
 	ProvideIdempotencyCleanupService,

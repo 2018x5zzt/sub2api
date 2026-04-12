@@ -5,9 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/url"
 	"strings"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
@@ -31,23 +33,44 @@ type InviteService struct {
 	userRepo        InviteUserRepository
 	rewardRepo      InviteRewardRecordRepository
 	settingService  *SettingService
+	entClient       *dbent.Client
 	registerURLBase string
 	codeGenerator   func() (string, error)
 }
 
-func NewInviteService(userRepo InviteUserRepository, rewardRepo InviteRewardRecordRepository) *InviteService {
+func NewInviteService(userRepo InviteUserRepository, rewardRepo InviteRewardRecordRepository, entClient ...*dbent.Client) *InviteService {
+	var txClient *dbent.Client
+	if len(entClient) > 0 {
+		txClient = entClient[0]
+	}
 	return &InviteService{
 		userRepo:        userRepo,
 		rewardRepo:      rewardRepo,
+		entClient:       txClient,
 		registerURLBase: "/register",
 		codeGenerator:   defaultInviteCodeGenerator,
 	}
 }
 
-func ProvideInviteService(userRepo InviteUserRepository, rewardRepo InviteRewardRecordRepository, settingService *SettingService) *InviteService {
-	svc := NewInviteService(userRepo, rewardRepo)
-	svc.settingService = settingService
-	return svc
+func (s *InviteService) withInviteWriteTx(ctx context.Context, fn func(context.Context) error) error {
+	if dbent.TxFromContext(ctx) != nil || s.entClient == nil {
+		return fn(ctx)
+	}
+
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if err := fn(txCtx); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+	return nil
 }
 
 func defaultInviteCodeGenerator() (string, error) {
@@ -200,15 +223,17 @@ func (s *InviteService) ApplyBaseRechargeRewards(ctx context.Context, inviteeID 
 		},
 	}
 
-	if err := s.rewardRepo.CreateBatch(ctx, records); err != nil {
-		if errors.Is(err, ErrInviteRewardAlreadyRecorded) {
-			return nil
+	return s.withInviteWriteTx(ctx, func(txCtx context.Context) error {
+		if err := s.rewardRepo.CreateBatch(txCtx, records); err != nil {
+			if errors.Is(err, ErrInviteRewardAlreadyRecorded) {
+				return nil
+			}
+			return err
 		}
-		return err
-	}
 
-	if err := s.userRepo.UpdateBalance(ctx, inviterID, inviterRewardAmount); err != nil {
-		return err
-	}
-	return s.userRepo.UpdateBalance(ctx, inviteeID, inviteeRewardAmount)
+		if err := s.userRepo.UpdateBalance(txCtx, inviterID, inviterRewardAmount); err != nil {
+			return err
+		}
+		return s.userRepo.UpdateBalance(txCtx, inviteeID, inviteeRewardAmount)
+	})
 }

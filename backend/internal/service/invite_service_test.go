@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
@@ -302,6 +303,33 @@ func TestInviteService_ApplyBaseRechargeRewardsSkipsEmptySourceType(t *testing.T
 
 	err := svc.ApplyBaseRechargeRewards(context.Background(), 8, &RedeemCode{
 		ID: 101, Type: RedeemTypeBalance, SourceType: "", Value: 100,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0.0, userRepo.users[7].Balance)
+	require.Equal(t, 10.0, userRepo.users[8].Balance)
+	require.Empty(t, rewardRepo.created)
+}
+
+func TestNewInviteService_WithEntClientSetsTransactionalClient(t *testing.T) {
+	entClient := &dbent.Client{}
+	svc := NewInviteService(&inviteSettlementUserRepoStub{}, &inviteRewardRepoStub{}, entClient)
+
+	require.Equal(t, entClient, svc.entClient)
+}
+
+func TestInviteService_ApplyBaseRechargeRewardsSkipsSubscriptionRedeemCode(t *testing.T) {
+	inviterID := int64(7)
+	userRepo := &inviteSettlementUserRepoStub{
+		users: map[int64]*User{
+			7: {ID: 7, Balance: 0, Status: StatusActive},
+			8: {ID: 8, Balance: 10, Status: StatusActive, InvitedByUserID: &inviterID},
+		},
+	}
+	rewardRepo := &inviteRewardRepoStub{}
+	svc := &InviteService{userRepo: userRepo, rewardRepo: rewardRepo}
+
+	err := svc.ApplyBaseRechargeRewards(context.Background(), 8, &RedeemCode{
+		ID: 101, Type: RedeemTypeSubscription, SourceType: RedeemSourceCommercial, Value: 100,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 0.0, userRepo.users[7].Balance)
