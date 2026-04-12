@@ -2,6 +2,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { describe, expect, it, vi } from 'vitest'
 
+import en from '@/i18n/locales/en'
 import InviteView from '@/views/user/InviteView.vue'
 import zh from '@/i18n/locales/zh'
 
@@ -36,7 +37,7 @@ describe('InviteView', () => {
     const i18n = createI18n({
       legacy: false,
       locale: 'zh',
-      messages: { zh },
+      messages: { zh, en },
       // Vitest uses the runtime-only vue-i18n build, so tests provide a tiny compiler for plain strings.
       messageCompiler: (message: string) => (ctx: any) =>
         message.replace(/\{(\w+)\}/g, (_match, key) => String(ctx?.values?.[key] ?? `{${key}}`))
@@ -53,6 +54,29 @@ describe('InviteView', () => {
 
     expect(wrapper.text()).toContain('HELLO123')
     expect(wrapper.text()).toContain(zh.invite.description)
+    expect(wrapper.text()).not.toMatch(/\d+(\.\d+)?%/)
+  })
+
+  it('keeps the english invite copy free of percentages', async () => {
+    const i18n = createI18n({
+      legacy: false,
+      locale: 'en',
+      messages: { zh, en },
+      // Vitest uses the runtime-only vue-i18n build, so tests provide a tiny compiler for plain strings.
+      messageCompiler: (message: string) => (ctx: any) =>
+        message.replace(/\{(\w+)\}/g, (_match, key) => String(ctx?.values?.[key] ?? `{${key}}`))
+    })
+
+    const wrapper = mount(InviteView, {
+      global: {
+        plugins: [i18n],
+        stubs: { AppLayout: { template: '<div><slot /></div>' } }
+      }
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(en.invite.description)
     expect(wrapper.text()).not.toMatch(/\d+(\.\d+)?%/)
   })
 })
