@@ -1,5 +1,6 @@
 -- Pre-deploy and post-deploy invite admin rollout verification checklist.
 -- This file is read-only and must not be treated as a migration.
+-- Statements must remain simple: semicolons act only as terminators for the naive splitter shared by the integration test harness.
 
 WITH metrics AS (
   SELECT 1 AS ord, 'bound_users_total' AS metric_name, COUNT(*)::text AS metric_value

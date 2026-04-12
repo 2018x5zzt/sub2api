@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -15,9 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var mutatingStatementRE = regexp.MustCompile(`\b(INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|MERGE|COPY|GRANT|REVOKE|LOCK)\b`)
+
 type sqlQueryResult struct {
 	Columns []string
-	Rows    []map[string]string
+	Rows    []map[string]*string
 }
 
 func TestInviteRolloutVerificationSQL_OverviewMetricsAndReadOnlyStatements(t *testing.T) {
@@ -28,6 +31,7 @@ func TestInviteRolloutVerificationSQL_OverviewMetricsAndReadOnlyStatements(t *te
 	require.NotEmpty(t, statements)
 
 	results := executeVerificationStatements(t, tx, statements[:1])
+	require.Len(t, results[0].Rows, 8)
 	metrics := metricMap(t, results[0])
 
 	require.Equal(t, "1", metrics["bound_users_total"])
@@ -65,6 +69,10 @@ func executableVerificationStatements(t *testing.T, content string) []string {
 			"verification SQL must stay read-only, got: %s",
 			trimmed,
 		)
+		require.False(t, mutatingStatementRE.MatchString(upper),
+			"verification SQL must stay read-only; detected mutation keyword in: %s",
+			trimmed,
+		)
 		out = append(out, stmt)
 	}
 	return out
@@ -73,34 +81,38 @@ func executableVerificationStatements(t *testing.T, content string) []string {
 func executeVerificationStatements(t *testing.T, tx *sql.Tx, statements []string) []sqlQueryResult {
 	t.Helper()
 
-	ctx := context.Background()
 	results := make([]sqlQueryResult, 0, len(statements))
 	for _, stmt := range statements {
-		rows, err := tx.QueryContext(ctx, stmt)
-		require.NoError(t, err)
-
-		cols, err := rows.Columns()
-		require.NoError(t, err)
-
-		result := sqlQueryResult{Columns: cols}
-		raw := make([]sql.RawBytes, len(cols))
-		args := make([]any, len(cols))
-		for i := range raw {
-			args[i] = &raw[i]
-		}
-
-		for rows.Next() {
-			require.NoError(t, rows.Scan(args...))
-
-			row := make(map[string]string, len(cols))
-			for i, col := range cols {
-				row[col] = string(raw[i])
+		result := func() sqlQueryResult {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			rows, err := tx.QueryContext(ctx, stmt)
+			require.NoError(t, err)
+			cols, err := rows.Columns()
+			require.NoError(t, err)
+			result := sqlQueryResult{Columns: cols}
+			raw := make([]sql.NullString, len(cols))
+			args := make([]any, len(cols))
+			for i := range raw {
+				args[i] = &raw[i]
 			}
-			result.Rows = append(result.Rows, row)
-		}
-
-		require.NoError(t, rows.Err())
-		require.NoError(t, rows.Close())
+			for rows.Next() {
+				require.NoError(t, rows.Scan(args...))
+				row := make(map[string]*string, len(cols))
+				for i, col := range cols {
+					if raw[i].Valid {
+						value := raw[i].String
+						row[col] = &value
+					} else {
+						row[col] = nil
+					}
+				}
+				result.Rows = append(result.Rows, row)
+			}
+			require.NoError(t, rows.Err())
+			require.NoError(t, rows.Close())
+			return result
+		}()
 		results = append(results, result)
 	}
 	return results
@@ -112,7 +124,11 @@ func metricMap(t *testing.T, result sqlQueryResult) map[string]string {
 
 	out := make(map[string]string, len(result.Rows))
 	for _, row := range result.Rows {
-		out[row["metric_name"]] = row["metric_value"]
+		name := row["metric_name"]
+		value := row["metric_value"]
+		require.NotNil(t, name, "metric_name must not be null")
+		require.NotNil(t, value, "metric_value must not be null")
+		out[*name] = *value
 	}
 	return out
 }
@@ -125,7 +141,11 @@ func requireColumns(t *testing.T, result sqlQueryResult, expected ...string) {
 func columnValues(result sqlQueryResult, column string) []string {
 	values := make([]string, 0, len(result.Rows))
 	for _, row := range result.Rows {
-		values = append(values, row[column])
+		if v := row[column]; v != nil {
+			values = append(values, *v)
+		} else {
+			values = append(values, "")
+		}
 	}
 	sort.Strings(values)
 	return values
