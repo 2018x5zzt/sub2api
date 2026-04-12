@@ -95,22 +95,25 @@ func (r *inviteRewardRecordRepository) ListByAdminActionID(ctx context.Context, 
 func (r *inviteRewardRecordRepository) SumBaseRewardsByTargetAndRole(ctx context.Context, userID int64, rewardRole string) (float64, error) {
 	client := clientFromContext(ctx, r.client)
 
-	rows, err := client.InviteRewardRecord.Query().
+	var rows []struct {
+		Sum float64 `json:"sum"`
+	}
+
+	err := client.InviteRewardRecord.Query().
 		Where(
 			dbinviterewardrecord.RewardTargetUserIDEQ(userID),
 			dbinviterewardrecord.RewardTypeEQ(service.InviteRewardTypeBase),
 			dbinviterewardrecord.RewardRoleEQ(rewardRole),
 		).
-		All(ctx)
+		Aggregate(dbent.As(dbent.Sum(dbinviterewardrecord.FieldRewardAmount), "sum")).
+		Scan(ctx, &rows)
 	if err != nil {
 		return 0, err
 	}
-
-	total := 0.0
-	for _, row := range rows {
-		total += row.RewardAmount
+	if len(rows) == 0 {
+		return 0, nil
 	}
-	return total, nil
+	return rows[0].Sum, nil
 }
 
 func (r *inviteRewardRecordRepository) SumRewardTotalsForScope(ctx context.Context, scope service.InviteRecomputeScope) (map[string]float64, error) {

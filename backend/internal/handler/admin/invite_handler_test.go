@@ -61,3 +61,45 @@ func TestInviteHandler_RebindRequiresReason(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+func TestInviteHandler_CreateManualGrantRejectsNonPositiveRewardAmount(t *testing.T) {
+	h := NewInviteHandler(newStubAdminService())
+	w := performAdminJSONRequest(t, http.MethodPost, "/api/v1/admin/invites/manual-grants", map[string]any{
+		"target_user_id": 9,
+		"reason":         "manual correction",
+		"lines": []map[string]any{
+			{
+				"inviter_user_id":       1,
+				"invitee_user_id":       2,
+				"reward_target_user_id": 1,
+				"reward_role":           service.InviteRewardRoleInviter,
+				"reward_amount":         -1,
+			},
+		},
+	}, func(c *gin.Context) {
+		h.CreateManualGrant(c)
+	})
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestInviteHandler_CreateManualGrantRejectsUnknownRewardRole(t *testing.T) {
+	h := NewInviteHandler(newStubAdminService())
+	w := performAdminJSONRequest(t, http.MethodPost, "/api/v1/admin/invites/manual-grants", map[string]any{
+		"target_user_id": 9,
+		"reason":         "manual correction",
+		"lines": []map[string]any{
+			{
+				"inviter_user_id":       1,
+				"invitee_user_id":       2,
+				"reward_target_user_id": 1,
+				"reward_role":           "unexpected",
+				"reward_amount":         1,
+			},
+		},
+	}, func(c *gin.Context) {
+		h.CreateManualGrant(c)
+	})
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+}

@@ -2,15 +2,16 @@ package repository
 
 import (
 	"context"
+	stdsql "database/sql"
 	"math"
 	"strings"
-	"time"
 
 	"entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	dbinviteadminaction "github.com/Wei-Shaw/sub2api/ent/inviteadminaction"
 	dbinviterelationshipevent "github.com/Wei-Shaw/sub2api/ent/inviterelationshipevent"
 	dbinviterewardrecord "github.com/Wei-Shaw/sub2api/ent/inviterewardrecord"
+	dbpredicate "github.com/Wei-Shaw/sub2api/ent/predicate"
 	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -34,47 +35,49 @@ func (r *inviteAdminQueryRepository) GetStats(ctx context.Context) (*service.Adm
 		return nil, err
 	}
 
-	rewardRows, err := client.InviteRewardRecord.Query().All(ctx)
+	qualifiedRewardUsersTotal, err := countDistinctInviteesByRewardType(ctx, client, service.InviteRewardTypeBase)
 	if err != nil {
 		return nil, err
 	}
 
-	stats := &service.AdminInviteStats{
-		TotalInvitedUsers: int64(totalInvitedUsers),
+	baseRewardsTotal, err := sumInviteRewardAmountsByType(ctx, client, service.InviteRewardTypeBase)
+	if err != nil {
+		return nil, err
 	}
-	qualifiedInvitees := make(map[int64]struct{})
-	for _, row := range rewardRows {
-		switch row.RewardType {
-		case service.InviteRewardTypeBase:
-			stats.BaseRewardsTotal += row.RewardAmount
-			qualifiedInvitees[row.InviteeUserID] = struct{}{}
-		case service.InviteRewardTypeManualGrant:
-			stats.ManualGrantsTotal += row.RewardAmount
-		case service.InviteRewardTypeRecomputeDelta:
-			stats.RecomputeAdjustmentsTotal += row.RewardAmount
-		}
+
+	manualGrantsTotal, err := sumInviteRewardAmountsByType(ctx, client, service.InviteRewardTypeManualGrant)
+	if err != nil {
+		return nil, err
 	}
-	stats.QualifiedRewardUsersTotal = int64(len(qualifiedInvitees))
-	return stats, nil
+
+	recomputeAdjustmentsTotal, err := sumInviteRewardAmountsByType(ctx, client, service.InviteRewardTypeRecomputeDelta)
+	if err != nil {
+		return nil, err
+	}
+
+	return &service.AdminInviteStats{
+		TotalInvitedUsers:         int64(totalInvitedUsers),
+		QualifiedRewardUsersTotal: qualifiedRewardUsersTotal,
+		BaseRewardsTotal:          baseRewardsTotal,
+		ManualGrantsTotal:         manualGrantsTotal,
+		RecomputeAdjustmentsTotal: recomputeAdjustmentsTotal,
+	}, nil
 }
 
 func (r *inviteAdminQueryRepository) ListRelationships(ctx context.Context, params pagination.PaginationParams, filters service.AdminInviteRelationshipFilters) ([]service.AdminInviteRelationship, *pagination.PaginationResult, error) {
 	client := clientFromContext(ctx, r.client)
-	query := client.User.Query().Where(dbuser.InvitedByUserIDNotNil())
-	if filters.InviterUserID != nil {
-		query = query.Where(dbuser.InvitedByUserIDEQ(*filters.InviterUserID))
-	}
-	if filters.InviteeUserID != nil {
-		query = query.Where(dbuser.IDEQ(*filters.InviteeUserID))
-	}
-	if filters.StartAt != nil {
-		query = query.Where(dbuser.InviteBoundAtGTE(*filters.StartAt))
-	}
-	if filters.EndAt != nil {
-		query = query.Where(dbuser.InviteBoundAtLTE(*filters.EndAt))
+	query := applyInviteRelationshipFilters(client.User.Query().Where(dbuser.InvitedByUserIDNotNil()), filters)
+
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	users, err := query.Order(dbuser.ByInviteBoundAt(sql.OrderDesc()), dbuser.ByID(sql.OrderDesc())).All(ctx)
+	users, err := query.
+		Order(dbuser.ByInviteBoundAt(sql.OrderDesc()), dbuser.ByID(sql.OrderDesc())).
+		Offset(params.Offset()).
+		Limit(params.Limit()).
+		All(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -89,7 +92,6 @@ func (r *inviteAdminQueryRepository) ListRelationships(ctx context.Context, para
 	}
 
 	items := make([]service.AdminInviteRelationship, 0, len(users))
-	search := strings.ToLower(strings.TrimSpace(filters.Search))
 	for _, user := range users {
 		item := service.AdminInviteRelationship{
 			InviteeUserID:        user.ID,
@@ -106,33 +108,26 @@ func (r *inviteAdminQueryRepository) ListRelationships(ctx context.Context, para
 			lastEventAt := event.EffectiveAt
 			item.LastEventAt = &lastEventAt
 		}
-		if search != "" && !relationshipMatchesSearch(item, search) {
-			continue
-		}
 		items = append(items, item)
 	}
 
-	start, end, pageResult := paginateBounds(len(items), params)
-	return items[start:end], pageResult, nil
+	return items, paginationResultFromTotal(int64(total), params), nil
 }
 
 func (r *inviteAdminQueryRepository) ListRewards(ctx context.Context, params pagination.PaginationParams, filters service.AdminInviteRewardFilters) ([]service.AdminInviteRewardRow, *pagination.PaginationResult, error) {
 	client := clientFromContext(ctx, r.client)
-	query := client.InviteRewardRecord.Query()
-	if filters.RewardType != "" {
-		query = query.Where(dbinviterewardrecord.RewardTypeEQ(filters.RewardType))
-	}
-	if filters.TargetUserID != nil {
-		query = query.Where(dbinviterewardrecord.RewardTargetUserIDEQ(*filters.TargetUserID))
-	}
-	if filters.StartAt != nil {
-		query = query.Where(dbinviterewardrecord.CreatedAtGTE(*filters.StartAt))
-	}
-	if filters.EndAt != nil {
-		query = query.Where(dbinviterewardrecord.CreatedAtLTE(*filters.EndAt))
+	query := applyInviteRewardFilters(client.InviteRewardRecord.Query(), filters)
+
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	rows, err := query.Order(dbinviterewardrecord.ByCreatedAt(sql.OrderDesc()), dbinviterewardrecord.ByID(sql.OrderDesc())).All(ctx)
+	rows, err := query.
+		Order(dbinviterewardrecord.ByCreatedAt(sql.OrderDesc()), dbinviterewardrecord.ByID(sql.OrderDesc())).
+		Offset(params.Offset()).
+		Limit(params.Limit()).
+		All(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -143,7 +138,6 @@ func (r *inviteAdminQueryRepository) ListRewards(ctx context.Context, params pag
 	}
 
 	items := make([]service.AdminInviteRewardRow, 0, len(rows))
-	search := strings.ToLower(strings.TrimSpace(filters.Search))
 	for _, row := range rows {
 		item := service.AdminInviteRewardRow{
 			RewardTargetUserID:  row.RewardTargetUserID,
@@ -159,14 +153,10 @@ func (r *inviteAdminQueryRepository) ListRewards(ctx context.Context, params pag
 			AdminActionID:       row.AdminActionID,
 			TriggerRedeemCodeID: row.TriggerRedeemCodeID,
 		}
-		if search != "" && !rewardMatchesSearch(item, search) {
-			continue
-		}
 		items = append(items, item)
 	}
 
-	start, end, pageResult := paginateBounds(len(items), params)
-	return items[start:end], pageResult, nil
+	return items, paginationResultFromTotal(int64(total), params), nil
 }
 
 func (r *inviteAdminQueryRepository) ListActions(ctx context.Context, params pagination.PaginationParams, filters service.InviteAdminActionFilters) ([]service.InviteAdminAction, *pagination.PaginationResult, error) {
@@ -249,6 +239,111 @@ func (r *inviteAdminQueryRepository) latestRelationshipEvents(ctx context.Contex
 	return out, nil
 }
 
+func applyInviteRelationshipFilters(query *dbent.UserQuery, filters service.AdminInviteRelationshipFilters) *dbent.UserQuery {
+	if filters.InviterUserID != nil {
+		query = query.Where(dbuser.InvitedByUserIDEQ(*filters.InviterUserID))
+	}
+	if filters.InviteeUserID != nil {
+		query = query.Where(dbuser.IDEQ(*filters.InviteeUserID))
+	}
+	if filters.StartAt != nil {
+		query = query.Where(dbuser.InviteBoundAtGTE(*filters.StartAt))
+	}
+	if filters.EndAt != nil {
+		query = query.Where(dbuser.InviteBoundAtLTE(*filters.EndAt))
+	}
+
+	search := strings.TrimSpace(filters.Search)
+	if search == "" {
+		return query
+	}
+
+	return query.Where(dbpredicate.User(func(s *sql.Selector) {
+		inviter := sql.Table(dbuser.Table).As("invite_relationship_inviter")
+		s.LeftJoin(inviter).On(s.C(dbuser.FieldInvitedByUserID), inviter.C(dbuser.FieldID))
+		s.Where(sql.Or(
+			sql.ContainsFold(s.C(dbuser.FieldEmail), search),
+			sql.ContainsFold(s.C(dbuser.FieldInviteCode), search),
+			sql.ContainsFold(inviter.C(dbuser.FieldEmail), search),
+		))
+	}))
+}
+
+func applyInviteRewardFilters(query *dbent.InviteRewardRecordQuery, filters service.AdminInviteRewardFilters) *dbent.InviteRewardRecordQuery {
+	if filters.RewardType != "" {
+		query = query.Where(dbinviterewardrecord.RewardTypeEQ(filters.RewardType))
+	}
+	if filters.TargetUserID != nil {
+		query = query.Where(dbinviterewardrecord.RewardTargetUserIDEQ(*filters.TargetUserID))
+	}
+	if filters.StartAt != nil {
+		query = query.Where(dbinviterewardrecord.CreatedAtGTE(*filters.StartAt))
+	}
+	if filters.EndAt != nil {
+		query = query.Where(dbinviterewardrecord.CreatedAtLTE(*filters.EndAt))
+	}
+
+	search := strings.TrimSpace(filters.Search)
+	if search == "" {
+		return query
+	}
+
+	return query.Where(dbpredicate.InviteRewardRecord(func(s *sql.Selector) {
+		inviter := sql.Table(dbuser.Table).As("invite_reward_inviter")
+		invitee := sql.Table(dbuser.Table).As("invite_reward_invitee")
+		rewardTarget := sql.Table(dbuser.Table).As("invite_reward_target")
+		s.LeftJoin(inviter).On(s.C(dbinviterewardrecord.FieldInviterUserID), inviter.C(dbuser.FieldID))
+		s.LeftJoin(invitee).On(s.C(dbinviterewardrecord.FieldInviteeUserID), invitee.C(dbuser.FieldID))
+		s.LeftJoin(rewardTarget).On(s.C(dbinviterewardrecord.FieldRewardTargetUserID), rewardTarget.C(dbuser.FieldID))
+		s.Where(sql.Or(
+			sql.ContainsFold(s.C(dbinviterewardrecord.FieldRewardType), search),
+			sql.ContainsFold(rewardTarget.C(dbuser.FieldEmail), search),
+			sql.ContainsFold(inviter.C(dbuser.FieldEmail), search),
+			sql.ContainsFold(invitee.C(dbuser.FieldEmail), search),
+		))
+	}))
+}
+
+func countDistinctInviteesByRewardType(ctx context.Context, client *dbent.Client, rewardType string) (int64, error) {
+	var rows []struct {
+		Count int64 `json:"count"`
+	}
+
+	err := client.InviteRewardRecord.Query().
+		Where(dbinviterewardrecord.RewardTypeEQ(rewardType)).
+		Aggregate(dbent.As(func(s *sql.Selector) string {
+			return sql.Count(sql.Distinct(s.C(dbinviterewardrecord.FieldInviteeUserID)))
+		}, "count")).
+		Scan(ctx, &rows)
+	if err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 {
+		return 0, nil
+	}
+	return rows[0].Count, nil
+}
+
+func sumInviteRewardAmountsByType(ctx context.Context, client *dbent.Client, rewardType string) (float64, error) {
+	var rows []struct {
+		Sum stdsql.NullFloat64 `json:"sum"`
+	}
+
+	err := client.InviteRewardRecord.Query().
+		Where(dbinviterewardrecord.RewardTypeEQ(rewardType)).
+		Aggregate(dbent.As(func(s *sql.Selector) string {
+			return sql.Sum(s.C(dbinviterewardrecord.FieldRewardAmount))
+		}, "sum")).
+		Scan(ctx, &rows)
+	if err != nil {
+		return 0, err
+	}
+	if len(rows) == 0 || !rows[0].Sum.Valid {
+		return 0, nil
+	}
+	return rows[0].Sum.Float64, nil
+}
+
 func collectRelationshipUserIDs(users []*dbent.User) []int64 {
 	ids := make(map[int64]struct{}, len(users)*2)
 	for _, user := range users {
@@ -323,14 +418,4 @@ func paginateBounds(total int, params pagination.PaginationParams) (int, int, *p
 		PageSize: pageSize,
 		Pages:    pages,
 	}
-}
-
-func withinRange(value time.Time, startAt, endAt *time.Time) bool {
-	if startAt != nil && value.Before(*startAt) {
-		return false
-	}
-	if endAt != nil && value.After(*endAt) {
-		return false
-	}
-	return true
 }

@@ -26,15 +26,15 @@ type manualInviteGrantLineRequest struct {
 	InviterUserID      int64   `json:"inviter_user_id" binding:"required,gt=0"`
 	InviteeUserID      int64   `json:"invitee_user_id" binding:"required,gt=0"`
 	RewardTargetUserID int64   `json:"reward_target_user_id" binding:"required,gt=0"`
-	RewardRole         string  `json:"reward_role" binding:"required"`
-	RewardAmount       float64 `json:"reward_amount" binding:"required"`
+	RewardRole         string  `json:"reward_role" binding:"required,oneof=inviter invitee"`
+	RewardAmount       float64 `json:"reward_amount" binding:"required,gt=0"`
 	Notes              string  `json:"notes"`
 }
 
 type manualInviteGrantRequest struct {
 	TargetUserID int64                          `json:"target_user_id" binding:"required,gt=0"`
 	Reason       string                         `json:"reason" binding:"required"`
-	Lines        []manualInviteGrantLineRequest `json:"lines" binding:"required,min=1"`
+	Lines        []manualInviteGrantLineRequest `json:"lines" binding:"required,min=1,dive"`
 }
 
 type recomputeRequest struct {
