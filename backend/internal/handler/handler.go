@@ -30,6 +30,7 @@ type AdminHandlers struct {
 	ErrorPassthrough *admin.ErrorPassthroughHandler
 	APIKey           *admin.AdminAPIKeyHandler
 	ScheduledTest    *admin.ScheduledTestHandler
+	TLSFingerprintProfile *admin.TLSFingerprintProfileHandler
 }
 
 // Handlers contains all HTTP handlers

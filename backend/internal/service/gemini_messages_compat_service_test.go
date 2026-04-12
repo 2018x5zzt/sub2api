@@ -11,10 +11,34 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
+type geminiCompatHTTPUpstreamStub struct {
+	response *http.Response
+	err      error
+	calls    int
+	lastReq  *http.Request
+}
+
+func (s *geminiCompatHTTPUpstreamStub) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
+	s.calls++
+	s.lastReq = req
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.response == nil {
+		return nil, fmt.Errorf("missing stub response")
+	}
+	resp := *s.response
+	return &resp, nil
+}
+
+func (s *geminiCompatHTTPUpstreamStub) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
+	return s.Do(req, proxyURL, accountID, accountConcurrency)
+}
 // TestConvertClaudeToolsToGeminiTools_CustomType 测试custom类型工具转换
 func TestConvertClaudeToolsToGeminiTools_CustomType(t *testing.T) {
 	tests := []struct {
