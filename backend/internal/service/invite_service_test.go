@@ -354,23 +354,12 @@ func TestInviteService_ApplyBaseRechargeRewardsSkipsDuplicateRewardRecord(t *tes
 		},
 	}
 	rewardRepo := &inviteRewardRepoStub{
-		createErr: nil,
+		createErr: ErrInviteRewardAlreadyRecorded,
 	}
-	svc := &InviteService{
-		userRepo:   userRepo,
-		rewardRepo: rewardRepo,
-		baseRewardExistsFn: func(_ context.Context, redeemCodeID int64) (bool, error) {
-			return redeemCodeID == 101, nil
-		},
-	}
+	svc := &InviteService{userRepo: userRepo, rewardRepo: rewardRepo}
 
 	err := svc.ApplyBaseRechargeRewards(context.Background(), 8, &RedeemCode{
 		ID: 101, Type: RedeemTypeBalance, SourceType: RedeemSourceCommercial, Value: 100,
 	})
-	require.NoError(t, err)
-	require.Equal(t, 0, rewardRepo.createBatchCalls)
-	require.Equal(t, 0, userRepo.updateCalls)
-	require.Equal(t, 0.0, userRepo.users[7].Balance)
-	require.Equal(t, 10.0, userRepo.users[8].Balance)
-	require.Empty(t, rewardRepo.created)
+	require.ErrorIs(t, err, ErrInviteRewardAlreadyRecorded)
 }

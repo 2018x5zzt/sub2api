@@ -5,6 +5,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -88,6 +89,49 @@ func TestInviteService_ApplyBaseRechargeRewards_RollsBackOnBalanceFailure(t *tes
 
 	require.Zero(t, countInviteRewardRecordsByTarget(t, inviter.ID))
 	require.Zero(t, countInviteRewardRecordsByTarget(t, invitee.ID))
+}
+
+func TestInviteService_ApplyBaseRechargeRewards_DuplicateSettlementNoOp(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	userRepo := NewUserRepository(client, nil).(*userRepository)
+	redeemRepo := NewRedeemCodeRepository(client).(*redeemCodeRepository)
+	rewardRepo := NewInviteRewardRecordRepository(client)
+
+	inviter := createInviteAdminServiceUser(t, userRepo, "invite-growth-duplicate-inviter@example.com", nil, nil)
+	invitee := createInviteAdminServiceUser(t, userRepo, "invite-growth-duplicate-invitee@example.com", int64Ptr(inviter.ID), nil)
+	cleanupInviteAdminServiceUsers(t, inviter.ID, invitee.ID)
+
+	redeemCode := &service.RedeemCode{
+		Code:       fmt.Sprintf("INVITE-GROWTH-DUPLICATE-%d", invitee.ID),
+		Type:       service.RedeemTypeBalance,
+		Value:      100,
+		Status:     service.StatusUnused,
+		SourceType: service.RedeemSourceCommercial,
+	}
+	require.NoError(t, redeemRepo.Create(ctx, redeemCode))
+
+	svc := service.NewInviteService(userRepo, rewardRepo, client)
+	inputCode := &service.RedeemCode{
+		ID:         redeemCode.ID,
+		Type:       service.RedeemTypeBalance,
+		SourceType: service.RedeemSourceCommercial,
+		Value:      100,
+	}
+
+	require.NoError(t, svc.ApplyBaseRechargeRewards(ctx, invitee.ID, inputCode))
+	require.NoError(t, svc.ApplyBaseRechargeRewards(ctx, invitee.ID, inputCode))
+
+	reloadedInviter, err := userRepo.GetByID(ctx, inviter.ID)
+	require.NoError(t, err)
+	require.Equal(t, 3.0, reloadedInviter.Balance)
+
+	reloadedInvitee, err := userRepo.GetByID(ctx, invitee.ID)
+	require.NoError(t, err)
+	require.Equal(t, 3.0, reloadedInvitee.Balance)
+
+	require.Equal(t, 1, countInviteRewardRecordsByTarget(t, inviter.ID))
+	require.Equal(t, 1, countInviteRewardRecordsByTarget(t, invitee.ID))
 }
 
 func countInviteRewardRecordsByTarget(t *testing.T, rewardTargetUserID int64) int {

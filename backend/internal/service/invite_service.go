@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -30,13 +31,12 @@ type InviteRewardRecordRepository interface {
 }
 
 type InviteService struct {
-	userRepo           InviteUserRepository
-	rewardRepo         InviteRewardRecordRepository
-	settingService     *SettingService
-	entClient          *dbent.Client
-	registerURLBase    string
-	codeGenerator      func() (string, error)
-	baseRewardExistsFn func(ctx context.Context, redeemCodeID int64) (bool, error)
+	userRepo        InviteUserRepository
+	rewardRepo      InviteRewardRecordRepository
+	settingService  *SettingService
+	entClient       *dbent.Client
+	registerURLBase string
+	codeGenerator   func() (string, error)
 }
 
 func NewInviteService(userRepo InviteUserRepository, rewardRepo InviteRewardRecordRepository, entClient ...*dbent.Client) *InviteService {
@@ -77,9 +77,6 @@ func (s *InviteService) withInviteWriteTx(ctx context.Context, fn func(context.C
 func (s *InviteService) existsBaseRewardByRedeemCodeID(ctx context.Context, redeemCodeID int64) (bool, error) {
 	if redeemCodeID <= 0 {
 		return false, nil
-	}
-	if s.baseRewardExistsFn != nil {
-		return s.baseRewardExistsFn(ctx, redeemCodeID)
 	}
 
 	var client *dbent.Client
@@ -212,14 +209,6 @@ func (s *InviteService) ApplyBaseRechargeRewards(ctx context.Context, inviteeID 
 	if sourceType != RedeemSourceCommercial {
 		return nil
 	}
-	exists, err := s.existsBaseRewardByRedeemCodeID(ctx, redeemCode.ID)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return nil
-	}
-
 	invitee, err := s.userRepo.GetByID(ctx, inviteeID)
 	if err != nil {
 		return err
@@ -261,7 +250,16 @@ func (s *InviteService) ApplyBaseRechargeRewards(ctx context.Context, inviteeID 
 		},
 	}
 
-	return s.withInviteWriteTx(ctx, func(txCtx context.Context) error {
+	startsOwnTx := dbent.TxFromContext(ctx) == nil && s.entClient != nil
+	err = s.withInviteWriteTx(ctx, func(txCtx context.Context) error {
+		exists, existsErr := s.existsBaseRewardByRedeemCodeID(txCtx, redeemCode.ID)
+		if existsErr != nil {
+			return existsErr
+		}
+		if exists {
+			return nil
+		}
+
 		if err := s.rewardRepo.CreateBatch(txCtx, records); err != nil {
 			return err
 		}
@@ -271,4 +269,8 @@ func (s *InviteService) ApplyBaseRechargeRewards(ctx context.Context, inviteeID 
 		}
 		return s.userRepo.UpdateBalance(txCtx, inviteeID, inviteeRewardAmount)
 	})
+	if startsOwnTx && errors.Is(err, ErrInviteRewardAlreadyRecorded) {
+		return nil
+	}
+	return err
 }
