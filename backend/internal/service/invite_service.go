@@ -223,11 +223,8 @@ func (s *InviteService) ApplyBaseRechargeRewards(ctx context.Context, inviteeID 
 		},
 	}
 
-	return s.withInviteWriteTx(ctx, func(txCtx context.Context) error {
+	err = s.withInviteWriteTx(ctx, func(txCtx context.Context) error {
 		if err := s.rewardRepo.CreateBatch(txCtx, records); err != nil {
-			if errors.Is(err, ErrInviteRewardAlreadyRecorded) {
-				return nil
-			}
 			return err
 		}
 
@@ -236,4 +233,8 @@ func (s *InviteService) ApplyBaseRechargeRewards(ctx context.Context, inviteeID 
 		}
 		return s.userRepo.UpdateBalance(txCtx, inviteeID, inviteeRewardAmount)
 	})
+	if errors.Is(err, ErrInviteRewardAlreadyRecorded) {
+		return nil
+	}
+	return err
 }

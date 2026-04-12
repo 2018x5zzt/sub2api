@@ -87,6 +87,7 @@ func TestInviteService_ApplyBaseRechargeRewards_RollsBackOnBalanceFailure(t *tes
 	require.Equal(t, 0.0, reloadedInvitee.Balance)
 
 	require.Zero(t, countInviteRewardRecordsByTarget(t, inviter.ID))
+	require.Zero(t, countInviteRewardRecordsByTarget(t, invitee.ID))
 }
 
 func countInviteRewardRecordsByTarget(t *testing.T, rewardTargetUserID int64) int {

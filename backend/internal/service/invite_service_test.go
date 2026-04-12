@@ -22,6 +22,7 @@ type inviteUserRepoStub struct {
 type inviteRewardRepoStub struct {
 	created   []InviteRewardRecord
 	totalBase float64
+	createErr error
 }
 
 func (s *inviteUserRepoStub) Create(context.Context, *User) error {
@@ -117,6 +118,9 @@ func (s *inviteUserRepoStub) DisableTotp(context.Context, int64) error {
 }
 
 func (s *inviteRewardRepoStub) CreateBatch(_ context.Context, records []InviteRewardRecord) error {
+	if s.createErr != nil {
+		return s.createErr
+	}
 	s.created = append(s.created, records...)
 	return nil
 }
@@ -200,7 +204,8 @@ func TestInviteService_BuildSummaryUsesConfiguredFrontendURL(t *testing.T) {
 }
 
 type inviteSettlementUserRepoStub struct {
-	users map[int64]*User
+	users       map[int64]*User
+	updateCalls int
 }
 
 func (s *inviteSettlementUserRepoStub) GetByID(_ context.Context, id int64) (*User, error) {
@@ -240,6 +245,7 @@ func (s *inviteSettlementUserRepoStub) CountInviteesByInviter(_ context.Context,
 }
 
 func (s *inviteSettlementUserRepoStub) UpdateBalance(_ context.Context, id int64, amount float64) error {
+	s.updateCalls++
 	s.users[id].Balance += amount
 	return nil
 }
@@ -332,6 +338,27 @@ func TestInviteService_ApplyBaseRechargeRewardsSkipsSubscriptionRedeemCode(t *te
 		ID: 101, Type: RedeemTypeSubscription, SourceType: RedeemSourceCommercial, Value: 100,
 	})
 	require.NoError(t, err)
+	require.Equal(t, 0.0, userRepo.users[7].Balance)
+	require.Equal(t, 10.0, userRepo.users[8].Balance)
+	require.Empty(t, rewardRepo.created)
+}
+
+func TestInviteService_ApplyBaseRechargeRewardsSkipsDuplicateRewardRecord(t *testing.T) {
+	inviterID := int64(7)
+	userRepo := &inviteSettlementUserRepoStub{
+		users: map[int64]*User{
+			7: {ID: 7, Balance: 0, Status: StatusActive},
+			8: {ID: 8, Balance: 10, Status: StatusActive, InvitedByUserID: &inviterID},
+		},
+	}
+	rewardRepo := &inviteRewardRepoStub{createErr: ErrInviteRewardAlreadyRecorded}
+	svc := &InviteService{userRepo: userRepo, rewardRepo: rewardRepo}
+
+	err := svc.ApplyBaseRechargeRewards(context.Background(), 8, &RedeemCode{
+		ID: 101, Type: RedeemTypeBalance, SourceType: RedeemSourceCommercial, Value: 100,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 0, userRepo.updateCalls)
 	require.Equal(t, 0.0, userRepo.users[7].Balance)
 	require.Equal(t, 10.0, userRepo.users[8].Balance)
 	require.Empty(t, rewardRepo.created)
