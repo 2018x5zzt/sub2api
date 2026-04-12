@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	servermiddleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -48,4 +50,98 @@ func TestGatewayRoutesOpenAIResponsesCompactPathIsRegistered(t *testing.T) {
 		router.ServeHTTP(w, req)
 		require.NotEqual(t, http.StatusNotFound, w.Code, "path=%s should hit OpenAI responses handler", path)
 	}
+}
+
+func newGatewayRoutesTestRouterWithGroupPlatform(platform string) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	RegisterGatewayRoutes(
+		router,
+		&handler.Handlers{
+			Gateway:       &handler.GatewayHandler{},
+			OpenAIGateway: &handler.OpenAIGatewayHandler{},
+			SoraGateway:   &handler.SoraGatewayHandler{},
+		},
+		servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
+			groupID := int64(1)
+			c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{
+				GroupID: &groupID,
+				Group:   &service.Group{Platform: platform},
+			})
+			c.Next()
+		}),
+		nil,
+		nil,
+		nil,
+		nil,
+		&config.Config{},
+	)
+
+	return router
+}
+
+func parseErrorObject(t *testing.T, body string) map[string]any {
+	t.Helper()
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal([]byte(body), &payload))
+	errObj, ok := payload["error"].(map[string]any)
+	require.True(t, ok, "response should contain error object: %s", body)
+	return errObj
+}
+
+func TestGatewayRoutesV1ResponsesDispatchesByGroupPlatform(t *testing.T) {
+	testCases := []struct {
+		name          string
+		platform      string
+		wantStatus    int
+		wantFieldName string
+		wantFieldVal  string
+	}{
+		{
+			name:          "openai platform routes to openai handler envelope",
+			platform:      service.PlatformOpenAI,
+			wantStatus:    http.StatusInternalServerError,
+			wantFieldName: "type",
+			wantFieldVal:  "api_error",
+		},
+		{
+			name:          "anthropic platform routes to gateway handler envelope",
+			platform:      service.PlatformAnthropic,
+			wantStatus:    http.StatusInternalServerError,
+			wantFieldName: "code",
+			wantFieldVal:  "api_error",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			router := newGatewayRoutesTestRouterWithGroupPlatform(tc.platform)
+
+			req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"gpt-5"}`))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+			require.Equal(t, tc.wantStatus, w.Code)
+
+			errObj := parseErrorObject(t, w.Body.String())
+			require.Equal(t, tc.wantFieldVal, errObj[tc.wantFieldName])
+		})
+	}
+}
+
+func TestGatewayRoutesV1ChatCompletionsRouteReturnsGatewayErrorEnvelope(t *testing.T) {
+	router := newGatewayRoutesTestRouterWithGroupPlatform(service.PlatformAnthropic)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"gpt-5"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	require.Equal(t, http.StatusInternalServerError, w.Code)
+
+	errObj := parseErrorObject(t, w.Body.String())
+	require.Equal(t, "api_error", errObj["type"])
+	require.Equal(t, "User context not found", errObj["message"])
 }
