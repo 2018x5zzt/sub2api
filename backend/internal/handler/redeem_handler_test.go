@@ -292,7 +292,7 @@ func TestRedeemHandler_GetBenefitLeaderboardAfterRedeem(t *testing.T) {
 	require.Equal(t, 1, *payload.CurrentUserRank)
 }
 
-func TestRedeemHandler_GetBenefitLeaderboardReturnsAllEntries(t *testing.T) {
+func TestRedeemHandler_GetBenefitLeaderboardDefaultsToTopTwentyEntries(t *testing.T) {
 	env := newRedeemHandlerTestEnv(t)
 	env.promoRepo.addCode(&service.PromoCode{
 		ID:                    405,
@@ -334,11 +334,11 @@ func TestRedeemHandler_GetBenefitLeaderboardReturnsAllEntries(t *testing.T) {
 
 	var payload BenefitLeaderboardResponse
 	require.NoError(t, json.Unmarshal(envelope.Data, &payload))
-	require.Len(t, payload.Entries, 21)
+	require.Len(t, payload.Entries, 20)
 	require.Equal(t, "rank_user_01", payload.Entries[0].DisplayName)
 	require.Equal(t, 1, payload.Entries[0].Rank)
-	require.Equal(t, "rank_user_21", payload.Entries[20].DisplayName)
-	require.Equal(t, 21, payload.Entries[20].Rank)
+	require.Equal(t, "rank_user_20", payload.Entries[19].DisplayName)
+	require.Equal(t, 20, payload.Entries[19].Rank)
 	require.NotNil(t, payload.CurrentUserRank)
 	require.Equal(t, 1, *payload.CurrentUserRank)
 }

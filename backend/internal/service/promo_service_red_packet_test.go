@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -62,39 +63,25 @@ func TestRankBenefitUsages_SortsByRandomBonusDescending(t *testing.T) {
 	require.Equal(t, 2, *result.CurrentUserRank)
 }
 
-func TestRankBenefitUsages_WithNonPositiveLimitReturnsAllEntries(t *testing.T) {
+func TestRankBenefitUsages_WithNonPositiveLimitDefaultsToTopTwenty(t *testing.T) {
 	now := time.Now()
-	result := rankBenefitUsages([]PromoCodeUsage{
-		{
-			UserID:            1,
-			BonusAmount:       10,
+	usages := make([]PromoCodeUsage, 0, 21)
+	for i := 1; i <= 21; i++ {
+		usages = append(usages, PromoCodeUsage{
+			UserID:            int64(i),
+			BonusAmount:       float64(22 - i),
 			FixedBonusAmount:  1,
-			RandomBonusAmount: 9,
-			UsedAt:            now,
-			User:              &User{Username: "alpha"},
-		},
-		{
-			UserID:            2,
-			BonusAmount:       8,
-			FixedBonusAmount:  1,
-			RandomBonusAmount: 7,
-			UsedAt:            now.Add(time.Second),
-			User:              &User{Username: "bravo"},
-		},
-		{
-			UserID:            3,
-			BonusAmount:       6,
-			FixedBonusAmount:  1,
-			RandomBonusAmount: 5,
-			UsedAt:            now.Add(2 * time.Second),
-			User:              &User{Username: "charlie"},
-		},
-	}, 2, 0)
+			RandomBonusAmount: float64(21 - i),
+			UsedAt:            now.Add(time.Duration(i) * time.Second),
+			User:              &User{Username: fmt.Sprintf("user_%02d", i)},
+		})
+	}
 
-	require.Len(t, result.Entries, 3)
-	require.Equal(t, "alpha", result.Entries[0].DisplayName)
-	require.Equal(t, "bravo", result.Entries[1].DisplayName)
-	require.Equal(t, "charlie", result.Entries[2].DisplayName)
+	result := rankBenefitUsages(usages, 1, 0)
+
+	require.Len(t, result.Entries, 20)
+	require.Equal(t, "user_01", result.Entries[0].DisplayName)
+	require.Equal(t, "user_20", result.Entries[19].DisplayName)
 	require.NotNil(t, result.CurrentUserRank)
-	require.Equal(t, 2, *result.CurrentUserRank)
+	require.Equal(t, 1, *result.CurrentUserRank)
 }
