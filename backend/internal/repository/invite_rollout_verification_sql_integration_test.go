@@ -163,6 +163,25 @@ func TestInviteRolloutVerificationSQL_RewardChecksSeparateAdminCorrections(t *te
 		"created_at",
 	)
 	require.Equal(t, []string{"5202", "5205", "5207"}, columnValues(t, rewardAnomalySamples, "id"))
+	anomalyByID := make(map[string]map[string]*string, len(rewardAnomalySamples.Rows))
+	for _, row := range rewardAnomalySamples.Rows {
+		id := row["id"]
+		require.NotNil(t, id, "id must not be null in reward anomaly samples")
+		anomalyByID[*id] = row
+	}
+
+	row5202, ok := anomalyByID["5202"]
+	require.True(t, ok, "expected anomaly sample for id 5202")
+	require.NotNil(t, row5202["admin_action_id"])
+	require.NotNil(t, row5202["trigger_redeem_code_id"])
+
+	row5205, ok := anomalyByID["5205"]
+	require.True(t, ok, "expected anomaly sample for id 5205")
+	require.Nil(t, row5205["admin_action_id"])
+
+	row5207, ok := anomalyByID["5207"]
+	require.True(t, ok, "expected anomaly sample for id 5207")
+	require.Nil(t, row5207["admin_action_id"])
 
 	baseRewardObservationSamples := results[8]
 	requireColumns(t, baseRewardObservationSamples,
@@ -424,7 +443,7 @@ func seedInviteVerificationRewardFixture(t *testing.T, tx *sql.Tx) {
 	insertVerificationUser(t, tx, 1204, "reward-operator@example.com", "IV-RW-1204", nil, nil, base)
 
 	insertVerificationRedeemCode(t, tx, 2201, "REWARD-CODE-2201", "balance", 100, "unused", "commercial", base)
-	insertVerificationRedeemCode(t, tx, 2202, "REWARD-CODE-2202", "balance", 100, "unused", "commercial", base)
+	insertVerificationRedeemCode(t, tx, 2202, "REWARD-CODE-2202", "balance", 50, "unused", "commercial", base)
 
 	insertVerificationAdminAction(t, tx, 3201, "manual_reward_grant", 1204, 1202, "manual grant sample", base.Add(3*time.Hour))
 	insertVerificationAdminAction(t, tx, 3202, "recompute_rewards", 1204, 1201, "recompute sample", base.Add(4*time.Hour))
@@ -446,9 +465,9 @@ func seedInviteVerificationRewardFixture(t *testing.T, tx *sql.Tx) {
 	insertVerificationRewardRecord(t, tx, verificationRewardRecord{
 		ID:                  5202,
 		InviterUserID:       1201,
-		InviteeUserID:       1203,
+		InviteeUserID:       1202,
 		TriggerRedeemCodeID: int64Ptr(2202),
-		TriggerValue:        100,
+		TriggerValue:        50,
 		RewardTargetUserID:  1201,
 		RewardRole:          "inviter",
 		RewardType:          "base_invite_reward",

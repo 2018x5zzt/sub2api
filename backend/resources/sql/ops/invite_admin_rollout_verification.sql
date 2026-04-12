@@ -11,7 +11,7 @@
 --   7) reward anomaly metrics
 --   8) reward anomaly samples (admin-correction focused)
 --   9) base reward observation samples
--- Later tasks must append new statements after statement 9, never insert before statements 1-5.
+-- Keep statement order fixed do not insert/reorder statements 1-9, only append after statement 9.
 
 WITH metrics AS (
   SELECT 1 AS ord, 'bound_users_total' AS metric_name, COUNT(*)::text AS metric_value
@@ -247,28 +247,30 @@ FROM metrics
 ORDER BY ord;
 
 SELECT
-  id,
+  id::text AS id,
   reward_type,
   reward_role,
-  reward_amount,
-  admin_action_id,
-  trigger_redeem_code_id,
-  created_at
+  reward_amount::text AS reward_amount,
+  admin_action_id::text AS admin_action_id,
+  trigger_redeem_code_id::text AS trigger_redeem_code_id,
+  created_at::text AS created_at
 FROM invite_reward_records
 WHERE (reward_type = 'base_invite_reward' AND admin_action_id IS NOT NULL)
    OR (reward_type = 'manual_invite_grant' AND admin_action_id IS NULL)
    OR (reward_type = 'recompute_delta' AND admin_action_id IS NULL)
-ORDER BY id;
+ORDER BY id
+LIMIT 50;
 
 SELECT
-  id,
-  inviter_user_id,
-  invitee_user_id,
-  reward_target_user_id,
+  id::text AS id,
+  inviter_user_id::text AS inviter_user_id,
+  invitee_user_id::text AS invitee_user_id,
+  reward_target_user_id::text AS reward_target_user_id,
   reward_role,
-  reward_amount,
-  trigger_redeem_code_id,
-  created_at
+  reward_amount::text AS reward_amount,
+  trigger_redeem_code_id::text AS trigger_redeem_code_id,
+  created_at::text AS created_at
 FROM invite_reward_records
 WHERE reward_type = 'base_invite_reward'
-ORDER BY id;
+ORDER BY id
+LIMIT 50;
