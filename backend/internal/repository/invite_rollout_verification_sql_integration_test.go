@@ -25,6 +25,7 @@ type sqlQueryResult struct {
 
 func TestInviteRolloutVerificationSQL_OverviewMetricsAndReadOnlyStatements(t *testing.T) {
 	tx := testTx(t)
+	resetInviteVerificationTables(t, tx)
 	seedInviteVerificationOverviewFixture(t, tx)
 
 	statements := executableVerificationStatements(t, readInviteRolloutVerificationSQL(t))
@@ -46,6 +47,7 @@ func TestInviteRolloutVerificationSQL_OverviewMetricsAndReadOnlyStatements(t *te
 
 func TestInviteRolloutVerificationSQL_BindingChecksExposeDriftSamples(t *testing.T) {
 	tx := testTx(t)
+	resetInviteVerificationTables(t, tx)
 	seedInviteVerificationBindingFixture(t, tx)
 
 	statements := executableVerificationStatements(t, readInviteRolloutVerificationSQL(t))
@@ -99,6 +101,7 @@ func TestInviteRolloutVerificationSQL_BindingChecksExposeDriftSamples(t *testing
 
 func TestInviteRolloutVerificationSQL_RewardChecksSeparateAdminCorrections(t *testing.T) {
 	tx := testTx(t)
+	resetInviteVerificationTables(t, tx)
 	seedInviteVerificationRewardFixture(t, tx)
 
 	statements := executableVerificationStatements(t, readInviteRolloutVerificationSQL(t))
@@ -195,6 +198,44 @@ func TestInviteRolloutVerificationSQL_RewardChecksSeparateAdminCorrections(t *te
 		"created_at",
 	)
 	require.Equal(t, []string{"5201", "5202", "5203"}, columnValues(t, baseRewardObservationSamples, "id"))
+}
+
+func TestInviteRolloutVerificationSQL_FullContractAndOperatorNotes(t *testing.T) {
+	tx := testTx(t)
+	resetInviteVerificationTables(t, tx)
+
+	content := readInviteRolloutVerificationSQL(t)
+
+	require.Contains(t, content, "Pre-deploy and post-deploy")
+	require.Contains(t, content, "not be treated as a migration")
+	require.Contains(t, content, "rebind_inviter")
+	require.Contains(t, content, "manual_reward_grant")
+	require.Contains(t, content, "recompute_rewards")
+
+	statements := executableVerificationStatements(t, content)
+	require.Len(t, statements, 9, "executable verification statement count is part of the rollout contract")
+
+	results := executeVerificationStatements(t, tx, statements)
+	require.Len(t, results, 9, "expected one query result per executable statement")
+
+	requireColumns(t, results[0], "metric_name", "metric_value")
+	requireColumns(t, results[1], "metric_name", "metric_value")
+	requireColumns(t, results[2], "invitee_user_id", "current_inviter_user_id", "expected_effective_at")
+	requireColumns(t, results[3], "invitee_user_id", "register_bind_count", "first_effective_at", "last_effective_at")
+	requireColumns(t, results[4], "invitee_user_id", "current_inviter_user_id", "event_inviter_user_id", "expected_effective_at", "event_effective_at")
+	requireColumns(t, results[5],
+		"reward_type",
+		"status",
+		"rows_total",
+		"reward_amount_total",
+		"distinct_invitees_total",
+		"distinct_reward_targets_total",
+		"rows_with_admin_action_total",
+		"rows_with_null_trigger_code_total",
+	)
+	requireColumns(t, results[6], "metric_name", "metric_value")
+	requireColumns(t, results[7], "id", "reward_type", "reward_role", "reward_amount", "admin_action_id", "trigger_redeem_code_id", "created_at")
+	requireColumns(t, results[8], "id", "inviter_user_id", "invitee_user_id", "reward_target_user_id", "reward_role", "reward_amount", "trigger_redeem_code_id", "created_at")
 }
 
 func readInviteRolloutVerificationSQL(t *testing.T) string {
@@ -299,6 +340,14 @@ func executeVerificationStatements(t *testing.T, tx *sql.Tx, statements []string
 		results = append(results, result)
 	}
 	return results
+}
+
+func resetInviteVerificationTables(t *testing.T, tx *sql.Tx) {
+	t.Helper()
+	_, err := tx.ExecContext(context.Background(), `
+		TRUNCATE invite_reward_records, invite_relationship_events, invite_admin_actions, redeem_codes, users RESTART IDENTITY CASCADE
+	`)
+	require.NoError(t, err)
 }
 
 func metricMap(t *testing.T, result sqlQueryResult) map[string]string {

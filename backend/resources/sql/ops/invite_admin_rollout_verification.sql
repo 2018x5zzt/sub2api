@@ -1,5 +1,13 @@
 -- Pre-deploy and post-deploy invite admin rollout verification checklist.
 -- This file is read-only and must not be treated as a migration.
+-- Checklist:
+--   1) Run and compare statements 1-9 before deploy and after deploy.
+--   2) Keep this file read-only for operators and release tooling.
+-- Operator note:
+--   If operators ran rebind_inviter, manual_reward_grant, or recompute_rewards during
+--   the comparison window, admin-related metric changes may be expected.
+--   Without explicit admin actions, binding alignment metrics and base_invite_reward
+--   totals should remain stable across pre-deploy and post-deploy checks.
 -- Statements must remain simple: semicolons act only as terminators for the naive splitter shared by the integration test harness.
 -- Statement-order contract (fixed for current rollout stage):
 --   1) overview metrics
