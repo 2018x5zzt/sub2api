@@ -110,6 +110,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
+	var rateLimitFailoverState openAI429SilentFailoverState
 
 	for {
 		c.Set("openai_chat_completions_fallback_model", "")
@@ -155,6 +156,9 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					return
 				}
 			} else {
+				if isOpenAI429Failover(lastFailoverErr) && h.waitForOpenAI429SilentFailover(c.Request.Context(), reqLog, &rateLimitFailoverState, failedAccountIDs, "chat_completions_account_select_failed") {
+					continue
+				}
 				if lastFailoverErr != nil {
 					h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
 				} else {
@@ -176,6 +180,9 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		allowQueueWait := h.shouldAllowOpenAIAccountQueueWait(lastFailoverErr)
 		accountReleaseFunc, acquired, waitSkipped := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, allowQueueWait, reqLog)
 		if !acquired {
+			if waitSkipped && isOpenAI429Failover(lastFailoverErr) && h.waitForOpenAI429SilentFailover(c.Request.Context(), reqLog, &rateLimitFailoverState, failedAccountIDs, "chat_completions_account_slot_wait_skipped") {
+				continue
+			}
 			if waitSkipped && lastFailoverErr != nil {
 				h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
 			}
@@ -206,7 +213,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			if errors.As(err, &failoverErr) {
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				// Pool mode: retry on the same account
-				if failoverErr.RetryableOnSameAccount {
+				if shouldRetrySameOpenAIAccount(failoverErr) {
 					retryLimit := account.GetPoolModeRetryCount()
 					if sameAccountRetryCount[account.ID] < retryLimit {
 						sameAccountRetryCount[account.ID]++
@@ -227,6 +234,22 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				h.gatewayService.RecordOpenAIAccountSwitch()
 				failedAccountIDs[account.ID] = struct{}{}
 				lastFailoverErr = failoverErr
+				if rateLimitFailoverState.noteSwitch(failoverErr, time.Now()) {
+					remaining := rateLimitFailoverState.remaining(time.Now())
+					if remaining <= 0 {
+						h.handleFailoverExhausted(c, failoverErr, streamStarted)
+						return
+					}
+					reqLog.Warn("openai_chat_completions.upstream_failover_switching",
+						zap.Int64("account_id", account.ID),
+						zap.Int("upstream_status", failoverErr.StatusCode),
+						zap.Int("switch_count", switchCount+rateLimitFailoverState.switchCount()),
+						zap.Bool("silent_rate_limit_failover", true),
+						zap.Int("rate_limit_switch_count", rateLimitFailoverState.switchCount()),
+						zap.Int64("rate_limit_budget_remaining_ms", remaining.Milliseconds()),
+					)
+					continue
+				}
 				if switchCount >= maxAccountSwitches {
 					h.handleFailoverExhausted(c, failoverErr, streamStarted)
 					return
@@ -235,7 +258,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				reqLog.Warn("openai_chat_completions.upstream_failover_switching",
 					zap.Int64("account_id", account.ID),
 					zap.Int("upstream_status", failoverErr.StatusCode),
-					zap.Int("switch_count", switchCount),
+					zap.Int("switch_count", switchCount+rateLimitFailoverState.switchCount()),
 					zap.Int("max_switches", maxAccountSwitches),
 				)
 				continue
@@ -283,7 +306,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		})
 		reqLog.Debug("openai_chat_completions.request_completed",
 			zap.Int64("account_id", account.ID),
-			zap.Int("switch_count", switchCount),
+			zap.Int("switch_count", switchCount+rateLimitFailoverState.switchCount()),
 		)
 		return
 	}
