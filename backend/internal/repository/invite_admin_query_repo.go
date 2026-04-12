@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	stdsql "database/sql"
-	"math"
 	"strings"
 
 	"entgo.io/ent/dialect/sql"
@@ -178,7 +177,16 @@ func (r *inviteAdminQueryRepository) ListActions(ctx context.Context, params pag
 		query = query.Where(dbinviteadminaction.CreatedAtLTE(*filters.EndAt))
 	}
 
-	rows, err := query.Order(dbinviteadminaction.ByCreatedAt(sql.OrderDesc()), dbinviteadminaction.ByID(sql.OrderDesc())).All(ctx)
+	total, err := query.Count(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rows, err := query.
+		Order(dbinviteadminaction.ByCreatedAt(sql.OrderDesc()), dbinviteadminaction.ByID(sql.OrderDesc())).
+		Offset(params.Offset()).
+		Limit(params.Limit()).
+		All(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -190,8 +198,7 @@ func (r *inviteAdminQueryRepository) ListActions(ctx context.Context, params pag
 		items = append(items, item)
 	}
 
-	start, end, pageResult := paginateBounds(len(items), params)
-	return items[start:end], pageResult, nil
+	return items, paginationResultFromTotal(int64(total), params), nil
 }
 
 func (r *inviteAdminQueryRepository) userEmailMap(ctx context.Context, userIDs []int64) (map[int64]string, error) {
@@ -392,30 +399,4 @@ func rewardMatchesSearch(item service.AdminInviteRewardRow, search string) bool 
 		strings.Contains(strings.ToLower(item.InviterEmail), search) ||
 		strings.Contains(strings.ToLower(item.InviteeEmail), search) ||
 		strings.Contains(strings.ToLower(item.RewardType), search)
-}
-
-func paginateBounds(total int, params pagination.PaginationParams) (int, int, *pagination.PaginationResult) {
-	page := params.Page
-	if page < 1 {
-		page = 1
-	}
-	pageSize := params.Limit()
-	start := (page - 1) * pageSize
-	if start > total {
-		start = total
-	}
-	end := start + pageSize
-	if end > total {
-		end = total
-	}
-	pages := int(math.Ceil(float64(total) / float64(pageSize)))
-	if pages < 1 {
-		pages = 1
-	}
-	return start, end, &pagination.PaginationResult{
-		Total:    int64(total),
-		Page:     page,
-		PageSize: pageSize,
-		Pages:    pages,
-	}
 }

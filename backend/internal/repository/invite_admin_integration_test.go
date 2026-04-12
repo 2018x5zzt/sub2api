@@ -333,6 +333,64 @@ func (s *InviteAdminRepoSuite) TestSumBaseRewardsByTargetAndRoleUsesDatabaseAggr
 	s.Contains(sqlLogs, "SUM(")
 }
 
+func (s *InviteAdminRepoSuite) TestSumBaseRewardsByTargetAndRoleReturnsZeroWhenNoRows() {
+	user := s.createUser("sum-empty@example.com", nil, nil)
+
+	total, err := s.rewardRepo.SumBaseRewardsByTargetAndRole(s.ctx, user.ID, service.InviteRewardRoleInviter)
+	s.Require().NoError(err)
+	s.Require().Equal(0.0, total)
+}
+
+func (s *InviteAdminRepoSuite) TestListActionsUsesDatabasePagination() {
+	operator := s.createUser("action-operator@example.com", nil, nil)
+	target := s.createUser("action-target@example.com", nil, nil)
+
+	older := &service.InviteAdminAction{
+		ActionType:          service.InviteAdminActionTypeManualGrant,
+		OperatorUserID:      operator.ID,
+		TargetUserID:        target.ID,
+		Reason:              "older action",
+		RequestSnapshotJSON: map[string]any{"idx": 1},
+		ResultSnapshotJSON:  map[string]any{"status": "ok"},
+	}
+	s.Require().NoError(s.adminActionRepo.Create(s.ctx, older))
+
+	newer := &service.InviteAdminAction{
+		ActionType:          service.InviteAdminActionTypeManualGrant,
+		OperatorUserID:      operator.ID,
+		TargetUserID:        target.ID,
+		Reason:              "newer action",
+		RequestSnapshotJSON: map[string]any{"idx": 2},
+		ResultSnapshotJSON:  map[string]any{"status": "ok"},
+	}
+	s.Require().NoError(s.adminActionRepo.Create(s.ctx, newer))
+
+	other := &service.InviteAdminAction{
+		ActionType:          service.InviteAdminActionTypeRebind,
+		OperatorUserID:      operator.ID,
+		TargetUserID:        target.ID,
+		Reason:              "other action",
+		RequestSnapshotJSON: map[string]any{"idx": 3},
+		ResultSnapshotJSON:  map[string]any{"status": "ok"},
+	}
+	s.Require().NoError(s.adminActionRepo.Create(s.ctx, other))
+
+	repo, logs := s.newInviteAdminQueryRepoWithDebugLogs()
+	rows, page, err := repo.ListActions(s.ctx, dbinviteadminquery.PaginationParams{Page: 2, PageSize: 1}, service.InviteAdminActionFilters{
+		ActionType: service.InviteAdminActionTypeManualGrant,
+	})
+	s.Require().NoError(err)
+	s.Require().Len(rows, 1)
+	s.Require().Equal(int64(2), page.Total)
+	s.Require().Equal(older.ID, rows[0].ID)
+	s.Require().Equal("older action", rows[0].Reason)
+
+	sqlLogs := logs()
+	s.Contains(sqlLogs, "COUNT(")
+	s.Contains(sqlLogs, "LIMIT 1")
+	s.Contains(sqlLogs, "OFFSET 1")
+}
+
 func (s *InviteAdminRepoSuite) createUser(email string, invitedByUserID *int64, inviteBoundAt *time.Time) *service.User {
 	user := &service.User{
 		Email:           email,

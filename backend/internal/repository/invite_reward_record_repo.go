@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	stdsql "database/sql"
 	"strconv"
 
 	"entgo.io/ent/dialect/sql"
@@ -96,7 +97,7 @@ func (r *inviteRewardRecordRepository) SumBaseRewardsByTargetAndRole(ctx context
 	client := clientFromContext(ctx, r.client)
 
 	var rows []struct {
-		Sum float64 `json:"sum"`
+		Sum stdsql.NullFloat64 `json:"sum"`
 	}
 
 	err := client.InviteRewardRecord.Query().
@@ -110,10 +111,10 @@ func (r *inviteRewardRecordRepository) SumBaseRewardsByTargetAndRole(ctx context
 	if err != nil {
 		return 0, err
 	}
-	if len(rows) == 0 {
+	if len(rows) == 0 || !rows[0].Sum.Valid {
 		return 0, nil
 	}
-	return rows[0].Sum, nil
+	return rows[0].Sum.Float64, nil
 }
 
 func (r *inviteRewardRecordRepository) SumRewardTotalsForScope(ctx context.Context, scope service.InviteRecomputeScope) (map[string]float64, error) {
