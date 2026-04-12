@@ -762,14 +762,14 @@ func newContractDeps(t *testing.T) *contractDeps {
 	subscriptionService := service.NewSubscriptionService(groupRepo, userSubRepo, nil, nil, cfg)
 	subscriptionHandler := handler.NewSubscriptionHandler(subscriptionService)
 
-	redeemService := service.NewRedeemService(redeemRepo, userRepo, subscriptionService, nil, nil, nil, nil)
+	redeemService := service.NewRedeemService(redeemRepo, userRepo, nil, subscriptionService, nil, nil, nil, nil)
 	redeemHandler := handler.NewRedeemHandler(redeemService, nil, nil)
 
 	settingRepo := newStubSettingRepo()
 	settingService := service.NewSettingService(settingRepo, cfg)
 
-	adminService := service.NewAdminService(userRepo, groupRepo, accountRepo, nil, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
-	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil)
+	adminService := service.NewAdminService(userRepo, groupRepo, accountRepo, nil, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil, nil)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService, accountRepo)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService)
 	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil, nil)
@@ -886,6 +886,16 @@ func (r *stubUserRepo) GetByEmail(ctx context.Context, email string) (*service.U
 	return nil, service.ErrUserNotFound
 }
 
+func (r *stubUserRepo) GetByInviteCode(ctx context.Context, code string) (*service.User, error) {
+	for _, user := range r.users {
+		if user.InviteCode == code {
+			clone := *user
+			return &clone, nil
+		}
+	}
+	return nil, service.ErrUserNotFound
+}
+
 func (r *stubUserRepo) GetFirstAdmin(ctx context.Context) (*service.User, error) {
 	for _, user := range r.users {
 		if user.Role == service.RoleAdmin && user.Status == service.StatusActive {
@@ -928,6 +938,10 @@ func (r *stubUserRepo) ExistsByEmail(ctx context.Context, email string) (bool, e
 	return false, errors.New("not implemented")
 }
 
+func (r *stubUserRepo) ExistsByInviteCode(ctx context.Context, code string) (bool, error) {
+	return false, errors.New("not implemented")
+}
+
 func (r *stubUserRepo) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {
 	return 0, errors.New("not implemented")
 }
@@ -950,6 +964,10 @@ func (r *stubUserRepo) EnableTotp(ctx context.Context, userID int64) error {
 
 func (r *stubUserRepo) DisableTotp(ctx context.Context, userID int64) error {
 	return errors.New("not implemented")
+}
+
+func (r *stubUserRepo) CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error) {
+	return 0, errors.New("not implemented")
 }
 
 type stubApiKeyCache struct{}

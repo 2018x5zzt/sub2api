@@ -100,7 +100,7 @@
           <label for="invitation_code" class="input-label">
             {{ t('auth.invitationCodeLabel') }}
             <span class="ml-1 text-xs font-normal text-gray-400 dark:text-dark-500">
-              ({{ t(invitationCodeEnabled ? 'common.required' : 'common.optional') }})
+              ({{ t('common.optional') }})
             </span>
           </label>
           <div class="relative">
@@ -111,7 +111,6 @@
               id="invitation_code"
               v-model="formData.invitation_code"
               type="text"
-              :required="invitationCodeEnabled"
               :disabled="isLoading"
               :readonly="inviteCodeLocked"
               class="input pl-11 pr-10"
@@ -329,7 +328,6 @@ const showPassword = ref<boolean>(false)
 const registrationEnabled = ref<boolean>(true)
 const emailVerifyEnabled = ref<boolean>(false)
 const promoCodeEnabled = ref<boolean>(true)
-const invitationCodeEnabled = ref<boolean>(false)
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
 const siteName = ref<string>('Sub2API')
@@ -383,7 +381,6 @@ onMounted(async () => {
     registrationEnabled.value = settings.registration_enabled
     emailVerifyEnabled.value = settings.email_verify_enabled
     promoCodeEnabled.value = settings.promo_code_enabled
-    invitationCodeEnabled.value = settings.invitation_code_enabled
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     siteName.value = settings.site_name || 'Sub2API'
@@ -638,11 +635,6 @@ function validateForm(): boolean {
   // Turnstile validation
   if (turnstileEnabled.value && !turnstileToken.value) {
     errors.turnstile = t('auth.completeVerification')
-    isValid = false
-  }
-
-  if (invitationCodeEnabled.value && !formData.invitation_code.trim()) {
-    errors.invitation_code = t('auth.invitationCodeRequired')
     isValid = false
   }
 

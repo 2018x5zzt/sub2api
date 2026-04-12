@@ -238,6 +238,10 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 }
 
 func (s *AuthService) resolveSubmittedInvitationCode(ctx context.Context, invitationCode string) (*User, error) {
+	if s.inviteService == nil {
+		return nil, ErrServiceUnavailable
+	}
+
 	normalizedCode := strings.ToUpper(strings.TrimSpace(invitationCode))
 	if normalizedCode == "" {
 		return nil, nil
