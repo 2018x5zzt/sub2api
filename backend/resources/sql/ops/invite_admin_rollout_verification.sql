@@ -1,6 +1,13 @@
 -- Pre-deploy and post-deploy invite admin rollout verification checklist.
 -- This file is read-only and must not be treated as a migration.
 -- Statements must remain simple: semicolons act only as terminators for the naive splitter shared by the integration test harness.
+-- Statement-order contract (fixed for current rollout stage):
+--   1) overview metrics
+--   2) binding alignment metrics
+--   3) missing register_bind samples
+--   4) duplicate register_bind samples
+--   5) inviter/effective_at mismatch samples
+-- Later tasks must append new statements after statement 5, never insert before statements 1-5.
 
 WITH metrics AS (
   SELECT 1 AS ord, 'bound_users_total' AS metric_name, COUNT(*)::text AS metric_value
@@ -88,7 +95,7 @@ metrics AS (
 
   UNION ALL
 
-  SELECT 2, 'register_bind_without_bound_user_total', COUNT(*)::text
+  SELECT 2, 'register_bind_without_bound_user_total', COUNT(DISTINCT e.invitee_user_id)::text
   FROM register_bind_events e
   LEFT JOIN bound_users b ON b.invitee_user_id = e.invitee_user_id
   WHERE b.invitee_user_id IS NULL
@@ -101,6 +108,9 @@ metrics AS (
 
   UNION ALL
 
+  -- Duplicate-policy: invitees with duplicate register_bind events are counted by
+  -- register_bind_duplicate_invitee_total and excluded from mismatch metrics because
+  -- there is no single authoritative register_bind event to compare.
   SELECT 4, 'register_bind_inviter_mismatch_total', COUNT(*)::text
   FROM bound_users b
   INNER JOIN single_register_bind_events e ON e.invitee_user_id = b.invitee_user_id
@@ -174,6 +184,8 @@ single_register_bind_events AS (
   INNER JOIN register_bind_counts c ON c.invitee_user_id = e.invitee_user_id
   WHERE c.register_bind_count = 1
 )
+-- Duplicate-policy: mismatch samples intentionally include only invitees with exactly
+-- one register_bind event. Duplicate invitees are surfaced by statement 4 instead.
 SELECT
   b.invitee_user_id,
   b.current_inviter_user_id,

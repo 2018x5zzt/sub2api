@@ -71,6 +71,30 @@ func TestInviteRolloutVerificationSQL_BindingChecksExposeDriftSamples(t *testing
 	mismatchSamples := results[4]
 	requireColumns(t, mismatchSamples, "invitee_user_id", "current_inviter_user_id", "event_inviter_user_id", "expected_effective_at", "event_effective_at")
 	require.Equal(t, []string{"1108", "1109"}, columnValues(t, mismatchSamples, "invitee_user_id"))
+
+	mismatchByInvitee := make(map[string]map[string]*string, len(mismatchSamples.Rows))
+	for _, row := range mismatchSamples.Rows {
+		invitee := row["invitee_user_id"]
+		require.NotNil(t, invitee, "invitee_user_id must not be null in mismatch samples")
+		mismatchByInvitee[*invitee] = row
+	}
+
+	row1108, ok := mismatchByInvitee["1108"]
+	require.True(t, ok, "expected mismatch sample for invitee 1108")
+	require.NotNil(t, row1108["current_inviter_user_id"])
+	require.NotNil(t, row1108["event_inviter_user_id"])
+	require.Equal(t, "1101", *row1108["current_inviter_user_id"])
+	require.Equal(t, "1102", *row1108["event_inviter_user_id"])
+
+	row1109, ok := mismatchByInvitee["1109"]
+	require.True(t, ok, "expected mismatch sample for invitee 1109")
+	require.NotNil(t, row1109["current_inviter_user_id"])
+	require.NotNil(t, row1109["event_inviter_user_id"])
+	require.NotNil(t, row1109["expected_effective_at"])
+	require.NotNil(t, row1109["event_effective_at"])
+	require.Equal(t, "1101", *row1109["current_inviter_user_id"])
+	require.Equal(t, "1101", *row1109["event_inviter_user_id"])
+	require.NotEqual(t, *row1109["expected_effective_at"], *row1109["event_effective_at"])
 }
 
 func readInviteRolloutVerificationSQL(t *testing.T) string {
