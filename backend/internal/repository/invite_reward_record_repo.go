@@ -117,6 +117,24 @@ func (r *inviteRewardRecordRepository) SumBaseRewardsByTargetAndRole(ctx context
 	return rows[0].Sum.Float64, nil
 }
 
+func (r *inviteRewardRecordRepository) ExistsBaseRewardByRedeemCodeID(ctx context.Context, redeemCodeID int64) (bool, error) {
+	if redeemCodeID <= 0 {
+		return false, nil
+	}
+
+	client := clientFromContext(ctx, r.client)
+	count, err := client.InviteRewardRecord.Query().
+		Where(
+			dbinviterewardrecord.TriggerRedeemCodeIDEQ(redeemCodeID),
+			dbinviterewardrecord.RewardTypeEQ(service.InviteRewardTypeBase),
+		).
+		Count(ctx)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (r *inviteRewardRecordRepository) SumRewardTotalsForScope(ctx context.Context, scope service.InviteRecomputeScope) (map[string]float64, error) {
 	client := clientFromContext(ctx, r.client)
 

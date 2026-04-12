@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -27,6 +26,10 @@ type InviteRewardRecordRepository interface {
 	ListByRewardTarget(ctx context.Context, userID int64, params pagination.PaginationParams) ([]InviteRewardRecord, *pagination.PaginationResult, error)
 	ListByAdminActionID(ctx context.Context, adminActionID int64) ([]InviteRewardRecord, error)
 	SumBaseRewardsByTargetAndRole(ctx context.Context, userID int64, rewardRole string) (float64, error)
+}
+
+type inviteBaseRewardDuplicateChecker interface {
+	ExistsBaseRewardByRedeemCodeID(ctx context.Context, redeemCodeID int64) (bool, error)
 }
 
 type InviteService struct {
@@ -181,6 +184,17 @@ func (s *InviteService) ApplyBaseRechargeRewards(ctx context.Context, inviteeID 
 	if sourceType != RedeemSourceCommercial {
 		return nil
 	}
+	if redeemCode.ID > 0 {
+		if checker, ok := s.rewardRepo.(inviteBaseRewardDuplicateChecker); ok {
+			exists, err := checker.ExistsBaseRewardByRedeemCodeID(ctx, redeemCode.ID)
+			if err != nil {
+				return err
+			}
+			if exists {
+				return nil
+			}
+		}
+	}
 
 	invitee, err := s.userRepo.GetByID(ctx, inviteeID)
 	if err != nil {
@@ -223,7 +237,7 @@ func (s *InviteService) ApplyBaseRechargeRewards(ctx context.Context, inviteeID 
 		},
 	}
 
-	err = s.withInviteWriteTx(ctx, func(txCtx context.Context) error {
+	return s.withInviteWriteTx(ctx, func(txCtx context.Context) error {
 		if err := s.rewardRepo.CreateBatch(txCtx, records); err != nil {
 			return err
 		}
@@ -233,8 +247,4 @@ func (s *InviteService) ApplyBaseRechargeRewards(ctx context.Context, inviteeID 
 		}
 		return s.userRepo.UpdateBalance(txCtx, inviteeID, inviteeRewardAmount)
 	})
-	if errors.Is(err, ErrInviteRewardAlreadyRecorded) {
-		return nil
-	}
-	return err
 }
