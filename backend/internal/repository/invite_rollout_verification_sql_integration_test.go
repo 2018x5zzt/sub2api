@@ -64,18 +64,48 @@ func executableVerificationStatements(t *testing.T, content string) []string {
 		}
 
 		upper := strings.ToUpper(trimmed)
+		sanitized := strings.ToUpper(stripSingleQuotedLiterals(trimmed))
 		require.True(t,
 			strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH"),
 			"verification SQL must stay read-only, got: %s",
 			trimmed,
 		)
-		require.False(t, mutatingStatementRE.MatchString(upper),
+		require.False(t, mutatingStatementRE.MatchString(sanitized),
 			"verification SQL must stay read-only; detected mutation keyword in: %s",
 			trimmed,
 		)
 		out = append(out, stmt)
 	}
 	return out
+}
+
+func stripSingleQuotedLiterals(s string) string {
+	var builder strings.Builder
+	inside := false
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if inside {
+			if ch == '\'' {
+				if i+1 < len(s) && s[i+1] == '\'' {
+					builder.WriteByte(' ') // treat escaped quote as space placeholder
+					i++
+					continue
+				}
+				inside = false
+				builder.WriteByte(' ')
+				continue
+			}
+			builder.WriteByte(' ')
+			continue
+		}
+		if ch == '\'' {
+			inside = true
+			builder.WriteByte(' ')
+			continue
+		}
+		builder.WriteByte(ch)
+	}
+	return builder.String()
 }
 
 func executeVerificationStatements(t *testing.T, tx *sql.Tx, statements []string) []sqlQueryResult {
@@ -138,14 +168,12 @@ func requireColumns(t *testing.T, result sqlQueryResult, expected ...string) {
 	require.Equal(t, expected, result.Columns)
 }
 
-func columnValues(result sqlQueryResult, column string) []string {
+func columnValues(t *testing.T, result sqlQueryResult, column string) []string {
 	values := make([]string, 0, len(result.Rows))
 	for _, row := range result.Rows {
-		if v := row[column]; v != nil {
-			values = append(values, *v)
-		} else {
-			values = append(values, "")
-		}
+		value := row[column]
+		require.NotNilf(t, value, "column %s returned NULL", column)
+		values = append(values, *value)
 	}
 	sort.Strings(values)
 	return values
