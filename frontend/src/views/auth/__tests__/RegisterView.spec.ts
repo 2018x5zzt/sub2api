@@ -87,9 +87,27 @@ describe('RegisterView', () => {
 
     const inviteInput = wrapper.find('#invitation_code')
     expect(inviteInput.exists()).toBe(true)
-    expect((inviteInput.element as HTMLInputElement).value).toBe('HELLO123')
+    expect((inviteInput.element as HTMLInputElement).value).toBe('hello123')
     expect(inviteInput.attributes('readonly')).toBeDefined()
     expect(wrapper.text()).toContain('auth.invitationCodeLockedFromLink')
+  })
+
+  it('keeps promo code hidden until public settings explicitly enable it', () => {
+    authApiMocks.getPublicSettingsMock.mockImplementation(() => new Promise(() => {}))
+
+    const wrapper = mount(RegisterView, {
+      global: {
+        stubs: {
+          AuthLayout: { template: '<div><slot /></div>' },
+          LinuxDoOAuthSection: { template: '<div />' },
+          TurnstileWidget: { template: '<div />' },
+          Icon: { template: '<span />' },
+          RouterLink: { template: '<a><slot /></a>' }
+        }
+      }
+    })
+
+    expect(wrapper.find('#promo_code').exists()).toBe(false)
   })
 
   it('keeps invite code editable when no invite query is provided', async () => {

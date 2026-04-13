@@ -77,6 +77,7 @@ func TestRedeemHandler_PromoFallbackRedeemsOncePerUser(t *testing.T) {
 		Status:  service.StatusActive,
 		Balance: 0,
 	}
+	require.NoError(t, env.settingRepo.Set(context.Background(), service.SettingKeyPromoCodeEnabled, "true"))
 	env.promoRepo.addCode(&service.PromoCode{
 		ID:          201,
 		Code:        "HELLO",
