@@ -666,7 +666,7 @@ func (s *GatewayService) GenerateSessionHash(parsed *ParsedRequest) string {
 	if parsed.SessionContext != nil {
 		_, _ = combined.WriteString(parsed.SessionContext.ClientIP)
 		_, _ = combined.WriteString(":")
-		_, _ = combined.WriteString(parsed.SessionContext.UserAgent)
+		_, _ = combined.WriteString(NormalizeSessionUserAgent(parsed.SessionContext.UserAgent))
 		_, _ = combined.WriteString(":")
 		_, _ = combined.WriteString(strconv.FormatInt(parsed.SessionContext.APIKeyID, 10))
 		_, _ = combined.WriteString("|")
@@ -4116,9 +4116,15 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		if s.identityService != nil {
 			fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 			if err == nil && fp != nil {
-				if metadataUserID := s.buildOAuthMetadataUserID(parsed, account, fp); metadataUserID != "" {
-					normalizeOpts.injectMetadata = true
-					normalizeOpts.metadataUserID = metadataUserID
+				mimicMPT := false
+				if s.settingService != nil {
+					_, mimicMPT = s.settingService.GetGatewayForwardingSettings(ctx)
+				}
+				if !mimicMPT {
+					if metadataUserID := s.buildOAuthMetadataUserID(parsed, account, fp); metadataUserID != "" {
+						normalizeOpts.injectMetadata = true
+						normalizeOpts.metadataUserID = metadataUserID
+					}
 				}
 			}
 		}
@@ -5656,6 +5662,10 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	}
 
 	// OAuth账号：应用统一指纹
+	enableFP, enableMPT := true, false
+	if s.settingService != nil {
+		enableFP, enableMPT = s.settingService.GetGatewayForwardingSettings(ctx)
+	}
 	var fingerprint *Fingerprint
 	if account.IsOAuth() && s.identityService != nil {
 		// 1. 获取或创建指纹（包含随机生成的ClientID）
@@ -5664,14 +5674,18 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 			logger.LegacyPrintf("service.gateway", "Warning: failed to get fingerprint for account %d: %v", account.ID, err)
 			// 失败时降级为透传原始headers
 		} else {
-			fingerprint = fp
+			if enableFP {
+				fingerprint = fp
+			}
 
 			// 2. 重写metadata.user_id（需要指纹中的ClientID和账号的account_uuid）
 			// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
-			accountUUID := account.GetExtraString("account_uuid")
-			if accountUUID != "" && fp.ClientID != "" {
-				if newBody, err := s.identityService.RewriteUserIDWithMasking(ctx, body, account, accountUUID, fp.ClientID, fp.UserAgent); err == nil && len(newBody) > 0 {
-					body = newBody
+			if !enableMPT {
+				accountUUID := account.GetExtraString("account_uuid")
+				if accountUUID != "" && fp.ClientID != "" {
+					if newBody, err := s.identityService.RewriteUserIDWithMasking(ctx, body, account, accountUUID, fp.ClientID, fp.UserAgent); err == nil && len(newBody) > 0 {
+						body = newBody
+					}
 				}
 			}
 		}
@@ -8352,13 +8366,21 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 
 	// OAuth 账号：应用统一指纹和重写 userID
 	// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
+	ctEnableFP, ctEnableMPT := true, false
+	if s.settingService != nil {
+		ctEnableFP, ctEnableMPT = s.settingService.GetGatewayForwardingSettings(ctx)
+	}
+	var ctFingerprint *Fingerprint
 	if account.IsOAuth() && s.identityService != nil {
 		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, clientHeaders)
 		if err == nil {
-			accountUUID := account.GetExtraString("account_uuid")
-			if accountUUID != "" && fp.ClientID != "" {
-				if newBody, err := s.identityService.RewriteUserIDWithMasking(ctx, body, account, accountUUID, fp.ClientID, fp.UserAgent); err == nil && len(newBody) > 0 {
-					body = newBody
+			ctFingerprint = fp
+			if !ctEnableMPT {
+				accountUUID := account.GetExtraString("account_uuid")
+				if accountUUID != "" && fp.ClientID != "" {
+					if newBody, err := s.identityService.RewriteUserIDWithMasking(ctx, body, account, accountUUID, fp.ClientID, fp.UserAgent); err == nil && len(newBody) > 0 {
+						body = newBody
+					}
 				}
 			}
 		}
@@ -8387,11 +8409,8 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 
 	// OAuth 账号：应用指纹到请求头
-	if account.IsOAuth() && s.identityService != nil {
-		fp, _ := s.identityService.GetOrCreateFingerprint(ctx, account.ID, clientHeaders)
-		if fp != nil {
-			s.identityService.ApplyFingerprint(req, fp)
-		}
+	if ctEnableFP && ctFingerprint != nil {
+		s.identityService.ApplyFingerprint(req, ctFingerprint)
 	}
 
 	// 确保必要的 headers 存在
