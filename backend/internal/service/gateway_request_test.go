@@ -41,6 +41,14 @@ func TestParseGatewayRequest_ThinkingAdaptiveEnabled(t *testing.T) {
 	require.True(t, parsed.ThinkingEnabled)
 }
 
+func TestParseGatewayRequest_ThinkingModelSuffixEnabled(t *testing.T) {
+	body := []byte(`{"model":"claude-opus-4-6-thinking","messages":[{"content":"hi"}]}`)
+	parsed, err := ParseGatewayRequest(body, "")
+	require.NoError(t, err)
+	require.Equal(t, "claude-opus-4-6-thinking", parsed.Model)
+	require.True(t, parsed.ThinkingEnabled)
+}
+
 func TestParseGatewayRequest_MaxTokens(t *testing.T) {
 	body := []byte(`{"model":"claude-haiku-4-5","max_tokens":1}`)
 	parsed, err := ParseGatewayRequest(body, "")

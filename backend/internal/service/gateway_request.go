@@ -165,9 +165,10 @@ func ParseGatewayRequest(body []byte, protocol string) (*ParsedRequest, error) {
 	// metadata.user_id: 直接路径提取，不需要严格类型校验
 	parsed.MetadataUserID = gjson.Get(jsonStr, "metadata.user_id").String()
 
-	// thinking.type: enabled/adaptive 都视为开启
+	// thinking.type: enabled/adaptive 都视为开启。
+	// 同时兼容 *-thinking 模型的默认语义，避免上下文丢失 thinking 状态。
 	thinkingType := gjson.Get(jsonStr, "thinking.type").String()
-	if thinkingType == "enabled" || thinkingType == "adaptive" {
+	if thinkingType == "enabled" || thinkingType == "adaptive" || strings.HasSuffix(strings.ToLower(strings.TrimSpace(parsed.Model)), "-thinking") {
 		parsed.ThinkingEnabled = true
 	}
 

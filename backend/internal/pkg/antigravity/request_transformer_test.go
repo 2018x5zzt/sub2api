@@ -315,7 +315,7 @@ func TestBuildGenerationConfig_ThinkingDynamicBudget(t *testing.T) {
 		},
 		{
 			name:        "nil thinking does not emit thinkingConfig",
-			model:       "claude-opus-4-6-thinking",
+			model:       "claude-opus-4-6",
 			thinking:    nil,
 			wantBudget:  0,
 			wantPresent: false,
@@ -351,6 +351,31 @@ func TestBuildGenerationConfig_ThinkingDynamicBudget(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildGenerationConfig_DefaultThinkingModels(t *testing.T) {
+	t.Run("thinking model without explicit config still enables thoughts", func(t *testing.T) {
+		req := &ClaudeRequest{
+			Model: "claude-opus-4-6-thinking",
+		}
+
+		cfg := buildGenerationConfig(req)
+		require.NotNil(t, cfg)
+		require.NotNil(t, cfg.ThinkingConfig)
+		require.True(t, cfg.ThinkingConfig.IncludeThoughts)
+		require.Equal(t, -1, cfg.ThinkingConfig.ThinkingBudget)
+	})
+
+	t.Run("explicit disabled keeps thinking off even on thinking model", func(t *testing.T) {
+		req := &ClaudeRequest{
+			Model:    "claude-opus-4-6-thinking",
+			Thinking: &ThinkingConfig{Type: "disabled"},
+		}
+
+		cfg := buildGenerationConfig(req)
+		require.NotNil(t, cfg)
+		require.Nil(t, cfg.ThinkingConfig)
+	})
 }
 
 func TestTransformClaudeToGeminiWithOptions_PreservesBillingHeaderSystemBlock(t *testing.T) {

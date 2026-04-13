@@ -99,8 +99,8 @@ func TransformClaudeToGeminiWithOptions(claudeReq *ClaudeRequest, projectID, map
 		}
 	}
 
-	// 检测是否启用 thinking
-	isThinkingEnabled := claudeReq.Thinking != nil && (claudeReq.Thinking.Type == "enabled" || claudeReq.Thinking.Type == "adaptive")
+	// 检测是否启用 thinking。显式配置优先，其次兼容 *-thinking 模型的默认语义。
+	isThinkingEnabled := isThinkingEnabledForClaudeRequest(targetModel, claudeReq.Thinking)
 
 	// 只有 Gemini 模型支持 dummy thought workaround
 	// Claude 模型通过 Vertex/Google API 需要有效的 thought signatures
@@ -121,7 +121,7 @@ func TransformClaudeToGeminiWithOptions(claudeReq *ClaudeRequest, projectID, map
 		// If we had to downgrade thinking blocks to plain text due to missing/invalid signatures,
 		// disable upstream thinking mode to avoid signature/structure validation errors.
 		reqCopy := *claudeReq
-		reqCopy.Thinking = nil
+		reqCopy.Thinking = &ThinkingConfig{Type: "disabled"}
 		reqForConfig = &reqCopy
 	}
 	if targetModel != "" && targetModel != reqForConfig.Model {
@@ -586,6 +586,19 @@ func isAntigravityOpus46Model(model string) bool {
 	return strings.HasPrefix(strings.ToLower(model), "claude-opus-4-6")
 }
 
+func isThinkingEnabledForClaudeRequest(model string, thinking *ThinkingConfig) bool {
+	if thinking != nil {
+		switch strings.ToLower(strings.TrimSpace(thinking.Type)) {
+		case "enabled", "adaptive":
+			return true
+		default:
+			return false
+		}
+	}
+
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(model)), "-thinking")
+}
+
 func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 	maxLimit := maxOutputTokensLimit(req.Model)
 	config := &GeminiGenerationConfig{
@@ -599,7 +612,7 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 	}
 
 	// Thinking 配置
-	if req.Thinking != nil && (req.Thinking.Type == "enabled" || req.Thinking.Type == "adaptive") {
+	if isThinkingEnabledForClaudeRequest(req.Model, req.Thinking) {
 		config.ThinkingConfig = &GeminiThinkingConfig{
 			IncludeThoughts: true,
 		}
@@ -607,10 +620,10 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 		// - thinking.type=enabled：budget_tokens>0 用显式预算
 		// - thinking.type=adaptive：仅在 Antigravity 的 Opus 4.6 上覆写为 （24576）
 		budget := -1
-		if req.Thinking.BudgetTokens > 0 {
+		if req.Thinking != nil && req.Thinking.BudgetTokens > 0 {
 			budget = req.Thinking.BudgetTokens
 		}
-		if req.Thinking.Type == "adaptive" && isAntigravityOpus46Model(req.Model) {
+		if req.Thinking != nil && strings.EqualFold(strings.TrimSpace(req.Thinking.Type), "adaptive") && isAntigravityOpus46Model(req.Model) {
 			budget = ClaudeAdaptiveHighThinkingBudgetTokens
 		}
 

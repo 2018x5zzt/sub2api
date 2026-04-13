@@ -86,6 +86,13 @@ func TestExtractOpenAIReasoningEffortFromBody(t *testing.T) {
 			wantValue: "high",
 		},
 		{
+			name:      "bare codex model defaults to medium",
+			body:      []byte(`{"input":"hi"}`),
+			model:     "gpt-5.1-codex",
+			wantNil:   false,
+			wantValue: "medium",
+		},
+		{
 			name:    "未知后缀不返回",
 			body:    []byte(`{"input":"hi"}`),
 			model:   "gpt-5-unknown",
@@ -153,6 +160,20 @@ func TestEnsureOpenAIResponsesReasoning(t *testing.T) {
 		_, hasSummary := reasoning["summary"]
 		require.False(t, hasSummary)
 	})
+
+	t.Run("default bare gpt-5 model to medium reasoning", func(t *testing.T) {
+		reqBody := map[string]any{
+			"model": "gpt-5.4",
+			"input": "hi",
+		}
+
+		changed := ensureOpenAIResponsesReasoning(reqBody, "gpt-5.4")
+		require.True(t, changed)
+
+		reasoning := reqBody["reasoning"].(map[string]any)
+		require.Equal(t, "medium", reasoning["effort"])
+		require.Equal(t, "auto", reasoning["summary"])
+	})
 }
 
 func TestNormalizeOpenAIPassthroughReasoningBody(t *testing.T) {
@@ -163,6 +184,16 @@ func TestNormalizeOpenAIPassthroughReasoningBody(t *testing.T) {
 	require.True(t, changed)
 	require.Equal(t, "high", gjson.GetBytes(normalized, "reasoning.effort").String())
 	require.Equal(t, "auto", gjson.GetBytes(normalized, "reasoning.summary").String())
+
+	t.Run("default bare gpt-5 model to medium reasoning", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-5.4","stream":true}`)
+
+		normalized, changed, err := normalizeOpenAIPassthroughReasoningBody(body)
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.Equal(t, "medium", gjson.GetBytes(normalized, "reasoning.effort").String())
+		require.Equal(t, "auto", gjson.GetBytes(normalized, "reasoning.summary").String())
+	})
 }
 
 func TestGetOpenAIRequestBodyMap_UsesContextCache(t *testing.T) {

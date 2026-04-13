@@ -75,6 +75,7 @@ func logOpenAICodexDroppedNativeItemReferences(account *Account, source string, 
 var (
 	errOpenAIEmptyResponse         = errors.New("upstream request failed: empty response")
 	errOpenAIStreamMissingTerminal = errors.New("stream usage incomplete: missing terminal event")
+	openAIDefaultReasoningModelRE  = regexp.MustCompile(`^gpt-5(?:\.\d+)*(?:-(?:mini|nano|chat|pro|codex(?:-(?:mini|max))?))?(?:-(?:latest|\d{4}-\d{2}-\d{2}))?$`)
 )
 
 // OpenAI allowed headers whitelist (for non-passthrough).
@@ -5216,7 +5217,11 @@ func extractOpenAIReasoningEffortFromBody(body []byte, requestedModel string) *s
 
 	value := deriveOpenAIReasoningEffortFromModel(requestedModel)
 	if value == "" {
-		return nil
+		if shouldDefaultOpenAIResponsesReasoning(requestedModel) {
+			value = "medium"
+		} else {
+			return nil
+		}
 	}
 	return &value
 }
@@ -5322,9 +5327,27 @@ func extractOpenAIReasoningEffort(reqBody map[string]any, requestedModel string)
 
 	value := deriveOpenAIReasoningEffortFromModel(requestedModel)
 	if value == "" {
-		return nil
+		if shouldDefaultOpenAIResponsesReasoning(requestedModel) {
+			value = "medium"
+		} else {
+			return nil
+		}
 	}
 	return &value
+}
+
+func shouldDefaultOpenAIResponsesReasoning(model string) bool {
+	modelID := strings.ToLower(strings.TrimSpace(model))
+	if modelID == "" {
+		return false
+	}
+
+	if strings.Contains(modelID, "/") {
+		parts := strings.Split(modelID, "/")
+		modelID = parts[len(parts)-1]
+	}
+
+	return openAIDefaultReasoningModelRE.MatchString(modelID)
 }
 
 func normalizeOpenAIReasoningEffort(raw string) string {
