@@ -85,6 +85,10 @@ export interface SystemSettings {
 
   // 分组隔离
   allow_ungrouped_key_scheduling: boolean
+
+  // Gateway forwarding behavior
+  enable_fingerprint_unification: boolean
+  enable_metadata_passthrough: boolean
 }
 
 export interface UpdateSettingsRequest {
@@ -140,6 +144,8 @@ export interface UpdateSettingsRequest {
   min_claude_code_version?: string
   max_claude_code_version?: string
   allow_ungrouped_key_scheduling?: boolean
+  enable_fingerprint_unification?: boolean
+  enable_metadata_passthrough?: boolean
 }
 
 /**
@@ -315,6 +321,8 @@ export interface RectifierSettings {
   enabled: boolean
   thinking_signature_enabled: boolean
   thinking_budget_enabled: boolean
+  apikey_signature_enabled: boolean
+  apikey_signature_patterns: string[]
 }
 
 /**
