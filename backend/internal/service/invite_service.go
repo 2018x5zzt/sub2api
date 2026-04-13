@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/url"
 	"strings"
 
@@ -14,6 +14,8 @@ import (
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
+
+const inviteCodeAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 type InviteUserRepository interface {
 	GetByID(ctx context.Context, id int64) (*User, error)
@@ -102,11 +104,16 @@ func (s *InviteService) existsBaseRewardByRedeemCodeID(ctx context.Context, rede
 }
 
 func defaultInviteCodeGenerator() (string, error) {
-	raw := make([]byte, 4)
-	if _, err := rand.Read(raw); err != nil {
-		return "", err
+	buf := make([]byte, 8)
+	max := big.NewInt(int64(len(inviteCodeAlphabet)))
+	for i := range buf {
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			return "", err
+		}
+		buf[i] = inviteCodeAlphabet[n.Int64()]
 	}
-	return strings.ToUpper(hex.EncodeToString(raw)), nil
+	return string(buf), nil
 }
 
 func (s *InviteService) GenerateUniqueInviteCode(ctx context.Context) (string, error) {
@@ -127,7 +134,7 @@ func (s *InviteService) GenerateUniqueInviteCode(ctx context.Context) (string, e
 }
 
 func (s *InviteService) ResolveInviterByCode(ctx context.Context, code string) (*User, error) {
-	normalized := strings.ToUpper(strings.TrimSpace(code))
+	normalized := strings.TrimSpace(code)
 	if normalized == "" {
 		return nil, ErrUserNotFound
 	}

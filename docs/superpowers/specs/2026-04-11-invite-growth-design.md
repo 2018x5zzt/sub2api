@@ -30,7 +30,7 @@ The immediate objective is growth from roughly 500 users toward 5000 users witho
 - Invite code and invite link are both supported.
 - Invite binding is permanent after registration and cannot be changed later.
 - Base rewards are triggered only by successful redemption of qualifying `balance` redeem codes.
-- Base rewards are `5%` to inviter and `5%` to invitee for each qualifying event.
+- Base rewards are `3%` to inviter and `3%` to invitee for each qualifying event.
 - The existing registration input field `invitation_code` is reused.
 - The existing public validation endpoint `/api/v1/auth/validate-invitation-code` is reused.
 - Campaigns must never reward raw registration count.
@@ -279,8 +279,8 @@ When a user redeems a qualifying paid `balance` redeem code:
 1. redeem succeeds
 2. base recharge amount is credited to the user
 3. if the user has `invited_by_user_id`, calculate:
-   - inviter reward = recharge amount * 5%
-   - invitee reward = recharge amount * 5%
+   - inviter reward = recharge amount * 3%
+   - invitee reward = recharge amount * 3%
 4. credit those rewards
 5. write separate `invite_reward_records`
 6. run campaign qualification / settlement if any active campaign applies
@@ -291,8 +291,8 @@ When a user redeems a qualifying paid `balance` redeem code:
 
 Base rewards are always-on system behavior:
 
-- inviter receives `5%`
-- invitee receives `5%`
+- inviter receives `3%`
+- invitee receives `3%`
 - triggered only by qualifying paid recharge events
 
 Recommended operational behavior:
@@ -546,8 +546,8 @@ Required coverage for implementation:
 
 ### Settlement Tests
 
-- inviter gets 5%
-- invitee gets 5%
+- inviter gets 3%
+- invitee gets 3%
 - both ledgers are written
 - duplicate processing does not double reward
 
@@ -569,7 +569,7 @@ Phase one scope:
 
 - permanent invite codes
 - permanent inviter binding
-- base `5% + 5%` referral settlement
+- base `3% + 3%` referral settlement
 - qualifying recharge metadata for redeem codes
 - invite center summary + reward history
 - campaign infrastructure
@@ -604,7 +604,7 @@ Implement a single-layer permanent referral system with:
 
 - permanent per-user invite code
 - permanent registration-time inviter binding
-- always-on `5% + 5%` rewards for qualifying paid `balance` recharges
+- always-on `3% + 3%` rewards for qualifying paid `balance` recharges
 - campaign layer restricted to qualifying recharge outcomes only
 
 This gives the product a strong growth mechanism without turning it into a fragile distributor system and keeps future event design safe from registration-count abuse.

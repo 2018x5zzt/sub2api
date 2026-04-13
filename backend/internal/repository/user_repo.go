@@ -138,9 +138,21 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 }
 
 func (r *userRepository) GetByInviteCode(ctx context.Context, code string) (*service.User, error) {
-	m, err := r.client.User.Query().Where(dbuser.InviteCodeEQ(normalizedInviteCode(code))).Only(ctx)
+	normalized := normalizedInviteCode(code)
+	m, err := r.client.User.Query().Where(dbuser.InviteCodeEQ(normalized)).Only(ctx)
 	if err != nil {
-		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
+		if !dbent.IsNotFound(err) && !errors.Is(err, sql.ErrNoRows) {
+			return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
+		}
+
+		userID, aliasErr := r.findInviteAliasUserID(ctx, normalized)
+		if errors.Is(aliasErr, sql.ErrNoRows) {
+			return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
+		}
+		if aliasErr != nil {
+			return nil, aliasErr
+		}
+		return r.GetByID(ctx, userID)
 	}
 
 	out := userEntityToService(m)
@@ -500,7 +512,14 @@ func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 }
 
 func (r *userRepository) ExistsByInviteCode(ctx context.Context, code string) (bool, error) {
-	return r.client.User.Query().Where(dbuser.InviteCodeEQ(normalizedInviteCode(code))).Exist(ctx)
+	exists, err := r.client.User.Query().Where(dbuser.InviteCodeEQ(normalizedInviteCode(code))).Exist(ctx)
+	if err != nil {
+		return false, err
+	}
+	if exists {
+		return true, nil
+	}
+	return r.inviteAliasExists(ctx, normalizedInviteCode(code))
 }
 
 func (r *userRepository) CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error) {
@@ -638,7 +657,46 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 }
 
 func normalizedInviteCode(code string) string {
-	return strings.ToUpper(strings.TrimSpace(code))
+	return strings.TrimSpace(code)
+}
+
+func (r *userRepository) findInviteAliasUserID(ctx context.Context, code string) (int64, error) {
+	if r.sql == nil {
+		return 0, sql.ErrNoRows
+	}
+
+	const query = `
+		SELECT user_id
+		FROM invite_code_aliases
+		WHERE alias_code = $1
+	`
+	var userID int64
+	if err := scanSingleRow(ctx, r.sql, query, []any{code}, &userID); err != nil {
+		return 0, err
+	}
+	return userID, nil
+}
+
+func (r *userRepository) inviteAliasExists(ctx context.Context, code string) (bool, error) {
+	if r.sql == nil {
+		return false, nil
+	}
+
+	const query = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM invite_code_aliases
+			WHERE alias_code = $1
+		)
+	`
+	var exists bool
+	if err := scanSingleRow(ctx, r.sql, query, []any{code}, &exists); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return exists, nil
 }
 
 func normalizedInviteBoundAt(invitedByUserID *int64, inviteBoundAt *time.Time) *time.Time {

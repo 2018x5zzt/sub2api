@@ -127,6 +127,47 @@ func (s *UserRepoSuite) TestGetByEmail_NotFound() {
 	s.Require().Error(err, "expected error for non-existent email")
 }
 
+func (s *UserRepoSuite) TestGetByInviteCode_FallsBackToAlias() {
+	user := s.mustCreateUser(&service.User{
+		Email:      "alias-lookup@test.com",
+		InviteCode: "AbCdEfGh",
+	})
+
+	_, err := integrationDB.ExecContext(
+		s.ctx,
+		"INSERT INTO invite_code_aliases (user_id, alias_code, source) VALUES ($1, $2, $3)",
+		user.ID,
+		"U1",
+		"integration_test",
+	)
+	s.Require().NoError(err, "insert invite alias")
+
+	got, err := s.repo.GetByInviteCode(s.ctx, "U1")
+	s.Require().NoError(err, "GetByInviteCode via alias")
+	s.Require().Equal(user.ID, got.ID)
+	s.Require().Equal("AbCdEfGh", got.InviteCode)
+}
+
+func (s *UserRepoSuite) TestExistsByInviteCode_ReturnsTrueForAlias() {
+	user := s.mustCreateUser(&service.User{
+		Email:      "alias-exists@test.com",
+		InviteCode: "QwErTyUi",
+	})
+
+	_, err := integrationDB.ExecContext(
+		s.ctx,
+		"INSERT INTO invite_code_aliases (user_id, alias_code, source) VALUES ($1, $2, $3)",
+		user.ID,
+		"U2",
+		"integration_test",
+	)
+	s.Require().NoError(err, "insert invite alias")
+
+	exists, err := s.repo.ExistsByInviteCode(s.ctx, "U2")
+	s.Require().NoError(err, "ExistsByInviteCode via alias")
+	s.Require().True(exists)
+}
+
 func (s *UserRepoSuite) TestUpdate() {
 	user := s.mustCreateUser(&service.User{Email: "update@test.com", Username: "original"})
 

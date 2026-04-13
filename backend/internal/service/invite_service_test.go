@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"regexp"
 	"testing"
 	"time"
 
@@ -162,6 +163,12 @@ func TestInviteService_GenerateUniqueInviteCodeRetriesOnCollision(t *testing.T) 
 	require.Equal(t, "ZXCVBN12", code)
 }
 
+func TestDefaultInviteCodeGenerator_GeneratesEightLetters(t *testing.T) {
+	code, err := defaultInviteCodeGenerator()
+	require.NoError(t, err)
+	require.Regexp(t, regexp.MustCompile(`^[A-Za-z]{8}$`), code)
+}
+
 func TestInviteService_ResolveInviterByCodeReturnsUser(t *testing.T) {
 	inviter := &User{ID: 7, InviteCode: "INVITER07", Status: StatusActive}
 	svc := &InviteService{
@@ -170,9 +177,35 @@ func TestInviteService_ResolveInviterByCodeReturnsUser(t *testing.T) {
 		},
 	}
 
-	got, err := svc.ResolveInviterByCode(context.Background(), "inviter07")
+	got, err := svc.ResolveInviterByCode(context.Background(), "INVITER07")
 	require.NoError(t, err)
 	require.Equal(t, inviter.ID, got.ID)
+}
+
+func TestInviteService_ResolveInviterByCodePreservesCase(t *testing.T) {
+	inviter := &User{ID: 7, InviteCode: "AbCdEfGh", Status: StatusActive}
+	svc := &InviteService{
+		userRepo: &inviteUserRepoStub{
+			usersByInviteCode: map[string]*User{"AbCdEfGh": inviter},
+		},
+	}
+
+	got, err := svc.ResolveInviterByCode(context.Background(), " AbCdEfGh ")
+	require.NoError(t, err)
+	require.Equal(t, inviter.ID, got.ID)
+}
+
+func TestInviteService_ResolveInviterByCodeRejectsWrongCase(t *testing.T) {
+	inviter := &User{ID: 7, InviteCode: "AbCdEfGh", Status: StatusActive}
+	svc := &InviteService{
+		userRepo: &inviteUserRepoStub{
+			usersByInviteCode: map[string]*User{"AbCdEfGh": inviter},
+		},
+	}
+
+	got, err := svc.ResolveInviterByCode(context.Background(), "abcdefgh")
+	require.ErrorIs(t, err, ErrUserNotFound)
+	require.Nil(t, got)
 }
 
 func TestInviteService_ResolveInviterByCodeRejectsInactiveUser(t *testing.T) {

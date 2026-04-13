@@ -31,7 +31,7 @@ Excluded:
 - no invite reward on subscription redemption or subscription purchase
 - no first-invite double-reward campaign logic
 - no campaign scheduler or temporary promotional engine
-- no automatic rewrite of historical 5% reward records
+- no automatic rewrite of historical invite reward records
 - no silent compatibility path for legacy one-time invitation codes
 
 ## Current State

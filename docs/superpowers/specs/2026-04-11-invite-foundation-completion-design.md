@@ -7,7 +7,7 @@ Status: Approved in conversation, written for implementation planning
 
 This design completes the base invite layer so it is not only user-visible, but also operationally manageable and auditable.
 
-The existing foundation already moves the product away from one-time `redeem_codes(type=invitation)` semantics toward permanent per-user invite codes, registration-time inviter binding, and `5% + 5%` recharge rewards on qualifying commercial `balance` redeem codes.
+The existing foundation already moves the product away from one-time `redeem_codes(type=invitation)` semantics toward permanent per-user invite codes, registration-time inviter binding, and `3% + 3%` recharge rewards on qualifying commercial `balance` redeem codes.
 
 This follow-up design closes the remaining base-layer gaps:
 
@@ -214,8 +214,8 @@ Purpose:
 Base reward semantics stay unchanged:
 
 - trigger only on successful redemption of qualifying commercial `balance` redeem codes
-- inviter receives `5%`
-- invitee receives `5%`
+- inviter receives `3%`
+- invitee receives `3%`
 - settlement remains idempotent per triggering redeem event
 
 ### Admin Rebind

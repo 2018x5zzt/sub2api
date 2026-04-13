@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-12
 
-**Goal:** Adjust the baseline invite reward to fit the current rollout without introducing a separate campaign engine. Keep the existing invite growth flow, but change the default reward rate from 5% to 3% and remove user-facing copy that hard-codes a percentage.
+**Goal:** Keep the baseline invite reward aligned at 3% without introducing a separate campaign engine, and remove user-facing copy that hard-codes a stale percentage.
 
 ## Scope
 
@@ -10,7 +10,7 @@ This change is limited to the baseline invite reward flow that already exists in
 
 Included:
 
-- Change the baseline invite reward rate from `5%` to `3%`.
+- Keep the baseline invite reward rate at `3%` and align stale invite docs with that implementation.
 - Keep the reward basis as the credited balance amount represented by commercial balance redeem codes.
 - Keep the current rule that only commercial balance redeem codes trigger invite rewards.
 - Update user-facing invite copy so it says both sides receive rewards, without exposing a fixed percentage.
@@ -61,7 +61,7 @@ This means the following do **not** count as qualifying recharge for baseline in
 
 ### 3. Reward rate
 
-The baseline reward rate changes from the current `5%` baseline to the following implementation rule:
+The baseline reward rate for the implementation is the following rule:
 
 - inviter receives `3%` of the credited balance amount
 - invitee receives `3%` of the credited balance amount
@@ -102,7 +102,7 @@ No schema change is required.
 
 Existing invite reward records remain valid historical data. This change only affects newly generated baseline invite rewards after deployment, plus any future recompute actions intentionally run by admins.
 
-Historical rows created under the previous 5% rule are **not** rewritten automatically in this change.
+Historical rows are **not** rewritten automatically in this change.
 
 ## Operational Consequences
 

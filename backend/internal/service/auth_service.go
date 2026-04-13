@@ -242,7 +242,7 @@ func (s *AuthService) resolveSubmittedInvitationCode(ctx context.Context, invita
 		return nil, ErrServiceUnavailable
 	}
 
-	normalizedCode := strings.ToUpper(strings.TrimSpace(invitationCode))
+	normalizedCode := strings.TrimSpace(invitationCode)
 	if normalizedCode == "" {
 		return nil, nil
 	}
@@ -253,7 +253,7 @@ func (s *AuthService) resolveSubmittedInvitationCode(ctx context.Context, invita
 	}
 
 	if s.redeemRepo != nil {
-		redeemCode, redeemErr := s.redeemRepo.GetByCode(ctx, normalizedCode)
+		redeemCode, redeemErr := s.redeemRepo.GetByCode(ctx, strings.ToUpper(normalizedCode))
 		if redeemErr == nil && redeemCode != nil && redeemCode.Type == RedeemTypeInvitation {
 			return nil, ErrInvitationCodeRemoved
 		}

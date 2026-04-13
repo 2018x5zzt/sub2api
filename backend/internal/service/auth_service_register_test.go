@@ -601,6 +601,30 @@ func TestAuthService_RegisterWithVerification_AssignsInviteCodeAndBindsInviter(t
 	require.NotNil(t, user.InviteBoundAt)
 }
 
+func TestAuthService_RegisterWithVerification_BindsMixedCaseInviterCode(t *testing.T) {
+	repo := &inviteAuthUserRepoStub{
+		userRepoStub: userRepoStub{nextID: 18},
+		usersByInviteCode: map[string]*User{
+			"AbCdEfGh": {ID: 17, Email: "inviter-mixed@test.com", Status: StatusActive, InviteCode: "AbCdEfGh"},
+		},
+	}
+	inviteSvc := &InviteService{
+		userRepo: repo,
+		codeGenerator: func() (string, error) {
+			return "QwErTyUi", nil
+		},
+	}
+	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil)
+
+	_, user, err := service.RegisterWithVerification(context.Background(), "mixed-user@test.com", "password", "", "", " AbCdEfGh ")
+	require.NoError(t, err)
+	require.Equal(t, "QwErTyUi", user.InviteCode)
+	require.NotNil(t, user.InvitedByUserID)
+	require.EqualValues(t, 17, *user.InvitedByUserID)
+}
+
 func TestAuthService_RegisterWithVerification_RejectsUnknownPermanentInviteCode(t *testing.T) {
 	repo := &inviteAuthUserRepoStub{userRepoStub: userRepoStub{nextID: 9}}
 	inviteSvc := &InviteService{
