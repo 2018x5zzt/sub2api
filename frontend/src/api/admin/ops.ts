@@ -945,8 +945,6 @@ export interface OpsErrorLog {
   status_code: number
   platform: string
   model: string
-  requested_model?: string
-  upstream_model?: string
 
   is_retryable: boolean
   retry_count: number
