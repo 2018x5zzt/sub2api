@@ -957,6 +957,43 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_ForwardDirect_EmptyResponseBo
 	require.Contains(t, err.Error(), "empty response")
 }
 
+func TestGatewayService_AnthropicAPIKeyPassthrough_ForwardDirect_EmptyContentBodyTriggersFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	upstream := &anthropicHTTPUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}, "x-request-id": []string{"rid-empty-content"}},
+			Body: io.NopCloser(strings.NewReader(
+				`{"id":"msg_empty","type":"message","role":"assistant","model":"claude-sonnet-4-6","content":[],"usage":{"input_tokens":12,"output_tokens":0}}`,
+			)),
+		},
+	}
+	svc := &GatewayService{
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+		httpUpstream: upstream,
+	}
+
+	account := newAnthropicAPIKeyAccountForTest()
+	account.Credentials["pool_mode"] = true
+
+	result, err := svc.forwardAnthropicAPIKeyPassthrough(context.Background(), c, account, []byte(`{"model":"claude-sonnet-4-6"}`), "claude-sonnet-4-6", "claude-sonnet-4-6", false, time.Now())
+	require.Nil(t, result)
+
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.Contains(t, string(failoverErr.ResponseBody), "Upstream returned empty content")
+	require.True(t, failoverErr.RetryableOnSameAccount)
+}
+
 func TestExtractAnthropicSSEDataLine(t *testing.T) {
 	t.Run("valid data line with spaces", func(t *testing.T) {
 		data, ok := extractAnthropicSSEDataLine("data:   {\"type\":\"message_start\"}")

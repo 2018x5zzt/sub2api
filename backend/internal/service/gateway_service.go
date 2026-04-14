@@ -5213,6 +5213,92 @@ func parseClaudeUsageFromResponseBody(body []byte) *ClaudeUsage {
 	return usage
 }
 
+func buildSyntheticAnthropicErrorResponseBody(message, errType string) []byte {
+	payload := map[string]any{
+		"type": "error",
+		"error": map[string]any{
+			"type":    errType,
+			"message": message,
+		},
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return []byte(message)
+	}
+	return raw
+}
+
+func isAnthropicResponseContentEmpty(body []byte) bool {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 || !gjson.ValidBytes(trimmed) {
+		return false
+	}
+
+	content := gjson.GetBytes(trimmed, "content")
+	if !content.Exists() || !content.IsArray() {
+		return false
+	}
+
+	items := content.Array()
+	if len(items) == 0 {
+		return true
+	}
+
+	for _, item := range items {
+		itemType := strings.TrimSpace(item.Get("type").String())
+		switch itemType {
+		case "text":
+			if strings.TrimSpace(item.Get("text").String()) != "" {
+				return false
+			}
+		case "thinking", "redacted_thinking":
+			if strings.TrimSpace(item.Get("thinking").String()) != "" || strings.TrimSpace(item.Get("signature").String()) != "" {
+				return false
+			}
+		default:
+			// Unknown or structured blocks (tool_use, tool_result, images, etc.) are treated as meaningful.
+			return false
+		}
+	}
+
+	return true
+}
+
+func wrapEmptyAnthropicSuccessResponse(c *gin.Context, account *Account, resp *http.Response, message string, passthrough bool) error {
+	if resp == nil {
+		return errors.New(message)
+	}
+
+	setOpsUpstreamError(c, resp.StatusCode, message, "")
+	event := OpsUpstreamErrorEvent{
+		UpstreamStatusCode: resp.StatusCode,
+		Passthrough:        passthrough,
+		Kind:               "failover",
+		Message:            message,
+	}
+	if resp.Header != nil {
+		event.UpstreamRequestID = strings.TrimSpace(resp.Header.Get("x-request-id"))
+	}
+	if account != nil {
+		event.Platform = account.Platform
+		event.AccountID = account.ID
+		event.AccountName = account.Name
+	}
+	appendOpsUpstreamError(c, event)
+
+	var responseHeaders http.Header
+	if resp.Header != nil {
+		responseHeaders = resp.Header.Clone()
+	}
+
+	return &UpstreamFailoverError{
+		StatusCode:             http.StatusBadGateway,
+		ResponseBody:           buildSyntheticAnthropicErrorResponseBody(message, "upstream_error"),
+		ResponseHeaders:        responseHeaders,
+		RetryableOnSameAccount: account != nil && account.IsPoolMode(),
+	}
+}
+
 func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 	ctx context.Context,
 	resp *http.Response,
@@ -5237,6 +5323,12 @@ func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
 			})
 		}
 		return nil, err
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil, wrapEmptyAnthropicSuccessResponse(c, account, resp, "Upstream returned empty response", true)
+	}
+	if isAnthropicResponseContentEmpty(body) {
+		return nil, wrapEmptyAnthropicSuccessResponse(c, account, resp, "Upstream returned empty content", true)
 	}
 
 	usage := parseClaudeUsageFromResponseBody(body)
@@ -7204,6 +7296,12 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 			})
 		}
 		return nil, err
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		return nil, wrapEmptyAnthropicSuccessResponse(c, account, resp, "Upstream returned empty response", false)
+	}
+	if isAnthropicResponseContentEmpty(body) {
+		return nil, wrapEmptyAnthropicSuccessResponse(c, account, resp, "Upstream returned empty content", false)
 	}
 
 	// 解析usage
