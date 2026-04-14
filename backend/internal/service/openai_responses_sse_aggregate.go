@@ -2,6 +2,7 @@ package service
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 )
@@ -138,7 +139,7 @@ func (a *responsesStreamAccumulator) appendOutputText(outputIndex, contentIndex 
 	if part.Type == "" {
 		part.Type = "output_text"
 	}
-	part.Text += text
+	part.Text = mergeAccumulatedResponsesText(part.Text, text)
 }
 
 func (a *responsesStreamAccumulator) appendFunctionCallArguments(outputIndex int, callID, name, arguments string) {
@@ -488,4 +489,31 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func mergeAccumulatedResponsesText(existing, incoming string) string {
+	if existing == "" {
+		return incoming
+	}
+	if incoming == "" {
+		return existing
+	}
+	if strings.HasPrefix(incoming, existing) {
+		return incoming
+	}
+	if strings.HasPrefix(existing, incoming) {
+		return existing
+	}
+
+	maxOverlap := len(existing)
+	if len(incoming) < maxOverlap {
+		maxOverlap = len(incoming)
+	}
+	for overlap := maxOverlap; overlap > 0; overlap-- {
+		if strings.HasSuffix(existing, incoming[:overlap]) {
+			return existing + incoming[overlap:]
+		}
+	}
+
+	return existing + incoming
 }

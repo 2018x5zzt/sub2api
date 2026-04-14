@@ -117,6 +117,56 @@ func TestForwardAsChatCompletions_BufferedDeltaOnlyTerminalResponsePreservesCont
 	require.Equal(t, int64(7), gjson.GetBytes(rec.Body.Bytes(), "usage.completion_tokens").Int())
 }
 
+func TestForwardAsChatCompletions_BufferedMessageItemAndTextDoneDoNotDuplicateContent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(nil))
+
+	body := []byte(`{"model":"gpt-5.4","messages":[{"role":"user","content":"Hi"}],"stream":false}`)
+	upstreamSSE := strings.Join([]string{
+		`data: {"type":"response.created","response":{"id":"resp_dup_text","model":"gpt-5.4","status":"in_progress"}}`,
+		"",
+		`data: {"type":"response.output_item.added","output_index":0,"item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"final answer"}]}}`,
+		"",
+		`data: {"type":"response.output_text.done","output_index":0,"content_index":0,"text":"final answer"}`,
+		"",
+		`data: {"type":"response.completed","response":{"id":"resp_dup_text","status":"completed","usage":{"input_tokens":4,"output_tokens":2,"total_tokens":6}}}`,
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid-dup-text"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamSSE)),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{}},
+		httpUpstream: upstream,
+	}
+
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeOAuth,
+		Concurrency:    1,
+		Credentials:    map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body, "", "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "final answer", gjson.GetBytes(rec.Body.Bytes(), "choices.0.message.content").String())
+}
+
 func TestForwardAsChatCompletions_BufferedToolCallDeltaOnlyTerminalResponsePreservesToolCalls(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
