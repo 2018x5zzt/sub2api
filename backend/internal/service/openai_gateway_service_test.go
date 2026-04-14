@@ -1177,6 +1177,9 @@ func TestOpenAIStreamingMissingTerminalEventReturnsIncompleteError(t *testing.T)
 	if err == nil || !strings.Contains(err.Error(), "missing terminal event") {
 		t.Fatalf("expected missing terminal event error, got %v", err)
 	}
+	if !strings.Contains(rec.Body.String(), "\"type\":\"error\"") || !strings.Contains(rec.Body.String(), "missing_terminal_event") {
+		t.Fatalf("expected OpenAI-compatible error SSE event, got %q", rec.Body.String())
+	}
 }
 
 func TestOpenAIStreamingPassthroughMissingTerminalEventReturnsIncompleteError(t *testing.T) {
@@ -1208,6 +1211,9 @@ func TestOpenAIStreamingPassthroughMissingTerminalEventReturnsIncompleteError(t 
 	_ = pr.Close()
 	if err == nil || !strings.Contains(err.Error(), "missing terminal event") {
 		t.Fatalf("expected missing terminal event error, got %v", err)
+	}
+	if !strings.Contains(rec.Body.String(), "\"type\":\"error\"") || !strings.Contains(rec.Body.String(), "missing_terminal_event") {
+		t.Fatalf("expected OpenAI-compatible passthrough error SSE event, got %q", rec.Body.String())
 	}
 }
 

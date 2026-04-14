@@ -3099,7 +3099,6 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		}
 		flusher.Flush()
 	}
-
 	flushPrelude := func() {
 		if len(pendingPrelude) == 0 {
 			return
@@ -3111,6 +3110,20 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			}
 		}
 		pendingPrelude = pendingPrelude[:0]
+	}
+	errorEventSent := false
+	sendErrorEvent := func(reason string) {
+		if errorEventSent || clientDisconnected {
+			return
+		}
+		errorEventSent = true
+		if !streamActivated {
+			streamActivated = true
+			flushPrelude()
+		}
+		payload := `{"type":"error","sequence_number":0,"error":{"type":"upstream_error","message":` + strconv.Quote(reason) + `,"code":` + strconv.Quote(reason) + `}}`
+		writeLine("data: " + payload)
+		writeLine("")
 	}
 
 	for scanner.Scan() {
@@ -3184,6 +3197,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			zap.Int64("account_id", account.ID),
 			zap.String("upstream_request_id", upstreamRequestID),
 		).Info("OpenAI passthrough 上游流在未收到 [DONE] 时结束，疑似断流")
+		sendErrorEvent("missing_terminal_event")
 		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, errOpenAIStreamMissingTerminal
 	}
 
@@ -3803,6 +3817,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			}
 		}
 		if !sawTerminalEvent {
+			sendErrorEvent("missing_terminal_event")
 			return resultWithUsage(), fmt.Errorf("stream usage incomplete: missing terminal event")
 		}
 		return resultWithUsage(), nil
