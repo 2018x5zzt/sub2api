@@ -455,6 +455,10 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 			}
 		}
 	}
+	if account.Type == AccountTypeOAuth {
+		normalizedModel, _ := normalizeChatGPTOAuthModel(testModelID)
+		testModelID = normalizedModel
+	}
 
 	// Determine authentication method and API URL
 	var authToken string

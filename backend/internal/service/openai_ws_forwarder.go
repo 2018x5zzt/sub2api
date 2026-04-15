@@ -2514,7 +2514,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			normalized = next
 		}
 		mappedModel := account.GetMappedModel(originalModel)
-		if normalizedModel := normalizeCodexModel(mappedModel); normalizedModel != "" {
+		normalizedModel := normalizeCodexModel(mappedModel)
+		if account.Type == AccountTypeOAuth {
+			normalizedModel, _ = normalizeChatGPTOAuthModel(mappedModel)
+		}
+		if normalizedModel != "" {
 			mappedModel = normalizedModel
 		}
 		if mappedModel != originalModel {
@@ -2775,7 +2779,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		var mappedModelBytes []byte
 		if originalModel != "" {
 			mappedModel = account.GetMappedModel(originalModel)
-			if normalizedModel := normalizeCodexModel(mappedModel); normalizedModel != "" {
+			normalizedModel := normalizeCodexModel(mappedModel)
+			if account.Type == AccountTypeOAuth {
+				normalizedModel, _ = normalizeChatGPTOAuthModel(mappedModel)
+			}
+			if normalizedModel != "" {
 				mappedModel = normalizedModel
 			}
 			needModelReplace = mappedModel != "" && mappedModel != originalModel

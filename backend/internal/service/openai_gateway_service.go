@@ -1888,6 +1888,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	// 针对所有 OpenAI 账号执行 Codex 模型名规范化，确保上游识别一致。
 	if model, ok := reqBody["model"].(string); ok {
 		normalizedModel := normalizeCodexModel(model)
+		if account.Type == AccountTypeOAuth {
+			normalizedModel, _ = normalizeChatGPTOAuthModel(model)
+		}
 		if normalizedModel != "" && normalizedModel != model {
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Codex model normalization: %s -> %s (account: %s, type: %s, isCodexCLI: %v)",
 				model, normalizedModel, account.Name, account.Type, isCodexCLI)
@@ -5074,6 +5077,16 @@ func normalizeOpenAIPassthroughOAuthBody(
 	normalized := body
 	changed := false
 	droppedNativeItemReferenceCount := 0
+
+	model := strings.TrimSpace(gjson.GetBytes(normalized, "model").String())
+	if normalizedModel, remapped := normalizeChatGPTOAuthModel(model); remapped {
+		next, err := sjson.SetBytes(normalized, "model", normalizedModel)
+		if err != nil {
+			return body, false, 0, fmt.Errorf("normalize passthrough body model: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
 
 	if compact {
 		if store := gjson.GetBytes(normalized, "store"); store.Exists() {

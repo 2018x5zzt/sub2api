@@ -69,6 +69,12 @@ type codexTransformResult struct {
 	DroppedNativeItemReferenceCount int
 }
 
+var chatGPTOAuthLegacyModelMap = map[string]string{
+	"gpt-5.1-codex":      "gpt-5.3-codex",
+	"gpt-5.2-codex":      "gpt-5.3-codex",
+	"gpt-5.1-codex-mini": "gpt-5.4-mini",
+}
+
 func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact bool) codexTransformResult {
 	return applyCodexOAuthTransformWithOptions(reqBody, isCodexCLI, isCompact, codexTransformOptions{})
 }
@@ -91,7 +97,7 @@ func applyCodexOAuthTransformWithOptions(
 	if v, ok := reqBody["model"].(string); ok {
 		model = v
 	}
-	normalizedModel := normalizeCodexModel(model)
+	normalizedModel, _ := normalizeChatGPTOAuthModel(model)
 	if normalizedModel != "" {
 		if model != normalizedModel {
 			reqBody["model"] = normalizedModel
@@ -290,6 +296,17 @@ func normalizeCodexModel(model string) string {
 	}
 
 	return normalized
+}
+
+func normalizeChatGPTOAuthModel(model string) (normalized string, remapped bool) {
+	normalized = normalizeCodexModel(model)
+	if normalized == "" {
+		return "", false
+	}
+	if mapped, ok := chatGPTOAuthLegacyModelMap[normalized]; ok {
+		return mapped, true
+	}
+	return normalized, false
 }
 
 func SupportsVerbosity(model string) bool {

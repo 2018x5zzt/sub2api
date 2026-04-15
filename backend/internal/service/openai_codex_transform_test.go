@@ -6,6 +6,42 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestNormalizeChatGPTOAuthModel_RemapsLegacyUnsupportedModels(t *testing.T) {
+	t.Parallel()
+
+	t.Run("legacy_models_remap_to_supported_targets", func(t *testing.T) {
+		t.Parallel()
+
+		testCases := []struct {
+			input string
+			want  string
+		}{
+			{input: "gpt-5.1-codex", want: "gpt-5.3-codex"},
+			{input: "gpt-5.2-codex-high", want: "gpt-5.3-codex"},
+			{input: "codex-mini-latest", want: "gpt-5.4-mini"},
+		}
+
+		for _, tc := range testCases {
+			tc := tc
+			t.Run(tc.input, func(t *testing.T) {
+				t.Parallel()
+
+				normalized, remapped := normalizeChatGPTOAuthModel(tc.input)
+				require.True(t, remapped)
+				require.Equal(t, tc.want, normalized)
+			})
+		}
+	})
+
+	t.Run("supported_models_pass", func(t *testing.T) {
+		t.Parallel()
+
+		normalized, remapped := normalizeChatGPTOAuthModel("gpt-5.3-codex-high")
+		require.False(t, remapped)
+		require.Equal(t, "gpt-5.3-codex", normalized)
+	})
+}
+
 func TestApplyCodexOAuthTransform_ToolContinuationPreservesInput(t *testing.T) {
 	// 续链场景：保留 item_reference 与 id，但不再强制 store=true。
 
@@ -350,6 +386,32 @@ func TestNormalizeCodexModel_SupportedAliases(t *testing.T) {
 func TestNormalizeCodexModel_UnsupportedModelsDoNotSilentlyRemap(t *testing.T) {
 	require.Equal(t, "gpt-5-pro", normalizeCodexModel("gpt-5-pro"))
 	require.Equal(t, "gpt-4o", normalizeCodexModel("gpt-4o"))
+}
+
+func TestApplyCodexOAuthTransform_RemapsLegacyUnsupportedChatGPTOAuthModels(t *testing.T) {
+	cases := map[string]string{
+		"gpt-5.1-codex":      "gpt-5.3-codex",
+		"gpt-5.2-codex":      "gpt-5.3-codex",
+		"gpt-5.1-codex-mini": "gpt-5.4-mini",
+	}
+
+	for input, expected := range cases {
+		reqBody := map[string]any{
+			"model": input,
+			"input": []any{
+				map[string]any{
+					"type": "input_text",
+					"text": "hello",
+				},
+			},
+		}
+
+		result := applyCodexOAuthTransform(reqBody, true, false)
+
+		require.Equal(t, expected, reqBody["model"], input)
+		require.Equal(t, expected, result.NormalizedModel, input)
+		require.True(t, result.Modified, input)
+	}
 }
 
 func TestApplyCodexOAuthTransform_CodexCLI_PreservesExistingInstructions(t *testing.T) {
