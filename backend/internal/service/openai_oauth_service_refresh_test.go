@@ -1,13 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -76,31 +76,6 @@ func TestOpenAIOAuthService_RefreshAccountToken_NoRefreshTokenUsesExistingAccess
 func TestOpenAIOAuthService_RefreshTokenWithClientID_RefreshesPlanTypeFromBackendAPI(t *testing.T) {
 	var checkCalls int32
 	var privacyCalls int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/backend-api/accounts/check/v4-2023-04-27":
-			atomic.AddInt32(&checkCalls, 1)
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{
-				"accounts": {
-					"org_123": {
-						"account": {
-							"plan_type": "pro",
-							"is_default": true
-						}
-					}
-				}
-			}`))
-		case r.Method == http.MethodPatch && r.URL.Path == "/backend-api/settings/account_user_setting":
-			atomic.AddInt32(&privacyCalls, 1)
-			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"ok":true}`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-
 	client := &openaiOAuthClientRefreshStub{
 		refreshTokenResp: &openai.TokenResponse{
 			AccessToken:  buildFakeOpenAIJWT(t, map[string]any{"https://api.openai.com/auth": map[string]any{"poid": "org_123"}}),
@@ -124,21 +99,49 @@ func TestOpenAIOAuthService_RefreshTokenWithClientID_RefreshesPlanTypeFromBacken
 	}
 	svc := NewOpenAIOAuthService(nil, client)
 	svc.SetPrivacyClientFactory(func(proxyURL string) (*req.Client, error) {
-		target, err := url.Parse(server.URL)
-		require.NoError(t, err)
-
 		httpClient := req.C()
-		httpClient.WrapRoundTripFunc(func(rt req.RoundTripper) req.RoundTripFunc {
-			return func(r *req.Request) (*req.Response, error) {
-				rewritten := *r.URL
-				rewritten.Scheme = target.Scheme
-				rewritten.Host = target.Host
-				r.URL = &rewritten
-				if r.RawRequest != nil {
-					r.RawRequest.URL = &rewritten
-					r.RawRequest.Host = target.Host
+		httpClient.GetTransport().WrapRoundTripFunc(func(rt http.RoundTripper) req.HttpRoundTripFunc {
+			return func(r *http.Request) (*http.Response, error) {
+				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/backend-api/accounts/check/v4-2023-04-27":
+					atomic.AddInt32(&checkCalls, 1)
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Header: http.Header{
+							"Content-Type": []string{"application/json"},
+						},
+						Body: io.NopCloser(bytes.NewBufferString(`{
+							"accounts": {
+								"org_123": {
+									"account": {
+										"plan_type": "pro",
+										"is_default": true
+									}
+								}
+							}
+						}`)),
+						Request: r,
+					}, nil
+				case r.Method == http.MethodPatch && r.URL.Path == "/backend-api/settings/account_user_setting":
+					atomic.AddInt32(&privacyCalls, 1)
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Header: http.Header{
+							"Content-Type": []string{"application/json"},
+						},
+						Body:    io.NopCloser(bytes.NewBufferString(`{"ok":true}`)),
+						Request: r,
+					}, nil
+				default:
+					return &http.Response{
+						StatusCode: http.StatusNotFound,
+						Header: http.Header{
+							"Content-Type": []string{"application/json"},
+						},
+						Body:    io.NopCloser(bytes.NewBufferString(`{"error":"not found"}`)),
+						Request: r,
+					}, nil
 				}
-				return rt.RoundTrip(r)
 			}
 		})
 		return httpClient, nil

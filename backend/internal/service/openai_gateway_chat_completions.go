@@ -55,6 +55,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	// 2. Resolve model mapping early so compat prompt_cache_key injection can
 	// derive a stable seed from the final upstream model family.
 	mappedModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
+	reasoningModel := mappedModel
 	if account.Type == AccountTypeOAuth {
 		if normalizedModel, _ := normalizeChatGPTOAuthModel(mappedModel); normalizedModel != "" {
 			mappedModel = normalizedModel
@@ -96,7 +97,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	} else {
 		// ChatCompletionsToResponses always sets Stream=true (upstream always streams).
 		chatReqForUpstream := chatReq
-		chatReqForUpstream.Model = mappedModel
+		chatReqForUpstream.Model = reasoningModel
 		responsesReq, err = apicompat.ChatCompletionsToResponses(&chatReqForUpstream)
 		if err != nil {
 			return nil, fmt.Errorf("convert chat completions to responses: %w", err)
@@ -127,6 +128,12 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		var reqBody map[string]any
 		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
 			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
+		}
+		if ensureOpenAIResponsesReasoning(reqBody, reasoningModel) {
+			responsesBody, err = json.Marshal(reqBody)
+			if err != nil {
+				return nil, fmt.Errorf("remarshal after reasoning normalization: %w", err)
+			}
 		}
 		codexResult := applyCodexOAuthTransformWithOptions(reqBody, false, false, codexTransformOptions{
 			DropStoreFalseNativeItemReferences: account.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled(),
