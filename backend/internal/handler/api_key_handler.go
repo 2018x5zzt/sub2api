@@ -526,12 +526,34 @@ func buildUserVisibleGroupPoolStatus(group *service.Group) UserVisibleGroupPoolS
 	}
 }
 
-func (h *APIKeyHandler) getGroupSupportedModels(_ context.Context, group *service.Group) ([]dto.SupportedModel, string, error) {
+func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *service.Group) ([]dto.SupportedModel, string, error) {
 	if group == nil {
 		return nil, "default", nil
 	}
 
-	return staticCatalogModelsForGroup(group), "default", nil
+	defaultModels := staticCatalogModelsForGroup(group)
+	if h == nil || h.accountRepo == nil || group.ID <= 0 {
+		return defaultModels, "default", nil
+	}
+
+	accounts, err := h.accountRepo.ListByGroup(ctx, group.ID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	mappedModelIDs := filterMappedModelIDsByCatalog(group.Platform, collectGroupModelIDs(group.Platform, accounts))
+	mappedModels := buildMappedModels(mappedModelIDs, defaultModels)
+
+	switch {
+	case len(defaultModels) == 0 && len(mappedModels) == 0:
+		return nil, "default", nil
+	case len(defaultModels) == 0:
+		return mappedModels, "mapping", nil
+	case len(mappedModels) == 0:
+		return defaultModels, "default", nil
+	default:
+		return mergeSupportedModels(defaultModels, mappedModels), "mixed", nil
+	}
 }
 
 func staticCatalogModelsForGroup(group *service.Group) []dto.SupportedModel {
@@ -727,6 +749,36 @@ func mergeDefaultAndMappedModels(defaults []dto.SupportedModel, mappedModelIDs [
 		})
 	}
 	return models
+}
+
+func mergeSupportedModels(primary []dto.SupportedModel, secondary []dto.SupportedModel) []dto.SupportedModel {
+	if len(primary) == 0 {
+		return append([]dto.SupportedModel(nil), secondary...)
+	}
+	if len(secondary) == 0 {
+		return append([]dto.SupportedModel(nil), primary...)
+	}
+
+	merged := make([]dto.SupportedModel, 0, len(primary)+len(secondary))
+	seen := make(map[string]struct{}, len(primary)+len(secondary))
+
+	for _, model := range primary {
+		if _, ok := seen[model.ID]; ok {
+			continue
+		}
+		seen[model.ID] = struct{}{}
+		merged = append(merged, model)
+	}
+
+	for _, model := range secondary {
+		if _, ok := seen[model.ID]; ok {
+			continue
+		}
+		seen[model.ID] = struct{}{}
+		merged = append(merged, model)
+	}
+
+	return merged
 }
 
 func supportedModelsFromOpenAI(models []openai.Model) []dto.SupportedModel {
