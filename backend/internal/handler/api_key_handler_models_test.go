@@ -5,11 +5,126 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
+
+type groupModelAccountRepoStub struct {
+	accountsByGroup map[int64][]service.Account
+}
+
+func (r *groupModelAccountRepoStub) Create(context.Context, *service.Account) error { return nil }
+func (r *groupModelAccountRepoStub) GetByID(context.Context, int64) (*service.Account, error) {
+	return nil, service.ErrAccountNotFound
+}
+func (r *groupModelAccountRepoStub) GetByIDs(context.Context, []int64) ([]*service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) ExistsByID(context.Context, int64) (bool, error) {
+	return false, nil
+}
+func (r *groupModelAccountRepoStub) GetByCRSAccountID(context.Context, string) (*service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) FindByExtraField(context.Context, string, any) ([]service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) ListCRSAccountIDs(context.Context) (map[string]int64, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) Update(context.Context, *service.Account) error { return nil }
+func (r *groupModelAccountRepoStub) Delete(context.Context, int64) error            { return nil }
+func (r *groupModelAccountRepoStub) List(context.Context, pagination.PaginationParams) ([]service.Account, *pagination.PaginationResult, error) {
+	return nil, nil, nil
+}
+func (r *groupModelAccountRepoStub) ListWithFilters(context.Context, pagination.PaginationParams, string, string, string, string, int64, string) ([]service.Account, *pagination.PaginationResult, error) {
+	return nil, nil, nil
+}
+func (r *groupModelAccountRepoStub) ListByGroup(_ context.Context, groupID int64) ([]service.Account, error) {
+	return append([]service.Account(nil), r.accountsByGroup[groupID]...), nil
+}
+func (r *groupModelAccountRepoStub) ListActive(context.Context) ([]service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) ListByPlatform(context.Context, string) ([]service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) UpdateLastUsed(context.Context, int64) error { return nil }
+func (r *groupModelAccountRepoStub) BatchUpdateLastUsed(context.Context, map[int64]time.Time) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) SetError(context.Context, int64, string) error { return nil }
+func (r *groupModelAccountRepoStub) ClearError(context.Context, int64) error       { return nil }
+func (r *groupModelAccountRepoStub) SetSchedulable(context.Context, int64, bool) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) AutoPauseExpiredAccounts(context.Context, time.Time) (int64, error) {
+	return 0, nil
+}
+func (r *groupModelAccountRepoStub) BindGroups(context.Context, int64, []int64) error { return nil }
+func (r *groupModelAccountRepoStub) ListSchedulable(context.Context) ([]service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) ListSchedulableByGroupID(context.Context, int64) ([]service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) ListSchedulableByPlatform(context.Context, string) ([]service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) ListSchedulableByGroupIDAndPlatform(context.Context, int64, string) ([]service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) ListSchedulableByPlatforms(context.Context, []string) ([]service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) ListSchedulableByGroupIDAndPlatforms(context.Context, int64, []string) ([]service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) ListSchedulableUngroupedByPlatform(context.Context, string) ([]service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) ListSchedulableUngroupedByPlatforms(context.Context, []string) ([]service.Account, error) {
+	return nil, nil
+}
+func (r *groupModelAccountRepoStub) SetRateLimited(context.Context, int64, time.Time) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) SetModelRateLimit(context.Context, int64, string, time.Time) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) SetOverloaded(context.Context, int64, time.Time) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) SetTempUnschedulable(context.Context, int64, time.Time, string) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) ClearTempUnschedulable(context.Context, int64) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) ClearRateLimit(context.Context, int64) error { return nil }
+func (r *groupModelAccountRepoStub) ClearAntigravityQuotaScopes(context.Context, int64) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) ClearModelRateLimits(context.Context, int64) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) UpdateSessionWindow(context.Context, int64, *time.Time, *time.Time, string) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) UpdateExtra(context.Context, int64, map[string]any) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) BulkUpdate(context.Context, []int64, service.AccountBulkUpdate) (int64, error) {
+	return 0, nil
+}
+func (r *groupModelAccountRepoStub) IncrementQuotaUsed(context.Context, int64, float64) error {
+	return nil
+}
+func (r *groupModelAccountRepoStub) ResetQuotaUsed(context.Context, int64) error { return nil }
 
 func TestCollectGroupModelIDs_IgnoresWildcardMappingSelectors(t *testing.T) {
 	accounts := []service.Account{
@@ -120,6 +235,56 @@ func TestGetGroupSupportedModels_UsesStaticOpenAICatalog(t *testing.T) {
 	if !found {
 		t.Fatalf("expected gpt-5 to be present in static catalog, got %v", models)
 	}
+}
+
+func TestGetGroupSupportedModels_AnthropicMergesDefaultsWithExplicitMappedCustomModels(t *testing.T) {
+	handler := &APIKeyHandler{
+		accountRepo: &groupModelAccountRepoStub{
+			accountsByGroup: map[int64][]service.Account{
+				42: {
+					{
+						Platform: service.PlatformAnthropic,
+						Type:     service.AccountTypeAPIKey,
+						Credentials: map[string]any{
+							"model_mapping": map[string]any{
+								"claude-opus-4-7":   "upstream-opus-4-7",
+								"claude-sonnet-4-6": "claude-sonnet-4-6",
+								"claude-*":          "wildcard-ignored",
+							},
+						},
+					},
+					{
+						Platform: service.PlatformAnthropic,
+						Type:     service.AccountTypeOAuth,
+						Credentials: map[string]any{
+							"model_mapping": map[string]any{
+								"claude-oauth-shadow": "should-not-surface",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	models, source, err := handler.getGroupSupportedModels(context.Background(), &service.Group{
+		ID:       42,
+		Platform: service.PlatformAnthropic,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "mixed", source)
+
+	modelIDs := make([]string, 0, len(models))
+	for _, model := range models {
+		modelIDs = append(modelIDs, model.ID)
+	}
+
+	require.Contains(t, modelIDs, "claude-haiku-4-5-20251001")
+	require.Contains(t, modelIDs, "claude-sonnet-4-6")
+	require.Contains(t, modelIDs, "claude-opus-4-6")
+	require.Contains(t, modelIDs, "claude-opus-4-7")
+	require.NotContains(t, modelIDs, "claude-*")
+	require.NotContains(t, modelIDs, "claude-oauth-shadow")
 }
 
 func TestGetGroupSupportedModels_AntigravityScopesStillApply(t *testing.T) {

@@ -591,6 +591,105 @@ func TestAPIContracts(t *testing.T) {
 	}
 }
 
+func TestAPIContracts_GetAvailableGroupModels_MixedSourceIncludesCustomAnthropicMapping(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	deps := newContractDeps(t)
+	deps.groupRepo.SetActive([]service.Group{
+		{
+			ID:             42,
+			Name:           "Anthropic Mixed",
+			Platform:       service.PlatformAnthropic,
+			RateMultiplier: 1,
+			Status:         service.StatusActive,
+			CreatedAt:      deps.now,
+			UpdatedAt:      deps.now,
+		},
+	})
+	deps.userSubRepo.SetActiveByUserID(1, nil)
+	deps.accountRepo.Seed(&service.Account{
+		ID:       301,
+		Name:     "anthropic-apikey-custom-mapping",
+		Platform: service.PlatformAnthropic,
+		Type:     service.AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key": "sk-ant-1",
+			"model_mapping": map[string]any{
+				"claude-opus-4-7":   "upstream-opus-4-7",
+				"claude-sonnet-4-6": "claude-sonnet-4-6",
+				"claude-*":          "wildcard-ignored",
+			},
+		},
+		GroupIDs:     []int64{42},
+		Status:       service.StatusActive,
+		Schedulable:  true,
+		CreatedAt:    deps.now,
+		UpdatedAt:    deps.now,
+		AccountGroups: []service.AccountGroup{
+			{AccountID: 301, GroupID: 42, Priority: 1},
+		},
+	})
+	deps.accountRepo.Seed(&service.Account{
+		ID:       302,
+		Name:     "anthropic-oauth-shadow",
+		Platform: service.PlatformAnthropic,
+		Type:     service.AccountTypeOAuth,
+		Credentials: map[string]any{
+			"access_token": "oauth-token",
+			"model_mapping": map[string]any{
+				"claude-oauth-shadow": "should-not-surface",
+			},
+		},
+		GroupIDs:     []int64{42},
+		Status:       service.StatusActive,
+		Schedulable:  true,
+		CreatedAt:    deps.now,
+		UpdatedAt:    deps.now,
+		AccountGroups: []service.AccountGroup{
+			{AccountID: 302, GroupID: 42, Priority: 2},
+		},
+	})
+
+	status, body := doRequest(t, deps.router, http.MethodGet, "/api/v1/groups/models", "", nil)
+	require.Equal(t, http.StatusOK, status)
+
+	var resp struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    []struct {
+			Group struct {
+				ID int64 `json:"id"`
+			} `json:"group"`
+			Models []struct {
+				ID          string `json:"id"`
+				DisplayName string `json:"display_name"`
+			} `json:"models"`
+			Source string `json:"source"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &resp))
+	require.Equal(t, 0, resp.Code)
+	require.Equal(t, "success", resp.Message)
+	require.Len(t, resp.Data, 1)
+	require.Equal(t, int64(42), resp.Data[0].Group.ID)
+	require.Equal(t, "mixed", resp.Data[0].Source)
+
+	modelDisplayNames := make(map[string]string, len(resp.Data[0].Models))
+	modelIDs := make([]string, 0, len(resp.Data[0].Models))
+	for _, model := range resp.Data[0].Models {
+		modelIDs = append(modelIDs, model.ID)
+		modelDisplayNames[model.ID] = model.DisplayName
+	}
+
+	require.Contains(t, modelIDs, "claude-haiku-4-5-20251001")
+	require.Contains(t, modelIDs, "claude-sonnet-4-6")
+	require.Contains(t, modelIDs, "claude-opus-4-6")
+	require.Contains(t, modelIDs, "claude-opus-4-7")
+	require.Equal(t, "claude-opus-4-7", modelDisplayNames["claude-opus-4-7"])
+	require.NotContains(t, modelIDs, "claude-*")
+	require.NotContains(t, modelIDs, "claude-oauth-shadow")
+}
+
 func TestAdminAccountCreateUpdateContract_GroupBindings(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
