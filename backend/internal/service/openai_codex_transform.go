@@ -136,6 +136,7 @@ func applyCodexOAuthTransformWithOptions(
 		"top_p",
 		"frequency_penalty",
 		"presence_penalty",
+		"prompt_cache_retention",
 	} {
 		if _, ok := reqBody[key]; ok {
 			delete(reqBody, key)
@@ -296,6 +297,13 @@ func normalizeCodexModel(model string) string {
 	}
 
 	return normalized
+}
+
+func normalizeOpenAIModelForUpstream(account *Account, model string) string {
+	if account == nil || account.Type == AccountTypeOAuth {
+		return normalizeCodexModel(model)
+	}
+	return strings.TrimSpace(model)
 }
 
 func normalizeChatGPTOAuthModel(model string) (normalized string, remapped bool) {

@@ -99,3 +99,39 @@ func TestResolveOpenAIForwardModel_PreventsClaudeModelFromFallingBackToGpt51(t *
 		t.Fatalf("normalizeCodexModel(%q) = %q, want %q", withDefault, got, "gpt-5.4")
 	}
 }
+
+func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
+	tests := []struct {
+		name    string
+		account *Account
+		model   string
+		want    string
+	}{
+		{
+			name:    "oauth keeps known codex normalization behavior",
+			account: &Account{Type: AccountTypeOAuth},
+			model:   "gpt-5.3-codex-spark",
+			want:    "gpt-5.3-codex",
+		},
+		{
+			name:    "apikey preserves custom compatible model",
+			account: &Account{Type: AccountTypeAPIKey},
+			model:   "gemini-3-flash-preview",
+			want:    "gemini-3-flash-preview",
+		},
+		{
+			name:    "apikey preserves official non codex model",
+			account: &Account{Type: AccountTypeAPIKey},
+			model:   "gpt-4.1",
+			want:    "gpt-4.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeOpenAIModelForUpstream(tt.account, tt.model); got != tt.want {
+				t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

@@ -108,12 +108,12 @@ func (r *OpenAITokenRefresher) CanRefresh(account *Account) bool {
 	return account.Platform == PlatformOpenAI && account.Type == AccountTypeOAuth
 }
 
-// NeedsRefresh 检查token是否需要刷新
-// 基于 expires_at 字段判断是否在刷新窗口内
+// NeedsRefresh 检查token是否需要刷新。
+// 当 expires_at 缺失但账号仍处于限流窗口时，也要触发刷新，避免长窗口内 token 静默过期。
 func (r *OpenAITokenRefresher) NeedsRefresh(account *Account, refreshWindow time.Duration) bool {
 	expiresAt := account.GetCredentialAsTime("expires_at")
 	if expiresAt == nil {
-		return false
+		return account.IsRateLimited()
 	}
 
 	return time.Until(*expiresAt) < refreshWindow

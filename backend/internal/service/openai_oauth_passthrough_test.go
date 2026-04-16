@@ -48,6 +48,22 @@ func (u *httpUpstreamRecorder) DoWithTLS(req *http.Request, proxyURL string, acc
 	return u.Do(req, proxyURL, accountID, accountConcurrency)
 }
 
+type openAIPassthroughFailoverRepo struct {
+	stubOpenAIAccountRepo
+	rateLimitCalls []time.Time
+	overloadCalls  []time.Time
+}
+
+func (r *openAIPassthroughFailoverRepo) SetRateLimited(_ context.Context, _ int64, resetAt time.Time) error {
+	r.rateLimitCalls = append(r.rateLimitCalls, resetAt)
+	return nil
+}
+
+func (r *openAIPassthroughFailoverRepo) SetOverloaded(_ context.Context, _ int64, until time.Time) error {
+	r.overloadCalls = append(r.overloadCalls, until)
+	return nil
+}
+
 var structuredLogCaptureMu sync.Mutex
 
 type inMemoryLogSink struct {
@@ -886,6 +902,143 @@ func TestOpenAIGatewayService_OAuthPassthrough_429PersistsRateLimit(t *testing.T
 	require.False(t, c.Writer.Written(), "429 应返回 failover 错误给上层切号，而不是直接透传到客户端")
 	require.Len(t, repo.rateLimitCalls, 1)
 	require.WithinDuration(t, time.Unix(resetAt, 0), repo.rateLimitCalls[0], 2*time.Second)
+}
+
+func TestOpenAIGatewayService_OpenAIPassthrough_429And529TriggerFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	originalBody := []byte(`{"model":"gpt-5.2","stream":false,"instructions":"local-test-instructions","input":[{"type":"text","text":"hi"}]}`)
+	newAccount := func(accountType string) *Account {
+		account := &Account{
+			ID:             223,
+			Name:           "acc-passthrough",
+			Platform:       PlatformOpenAI,
+			Type:           accountType,
+			Concurrency:    1,
+			Extra:          map[string]any{"openai_passthrough": true},
+			Status:         StatusActive,
+			Schedulable:    true,
+			RateMultiplier: f64p(1),
+		}
+		switch accountType {
+		case AccountTypeOAuth:
+			account.Credentials = map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"}
+		case AccountTypeAPIKey:
+			account.Credentials = map[string]any{"api_key": "sk-test"}
+		}
+		return account
+	}
+
+	tests := []struct {
+		name        string
+		accountType string
+		statusCode  int
+		body        string
+		assertRepo  func(t *testing.T, repo *openAIPassthroughFailoverRepo, start time.Time)
+	}{
+		{
+			name:        "oauth_429_rate_limit",
+			accountType: AccountTypeOAuth,
+			statusCode:  http.StatusTooManyRequests,
+			body: func() string {
+				resetAt := time.Now().Add(7 * 24 * time.Hour).Unix()
+				return fmt.Sprintf(`{"error":{"message":"The usage limit has been reached","type":"usage_limit_reached","resets_at":%d}}`, resetAt)
+			}(),
+			assertRepo: func(t *testing.T, repo *openAIPassthroughFailoverRepo, _ time.Time) {
+				require.Len(t, repo.rateLimitCalls, 1)
+				require.Empty(t, repo.overloadCalls)
+				require.True(t, time.Until(repo.rateLimitCalls[0]) > 24*time.Hour)
+			},
+		},
+		{
+			name:        "oauth_529_overload",
+			accountType: AccountTypeOAuth,
+			statusCode:  529,
+			body:        `{"error":{"message":"Service overloaded","type":"server_error"}}`,
+			assertRepo: func(t *testing.T, repo *openAIPassthroughFailoverRepo, start time.Time) {
+				require.Empty(t, repo.rateLimitCalls)
+				require.Len(t, repo.overloadCalls, 1)
+				require.WithinDuration(t, start.Add(10*time.Minute), repo.overloadCalls[0], 5*time.Second)
+			},
+		},
+		{
+			name:        "apikey_429_rate_limit",
+			accountType: AccountTypeAPIKey,
+			statusCode:  http.StatusTooManyRequests,
+			body: func() string {
+				resetAt := time.Now().Add(7 * 24 * time.Hour).Unix()
+				return fmt.Sprintf(`{"error":{"message":"The usage limit has been reached","type":"usage_limit_reached","resets_at":%d}}`, resetAt)
+			}(),
+			assertRepo: func(t *testing.T, repo *openAIPassthroughFailoverRepo, _ time.Time) {
+				require.Len(t, repo.rateLimitCalls, 1)
+				require.Empty(t, repo.overloadCalls)
+				require.True(t, time.Until(repo.rateLimitCalls[0]) > 24*time.Hour)
+			},
+		},
+		{
+			name:        "apikey_529_overload",
+			accountType: AccountTypeAPIKey,
+			statusCode:  529,
+			body:        `{"error":{"message":"Service overloaded","type":"server_error"}}`,
+			assertRepo: func(t *testing.T, repo *openAIPassthroughFailoverRepo, start time.Time) {
+				require.Empty(t, repo.rateLimitCalls)
+				require.Len(t, repo.overloadCalls, 1)
+				require.WithinDuration(t, start.Add(10*time.Minute), repo.overloadCalls[0], 5*time.Second)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+			c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+
+			upstream := &httpUpstreamRecorder{
+				resp: &http.Response{
+					StatusCode: tt.statusCode,
+					Header: http.Header{
+						"Content-Type": []string{"application/json"},
+						"x-request-id": []string{"rid-failover"},
+					},
+					Body: io.NopCloser(strings.NewReader(tt.body)),
+				},
+			}
+			repo := &openAIPassthroughFailoverRepo{}
+			rateSvc := &RateLimitService{
+				accountRepo: repo,
+				cfg: &config.Config{
+					RateLimit: config.RateLimitConfig{OverloadCooldownMinutes: 10},
+				},
+			}
+			svc := &OpenAIGatewayService{
+				cfg:              &config.Config{Gateway: config.GatewayConfig{ForceCodexCLI: false}},
+				httpUpstream:     upstream,
+				rateLimitService: rateSvc,
+			}
+
+			start := time.Now()
+			_, err := svc.Forward(context.Background(), c, newAccount(tt.accountType), originalBody)
+			require.Error(t, err)
+
+			var failoverErr *UpstreamFailoverError
+			require.ErrorAs(t, err, &failoverErr)
+			require.Equal(t, tt.statusCode, failoverErr.StatusCode)
+			require.False(t, c.Writer.Written(), "429/529 passthrough 应返回 failover 错误给上层换号，而不是直接写回客户端")
+
+			v, ok := c.Get(OpsUpstreamErrorsKey)
+			require.True(t, ok)
+			arr, ok := v.([]*OpsUpstreamErrorEvent)
+			require.True(t, ok)
+			require.NotEmpty(t, arr)
+			require.True(t, arr[len(arr)-1].Passthrough)
+			require.Equal(t, "failover", arr[len(arr)-1].Kind)
+			require.Equal(t, tt.statusCode, arr[len(arr)-1].UpstreamStatusCode)
+
+			tt.assertRepo(t, repo, start)
+		})
+	}
 }
 
 func TestOpenAIGatewayService_OAuthPassthrough_UnwrapsNestedUpstreamErrorMessage(t *testing.T) {
