@@ -2995,7 +2995,7 @@ func buildSyntheticOpenAIErrorResponseBody(message, code string) []byte {
 	return raw
 }
 
-func wrapRecoverableOpenAIPassthroughError(c *gin.Context, account *Account, resp *http.Response, err error) error {
+func wrapRecoverableOpenAIStreamError(c *gin.Context, account *Account, resp *http.Response, err error, passthrough bool) error {
 	if err == nil {
 		return nil
 	}
@@ -3030,7 +3030,7 @@ func wrapRecoverableOpenAIPassthroughError(c *gin.Context, account *Account, res
 	event := OpsUpstreamErrorEvent{
 		UpstreamStatusCode: upstreamStatusCode,
 		UpstreamRequestID:  upstreamRequestID,
-		Passthrough:        true,
+		Passthrough:        passthrough,
 		Kind:               "failover",
 		Message:            message,
 	}
@@ -3047,6 +3047,10 @@ func wrapRecoverableOpenAIPassthroughError(c *gin.Context, account *Account, res
 		ResponseHeaders:        responseHeaders,
 		RetryableOnSameAccount: account != nil && account.IsPoolMode(),
 	}
+}
+
+func wrapRecoverableOpenAIPassthroughError(c *gin.Context, account *Account, resp *http.Response, err error) error {
+	return wrapRecoverableOpenAIStreamError(c, account, resp, err, true)
 }
 
 func shouldDelayOpenAIPassthroughPrelude(line string) bool {

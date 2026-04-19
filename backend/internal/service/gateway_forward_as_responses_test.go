@@ -76,3 +76,55 @@ func TestGatewayService_ForwardAsResponses_BufferedAnthropicStreamPreservesToolC
 	require.Equal(t, 6, result.Usage.InputTokens)
 	require.Equal(t, 2, result.Usage.OutputTokens)
 }
+
+func TestGatewayService_ForwardAsResponses_StreamingEmptyAnthropicStreamReturnsFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+
+	body := []byte(`{"model":"gpt-5","input":"Hi","stream":true}`)
+	upstreamSSE := strings.Join([]string{
+		`event: ping`,
+		`data: not-json`,
+		``,
+		`event: message_stop`,
+		`data: {"type":"message_stop"}`,
+		``,
+	}, "\n")
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid-gw-responses-empty"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamSSE)),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+
+	svc := &GatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{}},
+		httpUpstream: upstream,
+	}
+
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformAnthropic,
+		Type:           AccountTypeAPIKey,
+		Concurrency:    1,
+		Credentials:    map[string]any{"api_key": "test-api-key"},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.ForwardAsResponses(context.Background(), c, account, body, nil)
+	require.Nil(t, result)
+	require.Error(t, err)
+
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.Contains(t, string(failoverErr.ResponseBody), "Upstream returned empty response")
+	require.Empty(t, rec.Body.String(), "empty upstream stream must not commit a 200 SSE response")
+	require.False(t, c.Writer.Written(), "service should return failover before writing response bytes")
+}

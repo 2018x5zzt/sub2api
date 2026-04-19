@@ -371,3 +371,52 @@ func TestForwardAsChatCompletions_BufferedDoneTerminalResponsePreservesOptionalC
 	require.Equal(t, 5, result.Usage.CacheCreationInputTokens)
 	require.Equal(t, 2, result.Usage.CacheReadInputTokens)
 }
+
+func TestForwardAsChatCompletions_StreamingEmptyResponsesStreamReturnsFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader(nil))
+
+	body := []byte(`{"model":"gpt-5.1","messages":[{"role":"user","content":"Hi"}],"stream":true}`)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid-openai-cc-empty"}},
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			"data: not-json",
+			"",
+			"data: [DONE]",
+			"",
+		}, "\n"))),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{}},
+		httpUpstream: upstream,
+	}
+
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeAPIKey,
+		Concurrency:    1,
+		Credentials:    map[string]any{"api_key": "test-api-key"},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body, "", "")
+	require.Nil(t, result)
+	require.Error(t, err)
+
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.Contains(t, string(failoverErr.ResponseBody), "Upstream returned empty response")
+	require.Empty(t, rec.Body.String(), "empty upstream responses stream must not commit a 200 chat stream")
+	require.False(t, c.Writer.Written(), "service should return failover before writing response bytes")
+}
