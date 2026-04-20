@@ -13,6 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
 )
 
 type openAIAccountTestRepo struct {
@@ -75,7 +77,7 @@ func TestAccountTestService_OpenAISuccessPersistsSnapshotFromHeaders(t *testing.
 	require.Contains(t, recorder.Body.String(), "test_complete")
 }
 
-func TestAccountTestService_OpenAI429PersistsSnapshotAndRateLimit(t *testing.T) {
+func TestAccountTestService_OpenAI429PersistsSnapshotWithoutRateLimit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, _ := newSoraTestContext()
 
@@ -102,12 +104,9 @@ func TestAccountTestService_OpenAI429PersistsSnapshotAndRateLimit(t *testing.T) 
 	require.Error(t, err)
 	require.NotEmpty(t, repo.updatedExtra)
 	require.Equal(t, 100.0, repo.updatedExtra["codex_5h_used_percent"])
-	require.Equal(t, int64(88), repo.rateLimitedID)
-	require.NotNil(t, repo.rateLimitedAt)
-	require.NotNil(t, account.RateLimitResetAt)
-	if account.RateLimitResetAt != nil && repo.rateLimitedAt != nil {
-		require.WithinDuration(t, *repo.rateLimitedAt, *account.RateLimitResetAt, time.Second)
-	}
+	require.Zero(t, repo.rateLimitedID)
+	require.Nil(t, repo.rateLimitedAt)
+	require.Nil(t, account.RateLimitResetAt)
 }
 
 func TestAccountTestService_OpenAIRemapsLegacyOAuthModel(t *testing.T) {
@@ -139,24 +138,59 @@ func TestAccountTestService_OpenAIRemapsLegacyOAuthModel(t *testing.T) {
 }
 
 func TestAccountTestService_OpenAI401MarksPermanentError(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	ctx, _ := newSoraTestContext()
+	t.Run("oauth accounts are marked permanent error", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		ctx, _ := newSoraTestContext()
 
-	resp := newJSONResponse(http.StatusUnauthorized, `{"detail":"Unauthorized"}`)
-	repo := &openAIAccountTestRepo{}
-	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
-	svc := &AccountTestService{accountRepo: repo, httpUpstream: upstream}
-	account := &Account{
-		ID:          90,
-		Platform:    PlatformOpenAI,
-		Type:        AccountTypeOAuth,
-		Concurrency: 1,
-		Credentials: map[string]any{"access_token": "test-token"},
-	}
+		resp := newJSONResponse(http.StatusUnauthorized, `{"detail":"Unauthorized"}`)
+		repo := &openAIAccountTestRepo{}
+		upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+		svc := &AccountTestService{accountRepo: repo, httpUpstream: upstream}
+		account := &Account{
+			ID:          90,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeOAuth,
+			Concurrency: 1,
+			Credentials: map[string]any{"access_token": "test-token"},
+		}
 
-	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4")
-	require.Error(t, err)
-	require.Equal(t, 1, repo.setErrorCalls)
-	require.Contains(t, repo.lastErrorMsg, "Authentication failed (401)")
-	require.Contains(t, repo.lastErrorMsg, "Unauthorized")
+		err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4")
+		require.Error(t, err)
+		require.Equal(t, 1, repo.setErrorCalls)
+		require.Contains(t, repo.lastErrorMsg, "Authentication failed (401)")
+		require.Contains(t, repo.lastErrorMsg, "Unauthorized")
+	})
+
+	t.Run("api key accounts are not marked permanent error", func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		ctx, _ := newSoraTestContext()
+
+		resp := newJSONResponse(http.StatusUnauthorized, `{"detail":"Unauthorized"}`)
+		repo := &openAIAccountTestRepo{}
+		upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+		svc := &AccountTestService{
+			accountRepo:  repo,
+			httpUpstream: upstream,
+			cfg: &config.Config{
+				Security: config.SecurityConfig{
+					URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+				},
+			},
+		}
+		account := &Account{
+			ID:          91,
+			Platform:    PlatformOpenAI,
+			Type:        AccountTypeAPIKey,
+			Concurrency: 1,
+			Credentials: map[string]any{
+				"api_key":  "test-token",
+				"base_url": "https://api.openai.com/responses",
+			},
+		}
+
+		err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4")
+		require.Error(t, err)
+		require.Zero(t, repo.setErrorCalls)
+		require.Empty(t, repo.lastErrorMsg)
+	})
 }
