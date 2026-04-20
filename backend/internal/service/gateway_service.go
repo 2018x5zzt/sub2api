@@ -5228,6 +5228,44 @@ func buildSyntheticAnthropicErrorResponseBody(message, errType string) []byte {
 	return raw
 }
 
+func wrapMalformedAnthropicSuccessResponse(c *gin.Context, account *Account, resp *http.Response, publicMessage, opsMessage string, passthrough bool) error {
+	if strings.TrimSpace(opsMessage) == "" {
+		opsMessage = publicMessage
+	}
+	if resp == nil {
+		return errors.New(opsMessage)
+	}
+
+	setOpsUpstreamError(c, resp.StatusCode, opsMessage, "")
+	event := OpsUpstreamErrorEvent{
+		UpstreamStatusCode: resp.StatusCode,
+		Passthrough:        passthrough,
+		Kind:               "failover",
+		Message:            opsMessage,
+	}
+	if resp.Header != nil {
+		event.UpstreamRequestID = strings.TrimSpace(resp.Header.Get("x-request-id"))
+	}
+	if account != nil {
+		event.Platform = account.Platform
+		event.AccountID = account.ID
+		event.AccountName = account.Name
+	}
+	appendOpsUpstreamError(c, event)
+
+	var responseHeaders http.Header
+	if resp.Header != nil {
+		responseHeaders = resp.Header.Clone()
+	}
+
+	return &UpstreamFailoverError{
+		StatusCode:             http.StatusBadGateway,
+		ResponseBody:           buildSyntheticAnthropicErrorResponseBody(publicMessage, "upstream_error"),
+		ResponseHeaders:        responseHeaders,
+		RetryableOnSameAccount: account != nil && account.IsPoolMode(),
+	}
+}
+
 func isAnthropicResponseContentEmpty(body []byte) bool {
 	trimmed := bytes.TrimSpace(body)
 	if len(trimmed) == 0 || !gjson.ValidBytes(trimmed) {
@@ -5265,38 +5303,7 @@ func isAnthropicResponseContentEmpty(body []byte) bool {
 }
 
 func wrapEmptyAnthropicSuccessResponse(c *gin.Context, account *Account, resp *http.Response, message string, passthrough bool) error {
-	if resp == nil {
-		return errors.New(message)
-	}
-
-	setOpsUpstreamError(c, resp.StatusCode, message, "")
-	event := OpsUpstreamErrorEvent{
-		UpstreamStatusCode: resp.StatusCode,
-		Passthrough:        passthrough,
-		Kind:               "failover",
-		Message:            message,
-	}
-	if resp.Header != nil {
-		event.UpstreamRequestID = strings.TrimSpace(resp.Header.Get("x-request-id"))
-	}
-	if account != nil {
-		event.Platform = account.Platform
-		event.AccountID = account.ID
-		event.AccountName = account.Name
-	}
-	appendOpsUpstreamError(c, event)
-
-	var responseHeaders http.Header
-	if resp.Header != nil {
-		responseHeaders = resp.Header.Clone()
-	}
-
-	return &UpstreamFailoverError{
-		StatusCode:             http.StatusBadGateway,
-		ResponseBody:           buildSyntheticAnthropicErrorResponseBody(message, "upstream_error"),
-		ResponseHeaders:        responseHeaders,
-		RetryableOnSameAccount: account != nil && account.IsPoolMode(),
-	}
+	return wrapMalformedAnthropicSuccessResponse(c, account, resp, message, message, passthrough)
 }
 
 func (s *GatewayService) handleNonStreamingResponseAnthropicAPIKeyPassthrough(
@@ -7309,7 +7316,15 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 		Usage ClaudeUsage `json:"usage"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("parse response: %w", err)
+		safeErr := sanitizeUpstreamErrorMessage(err.Error())
+		return nil, wrapMalformedAnthropicSuccessResponse(
+			c,
+			account,
+			resp,
+			"Upstream returned invalid JSON response",
+			"parse response: "+safeErr,
+			false,
+		)
 	}
 
 	// 解析嵌套的 cache_creation 对象中的 5m/1h 明细
