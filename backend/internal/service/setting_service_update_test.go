@@ -194,6 +194,33 @@ func TestSettingService_UpdateSettings_RegistrationEmailSuffixWhitelist_Invalid(
 	require.Equal(t, "INVALID_REGISTRATION_EMAIL_SUFFIX_WHITELIST", infraerrors.Reason(err))
 }
 
+func TestSettingService_UpdateSettings_EnterpriseVisibleGroups_DropsInvalidOrInactiveGroups(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	groupReader := &defaultSubGroupReaderStub{
+		byID: map[int64]*Group{
+			2:  {ID: 2, Status: StatusActive},
+			5:  {ID: 5, Status: StatusActive},
+			9:  {ID: 9, Status: StatusActive},
+			11: {ID: 11, Status: StatusActive},
+			18: {ID: 18, Status: StatusDisabled},
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+	svc.SetDefaultSubscriptionGroupReader(groupReader)
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		EnterpriseVisibleGroups: []EnterpriseVisibleGroupSetting{
+			{EnterpriseName: "  Acme ", VisibleGroupIDs: []int64{9, 2, 9, 0, 77, 18}},
+			{EnterpriseName: "acme", VisibleGroupIDs: []int64{11}},
+			{EnterpriseName: "Bustest", VisibleGroupIDs: []int64{5, 5}},
+			{EnterpriseName: "   ", VisibleGroupIDs: []int64{2}},
+		},
+	})
+	require.NoError(t, err)
+
+	require.JSONEq(t, `{"acme":[2,9,11],"bustest":[5]}`, repo.updates[SettingKeyEnterpriseVisibleGroupIDsByEnterprise])
+}
+
 func TestParseDefaultSubscriptions_NormalizesValues(t *testing.T) {
 	got := parseDefaultSubscriptions(`[{"group_id":11,"validity_days":30},{"group_id":11,"validity_days":60},{"group_id":0,"validity_days":10},{"group_id":12,"validity_days":99999}]`)
 	require.Equal(t, []DefaultSubscriptionSetting{

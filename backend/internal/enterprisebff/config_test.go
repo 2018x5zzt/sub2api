@@ -12,7 +12,7 @@ func TestParseEnterpriseVisibleGroupIDsByEnterprise_ParsesJSONMapping(t *testing
 	require.NoError(t, err)
 	require.Equal(t, map[string][]int64{
 		"bustest": {2, 9, 11},
-		"Acme":    {5},
+		"acme":    {5},
 	}, got)
 }
 

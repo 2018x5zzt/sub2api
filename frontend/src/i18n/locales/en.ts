@@ -4550,6 +4550,17 @@ export default {
         subscriptionGroup: 'Subscription Group',
         subscriptionValidityDays: 'Validity (days)'
       },
+      enterpriseVisibleGroups: {
+        title: 'Enterprise Visible Groups',
+        description: 'Choose which active groups each enterprise can see in the enterprise console.',
+        rules: 'Enterprise Rules',
+        rulesHint: 'Enterprise names are matched with trim + lowercase normalization.',
+        addRule: 'Add Rule',
+        empty: 'No enterprise-specific visible group rules configured.',
+        enterpriseName: 'Enterprise Name',
+        enterpriseNamePlaceholder: 'e.g. acme',
+        groupsHint: 'Only active groups are kept when the settings are saved.'
+      },
       claudeCode: {
         title: 'Claude Code Settings',
         description: 'Control Claude Code client access requirements',

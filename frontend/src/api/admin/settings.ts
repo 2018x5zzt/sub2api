@@ -11,6 +11,11 @@ export interface DefaultSubscriptionSetting {
   validity_days: number
 }
 
+export interface EnterpriseVisibleGroupSetting {
+  enterprise_name: string
+  visible_group_ids: number[]
+}
+
 /**
  * System settings interface
  */
@@ -28,6 +33,7 @@ export interface SystemSettings {
   default_balance: number
   default_concurrency: number
   default_subscriptions: DefaultSubscriptionSetting[]
+  enterprise_visible_groups: EnterpriseVisibleGroupSetting[]
   // OEM settings
   site_name: string
   site_logo: string
@@ -102,6 +108,7 @@ export interface UpdateSettingsRequest {
   default_balance?: number
   default_concurrency?: number
   default_subscriptions?: DefaultSubscriptionSetting[]
+  enterprise_visible_groups?: EnterpriseVisibleGroupSetting[]
   site_name?: string
   site_logo?: string
   site_subtitle?: string

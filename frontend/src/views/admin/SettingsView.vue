@@ -1166,6 +1166,84 @@
             </div>
           </div>
         </div>
+
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.enterpriseVisibleGroups.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.enterpriseVisibleGroups.description') }}
+            </p>
+          </div>
+          <div class="space-y-4 p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="font-medium text-gray-900 dark:text-white">
+                  {{ t('admin.settings.enterpriseVisibleGroups.rules') }}
+                </label>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.enterpriseVisibleGroups.rulesHint') }}
+                </p>
+              </div>
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm"
+                @click="addEnterpriseVisibleGroupRule"
+              >
+                {{ t('admin.settings.enterpriseVisibleGroups.addRule') }}
+              </button>
+            </div>
+
+            <div
+              v-if="form.enterprise_visible_groups.length === 0"
+              class="rounded border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
+            >
+              {{ t('admin.settings.enterpriseVisibleGroups.empty') }}
+            </div>
+
+            <div v-else class="space-y-4">
+              <div
+                v-for="(rule, index) in form.enterprise_visible_groups"
+                :key="`enterprise-visible-group-${index}`"
+                class="space-y-4 rounded border border-gray-200 p-4 dark:border-dark-600"
+              >
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
+                  <div>
+                    <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                      {{ t('admin.settings.enterpriseVisibleGroups.enterpriseName') }}
+                    </label>
+                    <input
+                      v-model="rule.enterprise_name"
+                      type="text"
+                      class="input"
+                      :placeholder="t('admin.settings.enterpriseVisibleGroups.enterpriseNamePlaceholder')"
+                    />
+                  </div>
+                  <div class="flex items-end">
+                    <button
+                      type="button"
+                      class="btn btn-secondary w-full text-red-600 hover:text-red-700 dark:text-red-400 md:w-auto"
+                      @click="removeEnterpriseVisibleGroupRule(index)"
+                    >
+                      {{ t('common.delete') }}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <GroupSelector
+                    v-model="rule.visible_group_ids"
+                    :groups="availableEnterpriseGroups"
+                  />
+                  <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.enterpriseVisibleGroups.groupsHint') }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         </div><!-- /Tab: Users -->
 
         <!-- Tab: Gateway — Claude Code, Scheduling -->
@@ -2004,6 +2082,7 @@ import Icon from '@/components/icons/Icon.vue'
 import Select from '@/components/common/Select.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
+import GroupSelector from '@/components/common/GroupSelector.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import ImageUpload from '@/components/common/ImageUpload.vue'
 import BackupSettings from '@/views/admin/BackupView.vue'
@@ -2051,6 +2130,7 @@ const adminApiKeyExists = ref(false)
 const adminApiKeyMasked = ref('')
 const adminApiKeyOperating = ref(false)
 const newAdminApiKey = ref('')
+const availableEnterpriseGroups = ref<AdminGroup[]>([])
 const subscriptionGroups = ref<AdminGroup[]>([])
 
 // Overload Cooldown (529) 状态
@@ -2122,6 +2202,7 @@ const form = reactive<SettingsForm>({
   default_balance: 0,
   default_concurrency: 1,
   default_subscriptions: [],
+  enterprise_visible_groups: [] as Array<{ enterprise_name: string; visible_group_ids: number[] }>,
   site_name: 'Sub2API',
   site_logo: '',
   site_subtitle: 'Subscription to API Conversion Platform',
@@ -2332,6 +2413,14 @@ async function loadSettings() {
             validity_days: item.validity_days
           }))
       : []
+    form.enterprise_visible_groups = Array.isArray(settings.enterprise_visible_groups)
+      ? settings.enterprise_visible_groups.map((rule) => ({
+          enterprise_name: rule.enterprise_name,
+          visible_group_ids: Array.isArray(rule.visible_group_ids)
+            ? rule.visible_group_ids.filter((groupID) => groupID > 0)
+            : []
+        }))
+      : []
     registrationEmailSuffixWhitelistTags.value = normalizeRegistrationEmailSuffixDomains(
       settings.registration_email_suffix_whitelist
     )
@@ -2353,11 +2442,13 @@ async function loadSettings() {
 async function loadSubscriptionGroups() {
   try {
     const groups = await adminAPI.groups.getAll()
-    subscriptionGroups.value = groups.filter(
-      (group) => group.subscription_type === 'subscription' && group.status === 'active'
+    availableEnterpriseGroups.value = groups.filter((group) => group.status === 'active')
+    subscriptionGroups.value = availableEnterpriseGroups.value.filter(
+      (group) => group.subscription_type === 'subscription'
     )
   } catch (error) {
     console.error('Failed to load subscription groups:', error)
+    availableEnterpriseGroups.value = []
     subscriptionGroups.value = []
   }
 }
@@ -2375,6 +2466,52 @@ function addDefaultSubscription() {
 
 function removeDefaultSubscription(index: number) {
   form.default_subscriptions.splice(index, 1)
+}
+
+function addEnterpriseVisibleGroupRule() {
+  form.enterprise_visible_groups.push({
+    enterprise_name: '',
+    visible_group_ids: []
+  })
+}
+
+function removeEnterpriseVisibleGroupRule(index: number) {
+  form.enterprise_visible_groups.splice(index, 1)
+}
+
+function normalizeEnterpriseVisibleGroupsForSave(
+  rules: Array<{ enterprise_name: string; visible_group_ids: number[] }>
+) {
+  const merged = new Map<string, Set<number>>()
+
+  for (const rule of rules) {
+    const enterpriseName = rule.enterprise_name.trim().toLowerCase()
+    if (!enterpriseName) {
+      continue
+    }
+
+    const visibleGroupIDs = Array.isArray(rule.visible_group_ids)
+      ? rule.visible_group_ids
+          .filter((groupID) => Number.isInteger(groupID) && groupID > 0)
+          .map((groupID) => Math.trunc(groupID))
+      : []
+    if (visibleGroupIDs.length === 0) {
+      continue
+    }
+
+    const current = merged.get(enterpriseName) ?? new Set<number>()
+    for (const groupID of visibleGroupIDs) {
+      current.add(groupID)
+    }
+    merged.set(enterpriseName, current)
+  }
+
+  return Array.from(merged.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([enterprise_name, visibleGroupIDs]) => ({
+      enterprise_name,
+      visible_group_ids: Array.from(visibleGroupIDs).sort((left, right) => left - right)
+    }))
 }
 
 async function saveSettings() {
@@ -2403,6 +2540,10 @@ async function saveSettings() {
       )
       return
     }
+
+    const normalizedEnterpriseVisibleGroups = normalizeEnterpriseVisibleGroupsForSave(
+      form.enterprise_visible_groups
+    )
 
     // Validate URL fields — novalidate disables browser-native checks, so we validate here
     const isValidHttpUrl = (url: string): boolean => {
@@ -2445,6 +2586,7 @@ async function saveSettings() {
       default_balance: form.default_balance,
       default_concurrency: form.default_concurrency,
       default_subscriptions: normalizedDefaultSubscriptions,
+      enterprise_visible_groups: normalizedEnterpriseVisibleGroups,
       site_name: form.site_name,
       site_logo: form.site_logo,
       site_subtitle: form.site_subtitle,
@@ -2493,6 +2635,14 @@ async function saveSettings() {
       updated.registration_email_suffix_whitelist
     )
     registrationEmailSuffixWhitelistDraft.value = ''
+    form.enterprise_visible_groups = Array.isArray(updated.enterprise_visible_groups)
+      ? updated.enterprise_visible_groups.map((rule) => ({
+          enterprise_name: rule.enterprise_name,
+          visible_group_ids: Array.isArray(rule.visible_group_ids)
+            ? rule.visible_group_ids.filter((groupID) => groupID > 0)
+            : []
+        }))
+      : []
     form.smtp_password = ''
     smtpPasswordManuallyEdited.value = false
     form.turnstile_secret_key = ''

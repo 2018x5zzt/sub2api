@@ -489,6 +489,15 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 		return fmt.Errorf("marshal default subscriptions: %w", err)
 	}
 	updates[SettingKeyDefaultSubscriptions] = string(defaultSubsJSON)
+	enterpriseVisibleGroups, err := normalizeEnterpriseVisibleGroups(ctx, settings.EnterpriseVisibleGroups, s.defaultSubGroupReader)
+	if err != nil {
+		return fmt.Errorf("normalize enterprise visible groups: %w", err)
+	}
+	enterpriseVisibleGroupsJSON, err := json.Marshal(enterpriseVisibleGroups)
+	if err != nil {
+		return fmt.Errorf("marshal enterprise visible groups: %w", err)
+	}
+	updates[SettingKeyEnterpriseVisibleGroupIDsByEnterprise] = string(enterpriseVisibleGroupsJSON)
 
 	// Model fallback configuration
 	updates[SettingKeyEnableModelFallback] = strconv.FormatBool(settings.EnableModelFallback)
@@ -907,6 +916,11 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.DefaultBalance = s.cfg.Default.UserBalance
 	}
 	result.DefaultSubscriptions = parseDefaultSubscriptions(settings[SettingKeyDefaultSubscriptions])
+	if enterpriseVisibleGroups, err := ParseEnterpriseVisibleGroupIDsByEnterprise(settings[SettingKeyEnterpriseVisibleGroupIDsByEnterprise]); err == nil {
+		result.EnterpriseVisibleGroups = BuildEnterpriseVisibleGroupRules(enterpriseVisibleGroups)
+	} else {
+		result.EnterpriseVisibleGroups = []EnterpriseVisibleGroupSetting{}
+	}
 
 	// 敏感信息直接返回，方便测试连接时使用
 	result.SMTPPassword = settings[SettingKeySMTPPassword]

@@ -64,9 +64,10 @@ type SystemSettings struct {
 	CustomMenuItems             []CustomMenuItem `json:"custom_menu_items"`
 	CustomEndpoints             []CustomEndpoint `json:"custom_endpoints"`
 
-	DefaultConcurrency   int                          `json:"default_concurrency"`
-	DefaultBalance       float64                      `json:"default_balance"`
-	DefaultSubscriptions []DefaultSubscriptionSetting `json:"default_subscriptions"`
+	DefaultConcurrency      int                             `json:"default_concurrency"`
+	DefaultBalance          float64                         `json:"default_balance"`
+	DefaultSubscriptions    []DefaultSubscriptionSetting    `json:"default_subscriptions"`
+	EnterpriseVisibleGroups []EnterpriseVisibleGroupSetting `json:"enterprise_visible_groups"`
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -102,6 +103,11 @@ type SystemSettings struct {
 type DefaultSubscriptionSetting struct {
 	GroupID      int64 `json:"group_id"`
 	ValidityDays int   `json:"validity_days"`
+}
+
+type EnterpriseVisibleGroupSetting struct {
+	EnterpriseName  string  `json:"enterprise_name"`
+	VisibleGroupIDs []int64 `json:"visible_group_ids"`
 }
 
 type PublicSettings struct {
