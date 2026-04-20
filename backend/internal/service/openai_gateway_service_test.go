@@ -531,7 +531,183 @@ func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingReturnsNoAvaila
 	require.Nil(t, selected)
 }
 
-func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingAllowsCompatibleHigherMultiplierBy7dAverage(t *testing.T) {
+func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingPrefersClosestLowerOrEqualMultiplier(t *testing.T) {
+	groupID := int64(7)
+	defaultBudget := 8.0
+	group := &Group{
+		ID:                      groupID,
+		Platform:                PlatformOpenAI,
+		Status:                  StatusActive,
+		Hydrated:                true,
+		PricingMode:             GroupPricingModeDynamic,
+		DefaultBudgetMultiplier: &defaultBudget,
+		RateMultiplier:          1.0,
+	}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+	ctx = context.WithValue(ctx, ctxkey.APIKey, &APIKey{
+		ID:               99,
+		UserID:           7,
+		GroupID:          &groupID,
+		Group:            group,
+		BudgetMultiplier: &defaultBudget,
+	})
+
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 1,
+				Priority:    0,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 4.0},
+				},
+			},
+			{
+				ID:          2,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 1,
+				Priority:    99,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 7.0},
+				},
+			},
+		}},
+	}
+
+	selected, err := svc.selectAccountForModelWithExclusions(ctx, &groupID, "", "", nil, 0)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	require.Equal(t, int64(2), selected.ID)
+}
+
+func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingPrefersLowerMultiplierBeforeCompatibleHigherBy7dAverage(t *testing.T) {
+	groupID := int64(7)
+	defaultBudget := 8.0
+	group := &Group{
+		ID:                      groupID,
+		Platform:                PlatformOpenAI,
+		Status:                  StatusActive,
+		Hydrated:                true,
+		PricingMode:             GroupPricingModeDynamic,
+		DefaultBudgetMultiplier: &defaultBudget,
+		RateMultiplier:          1.0,
+	}
+	now := time.Now()
+	apiKey := &APIKey{
+		ID:               99,
+		UserID:           7,
+		GroupID:          &groupID,
+		Group:            group,
+		BudgetMultiplier: &defaultBudget,
+		CreatedAt:        now.Add(-48 * time.Hour),
+	}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+	ctx = context.WithValue(ctx, ctxkey.APIKey, apiKey)
+
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 1,
+				Priority:    0,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 9.0},
+				},
+			},
+			{
+				ID:          2,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 1,
+				Priority:    99,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 4.0},
+				},
+			},
+		}},
+		usageLogRepo: &openAIDynamicPricingUsageLogRepoStub{
+			stats: &usagestats.UsageStats{
+				TotalRequests:   10,
+				TotalCost:       100,
+				TotalActualCost: 500,
+			},
+		},
+	}
+
+	selected, err := svc.selectAccountForModelWithExclusions(ctx, &groupID, "", "", nil, 0)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	require.Equal(t, int64(2), selected.ID)
+}
+
+func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingFallsBackToCompatibleHigherMultiplierBy7dAverage(t *testing.T) {
+	groupID := int64(7)
+	defaultBudget := 8.0
+	group := &Group{
+		ID:                      groupID,
+		Platform:                PlatformOpenAI,
+		Status:                  StatusActive,
+		Hydrated:                true,
+		PricingMode:             GroupPricingModeDynamic,
+		DefaultBudgetMultiplier: &defaultBudget,
+		RateMultiplier:          1.0,
+	}
+	now := time.Now()
+	apiKey := &APIKey{
+		ID:               99,
+		UserID:           7,
+		GroupID:          &groupID,
+		Group:            group,
+		BudgetMultiplier: &defaultBudget,
+		CreatedAt:        now.Add(-48 * time.Hour),
+	}
+	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
+	ctx = context.WithValue(ctx, ctxkey.APIKey, apiKey)
+
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeAPIKey,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 1,
+				Priority:    99,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID, BillingMultiplier: 9.0},
+				},
+			},
+		}},
+		usageLogRepo: &openAIDynamicPricingUsageLogRepoStub{
+			stats: &usagestats.UsageStats{
+				TotalRequests:   10,
+				TotalCost:       100,
+				TotalActualCost: 500,
+			},
+		},
+	}
+
+	selected, err := svc.selectAccountForModelWithExclusions(ctx, &groupID, "", "", nil, 0)
+	require.NoError(t, err)
+	require.NotNil(t, selected)
+	require.Equal(t, int64(1), selected.ID)
+}
+
+func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingReturnsBudgetExceededWhen7dAverageAlreadyOverTarget(t *testing.T) {
 	groupID := int64(7)
 	defaultBudget := 5.0
 	group := &Group{
@@ -566,18 +742,6 @@ func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingAllowsCompatibl
 				Concurrency: 1,
 				Priority:    0,
 				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 6.0},
-				},
-			},
-			{
-				ID:          2,
-				Platform:    PlatformOpenAI,
-				Type:        AccountTypeAPIKey,
-				Status:      StatusActive,
-				Schedulable: true,
-				Concurrency: 1,
-				Priority:    1,
-				AccountGroups: []AccountGroup{
 					{GroupID: groupID, BillingMultiplier: 4.0},
 				},
 			},
@@ -586,15 +750,14 @@ func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingAllowsCompatibl
 			stats: &usagestats.UsageStats{
 				TotalRequests:   10,
 				TotalCost:       100,
-				TotalActualCost: 400,
+				TotalActualCost: 600,
 			},
 		},
 	}
 
 	selected, err := svc.selectAccountForModelWithExclusions(ctx, &groupID, "", "", nil, 0)
-	require.NoError(t, err)
-	require.NotNil(t, selected)
-	require.Equal(t, int64(1), selected.ID)
+	require.ErrorIs(t, err, ErrDynamicPricingBudgetExceeded)
+	require.Nil(t, selected)
 }
 
 func TestOpenAISelectAccountForModelWithExclusions_StickyUnschedulableClearsSession(t *testing.T) {

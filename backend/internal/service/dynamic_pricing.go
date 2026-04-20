@@ -22,11 +22,15 @@ const (
 )
 
 var (
-	ErrGroupPricingModeInvalid    = infraerrors.BadRequest("GROUP_PRICING_MODE_INVALID", "pricing_mode must be fixed or dynamic")
-	ErrGroupDefaultBudgetRequired = infraerrors.BadRequest("GROUP_DEFAULT_BUDGET_REQUIRED", "default budget multiplier is required for dynamic pricing groups")
-	ErrAPIKeyBudgetRequired       = infraerrors.BadRequest("API_KEY_BUDGET_REQUIRED", "budget multiplier is required for dynamic pricing groups")
-	ErrBudgetMultiplierOutOfRange = infraerrors.BadRequest("BUDGET_MULTIPLIER_OUT_OF_RANGE", "budget multiplier must be between 3 and 50")
-	ErrAPIKeyGroupImmutable       = infraerrors.BadRequest("API_KEY_GROUP_IMMUTABLE", "api key group cannot be changed after creation")
+	ErrGroupPricingModeInvalid      = infraerrors.BadRequest("GROUP_PRICING_MODE_INVALID", "pricing_mode must be fixed or dynamic")
+	ErrGroupDefaultBudgetRequired   = infraerrors.BadRequest("GROUP_DEFAULT_BUDGET_REQUIRED", "default budget multiplier is required for dynamic pricing groups")
+	ErrAPIKeyBudgetRequired         = infraerrors.BadRequest("API_KEY_BUDGET_REQUIRED", "budget multiplier is required for dynamic pricing groups")
+	ErrBudgetMultiplierOutOfRange   = infraerrors.BadRequest("BUDGET_MULTIPLIER_OUT_OF_RANGE", "budget multiplier must be between 3 and 50")
+	ErrAPIKeyGroupImmutable         = infraerrors.BadRequest("API_KEY_GROUP_IMMUTABLE", "api key group cannot be changed after creation")
+	ErrDynamicPricingBudgetExceeded = infraerrors.TooManyRequests(
+		"DYNAMIC_PRICING_BUDGET_EXCEEDED",
+		"当前预算倍率下没有可用账号，可调高预算倍率后重试",
+	)
 )
 
 func normalizeGroupPricingMode(mode string) string {
@@ -180,6 +184,95 @@ func buildDynamicPricingBudgetState(ctx context.Context, groupID *int64, usageRe
 	return state
 }
 
+func dynamicPricingBudgetExceeded(ctx context.Context, groupID *int64) bool {
+	if groupID == nil || *groupID <= 0 {
+		return false
+	}
+	state := dynamicPricingBudgetStateFromContext(ctx)
+	if state == nil || !state.enabled || state.currentStandardCost <= 0 {
+		return false
+	}
+	return state.currentAverageMultiplier > state.budgetMultiplier+dynamicBudgetEpsilon
+}
+
+func validateDynamicPricingBudgetAvailable(ctx context.Context, groupID *int64) error {
+	if dynamicPricingBudgetExceeded(ctx, groupID) {
+		return ErrDynamicPricingBudgetExceeded
+	}
+	return nil
+}
+
+func resolveDynamicPricingBaseMultiplier(ctx context.Context, groupID *int64, resolveUserGroupRate userGroupRateResolverFunc) (float64, bool) {
+	group := dynamicPricingGroupFromContext(ctx, groupID)
+	if group == nil || !group.IsDynamicPricing() {
+		return 0, false
+	}
+	baseMultiplier := group.RateMultiplier
+	if apiKey := apiKeyFromContext(ctx); apiKey != nil && apiKey.UserID > 0 && resolveUserGroupRate != nil {
+		baseMultiplier = resolveUserGroupRate(ctx, apiKey.UserID, *groupID, group.RateMultiplier)
+	}
+	return baseMultiplier, true
+}
+
+func resolveDynamicPricingEffectiveMultiplier(ctx context.Context, groupID *int64, account *Account, resolveUserGroupRate userGroupRateResolverFunc) (float64, bool) {
+	if account == nil || groupID == nil || *groupID <= 0 {
+		return 0, false
+	}
+	baseMultiplier, ok := resolveDynamicPricingBaseMultiplier(ctx, groupID, resolveUserGroupRate)
+	if !ok {
+		return 0, false
+	}
+	return baseMultiplier * account.GroupBillingMultiplier(groupID), true
+}
+
+func compareDynamicPricingAccountPreference(ctx context.Context, groupID *int64, a, b *Account, resolveUserGroupRate userGroupRateResolverFunc) int {
+	if a == nil || b == nil {
+		return 0
+	}
+	group := dynamicPricingGroupFromContext(ctx, groupID)
+	if group == nil || !group.IsDynamicPricing() {
+		return 0
+	}
+	budgetMultiplier, ok := resolveDynamicBudgetMultiplier(ctx, group)
+	if !ok {
+		return 0
+	}
+	aMultiplier, okA := resolveDynamicPricingEffectiveMultiplier(ctx, groupID, a, resolveUserGroupRate)
+	bMultiplier, okB := resolveDynamicPricingEffectiveMultiplier(ctx, groupID, b, resolveUserGroupRate)
+	if !okA || !okB {
+		return 0
+	}
+
+	aWithinBudget := aMultiplier <= budgetMultiplier+dynamicBudgetEpsilon
+	bWithinBudget := bMultiplier <= budgetMultiplier+dynamicBudgetEpsilon
+	switch {
+	case aWithinBudget && !bWithinBudget:
+		return -1
+	case !aWithinBudget && bWithinBudget:
+		return 1
+	}
+
+	diff := aMultiplier - bMultiplier
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff <= dynamicBudgetEpsilon {
+		return 0
+	}
+
+	if aWithinBudget {
+		if aMultiplier > bMultiplier {
+			return -1
+		}
+		return 1
+	}
+
+	if aMultiplier < bMultiplier {
+		return -1
+	}
+	return 1
+}
+
 func isAccountWithinDynamicBudget(ctx context.Context, groupID *int64, account *Account, resolveUserGroupRate userGroupRateResolverFunc) bool {
 	if account == nil || groupID == nil || *groupID <= 0 {
 		return true
@@ -193,11 +286,10 @@ func isAccountWithinDynamicBudget(ctx context.Context, groupID *int64, account *
 		return true
 	}
 
-	baseMultiplier := group.RateMultiplier
-	if apiKey := apiKeyFromContext(ctx); apiKey != nil && apiKey.UserID > 0 && resolveUserGroupRate != nil {
-		baseMultiplier = resolveUserGroupRate(ctx, apiKey.UserID, *groupID, group.RateMultiplier)
+	effectiveMultiplier, ok := resolveDynamicPricingEffectiveMultiplier(ctx, groupID, account, resolveUserGroupRate)
+	if !ok {
+		return true
 	}
-	effectiveMultiplier := baseMultiplier * account.GroupBillingMultiplier(groupID)
 	state := dynamicPricingBudgetStateFromContext(ctx)
 	if state == nil || !state.enabled || state.estimatedNextStandardCost <= 0 || state.currentStandardCost <= 0 {
 		return effectiveMultiplier <= budgetMultiplier+dynamicBudgetEpsilon

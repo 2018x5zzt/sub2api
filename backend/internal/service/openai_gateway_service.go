@@ -1152,6 +1152,9 @@ func (s *OpenAIGatewayService) SelectAccountForModelWithExclusions(ctx context.C
 
 func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, stickyAccountID int64) (*Account, error) {
 	ctx = withDynamicPricingBudgetState(ctx, groupID, s.usageLogRepo)
+	if err := validateDynamicPricingBudgetAvailable(ctx, groupID); err != nil {
+		return nil, err
+	}
 	// 1. 尝试粘性会话命中
 	// Try sticky session hit
 	if account := s.tryStickySessionHit(ctx, groupID, sessionHash, requestedModel, excludedIDs, stickyAccountID); account != nil {
@@ -1274,12 +1277,7 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, accounts [
 
 		// 选择优先级最高且最久未使用的账号
 		// Select highest priority and least recently used
-		if selected == nil {
-			selected = fresh
-			continue
-		}
-
-		if s.isBetterAccount(fresh, selected) {
+		if selected == nil || s.compareAccountsForSelection(ctx, groupID, fresh, selected) < 0 {
 			selected = fresh
 		}
 	}
@@ -1287,42 +1285,55 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, accounts [
 	return selected
 }
 
-// isBetterAccount 判断 candidate 是否比 current 更优。
-// 规则：优先级更高（数值更小）优先；同优先级时，未使用过的优先，其次是最久未使用的。
-//
-// isBetterAccount checks if candidate is better than current.
-// Rules: higher priority (lower value) wins; same priority: never used > least recently used.
-func (s *OpenAIGatewayService) isBetterAccount(candidate, current *Account) bool {
-	// 优先级更高（数值更小）
-	// Higher priority (lower value)
-	if candidate.Priority < current.Priority {
-		return true
+func (s *OpenAIGatewayService) compareAccountsForSelection(ctx context.Context, groupID *int64, a, b *Account) int {
+	if cmp := compareDynamicPricingAccountPreference(ctx, groupID, a, b, s.getUserGroupRateMultiplier); cmp != 0 {
+		return cmp
 	}
-	if candidate.Priority > current.Priority {
-		return false
-	}
+	return compareAccountsByPriorityAndLastUsed(a, b, false)
+}
 
-	// 同优先级，比较最后使用时间
-	// Same priority, compare last used time
-	switch {
-	case candidate.LastUsedAt == nil && current.LastUsedAt != nil:
-		// candidate 从未使用，优先
-		return true
-	case candidate.LastUsedAt != nil && current.LastUsedAt == nil:
-		// current 从未使用，保持
-		return false
-	case candidate.LastUsedAt == nil && current.LastUsedAt == nil:
-		// 都未使用，保持
-		return false
-	default:
-		// 都使用过，选择最久未使用的
-		return candidate.LastUsedAt.Before(*current.LastUsedAt)
+func (s *OpenAIGatewayService) compareAccountLoadsForSelection(ctx context.Context, groupID *int64, a, b accountWithLoad) int {
+	if cmp := compareDynamicPricingAccountPreference(ctx, groupID, a.account, b.account, s.getUserGroupRateMultiplier); cmp != 0 {
+		return cmp
 	}
+	if cmp := compareAccountsByPriorityOnly(a.account, b.account, false); cmp != 0 {
+		return cmp
+	}
+	if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
+		if a.loadInfo.LoadRate < b.loadInfo.LoadRate {
+			return -1
+		}
+		return 1
+	}
+	return compareAccountsByLastUsed(a.account, b.account, false)
+}
+
+func (s *OpenAIGatewayService) sortAccountsForSelection(ctx context.Context, groupID *int64, accounts []*Account) {
+	if group := dynamicPricingGroupFromContext(ctx, groupID); group != nil && group.IsDynamicPricing() {
+		sort.SliceStable(accounts, func(i, j int) bool {
+			return s.compareAccountsForSelection(ctx, groupID, accounts[i], accounts[j]) < 0
+		})
+		return
+	}
+	sortAccountsByPriorityAndLastUsed(accounts, false)
+}
+
+func (s *OpenAIGatewayService) sortAccountLoadsForSelection(ctx context.Context, groupID *int64, accounts []accountWithLoad) {
+	sort.SliceStable(accounts, func(i, j int) bool {
+		return s.compareAccountLoadsForSelection(ctx, groupID, accounts[i], accounts[j]) < 0
+	})
+	if group := dynamicPricingGroupFromContext(ctx, groupID); group != nil && group.IsDynamicPricing() {
+		return
+	}
+	shuffleWithinSortGroups(accounts)
 }
 
 // SelectAccountWithLoadAwareness selects an account with load-awareness and wait plan.
 func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
 	ctx = withDynamicPricingBudgetState(ctx, groupID, s.usageLogRepo)
+	if err := validateDynamicPricingBudgetAvailable(ctx, groupID); err != nil {
+		return nil, err
+	}
 	cfg := s.schedulingConfig()
 	var stickyAccountID int64
 	if sessionHash != "" && s.cache != nil {
@@ -1466,7 +1477,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 	loadMap, err := s.concurrencyService.GetAccountsLoadBatch(ctx, accountLoads)
 	if err != nil {
 		ordered := append([]*Account(nil), candidates...)
-		sortAccountsByPriorityAndLastUsed(ordered, false)
+		s.sortAccountsForSelection(ctx, groupID, ordered)
 		for _, acc := range ordered {
 			fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, requestedModel)
 			if fresh == nil {
@@ -1504,26 +1515,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 		}
 
 		if len(available) > 0 {
-			sort.SliceStable(available, func(i, j int) bool {
-				a, b := available[i], available[j]
-				if a.account.Priority != b.account.Priority {
-					return a.account.Priority < b.account.Priority
-				}
-				if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
-					return a.loadInfo.LoadRate < b.loadInfo.LoadRate
-				}
-				switch {
-				case a.account.LastUsedAt == nil && b.account.LastUsedAt != nil:
-					return true
-				case a.account.LastUsedAt != nil && b.account.LastUsedAt == nil:
-					return false
-				case a.account.LastUsedAt == nil && b.account.LastUsedAt == nil:
-					return false
-				default:
-					return a.account.LastUsedAt.Before(*b.account.LastUsedAt)
-				}
-			})
-			shuffleWithinSortGroups(available)
+			s.sortAccountLoadsForSelection(ctx, groupID, available)
 
 			for _, item := range available {
 				fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, item.account, requestedModel)
@@ -1550,7 +1542,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 	}
 
 	// ============ Layer 3: Fallback wait ============
-	sortAccountsByPriorityAndLastUsed(candidates, false)
+	s.sortAccountsForSelection(ctx, groupID, candidates)
 	for _, acc := range candidates {
 		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, requestedModel)
 		if fresh == nil {
