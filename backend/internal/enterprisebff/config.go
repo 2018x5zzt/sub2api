@@ -1,7 +1,6 @@
 package enterprisebff
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	coreconfig "github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
 const (
@@ -102,31 +102,5 @@ func splitCSV(raw string) []string {
 }
 
 func parseEnterpriseVisibleGroupIDsByEnterprise(raw string) (map[string][]int64, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil, nil
-	}
-
-	parsed := make(map[string][]int64)
-	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
-		return nil, err
-	}
-
-	for enterpriseName, ids := range parsed {
-		seen := make(map[int64]struct{}, len(ids))
-		deduped := make([]int64, 0, len(ids))
-		for _, id := range ids {
-			if id <= 0 {
-				return nil, fmt.Errorf("enterprise %q has invalid group id %d", enterpriseName, id)
-			}
-			if _, ok := seen[id]; ok {
-				continue
-			}
-			seen[id] = struct{}{}
-			deduped = append(deduped, id)
-		}
-		parsed[enterpriseName] = deduped
-	}
-
-	return parsed, nil
+	return service.ParseEnterpriseVisibleGroupIDsByEnterprise(raw)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -46,13 +47,15 @@ type EnterpriseStore interface {
 
 type entEnterpriseStore struct {
 	client                      *dbent.Client
+	settingRepo                 service.SettingRepository
 	keys                        []string
 	visibleGroupIDsByEnterprise map[string]map[int64]struct{}
 }
 
-func newEntEnterpriseStore(client *dbent.Client, cfg *Config) EnterpriseStore {
+func newEntEnterpriseStore(client *dbent.Client, settingRepo service.SettingRepository, cfg *Config) EnterpriseStore {
 	return &entEnterpriseStore{
-		client: client,
+		client:      client,
+		settingRepo: settingRepo,
 		keys: []string{
 			cfg.EnterpriseAttributeKey,
 			cfg.EnterpriseDisplayNameAttributeKey,
@@ -137,7 +140,7 @@ func (s *entEnterpriseStore) ListVisibleGroups(ctx context.Context, userID int64
 	if err != nil {
 		return nil, err
 	}
-	configuredGroupIDs := s.visibleGroupIDSetForEnterprise(profile)
+	configuredGroupIDs := s.visibleGroupIDSetForEnterprise(ctx, profile)
 	if len(configuredGroupIDs) == 0 {
 		return []EnterpriseVisibleGroup{}, nil
 	}
@@ -183,11 +186,44 @@ func (s *entEnterpriseStore) SameEnterprise(ctx context.Context, actorUserID, ta
 	return normalizeCompanyName(actor.Name) == normalizeCompanyName(target.Name), nil
 }
 
-func (s *entEnterpriseStore) visibleGroupIDSetForEnterprise(profile *EnterpriseProfile) map[int64]struct{} {
+func (s *entEnterpriseStore) visibleGroupIDSetForEnterprise(ctx context.Context, profile *EnterpriseProfile) map[int64]struct{} {
 	if profile == nil {
 		return nil
 	}
-	return s.visibleGroupIDsByEnterprise[normalizeCompanyName(profile.Name)]
+	enterpriseName := normalizeCompanyName(profile.Name)
+	if enterpriseName == "" {
+		return nil
+	}
+	if configuredGroupIDs, ok := s.dbVisibleGroupIDSetForEnterprise(ctx, enterpriseName); ok {
+		return configuredGroupIDs
+	}
+	return s.visibleGroupIDsByEnterprise[enterpriseName]
+}
+
+func (s *entEnterpriseStore) dbVisibleGroupIDSetForEnterprise(ctx context.Context, enterpriseName string) (map[int64]struct{}, bool) {
+	if s.settingRepo == nil {
+		return nil, false
+	}
+
+	raw, err := s.settingRepo.GetValue(ctx, service.SettingKeyEnterpriseVisibleGroupIDsByEnterprise)
+	if err != nil {
+		if errors.Is(err, service.ErrSettingNotFound) {
+			return nil, false
+		}
+		log.Printf("enterprise-bff: failed to load enterprise visible groups setting: %v", err)
+		return nil, false
+	}
+	if strings.TrimSpace(raw) == "" {
+		return nil, false
+	}
+
+	parsed, err := service.ParseEnterpriseVisibleGroupIDsByEnterprise(raw)
+	if err != nil {
+		log.Printf("enterprise-bff: failed to parse enterprise visible groups setting: %v", err)
+		return nil, false
+	}
+
+	return normalizeEnterpriseVisibleGroupIDsByEnterprise(parsed)[enterpriseName], true
 }
 
 func normalizeEnterpriseVisibleGroupIDsByEnterprise(raw map[string][]int64) map[string]map[int64]struct{} {

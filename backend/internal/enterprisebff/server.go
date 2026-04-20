@@ -537,7 +537,7 @@ func Run(ctx context.Context) error {
 	server := New(
 		cfg,
 		NewAdminKeyStore(dbResources.Client, dbResources.SQLDB, sharedCfg),
-		newEntEnterpriseStore(dbResources.Client, cfg),
+		newEntEnterpriseStore(dbResources.Client, repository.NewSettingRepository(dbResources.Client), cfg),
 		repository.NewGroupHealthSnapshotRepository(dbResources.Client, dbResources.SQLDB),
 	)
 	httpServer := &http.Server{

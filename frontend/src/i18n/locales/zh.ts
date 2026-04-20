@@ -4621,6 +4621,17 @@ export default {
         subscriptionGroup: '订阅分组',
         subscriptionValidityDays: '有效期（天）'
       },
+      enterpriseVisibleGroups: {
+        title: '企业可见号池',
+        description: '配置每个企业在企业控制台里可以看到哪些启用中的分组。',
+        rules: '企业规则',
+        rulesHint: '企业名会按 trim + lowercase 规则归一化后再匹配。',
+        addRule: '添加规则',
+        empty: '当前还没有配置企业可见分组规则。',
+        enterpriseName: '企业名',
+        enterpriseNamePlaceholder: '例如 acme',
+        groupsHint: '保存时只会保留启用中的有效分组。'
+      },
       claudeCode: {
         title: 'Claude Code 设置',
         description: '控制 Claude Code 客户端访问要求',

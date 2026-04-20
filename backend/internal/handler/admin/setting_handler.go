@@ -73,6 +73,13 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 			ValidityDays: sub.ValidityDays,
 		})
 	}
+	enterpriseVisibleGroups := make([]dto.EnterpriseVisibleGroupSetting, 0, len(settings.EnterpriseVisibleGroups))
+	for _, rule := range settings.EnterpriseVisibleGroups {
+		enterpriseVisibleGroups = append(enterpriseVisibleGroups, dto.EnterpriseVisibleGroupSetting{
+			EnterpriseName:  rule.EnterpriseName,
+			VisibleGroupIDs: append([]int64(nil), rule.VisibleGroupIDs...),
+		})
+	}
 
 	response.Success(c, dto.SystemSettings{
 		RegistrationEnabled:                  settings.RegistrationEnabled,
@@ -113,6 +120,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		DefaultConcurrency:                   settings.DefaultConcurrency,
 		DefaultBalance:                       settings.DefaultBalance,
 		DefaultSubscriptions:                 defaultSubscriptions,
+		EnterpriseVisibleGroups:              enterpriseVisibleGroups,
 		EnableModelFallback:                  settings.EnableModelFallback,
 		FallbackModelAnthropic:               settings.FallbackModelAnthropic,
 		FallbackModelOpenAI:                  settings.FallbackModelOpenAI,
@@ -180,9 +188,10 @@ type UpdateSettingsRequest struct {
 	CustomEndpoints             *[]dto.CustomEndpoint `json:"custom_endpoints"`
 
 	// 默认配置
-	DefaultConcurrency   int                              `json:"default_concurrency"`
-	DefaultBalance       float64                          `json:"default_balance"`
-	DefaultSubscriptions []dto.DefaultSubscriptionSetting `json:"default_subscriptions"`
+	DefaultConcurrency      int                                  `json:"default_concurrency"`
+	DefaultBalance          float64                              `json:"default_balance"`
+	DefaultSubscriptions    []dto.DefaultSubscriptionSetting     `json:"default_subscriptions"`
+	EnterpriseVisibleGroups *[]dto.EnterpriseVisibleGroupSetting `json:"enterprise_visible_groups"`
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -506,6 +515,16 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			ValidityDays: sub.ValidityDays,
 		})
 	}
+	enterpriseVisibleGroups := previousSettings.EnterpriseVisibleGroups
+	if req.EnterpriseVisibleGroups != nil {
+		enterpriseVisibleGroups = make([]service.EnterpriseVisibleGroupSetting, 0, len(*req.EnterpriseVisibleGroups))
+		for _, rule := range *req.EnterpriseVisibleGroups {
+			enterpriseVisibleGroups = append(enterpriseVisibleGroups, service.EnterpriseVisibleGroupSetting{
+				EnterpriseName:  rule.EnterpriseName,
+				VisibleGroupIDs: append([]int64(nil), rule.VisibleGroupIDs...),
+			})
+		}
+	}
 
 	// 验证最低版本号格式（空字符串=禁用，或合法 semver）
 	if req.MinClaudeCodeVersion != "" {
@@ -569,6 +588,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DefaultConcurrency:               req.DefaultConcurrency,
 		DefaultBalance:                   req.DefaultBalance,
 		DefaultSubscriptions:             defaultSubscriptions,
+		EnterpriseVisibleGroups:          enterpriseVisibleGroups,
 		EnableModelFallback:              req.EnableModelFallback,
 		FallbackModelAnthropic:           req.FallbackModelAnthropic,
 		FallbackModelOpenAI:              req.FallbackModelOpenAI,
@@ -638,6 +658,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			ValidityDays: sub.ValidityDays,
 		})
 	}
+	updatedEnterpriseVisibleGroups := make([]dto.EnterpriseVisibleGroupSetting, 0, len(updatedSettings.EnterpriseVisibleGroups))
+	for _, rule := range updatedSettings.EnterpriseVisibleGroups {
+		updatedEnterpriseVisibleGroups = append(updatedEnterpriseVisibleGroups, dto.EnterpriseVisibleGroupSetting{
+			EnterpriseName:  rule.EnterpriseName,
+			VisibleGroupIDs: append([]int64(nil), rule.VisibleGroupIDs...),
+		})
+	}
 
 	response.Success(c, dto.SystemSettings{
 		RegistrationEnabled:                  updatedSettings.RegistrationEnabled,
@@ -678,6 +705,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DefaultConcurrency:                   updatedSettings.DefaultConcurrency,
 		DefaultBalance:                       updatedSettings.DefaultBalance,
 		DefaultSubscriptions:                 updatedDefaultSubscriptions,
+		EnterpriseVisibleGroups:              updatedEnterpriseVisibleGroups,
 		EnableModelFallback:                  updatedSettings.EnableModelFallback,
 		FallbackModelAnthropic:               updatedSettings.FallbackModelAnthropic,
 		FallbackModelOpenAI:                  updatedSettings.FallbackModelOpenAI,
