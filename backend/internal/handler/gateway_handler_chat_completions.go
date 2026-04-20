@@ -76,12 +76,15 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	reqModel := modelResult.String()
 	reqStream := gjson.GetBytes(body, "stream").Bool()
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
-	var channelMapping service.ChannelMappingResult
-	if apiKey.GroupID != nil {
-		channelMapping = h.gatewayService.ResolveChannelMapping(c.Request.Context(), *apiKey.GroupID, reqModel)
-	}
 
 	setOpsRequestContext(c, reqModel, reqStream, body)
+	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
+
+	channelMapping, restricted := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
+	if restricted {
+		h.chatCompletionsErrorResponse(c, http.StatusServiceUnavailable, "api_error", "The requested model is not available for this API key")
+		return
+	}
 
 	// Claude Code only restriction
 	if apiKey.Group != nil && apiKey.Group.ClaudeCodeOnly {
@@ -206,7 +209,11 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 		// 5. Forward request
 		writerSizeBeforeForward := c.Writer.Size()
-		result, err := h.gatewayService.ForwardAsChatCompletions(c.Request.Context(), c, account, body, parsedReq)
+		forwardBody := body
+		if channelMapping.Mapped {
+			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
+		}
+		result, err := h.gatewayService.ForwardAsChatCompletions(c.Request.Context(), c, account, forwardBody, parsedReq)
 
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()

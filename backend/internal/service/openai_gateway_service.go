@@ -444,6 +444,11 @@ func (s *OpenAIGatewayService) ResolveChannelMappingAndRestrict(ctx context.Cont
 	return s.channelService.ResolveChannelMappingAndRestrict(ctx, groupID, model)
 }
 
+// ReplaceModelInBody 替换请求体中的 JSON model 字段（通用 gjson/sjson 实现）。
+func (s *OpenAIGatewayService) ReplaceModelInBody(body []byte, newModel string) []byte {
+	return ReplaceModelInBody(body, newModel)
+}
+
 func (s *OpenAIGatewayService) getCodexSnapshotThrottle() *accountWriteThrottle {
 	if s != nil && s.codexSnapshotThrottle != nil {
 		return s.codexSnapshotThrottle

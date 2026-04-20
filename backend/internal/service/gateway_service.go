@@ -8157,6 +8157,14 @@ func (s *GatewayService) ResolveChannelMapping(ctx context.Context, groupID int6
 	return s.channelService.ResolveChannelMapping(ctx, groupID, model)
 }
 
+// ResolveChannelMappingAndRestrict 解析渠道映射并检查模型限制。
+func (s *GatewayService) ResolveChannelMappingAndRestrict(ctx context.Context, groupID *int64, model string) (ChannelMappingResult, bool) {
+	if s.channelService == nil {
+		return ChannelMappingResult{MappedModel: model}, false
+	}
+	return s.channelService.ResolveChannelMappingAndRestrict(ctx, groupID, model)
+}
+
 // ReplaceModelInBody 替换请求体中的模型名（导出供 handler 使用）
 func (s *GatewayService) ReplaceModelInBody(body []byte, newModel string) []byte {
 	return s.replaceModelInBody(body, newModel)
