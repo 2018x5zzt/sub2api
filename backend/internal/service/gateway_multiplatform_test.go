@@ -720,6 +720,192 @@ func TestGatewayService_SelectAccountForModelWithExclusions_ForcePlatform(t *tes
 	require.Equal(t, PlatformAntigravity, acc.Platform)
 }
 
+func TestGatewayService_SelectAccountForModelWithExclusions_ChannelPricingRestrictionRequestedModel(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(101)
+	group := &Group{
+		ID:       groupID,
+		Platform: PlatformAnthropic,
+		Status:   StatusActive,
+		Hydrated: true,
+	}
+	ctx = context.WithValue(ctx, ctxkey.Group, group)
+
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformAnthropic,
+				Priority:    1,
+				Status:      StatusActive,
+				Schedulable: true,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID},
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+
+	channelRepo := makeStandardRepo(Channel{
+		ID:                 1,
+		Status:             StatusActive,
+		GroupIDs:           []int64{groupID},
+		RestrictModels:     true,
+		BillingModelSource: BillingModelSourceRequested,
+		ModelPricing: []ChannelModelPricing{
+			{Platform: PlatformAnthropic, Models: []string{"claude-allowed"}},
+		},
+	}, map[int64]string{groupID: PlatformAnthropic})
+
+	svc := &GatewayService{
+		accountRepo:    repo,
+		groupRepo:      &mockGroupRepoForGateway{groups: map[int64]*Group{groupID: group}},
+		channelService: newTestChannelService(channelRepo),
+		cfg:            testConfig(),
+	}
+
+	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "claude-blocked", nil)
+	require.ErrorIs(t, err, ErrNoAvailableAccounts)
+	require.Nil(t, acc)
+	require.Contains(t, err.Error(), "channel pricing restriction")
+}
+
+func TestGatewayService_SelectAccountForModelWithExclusions_ChannelPricingRestrictionUpstreamSkipsRestrictedAccount(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(102)
+	group := &Group{
+		ID:       groupID,
+		Platform: PlatformAnthropic,
+		Status:   StatusActive,
+		Hydrated: true,
+	}
+	ctx = context.WithValue(ctx, ctxkey.Group, group)
+
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformAnthropic,
+				Priority:    1,
+				Status:      StatusActive,
+				Schedulable: true,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID},
+				},
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"claude-requested": "claude-upstream-blocked",
+					},
+				},
+			},
+			{
+				ID:          2,
+				Platform:    PlatformAnthropic,
+				Priority:    2,
+				Status:      StatusActive,
+				Schedulable: true,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID},
+				},
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"claude-requested": "claude-upstream-allowed",
+					},
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+
+	channelRepo := makeStandardRepo(Channel{
+		ID:                 1,
+		Status:             StatusActive,
+		GroupIDs:           []int64{groupID},
+		RestrictModels:     true,
+		BillingModelSource: BillingModelSourceUpstream,
+		ModelPricing: []ChannelModelPricing{
+			{Platform: PlatformAnthropic, Models: []string{"claude-upstream-allowed"}},
+		},
+	}, map[int64]string{groupID: PlatformAnthropic})
+
+	svc := &GatewayService{
+		accountRepo:    repo,
+		groupRepo:      &mockGroupRepoForGateway{groups: map[int64]*Group{groupID: group}},
+		channelService: newTestChannelService(channelRepo),
+		cfg:            testConfig(),
+	}
+
+	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "claude-requested", nil)
+	require.NoError(t, err)
+	require.NotNil(t, acc)
+	require.Equal(t, int64(2), acc.ID)
+}
+
+func TestGatewayService_SelectAccountWithLoadAwareness_ChannelPricingRestrictionRequestedModel(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(103)
+	group := &Group{
+		ID:       groupID,
+		Platform: PlatformAnthropic,
+		Status:   StatusActive,
+		Hydrated: true,
+	}
+	ctx = context.WithValue(ctx, ctxkey.Group, group)
+
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{
+				ID:          1,
+				Platform:    PlatformAnthropic,
+				Priority:    1,
+				Status:      StatusActive,
+				Schedulable: true,
+				Concurrency: 5,
+				AccountGroups: []AccountGroup{
+					{GroupID: groupID},
+				},
+			},
+		},
+		accountsByID: map[int64]*Account{},
+	}
+	for i := range repo.accounts {
+		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
+	}
+
+	channelRepo := makeStandardRepo(Channel{
+		ID:                 1,
+		Status:             StatusActive,
+		GroupIDs:           []int64{groupID},
+		RestrictModels:     true,
+		BillingModelSource: BillingModelSourceRequested,
+		ModelPricing: []ChannelModelPricing{
+			{Platform: PlatformAnthropic, Models: []string{"claude-allowed"}},
+		},
+	}, map[int64]string{groupID: PlatformAnthropic})
+
+	cfg := testConfig()
+	cfg.Gateway.Scheduling.LoadBatchEnabled = true
+
+	svc := &GatewayService{
+		accountRepo:        repo,
+		groupRepo:          &mockGroupRepoForGateway{groups: map[int64]*Group{groupID: group}},
+		channelService:     newTestChannelService(channelRepo),
+		cfg:                cfg,
+		concurrencyService: NewConcurrencyService(&mockConcurrencyCache{}),
+	}
+
+	result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "claude-blocked", nil, "")
+	require.ErrorIs(t, err, ErrNoAvailableAccounts)
+	require.Nil(t, result)
+}
+
 func TestGatewayService_SelectAccountForModelWithPlatform_RoutedStickySessionClears(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(10)

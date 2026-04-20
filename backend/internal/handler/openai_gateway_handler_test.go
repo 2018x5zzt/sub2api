@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -827,5 +828,12 @@ func newOpenAIWSHandlerTestServer(t *testing.T, h *OpenAIGatewayHandler, subject
 		c.Next()
 	})
 	router.GET("/openai/v1/responses", h.ResponsesWebSocket)
-	return httptest.NewServer(router)
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	require.NoError(t, err)
+	server := &httptest.Server{
+		Listener: listener,
+		Config:   &http.Server{Handler: router},
+	}
+	server.Start()
+	return server
 }
