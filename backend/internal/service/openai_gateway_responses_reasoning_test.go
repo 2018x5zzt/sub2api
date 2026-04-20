@@ -110,6 +110,55 @@ func TestForward_OpenAIResponsesPassthroughAddsReasoningSummary(t *testing.T) {
 	require.Equal(t, "auto", gjson.GetBytes(upstream.lastBody, "reasoning.summary").String())
 }
 
+func TestForward_OpenAIResponsesAPIKeyPassthroughNormalizesReasoningAliasModel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+
+	body := []byte(`{"model":"gpt-5.4-xhigh","input":"Hi","stream":false}`)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}, "x-request-id": []string{"rid-apikey-passthrough"}},
+		Body: io.NopCloser(bytes.NewReader([]byte(
+			`{"id":"resp_reasoning","model":"gpt-5.4","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"final answer"}]}],"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}`,
+		))),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{}},
+		httpUpstream: upstream,
+	}
+
+	account := &Account{
+		ID:          123,
+		Name:        "acc",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "sk-test",
+			"base_url": "https://relay.example.com",
+		},
+		Extra:          map[string]any{"openai_passthrough": true},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.Forward(context.Background(), c, account, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	require.Equal(t, "gpt-5.4", gjson.GetBytes(upstream.lastBody, "model").String())
+	require.Equal(t, "xhigh", gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
+	require.Equal(t, "auto", gjson.GetBytes(upstream.lastBody, "reasoning.summary").String())
+	require.NotNil(t, result.ReasoningEffort)
+	require.Equal(t, "xhigh", *result.ReasoningEffort)
+}
+
 func TestForward_OpenAIResponsesOAuthRemapsLegacyModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

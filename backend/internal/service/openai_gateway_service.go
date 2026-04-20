@@ -2436,6 +2436,16 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		reqStream = gjson.GetBytes(body, "stream").Bool()
 	}
 
+	if shouldNormalizeOpenAIPassthroughReasoningBody(body) {
+		reasoningBody, reasoningChanged, err := normalizeOpenAIPassthroughReasoningBody(body)
+		if err != nil {
+			return nil, err
+		}
+		if reasoningChanged {
+			body = reasoningBody
+		}
+	}
+
 	sanitizedBody, sanitized, err := sanitizeEmptyBase64InputImagesInOpenAIBody(body)
 	if err != nil {
 		return nil, err
@@ -5187,18 +5197,32 @@ func normalizeOpenAIPassthroughReasoningBody(body []byte) ([]byte, bool, error) 
 	}
 
 	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	normalizedModel, _, hasReasoningAlias := splitOpenAICompatReasoningModel(model)
 	reasoningEffort := extractOpenAIReasoningEffortFromBody(body, model)
-	if reasoningEffort == nil {
-		return body, false, nil
-	}
-
-	reasoningRoot := gjson.GetBytes(body, "reasoning")
-	if reasoningRoot.Exists() && reasoningRoot.Type != gjson.JSON {
+	if reasoningEffort == nil && (!hasReasoningAlias || normalizedModel == "" || normalizedModel == model) {
 		return body, false, nil
 	}
 
 	normalized := body
 	changed := false
+
+	if hasReasoningAlias && normalizedModel != "" && normalizedModel != model {
+		next, err := sjson.SetBytes(normalized, "model", normalizedModel)
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body model: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
+	if reasoningEffort == nil {
+		return normalized, changed, nil
+	}
+
+	reasoningRoot := gjson.GetBytes(normalized, "reasoning")
+	if reasoningRoot.Exists() && reasoningRoot.Type != gjson.JSON {
+		return normalized, changed, nil
+	}
 
 	if strings.TrimSpace(gjson.GetBytes(normalized, "reasoning.effort").String()) == "" {
 		next, err := sjson.SetBytes(normalized, "reasoning.effort", *reasoningEffort)
@@ -5220,6 +5244,23 @@ func normalizeOpenAIPassthroughReasoningBody(body []byte) ([]byte, bool, error) 
 	}
 
 	return normalized, changed, nil
+}
+
+func shouldNormalizeOpenAIPassthroughReasoningBody(body []byte) bool {
+	if len(body) == 0 {
+		return false
+	}
+
+	if reasoning := gjson.GetBytes(body, "reasoning"); reasoning.Exists() {
+		return true
+	}
+	if strings.TrimSpace(gjson.GetBytes(body, "reasoning_effort").String()) != "" {
+		return true
+	}
+
+	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	normalizedModel, _, hasReasoningAlias := splitOpenAICompatReasoningModel(model)
+	return hasReasoningAlias && normalizedModel != "" && normalizedModel != model
 }
 
 func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byte) string {
