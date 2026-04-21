@@ -156,6 +156,28 @@ func TestOpenAIEnsureForwardErrorResponse_WritesFallbackWhenNotWritten(t *testin
 	assert.Equal(t, "Upstream request failed", errorObj["message"])
 }
 
+func TestOpenAIEnsureForwardErrorResponse_UsesUpstreamBadRequestMessage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	service.SetOpsUpstreamError(c, http.StatusBadRequest, "Missing required parameter: 'tools[15].tools'.", "")
+
+	h := &OpenAIGatewayHandler{}
+	wrote := h.ensureForwardErrorResponse(c, false)
+
+	require.True(t, wrote)
+	require.Equal(t, http.StatusBadRequest, w.Code)
+
+	var parsed map[string]any
+	err := json.Unmarshal(w.Body.Bytes(), &parsed)
+	require.NoError(t, err)
+	errorObj, ok := parsed["error"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "invalid_request_error", errorObj["type"])
+	assert.Equal(t, "Missing required parameter: 'tools[15].tools'.", errorObj["message"])
+}
+
 func TestOpenAIEnsureForwardErrorResponse_DoesNotOverrideWrittenResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -169,6 +191,36 @@ func TestOpenAIEnsureForwardErrorResponse_DoesNotOverrideWrittenResponse(t *test
 	require.False(t, wrote)
 	require.Equal(t, http.StatusTeapot, w.Code)
 	assert.Equal(t, "already written", w.Body.String())
+}
+
+func TestOpenAIHandleFailoverExhausted_UsesUpstreamBadRequestMessage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+
+	h := &OpenAIGatewayHandler{}
+	failoverErr := &service.UpstreamFailoverError{
+		StatusCode: http.StatusBadRequest,
+		ResponseBody: []byte(`{
+			"error": {
+				"type": "invalid_request_error",
+				"message": "Missing required parameter: 'tools[15].tools'."
+			}
+		}`),
+	}
+
+	h.handleFailoverExhausted(c, failoverErr, false)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
+
+	var parsed map[string]any
+	err := json.Unmarshal(w.Body.Bytes(), &parsed)
+	require.NoError(t, err)
+	errorObj, ok := parsed["error"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "invalid_request_error", errorObj["type"])
+	assert.Equal(t, "Missing required parameter: 'tools[15].tools'.", errorObj["message"])
 }
 
 func TestShouldLogOpenAIForwardFailureAsWarn(t *testing.T) {

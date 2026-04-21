@@ -899,7 +899,8 @@ func (h *OpenAIGatewayHandler) anthropicStreamingAwareError(c *gin.Context, stat
 
 // handleAnthropicFailoverExhausted maps upstream failover errors to Anthropic format.
 func (h *OpenAIGatewayHandler) handleAnthropicFailoverExhausted(c *gin.Context, failoverErr *service.UpstreamFailoverError, streamStarted bool) {
-	status, errType, errMsg := h.mapUpstreamError(failoverErr.StatusCode)
+	upstreamMsg := service.ExtractUpstreamErrorMessage(failoverErr.ResponseBody)
+	status, errType, errMsg := h.mapUpstreamError(failoverErr.StatusCode, upstreamMsg)
 	h.anthropicStreamingAwareError(c, status, errType, errMsg, streamStarted)
 }
 
@@ -1570,19 +1571,24 @@ func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverE
 	service.SetOpsUpstreamError(c, statusCode, upstreamMsg, "")
 
 	// 使用默认的错误映射
-	status, errType, errMsg := h.mapUpstreamError(statusCode)
+	status, errType, errMsg := h.mapUpstreamError(statusCode, upstreamMsg)
 	h.handleStreamingAwareError(c, status, errType, errMsg, streamStarted)
 }
 
 // handleFailoverExhaustedSimple 简化版本，用于没有响应体的情况
 func (h *OpenAIGatewayHandler) handleFailoverExhaustedSimple(c *gin.Context, statusCode int, streamStarted bool) {
-	status, errType, errMsg := h.mapUpstreamError(statusCode)
+	status, errType, errMsg := h.mapUpstreamError(statusCode, "")
 	service.SetOpsUpstreamError(c, statusCode, errMsg, "")
 	h.handleStreamingAwareError(c, status, errType, errMsg, streamStarted)
 }
 
-func (h *OpenAIGatewayHandler) mapUpstreamError(statusCode int) (int, string, string) {
+func (h *OpenAIGatewayHandler) mapUpstreamError(statusCode int, upstreamMsg string) (int, string, string) {
 	switch statusCode {
+	case 400:
+		if msg := strings.TrimSpace(upstreamMsg); msg != "" {
+			return http.StatusBadRequest, "invalid_request_error", msg
+		}
+		return http.StatusBadRequest, "invalid_request_error", "Upstream rejected the request as invalid"
 	case 401:
 		return http.StatusBadGateway, "upstream_error", "Upstream authentication failed, please contact administrator"
 	case 403:
@@ -1623,8 +1629,37 @@ func (h *OpenAIGatewayHandler) ensureForwardErrorResponse(c *gin.Context, stream
 	if c == nil || c.Writer == nil || c.Writer.Written() {
 		return false
 	}
-	h.handleStreamingAwareError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed", streamStarted)
+	status := http.StatusBadGateway
+	errType := "upstream_error"
+	message := "Upstream request failed"
+	if upstreamStatusCode, upstreamMsg := getOpenAIUpstreamErrorContext(c); upstreamStatusCode > 0 {
+		status, errType, message = h.mapUpstreamError(upstreamStatusCode, upstreamMsg)
+	}
+	h.handleStreamingAwareError(c, status, errType, message, streamStarted)
 	return true
+}
+
+func getOpenAIUpstreamErrorContext(c *gin.Context) (int, string) {
+	if c == nil {
+		return 0, ""
+	}
+	upstreamStatusCode := 0
+	if v, ok := c.Get(service.OpsUpstreamStatusCodeKey); ok {
+		switch t := v.(type) {
+		case int:
+			upstreamStatusCode = t
+		case int64:
+			upstreamStatusCode = int(t)
+		}
+	}
+
+	upstreamMsg := ""
+	if v, ok := c.Get(service.OpsUpstreamErrorMessageKey); ok {
+		if s, ok := v.(string); ok {
+			upstreamMsg = strings.TrimSpace(s)
+		}
+	}
+	return upstreamStatusCode, upstreamMsg
 }
 
 func shouldLogOpenAIForwardFailureAsWarn(c *gin.Context, wroteFallback bool) bool {
