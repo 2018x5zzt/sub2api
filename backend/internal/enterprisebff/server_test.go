@@ -215,6 +215,222 @@ func TestPublicSettingsUseEnterpriseBrandingForAuthenticatedUser(t *testing.T) {
 	require.Equal(t, "ops@acme.test", data["contact_info"])
 }
 
+func TestUserProfileRouteProxiesToCore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server, seen := newProxyAssertionServer(t, http.MethodGet, "/api/v1/user/profile")
+
+	req := httptest.NewRequest(http.MethodGet, "/user/profile", nil)
+	req.Header.Set("Authorization", "Bearer token")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "/api/v1/user/profile", seen.path)
+}
+
+func TestUserUpdateRouteProxiesToCore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server, seen := newProxyAssertionServer(t, http.MethodPut, "/api/v1/user")
+
+	req := httptest.NewRequest(http.MethodPut, "/user", bytes.NewBufferString(`{"username":"new-name"}`))
+	req.Header.Set("Authorization", "Bearer token")
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, http.MethodPut, seen.method)
+	require.Equal(t, "/api/v1/user", seen.path)
+	require.JSONEq(t, `{"username":"new-name"}`, seen.body)
+}
+
+func TestUserPasswordRouteProxiesToCore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server, seen := newProxyAssertionServer(t, http.MethodPut, "/api/v1/user/password")
+
+	req := httptest.NewRequest(http.MethodPut, "/user/password", bytes.NewBufferString(`{"old_password":"old","new_password":"new-password"}`))
+	req.Header.Set("Authorization", "Bearer token")
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "/api/v1/user/password", seen.path)
+}
+
+func TestUserTotpStatusRouteProxiesToCore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server, seen := newProxyAssertionServer(t, http.MethodGet, "/api/v1/user/totp/status")
+
+	req := httptest.NewRequest(http.MethodGet, "/user/totp/status", nil)
+	req.Header.Set("Authorization", "Bearer token")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "/api/v1/user/totp/status", seen.path)
+}
+
+func TestRevokeAllSessionsRouteProxiesToCore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server, seen := newProxyAssertionServer(t, http.MethodPost, "/api/v1/auth/revoke-all-sessions")
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/revoke-all-sessions", nil)
+	req.Header.Set("Authorization", "Bearer token")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, http.MethodPost, seen.method)
+	require.Equal(t, "/api/v1/auth/revoke-all-sessions", seen.path)
+}
+
+func TestForgotPasswordRouteProxiesToCore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server, seen := newProxyAssertionServer(t, http.MethodPost, "/api/v1/auth/forgot-password")
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/forgot-password", bytes.NewBufferString(`{"email":"owner@example.com"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "/api/v1/auth/forgot-password", seen.path)
+	require.JSONEq(t, `{"email":"owner@example.com"}`, seen.body)
+}
+
+func TestResetPasswordRouteProxiesToCore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server, seen := newProxyAssertionServer(t, http.MethodPost, "/api/v1/auth/reset-password")
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/reset-password", bytes.NewBufferString(`{"email":"owner@example.com","token":"reset-token","new_password":"new-password"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "/api/v1/auth/reset-password", seen.path)
+	require.JSONEq(t, `{"email":"owner@example.com","token":"reset-token","new_password":"new-password"}`, seen.body)
+}
+
+func TestSubscriptionSummaryRouteProxiesToCore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server, seen := newProxyAssertionServer(t, http.MethodGet, "/api/v1/subscriptions/summary")
+
+	req := httptest.NewRequest(http.MethodGet, "/subscriptions/summary", nil)
+	req.Header.Set("Authorization", "Bearer token")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "/api/v1/subscriptions/summary", seen.path)
+}
+
+func TestSubscriptionProgressRouteProxiesToCore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server, seen := newProxyAssertionServer(t, http.MethodGet, "/api/v1/subscriptions/progress")
+
+	req := httptest.NewRequest(http.MethodGet, "/subscriptions/progress", nil)
+	req.Header.Set("Authorization", "Bearer token")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "/api/v1/subscriptions/progress", seen.path)
+}
+
+func TestRedeemHistoryRouteProxiesToCore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server, seen := newProxyAssertionServer(t, http.MethodGet, "/api/v1/redeem/history")
+
+	req := httptest.NewRequest(http.MethodGet, "/redeem/history?limit=10", nil)
+	req.Header.Set("Authorization", "Bearer token")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "/api/v1/redeem/history", seen.path)
+	require.Equal(t, "limit=10", seen.query)
+}
+
+func TestRedeemRouteProxiesToCore(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server, seen := newProxyAssertionServer(t, http.MethodPost, "/api/v1/redeem")
+
+	req := httptest.NewRequest(http.MethodPost, "/redeem", bytes.NewBufferString(`{"code":"LG2026"}`))
+	req.Header.Set("Authorization", "Bearer token")
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	server.Router().ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Equal(t, "/api/v1/redeem", seen.path)
+	require.JSONEq(t, `{"code":"LG2026"}`, seen.body)
+}
+
+type seenUpstreamRequest struct {
+	method string
+	path   string
+	query  string
+	body   string
+}
+
+func newProxyAssertionServer(t *testing.T, expectedMethod, expectedPath string) (*Server, *seenUpstreamRequest) {
+	t.Helper()
+
+	seen := &seenUpstreamRequest{}
+	transport := roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		require.Equal(t, expectedMethod, r.Method)
+		require.Equal(t, expectedPath, r.URL.Path)
+
+		seen.method = r.Method
+		seen.path = r.URL.Path
+		seen.query = r.URL.RawQuery
+
+		body, err := io.ReadAll(r.Body)
+		require.NoError(t, err)
+		seen.body = string(body)
+
+		recorder := httptest.NewRecorder()
+		recorder.Header().Set("Content-Type", "application/json")
+		_, _ = recorder.Write([]byte(`{"code":0,"message":"success","data":{}}`))
+		return recorder.Result(), nil
+	})
+
+	baseURL, err := url.Parse("http://core.example/api/v1")
+	require.NoError(t, err)
+
+	server := New(&Config{
+		ListenAddr:     "127.0.0.1:0",
+		CoreBaseURL:    baseURL,
+		RequestTimeout: 0,
+	}, nil, newFakeEnterpriseStore(), newNoopGroupHealthSnapshotRepo())
+	server.httpClient = &http.Client{Transport: transport}
+	return server, seen
+}
+
 type roundTripperFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
