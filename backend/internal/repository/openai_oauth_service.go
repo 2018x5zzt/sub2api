@@ -57,7 +57,7 @@ func (s *openaiOAuthService) ExchangeCode(ctx context.Context, code, codeVerifie
 	}
 
 	if !resp.IsSuccessState() {
-		return nil, infraerrors.Newf(http.StatusBadGateway, "OPENAI_OAUTH_TOKEN_EXCHANGE_FAILED", "token exchange failed: status %d, body: %s", resp.StatusCode, resp.String())
+		return nil, newOpenAIOAuthUpstreamError(resp.StatusCode, "OPENAI_OAUTH_TOKEN_EXCHANGE_FAILED", "token exchange failed: status %d, body: %s", resp.StatusCode, resp.String())
 	}
 
 	return &tokenResp, nil
@@ -102,7 +102,7 @@ func (s *openaiOAuthService) refreshTokenWithClientID(ctx context.Context, refre
 	}
 
 	if !resp.IsSuccessState() {
-		return nil, infraerrors.Newf(http.StatusBadGateway, "OPENAI_OAUTH_TOKEN_REFRESH_FAILED", "token refresh failed: status %d, body: %s", resp.StatusCode, resp.String())
+		return nil, newOpenAIOAuthUpstreamError(resp.StatusCode, "OPENAI_OAUTH_TOKEN_REFRESH_FAILED", "token refresh failed: status %d, body: %s", resp.StatusCode, resp.String())
 	}
 
 	return &tokenResp, nil
@@ -113,4 +113,11 @@ func createOpenAIReqClient(proxyURL string) (*req.Client, error) {
 		ProxyURL: proxyURL,
 		Timeout:  120 * time.Second,
 	})
+}
+
+func newOpenAIOAuthUpstreamError(statusCode int, reason, format string, a ...any) error {
+	if statusCode <= 0 {
+		statusCode = http.StatusBadGateway
+	}
+	return infraerrors.Newf(statusCode, reason, format, a...)
 }

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"testing"
 
+	pkgerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -215,6 +216,7 @@ func (s *OpenAIOAuthServiceSuite) TestNonSuccessStatus_IncludesBody() {
 
 	_, err := s.svc.ExchangeCode(s.ctx, "code", "ver", openai.DefaultRedirectURI, "", "")
 	require.Error(s.T(), err)
+	require.Equal(s.T(), http.StatusBadRequest, pkgerrors.Code(err))
 	require.ErrorContains(s.T(), err, "status 400")
 	require.ErrorContains(s.T(), err, "bad")
 }
@@ -335,6 +337,7 @@ func (s *OpenAIOAuthServiceSuite) TestRefreshToken_NonSuccessStatus() {
 
 	_, err := s.svc.RefreshToken(s.ctx, "rt", "")
 	require.Error(s.T(), err, "expected error for non-2xx status")
+	require.Equal(s.T(), http.StatusUnauthorized, pkgerrors.Code(err))
 	require.ErrorContains(s.T(), err, "status 401")
 }
 
