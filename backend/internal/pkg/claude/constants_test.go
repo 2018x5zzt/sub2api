@@ -2,6 +2,16 @@ package claude
 
 import "testing"
 
+func TestDefaultModels_ContainsOpus47Release(t *testing.T) {
+	for _, model := range DefaultModels {
+		if model.ID == "claude-opus-4-7" {
+			return
+		}
+	}
+
+	t.Fatalf("expected claude-opus-4-7 to be exposed in DefaultModels, got %v", DefaultModelIDs())
+}
+
 func TestDefaultModels_ContainsHaiku45Release(t *testing.T) {
 	for _, model := range DefaultModels {
 		if model.ID == "claude-haiku-4-5-20251001" {

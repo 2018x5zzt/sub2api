@@ -24,3 +24,19 @@ func TestDefaultAntigravityModelMapping_ImageCompatibilityAliases(t *testing.T) 
 		}
 	}
 }
+
+func TestDefaultModelMappings_ContainOpus47(t *testing.T) {
+	t.Parallel()
+
+	if got, ok := DefaultAntigravityModelMapping["claude-opus-4-7"]; !ok {
+		t.Fatal("expected antigravity mapping for claude-opus-4-7 to exist")
+	} else if got != "claude-opus-4-7" {
+		t.Fatalf("unexpected antigravity mapping for claude-opus-4-7: got %q want %q", got, "claude-opus-4-7")
+	}
+
+	if got, ok := DefaultBedrockModelMapping["claude-opus-4-7"]; !ok {
+		t.Fatal("expected bedrock mapping for claude-opus-4-7 to exist")
+	} else if got != "us.anthropic.claude-opus-4-7-v1" {
+		t.Fatalf("unexpected bedrock mapping for claude-opus-4-7: got %q want %q", got, "us.anthropic.claude-opus-4-7-v1")
+	}
+}

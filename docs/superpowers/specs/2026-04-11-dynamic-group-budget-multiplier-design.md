@@ -4,7 +4,24 @@
 
 This design introduces a new pricing mode for groups: dynamic pricing.
 
-When a user creates an API key and binds it to a dynamic pricing group, the key gets its own `budget_multiplier`. This value controls the key's acceptable rolling pricing budget inside that specific dynamic group. The system routes requests dynamically across different multiplier pools while trying to keep the key's recent 7-day cost-weighted average multiplier within the configured budget.
+When a user creates an API key and binds it to a dynamic pricing group, the key gets its own `budget_multiplier`. This value is a routing-budget control for that key inside that specific dynamic group. It is used to decide whether the request may continue and whether a candidate account may be selected. It is not the direct multiplier used for final billing.
+
+The system first calculates the API key's recent 7-day weighted average multiplier:
+
+```text
+current_average_multiplier = recent_7d_actual_cost / recent_7d_standard_cost
+```
+
+If the current average is already above the configured budget, the request is rejected immediately. Otherwise, the router evaluates candidate accounts and only allows candidates whose predicted post-request average would remain within budget.
+
+Final billing keeps the existing settlement model:
+
+```text
+ActualCost = TotalCost * effective_multiplier
+effective_multiplier = resolved_group_multiplier * account_group.billing_multiplier
+```
+
+Where `resolved_group_multiplier` is the user-specific group multiplier when present, otherwise the group's default multiplier.
 
 Claude's existing dynamic multiplier group is the first migration target. The same design must later support OpenAI and any other platform that adopts dynamic pricing groups.
 
@@ -26,7 +43,8 @@ Without this budget control:
 - Let each API key bound to a dynamic pricing group save its own `budget_multiplier`.
 - Show `budget_multiplier` only when the selected group is a dynamic pricing group.
 - Use a rolling 7-day, standard-cost-weighted average multiplier as the budget control rule.
-- Preserve price guarantees by failing requests when only over-budget routing remains available.
+- Keep the existing billing settlement path and avoid introducing a second billing formula for dynamic groups.
+- Preserve budget guarantees by failing requests when the current rolling average is already over budget or when no budget-compatible candidate remains.
 - Reuse the existing custom error response capability to explain budget-based failures.
 - Migrate the existing Claude dynamic multiplier group with a default budget multiplier of `8.0`.
 
@@ -61,6 +79,22 @@ API keys remain single-group credentials. An API key stores:
 - `budget_multiplier` when `group_id` points to a dynamic pricing group
 
 `budget_multiplier` belongs to the API key inside its currently bound dynamic group. It is not a global user setting and it is not shared across different dynamic groups.
+
+### Group Billing Multiplier Resolution
+
+Dynamic pricing groups continue to use the existing group multiplier stack:
+
+- group default rate multiplier
+- optional user-specific group multiplier override
+- account-group binding multiplier: `account_group.billing_multiplier`
+
+The resolved billing multiplier for a selected account is:
+
+```text
+effective_multiplier = resolved_group_multiplier * account_group.billing_multiplier
+```
+
+`budget_multiplier` does not replace this stack. It only constrains routing against rolling budget policy.
 
 ### Scope Rules
 
@@ -110,7 +144,7 @@ Suggested label:
 
 Suggested helper text:
 
-- `系统会按最近7天标准成本加权平均倍率，尽量控制在该预算倍率以内。低倍率号池不足时，请求可能失败。`
+- `系统会按最近7天标准成本加权平均倍率控制选号范围。预算倍率用于预算约束，不直接等于最终扣费倍率。`
 
 ### User API Key Editing
 
@@ -121,70 +155,126 @@ Suggested helper text:
 
 ## Routing and Budget Logic
 
-### Budget Definition
+### Budget Multiplier Resolution
 
-Budget control uses a rolling 7-day weighted average:
+The effective routing budget is resolved in this order:
 
 ```text
-recent_7d_average_multiplier = recent_7d_actual_billed_cost / recent_7d_standard_cost
+api_key.budget_multiplier > group.default_budget_multiplier > 8.0
+```
+
+The hard-coded `8.0` fallback is only a defensive read fallback for incomplete data during rollout.
+
+### Budget Window and Current Average
+
+Budget control uses a rolling 7-day weighted average. The budget window is:
+
+```text
+window_start = max(now - 7d, api_key.created_at)
+window_end = now
+```
+
+The system loads usage stats for that API key within this window and computes:
+
+```text
+current_average_multiplier = recent_7d_actual_cost / recent_7d_standard_cost
 ```
 
 Where:
 
-- `actual_billed_cost` includes dynamic multiplier effects
+- `actual_cost` is the already billed cost recorded in usage logs
 - `standard_cost` is the baseline cost before dynamic multiplier uplift
+- both values come from the API key's own usage history, not shared group history
 
 This is a standard-cost-weighted multiplier average, not a request-count average and not a natural-week average.
+
+If `current_average_multiplier > budget_multiplier`, the request is rejected before account selection.
+
+### Effective Billing Multiplier
+
+Dynamic pricing does not introduce a separate billing formula. For the selected account:
+
+```text
+resolved_group_multiplier =
+  user_specific_group_multiplier or group.default_rate_multiplier
+
+effective_multiplier =
+  resolved_group_multiplier * account_group.billing_multiplier
+
+ActualCost = TotalCost * effective_multiplier
+```
+
+This applies to token billing, per-request billing, and image billing. The account's own quota accounting may still use its separate account-level billing multiplier, but that value does not participate in dynamic budget evaluation.
+
+### Candidate Budget Check
+
+Each candidate account is evaluated by its `effective_multiplier`.
+
+If there is no usable 7-day history for the API key yet, or `recent_7d_standard_cost = 0`, the rule is:
+
+```text
+allow_candidate = effective_multiplier <= budget_multiplier
+```
+
+If there is existing history, the system predicts the next request using the recent average standard cost per request:
+
+```text
+estimated_next_standard_cost =
+  recent_7d_standard_cost / recent_7d_request_count
+
+predicted_average_multiplier =
+  (recent_7d_actual_cost + estimated_next_standard_cost * effective_multiplier) /
+  (recent_7d_standard_cost + estimated_next_standard_cost)
+
+allow_candidate = predicted_average_multiplier <= budget_multiplier
+```
+
+This is intentionally not a token-level estimate of the current request. It is a rolling budget policy based on recent average standard cost per request.
 
 ### Selection Strategy
 
 Routing for dynamic pricing groups follows these rules:
 
-1. Prefer lower-multiplier candidates first.
-2. If a higher-multiplier candidate is considered, evaluate whether selecting it remains compatible with the key's budget policy.
-3. If the candidate is budget-compatible, allow it.
-4. If it is not budget-compatible, keep searching lower-cost candidates.
+1. Budget-compatible candidates rank ahead of budget-incompatible candidates.
+2. If two candidates are both budget-compatible, prefer the higher `effective_multiplier`.
+3. If two candidates are both budget-incompatible, prefer the lower `effective_multiplier`.
+4. Only candidates that pass the budget check may actually be selected for the request.
 5. If no budget-compatible candidates remain, fail the request.
 
-This preserves the product promise:
+This is not a low-multiplier-first policy. The actual strategy is:
 
-- protect price
-- do not protect success rate at all costs
+- stay within the configured rolling budget
+- use the highest multiplier still allowed by that budget
+- fail once only over-budget candidates remain
 
 ### Failure Condition
 
 A request fails when:
 
 - the API key is bound to a dynamic pricing group
-- budget-compatible routing candidates are exhausted
-- remaining available candidates would break budget policy
+- the current rolling average multiplier is already above `budget_multiplier`
+- or budget-compatible routing candidates are exhausted and remaining available candidates would break budget policy
 
 The failure does not mean the whole upstream is unavailable. It means the currently available routes are outside the key's accepted budget range.
 
 ## Error Handling
 
-Budget-based failures should return a dedicated custom error instead of a generic upstream error.
+Budget-based failures should return the existing dedicated custom error instead of a generic upstream error.
 
-Suggested error type:
+Error code:
 
-- `dynamic_budget_blocked`
+- `DYNAMIC_PRICING_BUDGET_EXCEEDED`
 
-Suggested response content should include:
+Current default message:
 
-- configured `budget_multiplier`
-- current recent 7-day actual average multiplier
-- explanation that budget-range candidates are unavailable
-- action hint to raise the budget multiplier or retry later
+- `当前预算倍率下没有可用账号，可调高预算倍率后重试`
 
-Suggested message template:
+This error is used for both cases:
 
-```text
-当前预算倍率为 8.0x，最近7天实际平均倍率为 7.9x。
-当前预算范围内的可用号池不足，请求无法继续调度。
-建议提高预算倍率后重试，或稍后再试。
-```
+- the current rolling average is already over budget
+- the current request cannot find any budget-compatible candidate
 
-This design assumes the existing custom error response capability remains the delivery mechanism. The budget failure should integrate with that system rather than introducing a separate response framework.
+The budget failure integrates with the existing custom error response capability rather than introducing a separate response framework. Structured details such as current average or configured budget can be added later if the error-response layer is expanded, but they are not required for the initial design.
 
 ## Data Migration
 
@@ -207,8 +297,8 @@ Only migrate API keys currently bound to that group. Do not backfill API keys th
 
 During rollout, backend reads for dynamic pricing group keys may use a defensive fallback:
 
-- if a dynamic-group API key is missing `budget_multiplier`
-- temporarily read the group's `default_budget_multiplier`
+- if a dynamic-group API key is missing `budget_multiplier`, read `group.default_budget_multiplier`
+- if the group default is also missing, fall back to hard-coded `8.0`
 - still plan to repair the data rather than relying on fallback long term
 
 ## Update and Lifecycle Rules
@@ -216,6 +306,7 @@ During rollout, backend reads for dynamic pricing group keys may use a defensive
 - API keys may change `budget_multiplier`.
 - API keys may not change `group_id` after creation.
 - To move to another group, the user must create a new key and delete the old one.
+- When creating an API key for a dynamic pricing group, omit `budget_multiplier` only to accept the group's current default.
 - Changing a group's `default_budget_multiplier` only affects future API keys.
 - Existing API keys keep their own saved `budget_multiplier`.
 
@@ -231,10 +322,15 @@ This avoids cross-group budget leakage and avoids carrying rolling budget semant
 - API key update path allows `budget_multiplier` edits but rejects `group_id` changes
 - migration/backfill for the existing Claude dynamic group and bound API keys
 - routing tests for:
-  - lower-multiplier preference
-  - budget-compatible higher-multiplier selection
+  - request rejection when the current rolling average already exceeds budget
+  - budget compatibility check with no history
+  - predicted-average compatibility check with existing history
+  - budget-compatible higher-multiplier preference
+  - lower-multiplier preference only when all remaining candidates are already over budget
   - request rejection when only over-budget candidates remain
-- budget failure response uses the expected custom error type and message fields
+- billing tests for `ActualCost = TotalCost * effective_multiplier`
+- billing tests that `budget_multiplier` affects routing only and does not directly replace the billing multiplier
+- budget failure response uses the expected custom error code and message
 
 ### Frontend
 
@@ -255,7 +351,7 @@ This avoids cross-group budget leakage and avoids carrying rolling budget semant
 
 ### Product Risk
 
-If low-multiplier pools are frequently exhausted, users will see more budget-blocked failures. This is expected under a "protect price, not success rate" promise, but it requires clear messaging and operator visibility.
+Because routing prefers the highest multiplier still allowed by budget, a key may consume budget headroom faster than users expect if they assume the system always prefers the cheapest account. This is acceptable, but it must be clearly documented.
 
 ### UX Risk
 
@@ -263,8 +359,9 @@ Users may confuse:
 
 - fixed group multiplier
 - dynamic group budget multiplier
+- final billed multiplier on the selected account
 
-The UI must keep these concepts visibly separate. Fixed pricing groups should continue to talk about fixed billing multiplier. Dynamic pricing groups should talk about `预算倍率`.
+The UI must keep these concepts visibly separate. Fixed pricing groups should continue to talk about fixed billing multiplier. Dynamic pricing groups should talk about `预算倍率` as a routing budget, not as the final billing multiplier.
 
 ### Expansion Risk
 
@@ -281,6 +378,8 @@ The first rollout should:
 - add per-key `budget_multiplier`
 - prevent API key group switching
 - expose `预算倍率` only for dynamic pricing groups
+- reject requests when the current rolling average is already over budget
+- otherwise select the highest-multiplier candidate that still keeps the rolling average within budget
 - fail requests when no budget-compatible candidate remains
 
-This keeps the product model understandable, preserves budget guarantees, and leaves a clean path to future OpenAI dynamic pricing groups.
+This keeps the product model aligned with the existing billing pipeline, makes the routing rule explicit, preserves budget guarantees, and leaves a clean path to future OpenAI dynamic pricing groups.

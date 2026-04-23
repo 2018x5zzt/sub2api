@@ -205,6 +205,7 @@ type modelInfo struct {
 // 注意：模型映射逻辑在网关层完成；这里仅用于按模型前缀判断是否注入身份提示词。
 var modelInfoMap = map[string]modelInfo{
 	"claude-opus-4-5":   {DisplayName: "Claude Opus 4.5", CanonicalID: "claude-opus-4-5-20250929"},
+	"claude-opus-4-7":   {DisplayName: "Claude Opus 4.7", CanonicalID: "claude-opus-4-7"},
 	"claude-opus-4-6":   {DisplayName: "Claude Opus 4.6", CanonicalID: "claude-opus-4-6"},
 	"claude-sonnet-4-6": {DisplayName: "Claude Sonnet 4.6", CanonicalID: "claude-sonnet-4-6"},
 	"claude-sonnet-4-5": {DisplayName: "Claude Sonnet 4.5", CanonicalID: "claude-sonnet-4-5-20250929"},
@@ -582,8 +583,9 @@ func maxOutputTokensLimit(model string) int {
 	return maxOutputTokensUpperBound
 }
 
-func isAntigravityOpus46Model(model string) bool {
-	return strings.HasPrefix(strings.ToLower(model), "claude-opus-4-6")
+func isAntigravityHighBudgetOpusModel(model string) bool {
+	model = strings.ToLower(model)
+	return strings.HasPrefix(model, "claude-opus-4-6") || strings.HasPrefix(model, "claude-opus-4-7")
 }
 
 func isThinkingEnabledForClaudeRequest(model string, thinking *ThinkingConfig) bool {
@@ -618,12 +620,12 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 		}
 
 		// - thinking.type=enabled：budget_tokens>0 用显式预算
-		// - thinking.type=adaptive：仅在 Antigravity 的 Opus 4.6 上覆写为 （24576）
+		// - thinking.type=adaptive：仅在 Antigravity 的高预算 Opus 模型上覆写为 24576
 		budget := -1
 		if req.Thinking != nil && req.Thinking.BudgetTokens > 0 {
 			budget = req.Thinking.BudgetTokens
 		}
-		if req.Thinking != nil && strings.EqualFold(strings.TrimSpace(req.Thinking.Type), "adaptive") && isAntigravityOpus46Model(req.Model) {
+		if req.Thinking != nil && strings.EqualFold(strings.TrimSpace(req.Thinking.Type), "adaptive") && isAntigravityHighBudgetOpusModel(req.Model) {
 			budget = ClaudeAdaptiveHighThinkingBudgetTokens
 		}
 
