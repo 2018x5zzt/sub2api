@@ -235,6 +235,70 @@ func TestAccountTestService_OpenAIAPIKeyImageModelUsesImagesEndpointAndPrompt(t 
 	require.Contains(t, recorder.Body.String(), `"type":"test_complete"`)
 }
 
+func TestAccountTestService_OpenAIAPIKeyUsesV1ResponsesEndpointForRootBaseURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, recorder := newSoraTestContext()
+
+	resp := newJSONResponse(http.StatusOK, `{"id":"resp_ok","usage":{"input_tokens":1,"output_tokens":1}}`)
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          94,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "test-token",
+			"base_url": "https://api.openai.com",
+		},
+	}
+
+	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4", "")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://api.openai.com/v1/responses", upstream.requests[0].URL.String())
+	require.Contains(t, recorder.Body.String(), "test_complete")
+}
+
+func TestAccountTestService_OpenAIAPIKeyImageModelUsesV1ImagesEndpointForRootBaseURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, recorder := newSoraTestContext()
+
+	resp := newJSONResponse(http.StatusOK, `{"created":1710000000,"data":[{"b64_json":"QUJD","revised_prompt":"draw a tiny orange cat astronaut"}]}`)
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          95,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "test-token",
+			"base_url": "https://api.openai.com",
+		},
+	}
+
+	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-image-2", "draw a tiny orange cat astronaut")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://api.openai.com/v1/images/generations", upstream.requests[0].URL.String())
+	require.Contains(t, recorder.Body.String(), `"type":"test_complete"`)
+}
+
 func TestAccountTestService_OpenAIOAuthImageModelUsesPromptAndStreamsImagePreview(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx, recorder := newSoraTestContext()

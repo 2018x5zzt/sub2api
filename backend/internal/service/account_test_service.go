@@ -496,9 +496,9 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		apiURL = normalizedBaseURL
 		if account.ShouldAppendAPIPath() {
 			if isImageModel {
-				apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/images/generations"
+				apiURL = buildOpenAIImagesURL(normalizedBaseURL, openAIImagesGenerationsEndpoint)
 			} else {
-				apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/responses"
+				apiURL = buildOpenAIResponsesURL(normalizedBaseURL)
 			}
 		}
 	} else {
