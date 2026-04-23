@@ -69,7 +69,7 @@ func TestAccountTestService_OpenAISuccessPersistsSnapshotFromHeaders(t *testing.
 		Credentials: map[string]any{"access_token": "test-token"},
 	}
 
-	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4")
+	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4", "")
 	require.NoError(t, err)
 	require.NotEmpty(t, repo.updatedExtra)
 	require.Equal(t, 42.0, repo.updatedExtra["codex_5h_used_percent"])
@@ -100,7 +100,7 @@ func TestAccountTestService_OpenAI429PersistsSnapshotWithoutRateLimit(t *testing
 		Credentials: map[string]any{"access_token": "test-token"},
 	}
 
-	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4")
+	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4", "")
 	require.Error(t, err)
 	require.NotEmpty(t, repo.updatedExtra)
 	require.Equal(t, 100.0, repo.updatedExtra["codex_5h_used_percent"])
@@ -127,7 +127,7 @@ func TestAccountTestService_OpenAIRemapsLegacyOAuthModel(t *testing.T) {
 		Credentials: map[string]any{"access_token": "test-token"},
 	}
 
-	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.2-codex")
+	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.2-codex", "")
 	require.NoError(t, err)
 	require.Len(t, upstream.requests, 1)
 	require.Contains(t, recorder.Body.String(), "test_complete")
@@ -154,7 +154,7 @@ func TestAccountTestService_OpenAI401MarksPermanentError(t *testing.T) {
 			Credentials: map[string]any{"access_token": "test-token"},
 		}
 
-		err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4")
+		err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4", "")
 		require.Error(t, err)
 		require.Equal(t, 1, repo.setErrorCalls)
 		require.Contains(t, repo.lastErrorMsg, "Authentication failed (401)")
@@ -188,9 +188,85 @@ func TestAccountTestService_OpenAI401MarksPermanentError(t *testing.T) {
 			},
 		}
 
-		err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4")
+		err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4", "")
 		require.Error(t, err)
 		require.Zero(t, repo.setErrorCalls)
 		require.Empty(t, repo.lastErrorMsg)
 	})
+}
+
+func TestAccountTestService_OpenAIAPIKeyImageModelUsesImagesEndpointAndPrompt(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, recorder := newSoraTestContext()
+
+	resp := newJSONResponse(http.StatusOK, `{"created":1710000000,"data":[{"b64_json":"QUJD","revised_prompt":"draw a tiny orange cat astronaut"}]}`)
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{
+		httpUpstream: upstream,
+		cfg: &config.Config{
+			Security: config.SecurityConfig{
+				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+			},
+		},
+	}
+	account := &Account{
+		ID:          92,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "test-token",
+			"base_url": "https://api.openai.com/v1",
+		},
+	}
+
+	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-image-2", "draw a tiny orange cat astronaut")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, "https://api.openai.com/v1/images/generations", upstream.requests[0].URL.String())
+
+	body, readErr := io.ReadAll(upstream.requests[0].Body)
+	require.NoError(t, readErr)
+	require.Equal(t, "gpt-image-2", gjson.GetBytes(body, "model").String())
+	require.Equal(t, "draw a tiny orange cat astronaut", gjson.GetBytes(body, "prompt").String())
+	require.Equal(t, "b64_json", gjson.GetBytes(body, "response_format").String())
+	require.Contains(t, recorder.Body.String(), `"type":"image"`)
+	require.Contains(t, recorder.Body.String(), `data:image/png;base64,QUJD`)
+	require.Contains(t, recorder.Body.String(), `"type":"test_complete"`)
+}
+
+func TestAccountTestService_OpenAIOAuthImageModelUsesPromptAndStreamsImagePreview(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	ctx, recorder := newSoraTestContext()
+
+	resp := newJSONResponse(http.StatusOK, "")
+	resp.Body = io.NopCloser(strings.NewReader(`data: {"type":"response.output_item.done","item":{"type":"message","content":[{"type":"output_image","image_url":"data:image/png;base64,QUJD","mime_type":"image/png"}]}}
+
+data: {"type":"response.completed"}
+
+`))
+
+	upstream := &queuedHTTPUpstream{responses: []*http.Response{resp}}
+	svc := &AccountTestService{httpUpstream: upstream}
+	account := &Account{
+		ID:          93,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Concurrency: 1,
+		Credentials: map[string]any{"access_token": "test-token"},
+	}
+
+	err := svc.testOpenAIAccountConnection(ctx, account, "gpt-image-2", "draw a tiny orange cat astronaut")
+	require.NoError(t, err)
+	require.Len(t, upstream.requests, 1)
+	require.Equal(t, chatgptCodexAPIURL, upstream.requests[0].URL.String())
+
+	body, readErr := io.ReadAll(upstream.requests[0].Body)
+	require.NoError(t, readErr)
+	require.Equal(t, "gpt-image-2", gjson.GetBytes(body, "model").String())
+	require.Equal(t, "draw a tiny orange cat astronaut", gjson.GetBytes(body, "input.0.content.0.text").String())
+	require.Equal(t, "image_generation", gjson.GetBytes(body, "tools.0.type").String())
+	require.Contains(t, recorder.Body.String(), `"type":"image"`)
+	require.Contains(t, recorder.Body.String(), `data:image/png;base64,QUJD`)
+	require.Contains(t, recorder.Body.String(), `"type":"test_complete"`)
 }

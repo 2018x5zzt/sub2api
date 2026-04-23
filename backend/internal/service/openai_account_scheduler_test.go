@@ -108,6 +108,51 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_NormalizesCodexSparkAli
 	}
 }
 
+func TestOpenAIGatewayService_SelectAccountWithSchedulerForImages_RequiresNativeCapability(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(101031)
+	oauthAccount := Account{
+		ID:          33101,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+	}
+	apiKeyAccount := Account{
+		ID:          33102,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    5,
+	}
+
+	svc := &OpenAIGatewayService{
+		accountRepo: stubOpenAIAccountRepo{accounts: []Account{oauthAccount, apiKeyAccount}},
+		cfg:         &config.Config{},
+	}
+
+	selection, decision, err := svc.SelectAccountWithSchedulerForImages(
+		ctx,
+		&groupID,
+		"",
+		"gpt-image-2",
+		nil,
+		OpenAIImagesCapabilityNative,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, apiKeyAccount.ID, selection.Account.ID)
+	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
 func TestOpenAIGatewayService_SelectAccountForModelWithExclusions_SkipsFreshlyRateLimitedSnapshotCandidate(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(10102)

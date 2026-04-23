@@ -77,6 +77,8 @@ func TestDeriveUpstreamEndpoint(t *testing.T) {
 		{"openai responses nested", EndpointResponses, "/openai/v1/responses/compact/detail", service.PlatformOpenAI, "/v1/responses/compact/detail"},
 		{"openai from messages", EndpointMessages, "/v1/messages", service.PlatformOpenAI, EndpointResponses},
 		{"openai from completions", EndpointChatCompletions, "/v1/chat/completions", service.PlatformOpenAI, EndpointResponses},
+		{"openai image generations", "/v1/images/generations", "/v1/images/generations", service.PlatformOpenAI, "/v1/images/generations"},
+		{"openai image edits", "/v1/images/edits", "/openai/v1/images/edits", service.PlatformOpenAI, "/v1/images/edits"},
 
 		// Antigravity — uses inbound to pick Claude vs Gemini upstream.
 		{"antigravity claude", EndpointMessages, "/antigravity/v1/messages", service.PlatformAntigravity, EndpointMessages},

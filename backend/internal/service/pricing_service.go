@@ -758,6 +758,16 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 		return openAIGPT54NanoFallbackPricing
 	}
 
+	if isOpenAIImageGenerationModel(model) {
+		for _, candidate := range []string{"gpt-image-2", "gpt-image-1.5", "gpt-image-1"} {
+			if pricing, ok := s.pricingData[candidate]; ok {
+				logger.With(zap.String("component", "service.pricing")).
+					Info(fmt.Sprintf("[Pricing] OpenAI image fallback matched %s -> %s", model, candidate))
+				return pricing
+			}
+		}
+	}
+
 	return nil
 }
 

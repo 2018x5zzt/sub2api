@@ -186,7 +186,7 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 
 	// Route to platform-specific test method
 	if account.IsOpenAI() {
-		return s.testOpenAIAccountConnection(c, account, modelID)
+		return s.testOpenAIAccountConnection(c, account, modelID, prompt)
 	}
 
 	if account.IsGemini() {
@@ -437,7 +437,7 @@ func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx co
 }
 
 // testOpenAIAccountConnection tests an OpenAI account's connection
-func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account *Account, modelID string) error {
+func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account *Account, modelID string, prompt string) error {
 	ctx := c.Request.Context()
 
 	// Default to openai.DefaultTestModel for OpenAI testing
@@ -459,6 +459,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		normalizedModel, _ := normalizeChatGPTOAuthModel(testModelID)
 		testModelID = normalizedModel
 	}
+	isImageModel := isOpenAIImageGenerationModel(testModelID)
 
 	// Determine authentication method and API URL
 	var authToken string
@@ -494,7 +495,11 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		}
 		apiURL = normalizedBaseURL
 		if account.ShouldAppendAPIPath() {
-			apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/responses"
+			if isImageModel {
+				apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/images/generations"
+			} else {
+				apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/responses"
+			}
 		}
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
@@ -507,8 +512,13 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	c.Writer.Header().Set("X-Accel-Buffering", "no")
 	c.Writer.Flush()
 
-	// Create OpenAI Responses API payload
-	payload := createOpenAITestPayload(testModelID, isOAuth)
+	// Create test payload according to the selected model capability.
+	var payload map[string]any
+	if isImageModel && !isOAuth {
+		payload = createOpenAIImageTestPayload(testModelID, prompt)
+	} else {
+		payload = createOpenAITestPayload(testModelID, prompt, isOAuth)
+	}
 	payloadBytes, _ := json.Marshal(payload)
 
 	// Send test_start event
@@ -562,6 +572,9 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	}
 
 	// Process SSE stream
+	if isImageModel && !isOAuth {
+		return s.processOpenAIImageResponse(c, resp.Body)
+	}
 	return s.processOpenAIStream(c, resp.Body)
 }
 
@@ -1642,8 +1655,17 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 	}
 }
 
-// createOpenAITestPayload creates a test payload for OpenAI Responses API
-func createOpenAITestPayload(modelID string, isOAuth bool) map[string]any {
+// createOpenAITestPayload creates a test payload for OpenAI Responses API.
+func createOpenAITestPayload(modelID string, prompt string, isOAuth bool) map[string]any {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		if isOpenAIImageGenerationModel(modelID) {
+			prompt = defaultGeminiImageTestPrompt
+		} else {
+			prompt = "hi"
+		}
+	}
+
 	payload := map[string]any{
 		"model": modelID,
 		"input": []map[string]any{
@@ -1652,7 +1674,7 @@ func createOpenAITestPayload(modelID string, isOAuth bool) map[string]any {
 				"content": []map[string]any{
 					{
 						"type": "input_text",
-						"text": "hi",
+						"text": prompt,
 					},
 				},
 			},
@@ -1667,8 +1689,28 @@ func createOpenAITestPayload(modelID string, isOAuth bool) map[string]any {
 
 	// All accounts require instructions for Responses API
 	payload["instructions"] = openai.DefaultInstructions
+	if isOpenAIImageGenerationModel(modelID) {
+		payload["tools"] = []map[string]any{
+			{
+				"type": "image_generation",
+			},
+		}
+	}
 
 	return payload
+}
+
+func createOpenAIImageTestPayload(modelID string, prompt string) map[string]any {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		prompt = defaultGeminiImageTestPrompt
+	}
+	return map[string]any{
+		"model":           modelID,
+		"prompt":          prompt,
+		"n":               1,
+		"response_format": "b64_json",
+	}
 }
 
 // processClaudeStream processes the SSE stream from Claude API
@@ -1728,6 +1770,7 @@ func (s *AccountTestService) processClaudeStream(c *gin.Context, body io.Reader)
 // processOpenAIStream processes the SSE stream from OpenAI Responses API
 func (s *AccountTestService) processOpenAIStream(c *gin.Context, body io.Reader) error {
 	reader := bufio.NewReader(body)
+	seenImages := make(map[string]struct{})
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -1763,7 +1806,10 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, body io.Reader)
 			if delta, ok := data["delta"].(string); ok && delta != "" {
 				s.sendEvent(c, TestEvent{Type: "content", Text: delta})
 			}
+		case "response.output_item.done":
+			s.emitOpenAIInlineImages(c, data, seenImages)
 		case "response.completed":
+			s.emitOpenAIInlineImages(c, data, seenImages)
 			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 			return nil
 		case "error":
@@ -1776,6 +1822,67 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, body io.Reader)
 			return s.sendErrorAndEnd(c, errorMsg)
 		}
 	}
+}
+
+func (s *AccountTestService) processOpenAIImageResponse(c *gin.Context, body io.Reader) error {
+	payload, err := io.ReadAll(body)
+	if err != nil {
+		return s.sendErrorAndEnd(c, fmt.Sprintf("Failed to read image response: %s", err.Error()))
+	}
+
+	if sent := s.emitOpenAIInlineImagesFromBytes(c, payload, make(map[string]struct{})); sent == 0 {
+		return s.sendErrorAndEnd(c, "No image returned")
+	}
+
+	s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+	return nil
+}
+
+func (s *AccountTestService) emitOpenAIInlineImages(c *gin.Context, payload map[string]any, seen map[string]struct{}) int {
+	if len(payload) == 0 {
+		return 0
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return 0
+	}
+	return s.emitOpenAIInlineImagesFromBytes(c, body, seen)
+}
+
+func (s *AccountTestService) emitOpenAIInlineImagesFromBytes(c *gin.Context, body []byte, seen map[string]struct{}) int {
+	assets := mergeOpenAIImagePointerInfos(nil, collectOpenAIImageInlineAssets(body, ""))
+	sent := 0
+	for _, asset := range assets {
+		imageURL, mimeType := buildOpenAIAccountTestPreview(asset)
+		if imageURL == "" {
+			continue
+		}
+		if _, exists := seen[imageURL]; exists {
+			continue
+		}
+		seen[imageURL] = struct{}{}
+		s.sendEvent(c, TestEvent{
+			Type:     "image",
+			ImageURL: imageURL,
+			MimeType: mimeType,
+		})
+		sent++
+	}
+	return sent
+}
+
+func buildOpenAIAccountTestPreview(asset openAIImagePointerInfo) (string, string) {
+	mimeType := strings.TrimSpace(asset.MimeType)
+	if mimeType == "" {
+		mimeType = "image/png"
+	}
+	if downloadURL := strings.TrimSpace(asset.DownloadURL); downloadURL != "" {
+		return downloadURL, mimeType
+	}
+	if normalized := normalizeOpenAIImageBase64(asset.B64JSON); normalized != "" {
+		return fmt.Sprintf("data:%s;base64,%s", mimeType, normalized), mimeType
+	}
+	return "", ""
 }
 
 // sendEvent sends a SSE event to the client

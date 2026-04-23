@@ -61,7 +61,7 @@
         {{ t('admin.accounts.soraTestHint') }}
       </div>
 
-      <div v-if="supportsGeminiImageTest" class="space-y-1.5">
+      <div v-if="supportsImageTestPrompt" class="space-y-1.5">
         <TextArea
           v-model="testPrompt"
           :label="t('admin.accounts.geminiImagePromptLabel')"
@@ -160,7 +160,7 @@
           {{
             isSoraAccount
               ? t('admin.accounts.soraTestMode')
-              : supportsGeminiImageTest
+              : supportsImageTestPrompt
                 ? t('admin.accounts.geminiImageTestMode')
                 : t('admin.accounts.testPrompt')
           }}
@@ -268,6 +268,11 @@ const supportsGeminiImageTest = computed(() => {
 
   return props.account?.platform === 'gemini' || (props.account?.platform === 'antigravity' && props.account?.type === 'apikey')
 })
+const supportsOpenAIImageTest = computed(() => {
+  if (isSoraAccount.value) return false
+  return props.account?.platform === 'openai' && selectedModelId.value.toLowerCase().startsWith('gpt-image-')
+})
+const supportsImageTestPrompt = computed(() => supportsGeminiImageTest.value || supportsOpenAIImageTest.value)
 
 const sortTestModels = (models: ClaudeModel[]) => {
   const priorityMap = new Map(prioritizedGeminiModels.map((id, index) => [id, index]))
@@ -295,7 +300,7 @@ watch(
 )
 
 watch(selectedModelId, () => {
-  if (supportsGeminiImageTest.value && !testPrompt.value.trim()) {
+  if (supportsImageTestPrompt.value && !testPrompt.value.trim()) {
     testPrompt.value = t('admin.accounts.geminiImagePromptDefault')
   }
 })
@@ -399,7 +404,7 @@ const startTest = async () => {
           ? {}
           : {
               model_id: selectedModelId.value,
-              prompt: supportsGeminiImageTest.value ? testPrompt.value.trim() : ''
+              prompt: supportsImageTestPrompt.value ? testPrompt.value.trim() : ''
             }
       )
     })
@@ -463,7 +468,7 @@ const handleEvent = (event: {
       addLine(
         isSoraAccount.value
           ? t('admin.accounts.soraTestingFlow')
-          : supportsGeminiImageTest.value
+          : supportsImageTestPrompt.value
             ? t('admin.accounts.sendingGeminiImageRequest')
             : t('admin.accounts.sendingTestMessage'),
         'text-gray-400'

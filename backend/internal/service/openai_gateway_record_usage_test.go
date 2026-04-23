@@ -1032,3 +1032,80 @@ func TestOpenAIGatewayServiceRecordUsage_SimpleModeSkipsBillingAfterPersist(t *t
 	require.Equal(t, 0, userRepo.deductCalls)
 	require.Equal(t, 0, subRepo.incrementCalls)
 }
+
+func TestOpenAIGatewayServiceRecordUsage_ImageOnlyUsageStillPersists(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID:  "resp_image_only_usage",
+			Model:      "gpt-image-2",
+			ImageCount: 2,
+			ImageSize:  "1K",
+			Duration:   time.Second,
+		},
+		APIKey:  &APIKey{ID: 1007},
+		User:    &User{ID: 2007},
+		Account: &Account{ID: 3007},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, 2, usageRepo.lastLog.ImageCount)
+	require.NotNil(t, usageRepo.lastLog.ImageSize)
+	require.Equal(t, "1K", *usageRepo.lastLog.ImageSize)
+	require.NotNil(t, usageRepo.lastLog.BillingMode)
+	require.Equal(t, string(BillingModeImage), *usageRepo.lastLog.BillingMode)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_GroupImagePricingTakesPrecedenceOverImageTokens(t *testing.T) {
+	groupID := int64(31)
+	imagePrice1K := 0.30
+
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+	svc.billingService = NewBillingService(svc.cfg, &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-image-2": {
+				OutputCostPerToken: 0.02,
+			},
+		},
+	})
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_group_image_precedence",
+			Model:     "gpt-image-2",
+			Usage: OpenAIUsage{
+				OutputTokens:      100,
+				ImageOutputTokens: 100,
+			},
+			ImageCount: 2,
+			ImageSize:  "1K",
+			Duration:   time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      1008,
+			GroupID: i64p(groupID),
+			Group: &Group{
+				ID:           groupID,
+				ImagePrice1K: &imagePrice1K,
+			},
+		},
+		User:    &User{ID: 2008},
+		Account: &Account{ID: 3008},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.InDelta(t, 0.6, usageRepo.lastLog.TotalCost, 1e-12)
+	require.InDelta(t, 0.6, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, 0.6, userRepo.lastAmount, 1e-12)
+	require.NotNil(t, usageRepo.lastLog.BillingMode)
+	require.Equal(t, string(BillingModeImage), *usageRepo.lastLog.BillingMode)
+}

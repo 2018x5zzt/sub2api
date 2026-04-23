@@ -227,6 +227,7 @@ type OpenAIUsage struct {
 	OutputTokens             int `json:"output_tokens"`
 	CacheCreationInputTokens int `json:"cache_creation_input_tokens,omitempty"`
 	CacheReadInputTokens     int `json:"cache_read_input_tokens,omitempty"`
+	ImageOutputTokens        int `json:"image_output_tokens,omitempty"`
 }
 
 // OpenAIForwardResult represents the result of forwarding
@@ -253,6 +254,8 @@ type OpenAIForwardResult struct {
 	ResponseHeaders http.Header
 	Duration        time.Duration
 	FirstTokenMs    *int
+	ImageCount      int
+	ImageSize       string
 }
 
 type OpenAIWSRetryMetricsSnapshot struct {
@@ -519,6 +522,16 @@ func (s *OpenAIGatewayService) getOpenAIWSProtocolResolver() OpenAIWSProtocolRes
 		cfg = s.cfg
 	}
 	return NewOpenAIWSProtocolResolver(cfg)
+}
+
+func (s *OpenAIGatewayService) isOpenAIAccountTransportCompatible(account *Account, requiredTransport OpenAIUpstreamTransport) bool {
+	if requiredTransport == OpenAIUpstreamTransportAny || requiredTransport == OpenAIUpstreamTransportHTTPSSE {
+		return true
+	}
+	if s == nil || account == nil {
+		return false
+	}
+	return s.getOpenAIWSProtocolResolver().Resolve(account).Transport == requiredTransport
 }
 
 func classifyOpenAIWSReconnectReason(err error) (string, bool) {
@@ -1953,6 +1966,23 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			promptCacheKey = codexResult.PromptCacheKey
 		}
 		logOpenAICodexDroppedNativeItemReferences(account, "responses_forward", codexResult.DroppedNativeItemReferenceCount)
+	}
+
+	if normalizeOpenAIResponsesImageGenerationTools(reqBody) {
+		bodyModified = true
+		disablePatch()
+	}
+
+	if model, ok := reqBody["model"].(string); ok {
+		if imageModelErr := validateOpenAIResponsesImageModel(reqBody, model); imageModelErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": gin.H{
+					"type":    "invalid_request_error",
+					"message": imageModelErr.Error(),
+				},
+			})
+			return nil, imageModelErr
+		}
 	}
 
 	if ensureOpenAIResponsesReasoning(reqBody, reasoningModel) {
@@ -4141,6 +4171,7 @@ func (s *OpenAIGatewayService) parseSSEUsageBytes(data []byte, usage *OpenAIUsag
 		"response.usage.output_tokens",
 		"response.usage.cache_creation_input_tokens",
 		"response.usage.input_tokens_details.cached_tokens",
+		"response.usage.output_tokens_details.image_tokens",
 	)
 }
 
@@ -4154,22 +4185,22 @@ func extractOpenAIUsageFromJSONBytes(body []byte) (OpenAIUsage, bool) {
 		"usage.output_tokens",
 		"usage.cache_creation_input_tokens",
 		"usage.input_tokens_details.cached_tokens",
+		"usage.output_tokens_details.image_tokens",
 	), true
 }
 
-func extractOpenAIUsageFromJSONPaths(body []byte, inputPath, outputPath, cacheCreationPath, cacheReadPath string) OpenAIUsage {
-	values := gjson.GetManyBytes(
-		body,
-		inputPath,
-		outputPath,
-		cacheCreationPath,
-		cacheReadPath,
-	)
+func extractOpenAIUsageFromJSONPaths(body []byte, inputPath, outputPath, cacheCreationPath, cacheReadPath string, imageOutputPath ...string) OpenAIUsage {
+	paths := []string{inputPath, outputPath, cacheCreationPath, cacheReadPath}
+	if len(imageOutputPath) > 0 && strings.TrimSpace(imageOutputPath[0]) != "" {
+		paths = append(paths, imageOutputPath[0])
+	}
+	values := gjson.GetManyBytes(body, paths...)
 	return OpenAIUsage{
 		InputTokens:              int(values[0].Int()),
 		OutputTokens:             int(values[1].Int()),
 		CacheCreationInputTokens: int(values[2].Int()),
 		CacheReadInputTokens:     int(values[3].Int()),
+		ImageOutputTokens:        usageValueAt(values, 4),
 	}
 }
 
@@ -4189,6 +4220,16 @@ func mergeOpenAIUsageFillZero(dst *OpenAIUsage, src OpenAIUsage) {
 	if dst.CacheReadInputTokens == 0 {
 		dst.CacheReadInputTokens = src.CacheReadInputTokens
 	}
+	if dst.ImageOutputTokens == 0 {
+		dst.ImageOutputTokens = src.ImageOutputTokens
+	}
+}
+
+func usageValueAt(values []gjson.Result, idx int) int {
+	if idx < 0 || idx >= len(values) {
+		return 0
+	}
+	return int(values[idx].Int())
 }
 
 func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*OpenAIUsage, error) {
@@ -4645,7 +4686,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	// 跳过所有 token 均为零的用量记录——上游未返回 usage 时不应写入数据库
 	if result.Usage.InputTokens == 0 && result.Usage.OutputTokens == 0 &&
-		result.Usage.CacheCreationInputTokens == 0 && result.Usage.CacheReadInputTokens == 0 {
+		result.Usage.CacheCreationInputTokens == 0 && result.Usage.CacheReadInputTokens == 0 &&
+		result.Usage.ImageOutputTokens == 0 && result.ImageCount == 0 {
 		return nil
 	}
 
@@ -4693,21 +4735,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if result.ServiceTier != nil {
 		serviceTier = strings.TrimSpace(*result.ServiceTier)
 	}
-	if s.resolver != nil && apiKey.Group != nil {
-		gid := apiKey.Group.ID
-		cost, err = s.billingService.CalculateCostUnified(CostInput{
-			Ctx:            ctx,
-			Model:          billingModel,
-			GroupID:        &gid,
-			Tokens:         tokens,
-			RequestCount:   1,
-			RateMultiplier: effectiveRateMultiplier,
-			ServiceTier:    serviceTier,
-			Resolver:       s.resolver,
-		})
-	} else {
-		cost, err = s.billingService.CalculateCostWithServiceTier(billingModel, tokens, effectiveRateMultiplier, serviceTier)
-	}
+	cost, err = s.calculateOpenAIRecordUsageCost(ctx, result, apiKey, billingModel, effectiveRateMultiplier, tokens, serviceTier)
 	if err != nil {
 		cost = &CostBreakdown{ActualCost: 0}
 	}
@@ -4743,6 +4771,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		OutputTokens:          result.Usage.OutputTokens,
 		CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
 		CacheReadTokens:       result.Usage.CacheReadInputTokens,
+		ImageCount:            result.ImageCount,
+		ImageSize:             optionalTrimmedStringPtr(result.ImageSize),
 		InputCost:             cost.InputCost,
 		OutputCost:            cost.OutputCost,
 		CacheCreationCost:     cost.CacheCreationCost,
@@ -4762,6 +4792,9 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	usageLog.ModelMappingChain = optionalTrimmedStringPtr(input.ModelMappingChain)
 	if cost != nil && cost.BillingMode != "" {
 		billingMode := cost.BillingMode
+		usageLog.BillingMode = &billingMode
+	} else if result.ImageCount > 0 {
+		billingMode := string(BillingModeImage)
 		usageLog.BillingMode = &billingMode
 	} else {
 		billingMode := "token"
@@ -4812,6 +4845,147 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
 
 	return nil
+}
+
+func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
+	ctx context.Context,
+	result *OpenAIForwardResult,
+	apiKey *APIKey,
+	billingModel string,
+	multiplier float64,
+	tokens UsageTokens,
+	serviceTier string,
+) (*CostBreakdown, error) {
+	if result != nil && result.ImageCount > 0 {
+		if s.hasExplicitOpenAIImagePricing(ctx, billingModel, apiKey, result.ImageSize) {
+			return s.calculateOpenAIImageCost(ctx, billingModel, apiKey, result, multiplier), nil
+		}
+		if hasOpenAIImageUsageTokens(result) {
+			cost, err := s.calculateOpenAIImageTokenCost(ctx, apiKey, billingModel, multiplier, tokens, serviceTier, result.ImageSize)
+			if err == nil {
+				return cost, nil
+			}
+		}
+		return s.calculateOpenAIImageCost(ctx, billingModel, apiKey, result, multiplier), nil
+	}
+	if s.resolver != nil && apiKey.Group != nil {
+		gid := apiKey.Group.ID
+		return s.billingService.CalculateCostUnified(CostInput{
+			Ctx:            ctx,
+			Model:          billingModel,
+			GroupID:        &gid,
+			Tokens:         tokens,
+			RequestCount:   1,
+			RateMultiplier: multiplier,
+			ServiceTier:    serviceTier,
+			Resolver:       s.resolver,
+		})
+	}
+	return s.billingService.CalculateCostWithServiceTier(billingModel, tokens, multiplier, serviceTier)
+}
+
+func (s *OpenAIGatewayService) calculateOpenAIImageTokenCost(
+	ctx context.Context,
+	apiKey *APIKey,
+	billingModel string,
+	multiplier float64,
+	tokens UsageTokens,
+	serviceTier string,
+	sizeTier string,
+) (*CostBreakdown, error) {
+	if s.resolver != nil && apiKey.Group != nil {
+		gid := apiKey.Group.ID
+		return s.billingService.CalculateCostUnified(CostInput{
+			Ctx:            ctx,
+			Model:          billingModel,
+			GroupID:        &gid,
+			Tokens:         tokens,
+			RequestCount:   1,
+			SizeTier:       sizeTier,
+			RateMultiplier: multiplier,
+			ServiceTier:    serviceTier,
+			Resolver:       s.resolver,
+		})
+	}
+	return s.billingService.CalculateCostWithServiceTier(billingModel, tokens, multiplier, serviceTier)
+}
+
+func (s *OpenAIGatewayService) calculateOpenAIImageCost(
+	ctx context.Context,
+	billingModel string,
+	apiKey *APIKey,
+	result *OpenAIForwardResult,
+	multiplier float64,
+) *CostBreakdown {
+	if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved != nil {
+		cost, err := s.billingService.calculatePerRequestCost(resolved, CostInput{
+			Ctx:            ctx,
+			Model:          billingModel,
+			RequestCount:   result.ImageCount,
+			SizeTier:       result.ImageSize,
+			RateMultiplier: multiplier,
+		})
+		if err == nil {
+			return cost
+		}
+	}
+
+	var groupConfig *ImagePriceConfig
+	if apiKey != nil && apiKey.Group != nil {
+		groupConfig = &ImagePriceConfig{
+			Price1K: apiKey.Group.ImagePrice1K,
+			Price2K: apiKey.Group.ImagePrice2K,
+			Price4K: apiKey.Group.ImagePrice4K,
+		}
+	}
+	return s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, groupConfig, multiplier)
+}
+
+func (s *OpenAIGatewayService) hasExplicitOpenAIImagePricing(ctx context.Context, billingModel string, apiKey *APIKey, imageSize string) bool {
+	if s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey) != nil {
+		return true
+	}
+	if apiKey == nil || apiKey.Group == nil {
+		return false
+	}
+	return apiKey.Group.GetImagePrice(imageSize) != nil
+}
+
+func (s *OpenAIGatewayService) resolveOpenAIChannelPricing(ctx context.Context, billingModel string, apiKey *APIKey) *ResolvedPricing {
+	if s == nil || s.channelService == nil || apiKey == nil || apiKey.Group == nil {
+		return nil
+	}
+	channelPricing := s.channelService.GetChannelModelPricing(ctx, apiKey.Group.ID, billingModel)
+	if channelPricing == nil {
+		return nil
+	}
+	mode := channelPricing.BillingMode
+	if mode == "" {
+		mode = BillingModeToken
+	}
+	if mode != BillingModePerRequest && mode != BillingModeImage {
+		return nil
+	}
+	resolved := &ResolvedPricing{
+		Mode:   mode,
+		Source: PricingSourceChannel,
+	}
+	if channelPricing.PerRequestPrice != nil {
+		resolved.DefaultPerRequestPrice = *channelPricing.PerRequestPrice
+	}
+	if resolved.DefaultPerRequestPrice == 0 && channelPricing.ImageOutputPrice != nil {
+		resolved.DefaultPerRequestPrice = *channelPricing.ImageOutputPrice
+	}
+	resolved.RequestTiers = channelPricing.Intervals
+	return resolved
+}
+
+func hasOpenAIImageUsageTokens(result *OpenAIForwardResult) bool {
+	return result != nil && (result.Usage.InputTokens > 0 ||
+		result.Usage.OutputTokens > 0 ||
+		result.Usage.CacheCreationInputTokens > 0 ||
+		result.Usage.CacheReadInputTokens > 0 ||
+		result.Usage.ImageOutputTokens > 0)
 }
 
 // ParseCodexRateLimitHeaders extracts Codex usage limits from response headers.

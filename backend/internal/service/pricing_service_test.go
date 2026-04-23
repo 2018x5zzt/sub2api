@@ -139,6 +139,18 @@ func TestGetModelPricing_Gpt54NanoUsesDedicatedStaticFallbackWhenRemoteMissing(t
 	require.Zero(t, got.LongContextInputTokenThreshold)
 }
 
+func TestGetModelPricing_OpenAIImageModelFallsBackToBaseImagePricing(t *testing.T) {
+	imagePricing := &LiteLLMModelPricing{OutputCostPerToken: 1.5e-5}
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-image-2": imagePricing,
+		},
+	}
+
+	got := svc.GetModelPricing("gpt-image-2-preview")
+	require.Same(t, imagePricing, got)
+}
+
 func TestGetModelPricing_UnsupportedOpenAIModelDoesNotFallBackToDifferentFamily(t *testing.T) {
 	svc := &PricingService{
 		pricingData: map[string]*LiteLLMModelPricing{
