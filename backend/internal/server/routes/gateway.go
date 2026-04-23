@@ -95,24 +95,22 @@ func RegisterGatewayRoutes(
 		})
 		gateway.POST("/images/generations", func(c *gin.Context) {
 			if getGroupPlatform(c) != service.PlatformOpenAI {
-				c.JSON(http.StatusNotFound, gin.H{
-					"error": gin.H{
-						"type":    "not_found_error",
-						"message": "Images API is not supported for this platform",
-					},
-				})
+				writeOpenAIImagesRouteNotFound(c, "Images API is not supported for this platform")
+				return
+			}
+			if !groupAllowsOpenAIImages(c) {
+				writeOpenAIImagesRouteNotFound(c, "Images API is not enabled for this group")
 				return
 			}
 			h.OpenAIGateway.Images(c)
 		})
 		gateway.POST("/images/edits", func(c *gin.Context) {
 			if getGroupPlatform(c) != service.PlatformOpenAI {
-				c.JSON(http.StatusNotFound, gin.H{
-					"error": gin.H{
-						"type":    "not_found_error",
-						"message": "Images API is not supported for this platform",
-					},
-				})
+				writeOpenAIImagesRouteNotFound(c, "Images API is not supported for this platform")
+				return
+			}
+			if !groupAllowsOpenAIImages(c) {
+				writeOpenAIImagesRouteNotFound(c, "Images API is not enabled for this group")
 				return
 			}
 			h.OpenAIGateway.Images(c)
@@ -155,24 +153,22 @@ func RegisterGatewayRoutes(
 	})
 	r.POST("/images/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, func(c *gin.Context) {
 		if getGroupPlatform(c) != service.PlatformOpenAI {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": gin.H{
-					"type":    "not_found_error",
-					"message": "Images API is not supported for this platform",
-				},
-			})
+			writeOpenAIImagesRouteNotFound(c, "Images API is not supported for this platform")
+			return
+		}
+		if !groupAllowsOpenAIImages(c) {
+			writeOpenAIImagesRouteNotFound(c, "Images API is not enabled for this group")
 			return
 		}
 		h.OpenAIGateway.Images(c)
 	})
 	r.POST("/images/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, func(c *gin.Context) {
 		if getGroupPlatform(c) != service.PlatformOpenAI {
-			c.JSON(http.StatusNotFound, gin.H{
-				"error": gin.H{
-					"type":    "not_found_error",
-					"message": "Images API is not supported for this platform",
-				},
-			})
+			writeOpenAIImagesRouteNotFound(c, "Images API is not supported for this platform")
+			return
+		}
+		if !groupAllowsOpenAIImages(c) {
+			writeOpenAIImagesRouteNotFound(c, "Images API is not enabled for this group")
 			return
 		}
 		h.OpenAIGateway.Images(c)
@@ -242,4 +238,18 @@ func getGroupPlatform(c *gin.Context) string {
 		return ""
 	}
 	return apiKey.Group.Platform
+}
+
+func groupAllowsOpenAIImages(c *gin.Context) bool {
+	apiKey, ok := middleware.GetAPIKeyFromContext(c)
+	return ok && apiKey.Group != nil && apiKey.Group.AllowsOpenAIImageGeneration()
+}
+
+func writeOpenAIImagesRouteNotFound(c *gin.Context, message string) {
+	c.JSON(http.StatusNotFound, gin.H{
+		"error": gin.H{
+			"type":    "not_found_error",
+			"message": message,
+		},
+	})
 }

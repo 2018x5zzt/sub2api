@@ -237,6 +237,63 @@ func TestGetGroupSupportedModels_UsesStaticOpenAICatalog(t *testing.T) {
 	}
 }
 
+func TestGetGroupSupportedModels_HidesImageModelsForNonGPTImageGroup(t *testing.T) {
+	handler := &APIKeyHandler{
+		accountRepo: &groupModelAccountRepoStub{
+			accountsByGroup: map[int64][]service.Account{
+				29: {
+					{
+						Platform: service.PlatformOpenAI,
+						Type:     service.AccountTypeAPIKey,
+						Credentials: map[string]any{
+							"model_mapping": map[string]any{
+								"gpt-5":       "gpt-5",
+								"gpt-image-2": "gpt-image-2",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	models, source, err := handler.getGroupSupportedModels(context.Background(), &service.Group{
+		ID:       29,
+		Name:     "pro号池",
+		Platform: service.PlatformOpenAI,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "mixed", source)
+
+	modelIDs := make([]string, 0, len(models))
+	for _, model := range models {
+		modelIDs = append(modelIDs, model.ID)
+	}
+
+	require.Contains(t, modelIDs, "gpt-5")
+	require.NotContains(t, modelIDs, "gpt-image-2")
+}
+
+func TestGetGroupSupportedModels_KeepsImageModelsForGPTImageGroup(t *testing.T) {
+	handler := &APIKeyHandler{}
+
+	models, source, err := handler.getGroupSupportedModels(context.Background(), &service.Group{
+		ID:       30,
+		Name:     "gpt-image",
+		Platform: service.PlatformOpenAI,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "default", source)
+
+	modelIDs := make([]string, 0, len(models))
+	for _, model := range models {
+		modelIDs = append(modelIDs, model.ID)
+	}
+
+	require.Contains(t, modelIDs, "gpt-5")
+	require.Contains(t, modelIDs, "gpt-image-2")
+}
+
 func TestGetGroupSupportedModels_AnthropicMergesDefaultsWithExplicitMappedCustomModels(t *testing.T) {
 	handler := &APIKeyHandler{
 		accountRepo: &groupModelAccountRepoStub{

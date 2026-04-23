@@ -531,7 +531,7 @@ func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *serv
 		return nil, "default", nil
 	}
 
-	defaultModels := staticCatalogModelsForGroup(group)
+	defaultModels := filterSupportedModelsForGroup(group, staticCatalogModelsForGroup(group))
 	if h == nil || h.accountRepo == nil || group.ID <= 0 {
 		return defaultModels, "default", nil
 	}
@@ -542,7 +542,7 @@ func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *serv
 	}
 
 	mappedModelIDs := filterMappedModelIDsByCatalog(group.Platform, collectGroupModelIDs(group.Platform, accounts))
-	mappedModels := buildMappedModels(mappedModelIDs, defaultModels)
+	mappedModels := filterSupportedModelsForGroup(group, buildMappedModels(mappedModelIDs, defaultModels))
 
 	switch {
 	case len(defaultModels) == 0 && len(mappedModels) == 0:

@@ -870,10 +870,12 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
 
 	var groupID *int64
+	var group *service.Group
 	var platform string
 
 	if apiKey != nil && apiKey.Group != nil {
 		groupID = &apiKey.Group.ID
+		group = apiKey.Group
 		platform = apiKey.Group.Platform
 	}
 	if forcedPlatform, ok := middleware2.GetForcePlatformFromContext(c); ok && strings.TrimSpace(forcedPlatform) != "" {
@@ -892,6 +894,7 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	availableModels := h.gatewayService.GetAvailableModels(c.Request.Context(), groupID, "")
 
 	if len(availableModels) > 0 {
+		availableModels = filterOpenAIModelIDsForGroup(group, availableModels)
 		// Build model list from whitelist
 		models := make([]claude.Model, 0, len(availableModels))
 		for _, modelID := range availableModels {
@@ -913,7 +916,7 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	if platform == "openai" {
 		c.JSON(http.StatusOK, gin.H{
 			"object": "list",
-			"data":   openai.DefaultModels,
+			"data":   filterOpenAIModelsForGroup(group, openai.DefaultModels),
 		})
 		return
 	}

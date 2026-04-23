@@ -16,6 +16,10 @@ import (
 )
 
 func newGatewayRoutesTestRouter() *gin.Engine {
+	return newGatewayRoutesTestRouterWithGroup(service.PlatformOpenAI, "gpt-image")
+}
+
+func newGatewayRoutesTestRouterWithGroup(platform, groupName string) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 
@@ -30,7 +34,11 @@ func newGatewayRoutesTestRouter() *gin.Engine {
 			groupID := int64(1)
 			c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{
 				GroupID: &groupID,
-				Group:   &service.Group{Platform: service.PlatformOpenAI},
+				Group: &service.Group{
+					ID:       groupID,
+					Name:     groupName,
+					Platform: platform,
+				},
 			})
 			c.Next()
 		}),
@@ -58,32 +66,7 @@ func TestGatewayRoutesOpenAIResponsesCompactPathIsRegistered(t *testing.T) {
 }
 
 func newGatewayRoutesTestRouterWithGroupPlatform(platform string) *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-
-	RegisterGatewayRoutes(
-		router,
-		&handler.Handlers{
-			Gateway:       &handler.GatewayHandler{},
-			OpenAIGateway: &handler.OpenAIGatewayHandler{},
-			SoraGateway:   &handler.SoraGatewayHandler{},
-		},
-		servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
-			groupID := int64(1)
-			c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{
-				GroupID: &groupID,
-				Group:   &service.Group{Platform: platform},
-			})
-			c.Next()
-		}),
-		nil,
-		nil,
-		nil,
-		nil,
-		&config.Config{},
-	)
-
-	return router
+	return newGatewayRoutesTestRouterWithGroup(platform, "")
 }
 
 func parseErrorObject(t *testing.T, body string) map[string]any {
@@ -183,5 +166,22 @@ func TestGatewayRoutesOpenAIImagesRejectNonOpenAIPlatforms(t *testing.T) {
 		errObj := parseErrorObject(t, w.Body.String())
 		require.Equal(t, "not_found_error", errObj["type"])
 		require.Equal(t, "Images API is not supported for this platform", errObj["message"])
+	}
+}
+
+func TestGatewayRoutesOpenAIImagesRejectNonGPTImageOpenAIGroups(t *testing.T) {
+	router := newGatewayRoutesTestRouterWithGroup(service.PlatformOpenAI, "pro号池")
+
+	for _, path := range []string{"/v1/images/generations", "/images/edits"} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"gpt-image-2","prompt":"draw a cat"}`))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+		require.Equal(t, http.StatusNotFound, w.Code, "path=%s should reject non-gpt-image openai groups", path)
+
+		errObj := parseErrorObject(t, w.Body.String())
+		require.Equal(t, "not_found_error", errObj["type"])
+		require.Equal(t, "Images API is not enabled for this group", errObj["message"])
 	}
 }

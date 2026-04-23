@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const openAIImageOnlyGroupName = "gpt-image"
+
 type Group struct {
 	ID             int64
 	Name           string
@@ -94,6 +96,13 @@ func (g *Group) IsSubscriptionType() bool {
 
 func (g *Group) IsFreeSubscription() bool {
 	return g.IsSubscriptionType() && g.RateMultiplier == 0
+}
+
+func (g *Group) AllowsOpenAIImageGeneration() bool {
+	if g == nil {
+		return false
+	}
+	return g.Platform == PlatformOpenAI && strings.EqualFold(strings.TrimSpace(g.Name), openAIImageOnlyGroupName)
 }
 
 func (g *Group) HasDailyLimit() bool {
