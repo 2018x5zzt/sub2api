@@ -223,6 +223,8 @@ func (s *BillingService) initFallbackPricing() {
 	for _, model := range openai.DefaultModels {
 		s.fallbackPrices[model.ID] = newOpenAIFallbackPricing(model.InputPricePerMTok, model.OutputPricePerMTok)
 	}
+	// GPT-5.5 暂无独立定价，回退到 GPT-5.4。
+	s.fallbackPrices["gpt-5.5"] = s.fallbackPrices["gpt-5.4"]
 	s.fallbackPrices["gpt-5.4"].LongContextInputThreshold = openAIGPT54LongContextInputThreshold
 	s.fallbackPrices["gpt-5.4"].LongContextInputMultiplier = openAIGPT54LongContextInputMultiplier
 	s.fallbackPrices["gpt-5.4"].LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
@@ -283,6 +285,8 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 			return s.fallbackPrices["gpt-5.1-codex-max"]
 		case "gpt-5.1-codex-mini":
 			return s.fallbackPrices["gpt-5.1-codex-mini"]
+		case "gpt-5.5":
+			return s.fallbackPrices["gpt-5.5"]
 		case "gpt-5.2":
 			return s.fallbackPrices["gpt-5.2"]
 		case "gpt-5.2-codex":
@@ -645,8 +649,14 @@ func (s *BillingService) shouldApplySessionLongContextPricing(tokens UsageTokens
 }
 
 func isOpenAIGPT54Model(model string) bool {
-	normalized := normalizeCodexModel(strings.TrimSpace(strings.ToLower(model)))
-	return normalized == "gpt-5.4"
+	trimmed := strings.TrimSpace(strings.ToLower(model))
+	// 仅当模型字符串实际属于 GPT-5/Codex 族时才做归一判定，避免 normalizeCodexModel
+	// 的默认兜底把非 OpenAI 模型（claude-*、gemini-*、gpt-4o）误识别为 gpt-5.4。
+	if !strings.Contains(trimmed, "gpt-5") && !strings.Contains(trimmed, "codex") {
+		return false
+	}
+	normalized := normalizeCodexModel(trimmed)
+	return normalized == "gpt-5.4" || normalized == "gpt-5.5"
 }
 
 // CalculateCostWithConfig 使用配置中的默认倍率计算费用
