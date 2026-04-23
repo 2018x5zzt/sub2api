@@ -131,6 +131,7 @@ vite.config.js
 docs/*
 .serena/
 .codex/
+.worktrees/
 frontend/coverage/
 aicodex
 output/
