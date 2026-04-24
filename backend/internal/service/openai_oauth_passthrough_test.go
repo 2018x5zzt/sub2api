@@ -551,6 +551,102 @@ func TestOpenAIGatewayService_OAuthPassthrough_CommentOnlyStreamReturnsFailover(
 	require.True(t, logSink.ContainsMessage("上游流在未收到有效 data 事件时结束，疑似空传"))
 }
 
+func TestOpenAIGatewayService_OAuthPassthrough_CompactHTMLSuccessBodyReturnsFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses/compact", bytes.NewReader(nil))
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+
+	originalBody := []byte(`{"model":"gpt-5.2","stream":false,"instructions":"test","input":[{"type":"text","text":"hi"}]}`)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Type": []string{"text/html; charset=utf-8"},
+			"x-request-id": []string{"rid-html-success"},
+		},
+		Body: io.NopCloser(strings.NewReader(`<!DOCTYPE html><html><head><title>Bad gateway</title></head><body>temporarily unavailable</body></html>`)),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{ForceCodexCLI: false}},
+		httpUpstream: upstream,
+	}
+
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeOAuth,
+		Concurrency:    1,
+		Credentials:    map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"},
+		Extra:          map[string]any{"openai_passthrough": true},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	require.Nil(t, result)
+	require.Error(t, err)
+
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.JSONEq(t, `{"error":{"type":"upstream_error","message":"Upstream returned an HTML response","code":"html_response"}}`, string(failoverErr.ResponseBody))
+	require.False(t, c.Writer.Written(), "HTML 200 成功页不应直接透传给下游")
+}
+
+func TestOpenAIGatewayService_OAuthPassthrough_HTMLBadGatewayBodyNormalizesToJSONFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+
+	originalBody := []byte(`{"model":"gpt-5.2","stream":true,"input":[{"type":"text","text":"hi"}]}`)
+	resp := &http.Response{
+		StatusCode: http.StatusBadGateway,
+		Header: http.Header{
+			"Content-Type": []string{"text/html; charset=utf-8"},
+			"x-request-id": []string{"rid-html-502"},
+		},
+		Body: io.NopCloser(strings.NewReader(`<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body>bad gateway</body></html>`)),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{ForceCodexCLI: false}},
+		httpUpstream: upstream,
+	}
+
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeOAuth,
+		Concurrency:    1,
+		Credentials:    map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"},
+		Extra:          map[string]any{"openai_passthrough": true},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	require.Nil(t, result)
+	require.Error(t, err)
+
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.JSONEq(t, `{"error":{"type":"upstream_error","message":"Upstream returned an HTML error page","code":"html_error_response"}}`, string(failoverErr.ResponseBody))
+	require.False(t, c.Writer.Written(), "HTML 502 错误页应先归一化为 failover 错误")
+}
+
 func TestOpenAIGatewayService_OAuthPassthrough_CodexMissingInstructionsRejectedBeforeUpstream(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logSink, restore := captureStructuredLog(t)

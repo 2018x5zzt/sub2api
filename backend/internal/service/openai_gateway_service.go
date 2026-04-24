@@ -74,6 +74,7 @@ func logOpenAICodexDroppedNativeItemReferences(account *Account, source string, 
 
 var (
 	errOpenAIEmptyResponse         = errors.New("upstream request failed: empty response")
+	errOpenAIHTMLResponse          = errors.New("upstream request failed: html response")
 	errOpenAIStreamMissingTerminal = errors.New("stream usage incomplete: missing terminal event")
 	openAIDefaultReasoningModelRE  = regexp.MustCompile(`^gpt-5(?:\.\d+)*(?:-(?:mini|nano|chat|pro|codex(?:-(?:mini|max))?))?(?:-(?:latest|\d{4}-\d{2}-\d{2}))?$`)
 )
@@ -2782,7 +2783,7 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 ) error {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	rawBody := append([]byte(nil), body...)
-	body = normalizeOpenAIPassthroughErrorBody(resp.StatusCode, body)
+	body = normalizeOpenAIPassthroughErrorBody(resp.StatusCode, resp.Header, body)
 
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
@@ -2851,9 +2852,15 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 	return fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
 }
 
-func normalizeOpenAIPassthroughErrorBody(statusCode int, body []byte) []byte {
+func normalizeOpenAIPassthroughErrorBody(statusCode int, headers http.Header, body []byte) []byte {
 	trimmed := bytes.TrimSpace(body)
-	if len(trimmed) == 0 || !gjson.ValidBytes(trimmed) || !gjson.GetBytes(trimmed, "error").Exists() {
+	if len(trimmed) == 0 {
+		return body
+	}
+	if isLikelyOpenAIHTMLResponse(headers, trimmed) {
+		return buildSyntheticOpenAIHTMLResponseBody(statusCode)
+	}
+	if !gjson.ValidBytes(trimmed) || !gjson.GetBytes(trimmed, "error").Exists() {
 		return body
 	}
 
@@ -2888,6 +2895,40 @@ func normalizeOpenAIPassthroughErrorBody(statusCode int, body []byte) []byte {
 		}
 	}
 	return normalized
+}
+
+func isLikelyOpenAIHTMLResponse(headers http.Header, body []byte) bool {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return false
+	}
+
+	contentType := ""
+	if headers != nil {
+		contentType = strings.ToLower(strings.TrimSpace(headers.Get("Content-Type")))
+	}
+	if strings.Contains(contentType, "text/html") {
+		return true
+	}
+
+	preview := trimmed
+	if len(preview) > 4096 {
+		preview = preview[:4096]
+	}
+	lowerPreview := strings.ToLower(string(preview))
+	return strings.Contains(lowerPreview, "<html") ||
+		strings.Contains(lowerPreview, "<!doctype html") ||
+		strings.Contains(lowerPreview, "window._cf_chl_opt")
+}
+
+func buildSyntheticOpenAIHTMLResponseBody(statusCode int) []byte {
+	message := "Upstream returned an HTML error page"
+	code := "html_error_response"
+	if statusCode >= 200 && statusCode < 300 {
+		message = "Upstream returned an HTML response"
+		code = "html_response"
+	}
+	return buildSyntheticOpenAIErrorResponseBody(message, code)
 }
 
 func extractUpstreamErrorType(body []byte) string {
@@ -3074,6 +3115,9 @@ func wrapRecoverableOpenAIStreamError(c *gin.Context, account *Account, resp *ht
 	case errors.Is(err, errOpenAIEmptyResponse):
 		message = "Upstream returned empty response"
 		code = "empty_response"
+	case errors.Is(err, errOpenAIHTMLResponse):
+		message = "Upstream returned an HTML response"
+		code = "html_response"
 	case errors.Is(err, errOpenAIStreamMissingTerminal):
 		message = "Upstream stream ended before a terminal event"
 		code = "stream_incomplete"
@@ -3305,6 +3349,9 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	}
 	if len(bytes.TrimSpace(body)) == 0 {
 		return nil, errOpenAIEmptyResponse
+	}
+	if isLikelyOpenAIHTMLResponse(resp.Header, body) {
+		return nil, errOpenAIHTMLResponse
 	}
 
 	usage := &OpenAIUsage{}
