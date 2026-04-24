@@ -6,14 +6,25 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
+func isOpenAIModelAllowedForGroup(group *service.Group, modelID string) bool {
+	if group == nil {
+		return true
+	}
+	isImageModel := service.IsOpenAIImageGenerationModel(modelID)
+	if group.AllowsOpenAIImageGeneration() {
+		return isImageModel
+	}
+	return !isImageModel
+}
+
 func filterOpenAIModelIDsForGroup(group *service.Group, modelIDs []string) []string {
-	if group == nil || group.AllowsOpenAIImageGeneration() {
+	if group == nil {
 		return append([]string(nil), modelIDs...)
 	}
 
 	filtered := make([]string, 0, len(modelIDs))
 	for _, modelID := range modelIDs {
-		if service.IsOpenAIImageGenerationModel(modelID) {
+		if !isOpenAIModelAllowedForGroup(group, modelID) {
 			continue
 		}
 		filtered = append(filtered, modelID)
@@ -22,13 +33,13 @@ func filterOpenAIModelIDsForGroup(group *service.Group, modelIDs []string) []str
 }
 
 func filterOpenAIModelsForGroup(group *service.Group, models []openai.Model) []openai.Model {
-	if group == nil || group.AllowsOpenAIImageGeneration() {
+	if group == nil {
 		return append([]openai.Model(nil), models...)
 	}
 
 	filtered := make([]openai.Model, 0, len(models))
 	for _, model := range models {
-		if service.IsOpenAIImageGenerationModel(model.ID) {
+		if !isOpenAIModelAllowedForGroup(group, model.ID) {
 			continue
 		}
 		filtered = append(filtered, model)
@@ -37,13 +48,13 @@ func filterOpenAIModelsForGroup(group *service.Group, models []openai.Model) []o
 }
 
 func filterSupportedModelsForGroup(group *service.Group, models []dto.SupportedModel) []dto.SupportedModel {
-	if group == nil || group.AllowsOpenAIImageGeneration() {
+	if group == nil {
 		return append([]dto.SupportedModel(nil), models...)
 	}
 
 	filtered := make([]dto.SupportedModel, 0, len(models))
 	for _, model := range models {
-		if service.IsOpenAIImageGenerationModel(model.ID) {
+		if !isOpenAIModelAllowedForGroup(group, model.ID) {
 			continue
 		}
 		filtered = append(filtered, model)

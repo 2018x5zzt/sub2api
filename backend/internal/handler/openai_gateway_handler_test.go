@@ -509,6 +509,39 @@ func TestOpenAIResponses_RejectsMessageIDAsPreviousResponseID(t *testing.T) {
 	require.Contains(t, w.Body.String(), "previous_response_id must be a response.id")
 }
 
+func TestOpenAIResponses_RejectsNonImageModelForGPTImageGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", strings.NewReader(
+		`{"model":"gpt-5","stream":false,"input":[{"type":"input_text","text":"hello"}]}`,
+	))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	groupID := int64(30)
+	c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{
+		ID:      101,
+		GroupID: &groupID,
+		Group: &service.Group{
+			ID:       groupID,
+			Name:     "gpt-image",
+			Platform: service.PlatformOpenAI,
+		},
+		User: &service.User{ID: 1},
+	})
+	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{
+		UserID:      1,
+		Concurrency: 1,
+	})
+
+	h := newOpenAIHandlerForPreviousResponseIDValidation(t, nil)
+	h.Responses(c)
+
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
+	require.Contains(t, w.Body.String(), "The requested model is not available for this API key")
+}
+
 func TestValidateFunctionCallOutputRequest_RejectsMissingReferenceWithoutSessionAnchor(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

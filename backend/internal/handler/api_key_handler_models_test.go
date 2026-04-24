@@ -290,8 +290,11 @@ func TestGetGroupSupportedModels_KeepsImageModelsForGPTImageGroup(t *testing.T) 
 		modelIDs = append(modelIDs, model.ID)
 	}
 
-	require.Contains(t, modelIDs, "gpt-5")
 	require.Contains(t, modelIDs, "gpt-image-2")
+	require.NotContains(t, modelIDs, "gpt-5")
+	for _, modelID := range modelIDs {
+		require.True(t, service.IsOpenAIImageGenerationModel(modelID), "unexpected non-image model %s", modelID)
+	}
 }
 
 func TestGetGroupSupportedModels_AnthropicMergesDefaultsWithExplicitMappedCustomModels(t *testing.T) {

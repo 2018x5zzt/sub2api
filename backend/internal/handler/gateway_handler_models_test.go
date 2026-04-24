@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	servermiddleware "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -149,6 +148,9 @@ func TestGatewayHandlerModels_KeepsImageModelsForGPTImageGroup(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, recorder.Code)
 	modelIDs := decodeOpenAIModelIDs(t, recorder.Body.Bytes())
-	require.Contains(t, modelIDs, openai.DefaultModelIDs()[0])
 	require.Contains(t, modelIDs, "gpt-image-2")
+	require.NotContains(t, modelIDs, "gpt-5")
+	for _, modelID := range modelIDs {
+		require.True(t, service.IsOpenAIImageGenerationModel(modelID), "unexpected non-image model %s", modelID)
+	}
 }
