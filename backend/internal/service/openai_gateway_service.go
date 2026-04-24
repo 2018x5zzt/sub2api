@@ -2492,6 +2492,14 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		reqStream = gjson.GetBytes(body, "stream").Bool()
 	}
 
+	bodyWithInstructions, instructionsChanged, err := ensureOpenAIPassthroughInstructions(body)
+	if err != nil {
+		return nil, err
+	}
+	if instructionsChanged {
+		body = bodyWithInstructions
+	}
+
 	if shouldNormalizeOpenAIPassthroughReasoningBody(body) {
 		reasoningBody, reasoningChanged, err := normalizeOpenAIPassthroughReasoningBody(body)
 		if err != nil {
@@ -5491,6 +5499,23 @@ func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byt
 		return "instructions_empty"
 	}
 	return ""
+}
+
+func ensureOpenAIPassthroughInstructions(body []byte) ([]byte, bool, error) {
+	if len(body) == 0 {
+		return body, false, nil
+	}
+
+	instructions := gjson.GetBytes(body, "instructions")
+	if instructions.Exists() && instructions.Type == gjson.String && strings.TrimSpace(instructions.String()) != "" {
+		return body, false, nil
+	}
+
+	updated, err := sjson.SetBytes(body, "instructions", "You are a helpful coding assistant.")
+	if err != nil {
+		return body, false, fmt.Errorf("normalize passthrough body instructions: %w", err)
+	}
+	return updated, true, nil
 }
 
 func extractOpenAIReasoningEffortFromBody(body []byte, requestedModel string) *string {

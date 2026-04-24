@@ -1488,7 +1488,7 @@ func TestOpenAIGatewayService_APIKeyPassthrough_PreservesBodyAndUsesResponsesEnd
 	c.Request.Header.Set("User-Agent", "curl/8.0")
 	c.Request.Header.Set("X-Test", "keep")
 
-	originalBody := []byte(`{"model":"gpt-5.2","stream":false,"service_tier":"flex","max_output_tokens":128,"input":[{"type":"text","text":"hi"}]}`)
+	originalBody := []byte(`{"model":"gpt-5.2","stream":false,"service_tier":"flex","max_output_tokens":128,"instructions":"local-test-instructions","input":[{"type":"text","text":"hi"}]}`)
 	resp := &http.Response{
 		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": []string{"application/json"}, "x-request-id": []string{"rid"}},
@@ -1525,6 +1525,93 @@ func TestOpenAIGatewayService_APIKeyPassthrough_PreservesBodyAndUsesResponsesEnd
 	require.Equal(t, "Bearer sk-api-key", upstream.lastReq.Header.Get("Authorization"))
 	require.Equal(t, "curl/8.0", upstream.lastReq.Header.Get("User-Agent"))
 	require.Empty(t, upstream.lastReq.Header.Get("X-Test"))
+}
+
+func TestOpenAIGatewayService_APIKeyPassthrough_SuppliesDefaultInstructionsWhenMissing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+	c.Request.Header.Set("User-Agent", "curl/8.0")
+
+	originalBody := []byte(`{"model":"gpt-5.2","stream":false,"input":[{"type":"text","text":"hi"}]}`)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}, "x-request-id": []string{"rid"}},
+		Body:       io.NopCloser(strings.NewReader(`{"output":[],"usage":{"input_tokens":1,"output_tokens":1,"input_tokens_details":{"cached_tokens":0}}}`)),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{ForceCodexCLI: false}},
+		httpUpstream: upstream,
+	}
+
+	account := &Account{
+		ID:             456,
+		Name:           "apikey-acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeAPIKey,
+		Concurrency:    1,
+		Credentials:    map[string]any{"api_key": "sk-api-key", "base_url": "https://api.openai.com"},
+		Extra:          map[string]any{"openai_passthrough": true},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "You are a helpful coding assistant.", gjson.GetBytes(upstream.lastBody, "instructions").String())
+}
+
+func TestOpenAIGatewayService_OAuthPassthrough_SuppliesDefaultInstructionsWhenMissingForNonCodexModel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+	c.Request.Header.Set("User-Agent", "curl/8.0")
+
+	originalBody := []byte(`{"model":"gpt-5.2","stream":false,"store":true,"input":[{"type":"text","text":"hi"}]}`)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid"}},
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			`data: {"type":"response.done","response":{"usage":{"input_tokens":1,"output_tokens":1,"input_tokens_details":{"cached_tokens":0}}}}`,
+			"",
+			"data: [DONE]",
+			"",
+		}, "\n"))),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{ForceCodexCLI: false}},
+		httpUpstream: upstream,
+	}
+
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeOAuth,
+		Concurrency:    1,
+		Credentials:    map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"},
+		Extra:          map[string]any{"openai_passthrough": true},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.Forward(context.Background(), c, account, originalBody)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "You are a helpful coding assistant.", gjson.GetBytes(upstream.lastBody, "instructions").String())
+	require.Equal(t, false, gjson.GetBytes(upstream.lastBody, "store").Bool())
+	require.Equal(t, true, gjson.GetBytes(upstream.lastBody, "stream").Bool())
 }
 
 func TestOpenAIGatewayService_APIKeyPassthrough_NonStreamingSSEConvertsToJSON(t *testing.T) {
