@@ -4,8 +4,9 @@ import { nextTick } from 'vue'
 
 import UsageView from '../UsageView.vue'
 
-const { query, getStatsByDateRange, list, showError, showWarning, showSuccess, showInfo } = vi.hoisted(() => ({
+const { query, getStats, getStatsByDateRange, list, showError, showWarning, showSuccess, showInfo } = vi.hoisted(() => ({
   query: vi.fn(),
+  getStats: vi.fn(),
   getStatsByDateRange: vi.fn(),
   list: vi.fn(),
   showError: vi.fn(),
@@ -46,6 +47,7 @@ const messages: Record<string, string> = {
 
 vi.mock('@/api', () => ({
   usageAPI: {
+    getStats,
     query,
     getStatsByDateRange,
   },
@@ -76,6 +78,7 @@ const TablePageLayoutStub = {
 describe('user UsageView tooltip', () => {
   beforeEach(() => {
     query.mockReset()
+    getStats.mockReset()
     getStatsByDateRange.mockReset()
     list.mockReset()
     showError.mockReset()
@@ -130,7 +133,7 @@ describe('user UsageView tooltip', () => {
       total: 1,
       pages: 1,
     })
-    getStatsByDateRange.mockResolvedValue({
+    getStats.mockResolvedValue({
       total_requests: 1,
       total_tokens: 100,
       total_cost: 0.1,
@@ -219,7 +222,7 @@ describe('user UsageView tooltip', () => {
       total: 1,
       pages: 1,
     })
-    getStatsByDateRange.mockResolvedValue({
+    getStats.mockResolvedValue({
       total_requests: 1,
       total_tokens: 100,
       total_cost: 0.1,
@@ -291,7 +294,7 @@ describe('user UsageView tooltip', () => {
       total: 0,
       pages: 0,
     })
-    getStatsByDateRange.mockResolvedValue({
+    getStats.mockResolvedValue({
       total_requests: 1,
       total_tokens: 100,
       total_actual_cost: 0.092883,
@@ -331,7 +334,7 @@ describe('user UsageView tooltip', () => {
       total: 0,
       pages: 0,
     })
-    getStatsByDateRange.mockResolvedValue({
+    getStats.mockResolvedValue({
       total_requests: 0,
       total_tokens: 0,
       total_cost: 0,
@@ -368,5 +371,49 @@ describe('user UsageView tooltip', () => {
     await nextTick()
 
     expect(wrapper.text()).toContain('OpenAI cache creation may be unavailable')
+  })
+
+  it('defaults to all-time usage filters on initial load', async () => {
+    query.mockResolvedValue({
+      items: [],
+      total: 0,
+      pages: 0,
+    })
+    getStats.mockResolvedValue({
+      total_requests: 0,
+      total_tokens: 0,
+      total_cost: 0,
+      avg_duration_ms: 0,
+    })
+    getStatsByDateRange.mockResolvedValue({
+      total_requests: 0,
+      total_tokens: 0,
+      total_cost: 0,
+      avg_duration_ms: 0,
+    })
+    list.mockResolvedValue({ items: [] })
+
+    mount(UsageView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          TablePageLayout: TablePageLayoutStub,
+          Pagination: true,
+          EmptyState: true,
+          Select: true,
+          DateRangePicker: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    expect(query).toHaveBeenCalled()
+    expect(query.mock.calls[0][0]).not.toHaveProperty('start_date')
+    expect(query.mock.calls[0][0]).not.toHaveProperty('end_date')
+    expect(getStats).toHaveBeenCalledWith('all', undefined)
+    expect(getStatsByDateRange).not.toHaveBeenCalled()
   })
 })

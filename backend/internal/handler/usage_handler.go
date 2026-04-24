@@ -233,6 +233,8 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 		// 使用 period 参数
 		period := c.DefaultQuery("period", "today")
 		switch period {
+		case "all":
+			startTime = time.Time{}
 		case "today":
 			startTime = timezone.StartOfDayInUserLocation(now, userTZ)
 		case "week":

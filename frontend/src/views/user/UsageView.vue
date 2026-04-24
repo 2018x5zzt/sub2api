@@ -510,29 +510,13 @@ const apiKeyOptions = computed(() => {
   ]
 })
 
-// Helper function to format date in local timezone
-const formatLocalDate = (date: Date): string => {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-}
-
-// Initialize date range immediately
-const now = new Date()
-const weekAgo = new Date(now)
-weekAgo.setDate(weekAgo.getDate() - 6)
-
 // Date range state
-const startDate = ref(formatLocalDate(weekAgo))
-const endDate = ref(formatLocalDate(now))
+const startDate = ref('')
+const endDate = ref('')
 
 const filters = ref<UsageQueryParams>({
   api_key_id: undefined,
-  start_date: undefined,
-  end_date: undefined
 })
-
-// Initialize filters with date range
-filters.value.start_date = startDate.value
-filters.value.end_date = endDate.value
 
 // Handle date range change from DateRangePicker
 const onDateRangeChange = (range: {
@@ -623,7 +607,9 @@ const loadUsageLogs = async () => {
     const params: UsageQueryParams = {
       page: pagination.page,
       page_size: pagination.page_size,
-      ...filters.value
+      ...(filters.value.api_key_id !== undefined ? { api_key_id: filters.value.api_key_id } : {}),
+      ...(filters.value.start_date ? { start_date: filters.value.start_date } : {}),
+      ...(filters.value.end_date ? { end_date: filters.value.end_date } : {})
     }
 
     const response = await usageAPI.query(params, { signal })
@@ -661,11 +647,11 @@ const loadApiKeys = async () => {
 const loadUsageStats = async () => {
   try {
     const apiKeyId = filters.value.api_key_id ? Number(filters.value.api_key_id) : undefined
-    const stats = await usageAPI.getStatsByDateRange(
-      filters.value.start_date || startDate.value,
-      filters.value.end_date || endDate.value,
-      apiKeyId
-    )
+    const selectedStartDate = filters.value.start_date || startDate.value
+    const selectedEndDate = filters.value.end_date || endDate.value
+    const stats = selectedStartDate && selectedEndDate
+      ? await usageAPI.getStatsByDateRange(selectedStartDate, selectedEndDate, apiKeyId)
+      : await usageAPI.getStats('all', apiKeyId)
     usageStats.value = stats
   } catch (error) {
     console.error('Failed to load usage stats:', error)
@@ -680,18 +666,10 @@ const applyFilters = () => {
 
 const resetFilters = () => {
   filters.value = {
-    api_key_id: undefined,
-    start_date: undefined,
-    end_date: undefined
+    api_key_id: undefined
   }
-  // Reset date range to default (last 7 days)
-  const now = new Date()
-  const weekAgo = new Date(now)
-  weekAgo.setDate(weekAgo.getDate() - 6)
-  startDate.value = formatLocalDate(weekAgo)
-  endDate.value = formatLocalDate(now)
-  filters.value.start_date = startDate.value
-  filters.value.end_date = endDate.value
+  startDate.value = ''
+  endDate.value = ''
   pagination.page = 1
   loadUsageLogs()
   loadUsageStats()
