@@ -2229,6 +2229,29 @@ func TestExtractOpenAIUsageFromJSONBytes_ParsesOptionalCacheCreationInputTokens(
 	require.Equal(t, 3, usage.CacheReadInputTokens)
 }
 
+func TestExtractOpenAIUsageFromJSONBytes_FallsBackToNestedCacheCreationBreakdown(t *testing.T) {
+	body := []byte(`{"usage":{"input_tokens":12,"output_tokens":6,"input_tokens_details":{"cached_tokens":3},"cache_creation":{"ephemeral_5m_input_tokens":2,"ephemeral_1h_input_tokens":5}}}`)
+
+	usage, ok := extractOpenAIUsageFromJSONBytes(body)
+	require.True(t, ok)
+	require.Equal(t, 12, usage.InputTokens)
+	require.Equal(t, 6, usage.OutputTokens)
+	require.Equal(t, 7, usage.CacheCreationInputTokens)
+	require.Equal(t, 3, usage.CacheReadInputTokens)
+}
+
+func TestParseSSEUsage_FallsBackToNestedCacheCreationBreakdown(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	usage := &OpenAIUsage{}
+
+	svc.parseSSEUsage(`{"type":"response.completed","response":{"usage":{"input_tokens":9,"output_tokens":4,"input_tokens_details":{"cached_tokens":2},"cache_creation":{"ephemeral_5m_input_tokens":3,"ephemeral_1h_input_tokens":8}}}}`, usage)
+
+	require.Equal(t, 9, usage.InputTokens)
+	require.Equal(t, 4, usage.OutputTokens)
+	require.Equal(t, 11, usage.CacheCreationInputTokens)
+	require.Equal(t, 2, usage.CacheReadInputTokens)
+}
+
 func TestExtractCodexFinalResponse_SampleReplay(t *testing.T) {
 	body := strings.Join([]string{
 		`event: message`,

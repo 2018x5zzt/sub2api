@@ -47,7 +47,7 @@ const (
 
 	openAIImageBackendUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 	openAIImageRequirementsDiff = "0fffff"
-	openAIImageLifecycleTimeout = 2 * time.Minute
+	openAIImageLifecycleTimeout = 10 * time.Minute
 )
 
 type OpenAIImagesCapability string
@@ -943,7 +943,7 @@ func resolveOpenAIProxyURL(account *Account) string {
 
 func newOpenAIBackendAPIClient(proxyURL string) (*req.Client, error) {
 	client := req.C().
-		SetTimeout(180 * time.Second).
+		SetTimeout(600 * time.Second).
 		ImpersonateChrome()
 	trimmed, _, err := proxyurl.Parse(proxyURL)
 	if err != nil {

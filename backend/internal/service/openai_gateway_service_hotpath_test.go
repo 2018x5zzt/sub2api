@@ -74,6 +74,13 @@ func TestExtractOpenAIReasoningEffortFromBody(t *testing.T) {
 			wantValue: "xhigh",
 		},
 		{
+			name:      "兼容历史 typo xhight",
+			body:      []byte(`{"input":"hi"}`),
+			model:     "gpt-5.5-xhight",
+			wantNil:   false,
+			wantValue: "xhigh",
+		},
+		{
 			name:      "minimal 保持为 minimal",
 			body:      []byte(`{"reasoning":{"effort":"minimal"}}`),
 			model:     "gpt-5-high",

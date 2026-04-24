@@ -223,11 +223,12 @@ func (s *BillingService) initFallbackPricing() {
 	for _, model := range openai.DefaultModels {
 		s.fallbackPrices[model.ID] = newOpenAIFallbackPricing(model.InputPricePerMTok, model.OutputPricePerMTok)
 	}
-	// GPT-5.5 暂无独立定价，回退到 GPT-5.4。
-	s.fallbackPrices["gpt-5.5"] = s.fallbackPrices["gpt-5.4"]
 	s.fallbackPrices["gpt-5.4"].LongContextInputThreshold = openAIGPT54LongContextInputThreshold
 	s.fallbackPrices["gpt-5.4"].LongContextInputMultiplier = openAIGPT54LongContextInputMultiplier
 	s.fallbackPrices["gpt-5.4"].LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
+	s.fallbackPrices["gpt-5.5"].LongContextInputThreshold = openAIGPT54LongContextInputThreshold
+	s.fallbackPrices["gpt-5.5"].LongContextInputMultiplier = openAIGPT54LongContextInputMultiplier
+	s.fallbackPrices["gpt-5.5"].LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
 }
 
 // getFallbackPricing 根据模型系列获取回退价格

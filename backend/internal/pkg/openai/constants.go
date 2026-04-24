@@ -35,7 +35,7 @@ var DefaultModels = []Model{
 	{ID: "gpt-5.3-codex-low", Object: "model", Created: 1735689600, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.3 Codex Low", InputPricePerMTok: 1.75, OutputPricePerMTok: 14.00},
 	{ID: "gpt-5.3-codex-medium", Object: "model", Created: 1735689600, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.3 Codex Medium", InputPricePerMTok: 1.75, OutputPricePerMTok: 14.00},
 	{ID: "gpt-5.3-codex-xhigh", Object: "model", Created: 1735689600, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.3 Codex XHigh", InputPricePerMTok: 1.75, OutputPricePerMTok: 14.00},
-	{ID: "gpt-5.5", Object: "model", Created: 1776873600, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.5", InputPricePerMTok: 2.50, OutputPricePerMTok: 15.00},
+	{ID: "gpt-5.5", Object: "model", Created: 1776873600, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.5", InputPricePerMTok: 5.00, OutputPricePerMTok: 30.00},
 	{ID: "gpt-5.4", Object: "model", Created: 1738368000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.4", InputPricePerMTok: 2.50, OutputPricePerMTok: 15.00},
 	{ID: "gpt-5.4-high", Object: "model", Created: 1738368000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.4 High", InputPricePerMTok: 2.50, OutputPricePerMTok: 15.00},
 	{ID: "gpt-5.4-medium", Object: "model", Created: 1738368000, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.4 Medium", InputPricePerMTok: 2.50, OutputPricePerMTok: 15.00},

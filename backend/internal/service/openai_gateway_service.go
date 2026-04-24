@@ -4238,17 +4238,37 @@ func extractOpenAIUsageFromJSONBytes(body []byte) (OpenAIUsage, bool) {
 
 func extractOpenAIUsageFromJSONPaths(body []byte, inputPath, outputPath, cacheCreationPath, cacheReadPath string, imageOutputPath ...string) OpenAIUsage {
 	paths := []string{inputPath, outputPath, cacheCreationPath, cacheReadPath}
+	imageOutputIndex := -1
 	if len(imageOutputPath) > 0 && strings.TrimSpace(imageOutputPath[0]) != "" {
+		imageOutputIndex = len(paths)
 		paths = append(paths, imageOutputPath[0])
 	}
+	cacheCreationBreakdownStart := len(paths)
+	breakdown5mPath, breakdown1hPath := deriveOpenAICacheCreationBreakdownPaths(cacheCreationPath)
+	if breakdown5mPath != "" && breakdown1hPath != "" {
+		paths = append(paths, breakdown5mPath, breakdown1hPath)
+	}
 	values := gjson.GetManyBytes(body, paths...)
+	cacheCreationTokens := int(values[2].Int())
+	if cacheCreationTokens == 0 && len(values) >= cacheCreationBreakdownStart+2 {
+		cacheCreationTokens = int(values[cacheCreationBreakdownStart].Int() + values[cacheCreationBreakdownStart+1].Int())
+	}
 	return OpenAIUsage{
 		InputTokens:              int(values[0].Int()),
 		OutputTokens:             int(values[1].Int()),
-		CacheCreationInputTokens: int(values[2].Int()),
+		CacheCreationInputTokens: cacheCreationTokens,
 		CacheReadInputTokens:     int(values[3].Int()),
-		ImageOutputTokens:        usageValueAt(values, 4),
+		ImageOutputTokens:        usageValueAt(values, imageOutputIndex),
 	}
+}
+
+func deriveOpenAICacheCreationBreakdownPaths(cacheCreationPath string) (string, string) {
+	cacheCreationPath = strings.TrimSpace(cacheCreationPath)
+	if !strings.HasSuffix(cacheCreationPath, "cache_creation_input_tokens") {
+		return "", ""
+	}
+	prefix := strings.TrimSuffix(cacheCreationPath, "cache_creation_input_tokens")
+	return prefix + "cache_creation.ephemeral_5m_input_tokens", prefix + "cache_creation.ephemeral_1h_input_tokens"
 }
 
 func mergeOpenAIUsageFillZero(dst *OpenAIUsage, src OpenAIUsage) {
@@ -5754,7 +5774,7 @@ func normalizeOpenAIReasoningEffort(raw string) string {
 		return ""
 	case "low", "medium", "high":
 		return value
-	case "xhigh", "extrahigh":
+	case "xhigh", "xhight", "extrahigh":
 		return "xhigh"
 	default:
 		// Only store known effort levels for now to keep UI consistent.

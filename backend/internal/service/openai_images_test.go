@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -156,4 +157,12 @@ func TestResolveOpenAIImageBytes_PrefersInlineBase64(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, []byte("ABC"), data)
+}
+
+func TestOpenAIImageTimeoutsAllowLongRunningJobs(t *testing.T) {
+	require.Equal(t, 600*time.Second, openAIImageLifecycleTimeout)
+
+	client, err := newOpenAIBackendAPIClient("")
+	require.NoError(t, err)
+	require.Equal(t, 600*time.Second, client.GetClient().Timeout)
 }
