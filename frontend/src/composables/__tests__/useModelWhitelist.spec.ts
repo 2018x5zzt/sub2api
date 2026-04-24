@@ -4,7 +4,11 @@ vi.mock('@/api/admin/accounts', () => ({
   getAntigravityDefaultModelMapping: vi.fn()
 }))
 
-import { buildModelMappingObject, getModelsByPlatform } from '../useModelWhitelist'
+import {
+  buildModelMappingObject,
+  getModelsByPlatform,
+  getPresetMappingsByPlatform
+} from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
   it('openai 模型列表仅暴露兼容的 GPT-5 模型集合', () => {
@@ -46,6 +50,33 @@ describe('useModelWhitelist', () => {
     const models = getModelsByPlatform('anthropic')
 
     expect(models).toContain('claude-haiku-4-5-20251001')
+  })
+
+  it('claude-opus-4-7 会出现在 Claude 与 Antigravity 默认模型列表里', () => {
+    const anthropicModels = getModelsByPlatform('anthropic')
+    const antigravityModels = getModelsByPlatform('antigravity')
+
+    expect(anthropicModels).toContain('claude-opus-4-7')
+    expect(antigravityModels).toContain('claude-opus-4-7')
+  })
+
+  it('claude-opus-4-7 会出现在相关预设映射里', () => {
+    const anthropicMappings = getPresetMappingsByPlatform('anthropic')
+    const antigravityMappings = getPresetMappingsByPlatform('antigravity')
+    const bedrockMappings = getPresetMappingsByPlatform('bedrock')
+
+    expect(anthropicMappings).toContainEqual(expect.objectContaining({
+      from: 'claude-opus-4-7',
+      to: 'claude-opus-4-7'
+    }))
+    expect(antigravityMappings).toContainEqual(expect.objectContaining({
+      from: 'claude-opus-4-7',
+      to: 'claude-opus-4-7'
+    }))
+    expect(bedrockMappings).toContainEqual(expect.objectContaining({
+      from: 'claude-opus-4-7',
+      to: 'us.anthropic.claude-opus-4-7-v1'
+    }))
   })
 
   it('whitelist 模式会忽略通配符条目', () => {
