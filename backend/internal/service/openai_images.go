@@ -510,6 +510,9 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 	if parsed.Stream {
 		streamUsage, streamCount, ttft, err := s.handleOpenAIImagesStreamingResponse(resp, c, startTime)
 		if err != nil {
+			if errors.Is(err, errOpenAIEmptyResponse) || errors.Is(err, errOpenAIHTMLResponse) {
+				return nil, wrapRecoverableOpenAIStreamError(c, account, resp, err, false)
+			}
 			return nil, err
 		}
 		usage = streamUsage
@@ -518,6 +521,9 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 	} else {
 		nonStreamUsage, nonStreamCount, err := s.handleOpenAIImagesNonStreamingResponse(resp, c)
 		if err != nil {
+			if errors.Is(err, errOpenAIEmptyResponse) || errors.Is(err, errOpenAIHTMLResponse) {
+				return nil, wrapRecoverableOpenAIStreamError(c, account, resp, err, false)
+			}
 			return nil, err
 		}
 		usage = nonStreamUsage
@@ -687,6 +693,12 @@ func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(resp *http
 	if err != nil {
 		return OpenAIUsage{}, 0, err
 	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		return OpenAIUsage{}, 0, errOpenAIEmptyResponse
+	}
+	if isLikelyOpenAIHTMLResponse(resp.Header, body) {
+		return OpenAIUsage{}, 0, errOpenAIHTMLResponse
+	}
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	contentType := "application/json"
 	if s.cfg != nil && !s.cfg.Security.ResponseHeaders.Enabled {
@@ -705,6 +717,9 @@ func (s *OpenAIGatewayService) handleOpenAIImagesStreamingResponse(
 	c *gin.Context,
 	startTime time.Time,
 ) (OpenAIUsage, int, *int, error) {
+	if headerType := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Type"))); strings.Contains(headerType, "text/html") {
+		return OpenAIUsage{}, 0, nil, errOpenAIHTMLResponse
+	}
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
 	if contentType == "" {
@@ -2005,6 +2020,9 @@ func newOpenAIImageStatusError(resp *req.Response, fallback string) error {
 			body, _ = io.ReadAll(io.LimitReader(resp.Response.Body, 2<<20))
 			_ = resp.Response.Body.Close()
 		}
+	}
+	if isLikelyOpenAIHTMLResponse(headers, body) {
+		body = buildSyntheticOpenAIHTMLResponseBody(statusCode)
 	}
 
 	message := sanitizeUpstreamErrorMessage(extractUpstreamErrorMessage(body))
