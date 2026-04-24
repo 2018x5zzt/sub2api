@@ -42,9 +42,11 @@ func TestForwardAsAnthropic_BufferedDeltaOnlyTerminalResponsePreservesThinkingAn
 	}
 	upstream := &httpUpstreamRecorder{resp: resp}
 
+	cfg := &config.Config{Gateway: config.GatewayConfig{}}
 	svc := &OpenAIGatewayService{
-		cfg:          &config.Config{Gateway: config.GatewayConfig{}},
-		httpUpstream: upstream,
+		cfg:                  cfg,
+		httpUpstream:         upstream,
+		responseHeaderFilter: compileResponseHeaderFilter(cfg),
 	}
 
 	account := &Account{
@@ -63,6 +65,7 @@ func TestForwardAsAnthropic_BufferedDeltaOnlyTerminalResponsePreservesThinkingAn
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
+	require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 	require.Equal(t, "thinking", gjson.GetBytes(rec.Body.Bytes(), "content.0.type").String())
 	require.Equal(t, "plan first", gjson.GetBytes(rec.Body.Bytes(), "content.0.thinking").String())
 	require.Equal(t, "text", gjson.GetBytes(rec.Body.Bytes(), "content.1.type").String())

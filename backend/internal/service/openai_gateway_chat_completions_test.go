@@ -34,9 +34,11 @@ func TestForwardAsChatCompletions_OAuthRemapsLegacyModel(t *testing.T) {
 	}
 	upstream := &httpUpstreamRecorder{resp: resp}
 
+	cfg := &config.Config{Gateway: config.GatewayConfig{}}
 	svc := &OpenAIGatewayService{
-		cfg:          &config.Config{Gateway: config.GatewayConfig{}},
-		httpUpstream: upstream,
+		cfg:                  cfg,
+		httpUpstream:         upstream,
+		responseHeaderFilter: compileResponseHeaderFilter(cfg),
 	}
 
 	account := &Account{
@@ -78,9 +80,11 @@ func TestForwardAsChatCompletions_DefaultMappedModelPreservesReasoningSemantics(
 	}
 	upstream := &httpUpstreamRecorder{resp: resp}
 
+	cfg := &config.Config{Gateway: config.GatewayConfig{}}
 	svc := &OpenAIGatewayService{
-		cfg:          &config.Config{Gateway: config.GatewayConfig{}},
-		httpUpstream: upstream,
+		cfg:                  cfg,
+		httpUpstream:         upstream,
+		responseHeaderFilter: compileResponseHeaderFilter(cfg),
 	}
 
 	account := &Account{
@@ -155,6 +159,7 @@ func TestForwardAsChatCompletions_BufferedDeltaOnlyTerminalResponsePreservesCont
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
+	require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 	require.Equal(t, "plan first", gjson.GetBytes(rec.Body.Bytes(), "choices.0.message.reasoning_content").String())
 	require.Equal(t, "final answer", gjson.GetBytes(rec.Body.Bytes(), "choices.0.message.content").String())
 	require.Equal(t, int64(11), gjson.GetBytes(rec.Body.Bytes(), "usage.prompt_tokens").Int())

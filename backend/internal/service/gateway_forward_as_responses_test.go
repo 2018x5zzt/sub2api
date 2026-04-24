@@ -44,9 +44,11 @@ func TestGatewayService_ForwardAsResponses_BufferedAnthropicStreamPreservesToolC
 	}
 	upstream := &httpUpstreamRecorder{resp: resp}
 
+	cfg := &config.Config{Gateway: config.GatewayConfig{}}
 	svc := &GatewayService{
-		cfg:          &config.Config{Gateway: config.GatewayConfig{}},
-		httpUpstream: upstream,
+		cfg:                  cfg,
+		httpUpstream:         upstream,
+		responseHeaderFilter: compileResponseHeaderFilter(cfg),
 	}
 
 	account := &Account{
@@ -65,6 +67,7 @@ func TestGatewayService_ForwardAsResponses_BufferedAnthropicStreamPreservesToolC
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
+	require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
 	require.Equal(t, "gpt-5", gjson.GetBytes(rec.Body.Bytes(), "model").String())
 	require.Equal(t, "completed", gjson.GetBytes(rec.Body.Bytes(), "status").String())
 	require.Equal(t, "function_call", gjson.GetBytes(rec.Body.Bytes(), "output.0.type").String())
