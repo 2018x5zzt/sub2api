@@ -385,11 +385,68 @@ func TestResolveGroupRateMultiplier_UsesUserOverride(t *testing.T) {
 	require.InDelta(t, 1.25, *userRate, 1e-12)
 }
 
+func testFloat64Ptr(v float64) *float64 { return &v }
+func testIntPtr(v int) *int             { return &v }
+
+func TestSupportedModelPricingFromResolved_IncludesTokenIntervals(t *testing.T) {
+	pricing := supportedModelPricingFromResolved(&service.ResolvedPricing{
+		Mode: service.BillingModeToken,
+		BasePricing: &service.ModelPricing{
+			InputPricePerToken:  1e-6,
+			OutputPricePerToken: 2e-6,
+		},
+		Intervals: []service.PricingInterval{
+			{
+				MinTokens:   0,
+				MaxTokens:   testIntPtr(128000),
+				InputPrice:  testFloat64Ptr(3e-6),
+				OutputPrice: testFloat64Ptr(4e-6),
+			},
+		},
+	}, 2)
+
+	require.NotNil(t, pricing)
+	require.Equal(t, string(service.BillingModeToken), pricing.BillingMode)
+	require.NotNil(t, pricing.InputPricePerMillionTokens)
+	require.NotNil(t, pricing.OutputPricePerMillionTokens)
+	require.InDelta(t, 2, *pricing.InputPricePerMillionTokens, 1e-12)
+	require.InDelta(t, 4, *pricing.OutputPricePerMillionTokens, 1e-12)
+	require.Len(t, pricing.TokenIntervals, 1)
+	require.Equal(t, 0, pricing.TokenIntervals[0].MinTokens)
+	require.Equal(t, testIntPtr(128000), pricing.TokenIntervals[0].MaxTokens)
+	require.NotNil(t, pricing.TokenIntervals[0].InputPricePerMillionTokens)
+	require.NotNil(t, pricing.TokenIntervals[0].OutputPricePerMillionTokens)
+	require.InDelta(t, 6, *pricing.TokenIntervals[0].InputPricePerMillionTokens, 1e-12)
+	require.InDelta(t, 8, *pricing.TokenIntervals[0].OutputPricePerMillionTokens, 1e-12)
+}
+
+func TestSupportedModelPricingFromResolved_UsesEffectiveRateMultiplierForImagePricing(t *testing.T) {
+	pricing := supportedModelPricingFromResolved(&service.ResolvedPricing{
+		Mode:                   service.BillingModeImage,
+		DefaultPerRequestPrice: 0.08,
+		RequestTiers: []service.PricingInterval{
+			{
+				TierLabel:       "1K",
+				PerRequestPrice: testFloat64Ptr(0.04),
+			},
+		},
+	}, 1.5)
+
+	require.NotNil(t, pricing)
+	require.Equal(t, string(service.BillingModeImage), pricing.BillingMode)
+	require.NotNil(t, pricing.DefaultPricePerRequest)
+	require.InDelta(t, 0.12, *pricing.DefaultPricePerRequest, 1e-12)
+	require.Len(t, pricing.RequestTiers, 1)
+	require.Equal(t, "1K", pricing.RequestTiers[0].TierLabel)
+	require.NotNil(t, pricing.RequestTiers[0].PricePerRequest)
+	require.InDelta(t, 0.06, *pricing.RequestTiers[0].PricePerRequest, 1e-12)
+}
+
 func TestSupportedModelPricingFromService_UsesEffectiveRateMultiplier(t *testing.T) {
 	h := NewAPIKeyHandler(nil, nil)
 	h.SetBillingService(service.NewBillingService(&config.Config{}, nil))
 
-	pricing := h.buildSupportedModelPricing("gpt-5.4", 1.5, map[string]cachedModelPricing{})
+	pricing := h.buildSupportedModelPricing(context.Background(), 0, "gpt-5.4", 1.5)
 	require.NotNil(t, pricing)
 	require.Equal(t, "USD", pricing.Currency)
 	require.NotNil(t, pricing.InputPricePerMillionTokens)
@@ -402,7 +459,7 @@ func TestSupportedModelPricingFromService_ZeroMultiplierShowsZeroEffectivePrice(
 	h := NewAPIKeyHandler(nil, nil)
 	h.SetBillingService(service.NewBillingService(&config.Config{}, nil))
 
-	pricing := h.buildSupportedModelPricing("gpt-5.4-mini", 0, map[string]cachedModelPricing{})
+	pricing := h.buildSupportedModelPricing(context.Background(), 0, "gpt-5.4-mini", 0)
 	require.NotNil(t, pricing)
 	require.NotNil(t, pricing.InputPricePerMillionTokens)
 	require.NotNil(t, pricing.OutputPricePerMillionTokens)

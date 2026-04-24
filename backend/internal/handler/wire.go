@@ -81,9 +81,11 @@ func ProvideAPIKeyHandler(
 	apiKeyService *service.APIKeyService,
 	accountRepo service.AccountRepository,
 	billingService *service.BillingService,
+	modelPricingResolver *service.ModelPricingResolver,
 ) *APIKeyHandler {
 	h := NewAPIKeyHandler(apiKeyService, accountRepo)
 	h.SetBillingService(billingService)
+	h.SetPricingResolver(modelPricingResolver)
 	return h
 }
 

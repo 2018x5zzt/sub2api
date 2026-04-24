@@ -302,22 +302,17 @@
                         <code class="mt-1 block truncate text-xs text-gray-500 dark:text-gray-400">
                           {{ model.id }}
                         </code>
-                        <div v-if="hasDisplayedPricing(model)" class="mt-2 flex flex-wrap gap-1.5">
+                        <div class="mt-2 flex flex-wrap gap-1.5">
                           <span
-                            v-if="model.pricing?.input_price_per_million_tokens !== undefined"
-                            class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                            v-for="badge in getPricingBadges(model, catalog.effective_rate_multiplier)"
+                            :key="badge.key"
+                            :class="pricingBadgeClass(badge.tone)"
                           >
-                            {{ t('modelHub.inputPriceShort') }} {{ formatPerMillionPrice(model.pricing?.input_price_per_million_tokens) }}
-                          </span>
-                          <span
-                            v-if="model.pricing?.output_price_per_million_tokens !== undefined"
-                            class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
-                          >
-                            {{ t('modelHub.outputPriceShort') }} {{ formatPerMillionPrice(model.pricing?.output_price_per_million_tokens) }}
+                            {{ badge.text }}
                           </span>
                         </div>
                         <div
-                          v-else
+                          v-if="!hasDisplayedPricing(model)"
                           class="mt-2 text-[11px] text-gray-400 dark:text-gray-500"
                         >
                           {{ t('modelHub.pricingUnavailable') }}
@@ -348,7 +343,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { userGroupsAPI } from '@/api'
-import type { GroupModelCatalog, GroupPlatform, SupportedModel } from '@/types'
+import type { GroupModelCatalog, GroupPlatform, SupportedModel, SupportedModelRequestTier, SupportedModelTokenInterval } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
@@ -363,6 +358,12 @@ type GroupFilter = number | 'all'
 interface PlatformOption {
   value: PlatformFilter
   label: string
+}
+
+interface PricingBadge {
+  key: string
+  text: string
+  tone: 'rate' | 'input' | 'output' | 'request' | 'interval'
 }
 
 const { t } = useI18n()
@@ -496,10 +497,145 @@ function formatPerMillionPrice(price?: number | null): string {
   return `${formatCurrency(price)} ${t('modelHub.perMillionTokens')}`
 }
 
+function formatPerRequestPrice(price?: number | null): string {
+  if (price === null || price === undefined) {
+    return t('modelHub.pricingUnavailable')
+  }
+  return `${formatCurrency(price)} ${t('modelHub.perRequest')}`
+}
+
+function formatCompactTokenCount(tokens?: number | null): string {
+  if (tokens === null || tokens === undefined || !Number.isFinite(tokens)) {
+    return '0'
+  }
+  if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 === 0 ? 0 : 1)}M`
+  }
+  if (tokens >= 1_000) {
+    return `${(tokens / 1_000).toFixed(tokens % 1_000 === 0 ? 0 : 1)}K`
+  }
+  return `${tokens}`
+}
+
+function formatTokenRange(minTokens?: number, maxTokens?: number | null): string {
+  const lower = formatCompactTokenCount(minTokens ?? 0)
+  if (maxTokens === null || maxTokens === undefined) {
+    return `${lower}+`
+  }
+  return `${lower}-${formatCompactTokenCount(maxTokens)}`
+}
+
+function formatTokenIntervalBadge(interval: SupportedModelTokenInterval): string | null {
+  const parts: string[] = []
+  if (interval.input_price_per_million_tokens !== undefined) {
+    parts.push(`${t('modelHub.inputPriceShort')} ${formatPerMillionPrice(interval.input_price_per_million_tokens)}`)
+  }
+  if (interval.output_price_per_million_tokens !== undefined) {
+    parts.push(`${t('modelHub.outputPriceShort')} ${formatPerMillionPrice(interval.output_price_per_million_tokens)}`)
+  }
+  if (parts.length === 0) {
+    return null
+  }
+  return `${formatTokenRange(interval.min_tokens, interval.max_tokens)} ${parts.join(' · ')}`
+}
+
+function formatRequestTierLabel(tier: SupportedModelRequestTier): string {
+  if (tier.tier_label) {
+    return tier.tier_label
+  }
+  return formatTokenRange(tier.min_tokens ?? 0, tier.max_tokens ?? null)
+}
+
+function getPricingBadges(model: SupportedModel, rate: number): PricingBadge[] {
+  const badges: PricingBadge[] = [
+    {
+      key: `rate:${model.id}`,
+      text: `${t('modelHub.rateShort')} ${formatRateMultiplier(rate)}x`,
+      tone: 'rate'
+    }
+  ]
+
+  const pricing = model.pricing
+  if (!pricing) {
+    return badges
+  }
+
+  if (pricing.input_price_per_million_tokens !== undefined) {
+    badges.push({
+      key: `input:${model.id}`,
+      text: `${t('modelHub.inputPriceShort')} ${formatPerMillionPrice(pricing.input_price_per_million_tokens)}`,
+      tone: 'input'
+    })
+  }
+  if (pricing.output_price_per_million_tokens !== undefined) {
+    badges.push({
+      key: `output:${model.id}`,
+      text: `${t('modelHub.outputPriceShort')} ${formatPerMillionPrice(pricing.output_price_per_million_tokens)}`,
+      tone: 'output'
+    })
+  }
+  if (pricing.default_price_per_request !== undefined) {
+    badges.push({
+      key: `request-default:${model.id}`,
+      text: `${t('modelHub.defaultPriceShort')} ${formatPerRequestPrice(pricing.default_price_per_request)}`,
+      tone: 'request'
+    })
+  }
+  for (const [index, tier] of (pricing.request_tiers || []).entries()) {
+    if (tier.price_per_request === undefined) {
+      continue
+    }
+    badges.push({
+      key: `request-tier:${model.id}:${index}`,
+      text: `${formatRequestTierLabel(tier)} ${formatPerRequestPrice(tier.price_per_request)}`,
+      tone: 'request'
+    })
+  }
+  for (const [index, interval] of (pricing.token_intervals || []).entries()) {
+    const text = formatTokenIntervalBadge(interval)
+    if (!text) {
+      continue
+    }
+    badges.push({
+      key: `token-interval:${model.id}:${index}`,
+      text,
+      tone: 'interval'
+    })
+  }
+
+  return badges
+}
+
+function pricingBadgeClass(tone: PricingBadge['tone']): string {
+  const base = 'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold'
+  if (tone === 'rate') {
+    return `${base} bg-slate-100 text-slate-700 dark:bg-dark-700 dark:text-slate-200`
+  }
+  if (tone === 'input') {
+    return `${base} bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300`
+  }
+  if (tone === 'output') {
+    return `${base} bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300`
+  }
+  if (tone === 'request') {
+    return `${base} bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300`
+  }
+  return `${base} bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300`
+}
+
 function hasDisplayedPricing(model: SupportedModel): boolean {
-  return (
-    model.pricing?.input_price_per_million_tokens !== undefined ||
-    model.pricing?.output_price_per_million_tokens !== undefined
+  return Boolean(
+    model.pricing &&
+    (
+      model.pricing.input_price_per_million_tokens !== undefined ||
+      model.pricing.output_price_per_million_tokens !== undefined ||
+      model.pricing.default_price_per_request !== undefined ||
+      (model.pricing.request_tiers || []).some((tier) => tier.price_per_request !== undefined) ||
+      (model.pricing.token_intervals || []).some((interval) =>
+        interval.input_price_per_million_tokens !== undefined ||
+        interval.output_price_per_million_tokens !== undefined
+      )
+    )
   )
 }
 

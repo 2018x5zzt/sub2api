@@ -1,4 +1,4 @@
-import type { BillingMode, PricingInterval } from '@/api/admin/channels'
+import type { BillingMode, ChannelModelPricing, PricingInterval } from '@/api/admin/channels'
 
 export interface IntervalFormEntry {
   min_tokens: number
@@ -71,6 +71,43 @@ export function formIntervalsToAPI(intervals: IntervalFormEntry[]): PricingInter
     per_request_price: toNullableNumber(iv.per_request_price),
     sort_order: iv.sort_order
   }))
+}
+
+export function apiPricingToFormEntry(pricing: ChannelModelPricing): PricingFormEntry {
+  const isImageMode = pricing.billing_mode === 'image'
+  const imageDefaultPrice = pricing.per_request_price ?? pricing.image_output_price ?? null
+
+  return {
+    models: pricing.models || [],
+    billing_mode: pricing.billing_mode,
+    input_price: perTokenToMTok(pricing.input_price),
+    output_price: perTokenToMTok(pricing.output_price),
+    cache_write_price: perTokenToMTok(pricing.cache_write_price),
+    cache_read_price: perTokenToMTok(pricing.cache_read_price),
+    image_output_price: isImageMode
+      ? pricing.image_output_price ?? imageDefaultPrice
+      : perTokenToMTok(pricing.image_output_price),
+    per_request_price: isImageMode ? imageDefaultPrice : pricing.per_request_price,
+    intervals: apiIntervalsToForm(pricing.intervals || [])
+  }
+}
+
+export function formPricingToAPI(platform: string, entry: PricingFormEntry): ChannelModelPricing {
+  const isImageMode = entry.billing_mode === 'image'
+  const defaultPerRequestPrice = toNullableNumber(entry.per_request_price)
+
+  return {
+    platform,
+    models: entry.models,
+    billing_mode: entry.billing_mode,
+    input_price: mTokToPerToken(entry.input_price),
+    output_price: mTokToPerToken(entry.output_price),
+    cache_write_price: mTokToPerToken(entry.cache_write_price),
+    cache_read_price: mTokToPerToken(entry.cache_read_price),
+    image_output_price: isImageMode ? defaultPerRequestPrice : mTokToPerToken(entry.image_output_price),
+    per_request_price: defaultPerRequestPrice,
+    intervals: formIntervalsToAPI(entry.intervals || [])
+  }
 }
 
 // ── 模型模式冲突检测 ──────────────────────────────────────

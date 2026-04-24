@@ -115,10 +115,28 @@ type SupportedModel struct {
 	Pricing     *SupportedModelPricing `json:"pricing,omitempty"`
 }
 
-type SupportedModelPricing struct {
-	Currency                    string   `json:"currency"`
+type SupportedModelTokenInterval struct {
+	MinTokens                   int      `json:"min_tokens"`
+	MaxTokens                   *int     `json:"max_tokens,omitempty"`
 	InputPricePerMillionTokens  *float64 `json:"input_price_per_million_tokens,omitempty"`
 	OutputPricePerMillionTokens *float64 `json:"output_price_per_million_tokens,omitempty"`
+}
+
+type SupportedModelRequestTier struct {
+	TierLabel       string   `json:"tier_label,omitempty"`
+	MinTokens       int      `json:"min_tokens,omitempty"`
+	MaxTokens       *int     `json:"max_tokens,omitempty"`
+	PricePerRequest *float64 `json:"price_per_request,omitempty"`
+}
+
+type SupportedModelPricing struct {
+	Currency                    string                        `json:"currency"`
+	BillingMode                 string                        `json:"billing_mode,omitempty"`
+	InputPricePerMillionTokens  *float64                      `json:"input_price_per_million_tokens,omitempty"`
+	OutputPricePerMillionTokens *float64                      `json:"output_price_per_million_tokens,omitempty"`
+	DefaultPricePerRequest      *float64                      `json:"default_price_per_request,omitempty"`
+	TokenIntervals              []SupportedModelTokenInterval `json:"token_intervals,omitempty"`
+	RequestTiers                []SupportedModelRequestTier   `json:"request_tiers,omitempty"`
 }
 
 type GroupModelCatalog struct {

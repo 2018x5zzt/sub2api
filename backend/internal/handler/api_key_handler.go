@@ -23,9 +23,10 @@ import (
 
 // APIKeyHandler handles API key-related requests
 type APIKeyHandler struct {
-	apiKeyService  *service.APIKeyService
-	accountRepo    service.AccountRepository
-	billingService *service.BillingService
+	apiKeyService   *service.APIKeyService
+	accountRepo     service.AccountRepository
+	billingService  *service.BillingService
+	pricingResolver *service.ModelPricingResolver
 }
 
 // NewAPIKeyHandler creates a new APIKeyHandler
@@ -41,6 +42,13 @@ func (h *APIKeyHandler) SetBillingService(billingService *service.BillingService
 		return
 	}
 	h.billingService = billingService
+}
+
+func (h *APIKeyHandler) SetPricingResolver(pricingResolver *service.ModelPricingResolver) {
+	if h == nil {
+		return
+	}
+	h.pricingResolver = pricingResolver
 }
 
 // CreateAPIKeyRequest represents the create API key request payload
@@ -345,7 +353,6 @@ func (h *APIKeyHandler) GetAvailableGroupModels(c *gin.Context) {
 		return
 	}
 
-	pricingCache := make(map[string]cachedModelPricing)
 	out := make([]dto.GroupModelCatalog, 0, len(groups))
 	for i := range groups {
 		models, source, err := h.getGroupSupportedModels(c.Request.Context(), &groups[i])
@@ -357,18 +364,13 @@ func (h *APIKeyHandler) GetAvailableGroupModels(c *gin.Context) {
 		effectiveRateMultiplier, userRateMultiplier := resolveGroupRateMultiplier(&groups[i], userRates)
 		out = append(out, dto.GroupModelCatalog{
 			Group:                   *dto.GroupFromService(&groups[i]),
-			Models:                  h.attachSupportedModelPricing(models, effectiveRateMultiplier, pricingCache),
+			Models:                  h.attachSupportedModelPricing(c.Request.Context(), groups[i].ID, models, effectiveRateMultiplier),
 			Source:                  source,
 			EffectiveRateMultiplier: effectiveRateMultiplier,
 			UserRateMultiplier:      userRateMultiplier,
 		})
 	}
 	response.Success(c, out)
-}
-
-type cachedModelPricing struct {
-	pricing *service.ModelPricing
-	loaded  bool
 }
 
 func resolveGroupRateMultiplier(group *service.Group, userRates map[int64]float64) (float64, *float64) {
@@ -391,9 +393,10 @@ func resolveGroupRateMultiplier(group *service.Group, userRates map[int64]float6
 }
 
 func (h *APIKeyHandler) attachSupportedModelPricing(
+	ctx context.Context,
+	groupID int64,
 	models []dto.SupportedModel,
 	effectiveRateMultiplier float64,
-	pricingCache map[string]cachedModelPricing,
 ) []dto.SupportedModel {
 	if len(models) == 0 {
 		return models
@@ -402,32 +405,40 @@ func (h *APIKeyHandler) attachSupportedModelPricing(
 	out := make([]dto.SupportedModel, 0, len(models))
 	for _, model := range models {
 		modelCopy := model
-		modelCopy.Pricing = h.buildSupportedModelPricing(model.ID, effectiveRateMultiplier, pricingCache)
+		modelCopy.Pricing = h.buildSupportedModelPricing(ctx, groupID, model.ID, effectiveRateMultiplier)
 		out = append(out, modelCopy)
 	}
 	return out
 }
 
 func (h *APIKeyHandler) buildSupportedModelPricing(
+	ctx context.Context,
+	groupID int64,
 	modelID string,
 	effectiveRateMultiplier float64,
-	pricingCache map[string]cachedModelPricing,
 ) *dto.SupportedModelPricing {
-	if h == nil || h.billingService == nil || modelID == "" {
+	if h == nil || modelID == "" {
 		return nil
 	}
 
-	entry, ok := pricingCache[modelID]
-	if !ok || !entry.loaded {
-		pricing, err := h.billingService.GetModelPricing(modelID)
-		if err == nil {
-			entry.pricing = pricing
+	if h.pricingResolver != nil && groupID > 0 {
+		resolved := h.pricingResolver.Resolve(ctx, service.PricingInput{
+			Model:   modelID,
+			GroupID: &groupID,
+		})
+		if pricing := supportedModelPricingFromResolved(resolved, effectiveRateMultiplier); pricing != nil {
+			return pricing
 		}
-		entry.loaded = true
-		pricingCache[modelID] = entry
 	}
 
-	return supportedModelPricingFromService(entry.pricing, effectiveRateMultiplier)
+	if h.billingService == nil {
+		return nil
+	}
+	pricing, err := h.billingService.GetModelPricing(modelID)
+	if err != nil {
+		return nil
+	}
+	return supportedModelPricingFromService(pricing, effectiveRateMultiplier)
 }
 
 func supportedModelPricingFromService(
@@ -446,7 +457,10 @@ func supportedModelPricingFromService(
 
 	const tokensPerMillion = 1_000_000.0
 
-	out := &dto.SupportedModelPricing{Currency: "USD"}
+	out := &dto.SupportedModelPricing{
+		Currency:    "USD",
+		BillingMode: string(service.BillingModeToken),
+	}
 	if hasInput {
 		v := pricing.InputPricePerToken * effectiveRateMultiplier * tokensPerMillion
 		out.InputPricePerMillionTokens = &v
@@ -454,6 +468,89 @@ func supportedModelPricingFromService(
 	if hasOutput {
 		v := pricing.OutputPricePerToken * effectiveRateMultiplier * tokensPerMillion
 		out.OutputPricePerMillionTokens = &v
+	}
+	return out
+}
+
+func supportedModelPricingFromResolved(
+	resolved *service.ResolvedPricing,
+	effectiveRateMultiplier float64,
+) *dto.SupportedModelPricing {
+	if resolved == nil {
+		return nil
+	}
+
+	mode := resolved.Mode
+	if mode == "" {
+		mode = service.BillingModeToken
+	}
+
+	out := &dto.SupportedModelPricing{
+		Currency:    "USD",
+		BillingMode: string(mode),
+	}
+
+	const tokensPerMillion = 1_000_000.0
+	hasValue := false
+
+	switch mode {
+	case service.BillingModePerRequest, service.BillingModeImage:
+		if resolved.DefaultPerRequestPrice > 0 {
+			v := resolved.DefaultPerRequestPrice * effectiveRateMultiplier
+			out.DefaultPricePerRequest = &v
+			hasValue = true
+		}
+		for _, tier := range resolved.RequestTiers {
+			if tier.PerRequestPrice == nil || *tier.PerRequestPrice <= 0 {
+				continue
+			}
+			v := *tier.PerRequestPrice * effectiveRateMultiplier
+			out.RequestTiers = append(out.RequestTiers, dto.SupportedModelRequestTier{
+				TierLabel:       tier.TierLabel,
+				MinTokens:       tier.MinTokens,
+				MaxTokens:       tier.MaxTokens,
+				PricePerRequest: &v,
+			})
+			hasValue = true
+		}
+	default:
+		if resolved.BasePricing != nil {
+			if resolved.BasePricing.InputPricePerToken > 0 {
+				v := resolved.BasePricing.InputPricePerToken * effectiveRateMultiplier * tokensPerMillion
+				out.InputPricePerMillionTokens = &v
+				hasValue = true
+			}
+			if resolved.BasePricing.OutputPricePerToken > 0 {
+				v := resolved.BasePricing.OutputPricePerToken * effectiveRateMultiplier * tokensPerMillion
+				out.OutputPricePerMillionTokens = &v
+				hasValue = true
+			}
+		}
+		for _, interval := range resolved.Intervals {
+			if interval.InputPrice == nil && interval.OutputPrice == nil {
+				continue
+			}
+			dtoInterval := dto.SupportedModelTokenInterval{
+				MinTokens: interval.MinTokens,
+				MaxTokens: interval.MaxTokens,
+			}
+			if interval.InputPrice != nil && *interval.InputPrice > 0 {
+				v := *interval.InputPrice * effectiveRateMultiplier * tokensPerMillion
+				dtoInterval.InputPricePerMillionTokens = &v
+			}
+			if interval.OutputPrice != nil && *interval.OutputPrice > 0 {
+				v := *interval.OutputPrice * effectiveRateMultiplier * tokensPerMillion
+				dtoInterval.OutputPricePerMillionTokens = &v
+			}
+			if dtoInterval.InputPricePerMillionTokens != nil || dtoInterval.OutputPricePerMillionTokens != nil {
+				out.TokenIntervals = append(out.TokenIntervals, dtoInterval)
+				hasValue = true
+			}
+		}
+	}
+
+	if !hasValue {
+		return nil
 	}
 	return out
 }

@@ -406,6 +406,25 @@ func TestResolve_WithChannelOverride_ImageTierLabels(t *testing.T) {
 	require.InDelta(t, 0.0, r.GetRequestTierPrice(resolved, "8K"), 1e-12) // not found
 }
 
+func TestResolve_WithChannelOverride_ImageLegacyDefaultPrice(t *testing.T) {
+	r := newResolverWithChannel(t, []ChannelModelPricing{{
+		Platform:         "anthropic",
+		Models:           []string{"claude-sonnet-4"},
+		BillingMode:      BillingModeImage,
+		ImageOutputPrice: testPtrFloat64(0.08),
+	}})
+
+	resolved := r.Resolve(context.Background(), PricingInput{
+		Model:   "claude-sonnet-4",
+		GroupID: groupIDPtr(),
+	})
+
+	require.NotNil(t, resolved)
+	require.Equal(t, BillingModeImage, resolved.Mode)
+	require.Equal(t, "channel", resolved.Source)
+	require.InDelta(t, 0.08, resolved.DefaultPerRequestPrice, 1e-12)
+}
+
 // ---------------------------------------------------------------------------
 // 4. Source tracking & default mode
 // ---------------------------------------------------------------------------

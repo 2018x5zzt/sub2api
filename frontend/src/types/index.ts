@@ -546,10 +546,28 @@ export interface SupportedModel {
   pricing?: SupportedModelPricing | null
 }
 
-export interface SupportedModelPricing {
-  currency: string
+export interface SupportedModelTokenInterval {
+  min_tokens: number
+  max_tokens?: number | null
   input_price_per_million_tokens?: number
   output_price_per_million_tokens?: number
+}
+
+export interface SupportedModelRequestTier {
+  tier_label?: string
+  min_tokens?: number
+  max_tokens?: number | null
+  price_per_request?: number
+}
+
+export interface SupportedModelPricing {
+  currency: string
+  billing_mode?: string
+  input_price_per_million_tokens?: number
+  output_price_per_million_tokens?: number
+  default_price_per_request?: number
+  token_intervals?: SupportedModelTokenInterval[]
+  request_tiers?: SupportedModelRequestTier[]
 }
 
 export type GroupModelCatalogSource = 'default' | 'mapping' | 'mixed'
