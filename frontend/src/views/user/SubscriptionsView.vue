@@ -110,20 +110,27 @@
                   }"
                 ></div>
               </div>
+              <p
+                v-if="hasProductDailyCarryover(product)"
+                class="text-xs text-amber-600 dark:text-amber-400"
+              >
+                {{ formatProductDailyQuotaBreakdown(product) }}
+              </p>
             </div>
 
-            <div v-if="product.weekly_limit_usd" class="space-y-2">
+            <div v-if="shouldShowProductPeriodUsage(product.weekly_limit_usd, product.weekly_usage_usd)" class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.weekly') }}
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
-                  ${{ (product.weekly_usage_usd || 0).toFixed(2) }} / ${{
-                    product.weekly_limit_usd.toFixed(2)
-                  }}
+                  {{ formatPeriodUsage(product.weekly_usage_usd, product.weekly_limit_usd) }}
                 </span>
               </div>
-              <div class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+              <div
+                v-if="hasPositiveLimit(product.weekly_limit_usd)"
+                class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600"
+              >
                 <div
                   class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
                   :class="getProgressBarClass(product.weekly_usage_usd, product.weekly_limit_usd)"
@@ -132,18 +139,19 @@
               </div>
             </div>
 
-            <div v-if="product.monthly_limit_usd" class="space-y-2">
+            <div v-if="shouldShowProductPeriodUsage(product.monthly_limit_usd, product.monthly_usage_usd)" class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.monthly') }}
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
-                  ${{ (product.monthly_usage_usd || 0).toFixed(2) }} / ${{
-                    product.monthly_limit_usd.toFixed(2)
-                  }}
+                  {{ formatPeriodUsage(product.monthly_usage_usd, product.monthly_limit_usd) }}
                 </span>
               </div>
-              <div class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+              <div
+                v-if="hasPositiveLimit(product.monthly_limit_usd)"
+                class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600"
+              >
                 <div
                   class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
                   :class="getProgressBarClass(product.monthly_usage_usd, product.monthly_limit_usd)"
@@ -237,7 +245,7 @@
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
                   ${{ (subscription.daily_usage_usd || 0).toFixed(2) }} / ${{
-                    subscription.group.daily_limit_usd.toFixed(2)
+                    getSubscriptionDailyDisplayLimit(subscription)?.toFixed(2)
                   }}
                 </span>
               </div>
@@ -247,17 +255,23 @@
                   :class="
                     getProgressBarClass(
                       subscription.daily_usage_usd,
-                      subscription.group.daily_limit_usd
+                      getSubscriptionDailyDisplayLimit(subscription)
                     )
                   "
                   :style="{
                     width: getProgressWidth(
                       subscription.daily_usage_usd,
-                      subscription.group.daily_limit_usd
+                      getSubscriptionDailyDisplayLimit(subscription)
                     )
                   }"
                 ></div>
               </div>
+              <p
+                v-if="hasSubscriptionDailyCarryover(subscription)"
+                class="text-xs text-amber-600 dark:text-amber-400"
+              >
+                {{ formatSubscriptionDailyQuotaBreakdown(subscription) }}
+              </p>
               <p
                 v-if="subscription.daily_window_start"
                 class="text-xs text-gray-500 dark:text-dark-400"
@@ -418,6 +432,55 @@ async function loadSubscriptions() {
 function getProductDailyDisplayLimit(product: ActiveSubscriptionProduct): number | null {
   if (!product.daily_limit_usd) return product.daily_limit_usd
   return product.daily_limit_usd + (product.daily_carryover_in_usd || 0)
+}
+
+function hasProductDailyCarryover(product: ActiveSubscriptionProduct): boolean {
+  return (product.daily_carryover_in_usd || 0) > 0
+}
+
+function formatProductDailyQuotaBreakdown(product: ActiveSubscriptionProduct): string {
+  const carryover = (product.daily_carryover_in_usd || 0).toFixed(2)
+  const today = (product.daily_limit_usd || 0).toFixed(2)
+  const total = (getProductDailyDisplayLimit(product) || 0).toFixed(2)
+  return t('userSubscriptions.dailyQuotaBreakdown', { carryover, today, total })
+}
+
+function getSubscriptionDailyDisplayLimit(subscription: UserSubscription): number | null | undefined {
+  if (subscription.daily_effective_limit_usd && subscription.daily_effective_limit_usd > 0) {
+    return subscription.daily_effective_limit_usd
+  }
+  if (!subscription.group?.daily_limit_usd) return subscription.group?.daily_limit_usd
+  return subscription.group.daily_limit_usd + (subscription.daily_carryover_in_usd || 0)
+}
+
+function hasSubscriptionDailyCarryover(subscription: UserSubscription): boolean {
+  return (subscription.daily_carryover_in_usd || 0) > 0
+}
+
+function formatSubscriptionDailyQuotaBreakdown(subscription: UserSubscription): string {
+  const carryover = (subscription.daily_carryover_in_usd || 0).toFixed(2)
+  const today = (subscription.group?.daily_limit_usd || 0).toFixed(2)
+  const total = (getSubscriptionDailyDisplayLimit(subscription) || 0).toFixed(2)
+  return t('userSubscriptions.dailyQuotaBreakdown', { carryover, today, total })
+}
+
+function hasPositiveLimit(limit: number | null | undefined): boolean {
+  return !!limit && limit > 0
+}
+
+function shouldShowProductPeriodUsage(
+  limit: number | null | undefined,
+  used: number | undefined
+): boolean {
+  return limit !== null && limit !== undefined || (used || 0) > 0
+}
+
+function formatPeriodUsage(used: number | undefined, limit: number | null | undefined): string {
+  const usedValue = `$${(used || 0).toFixed(2)}`
+  if (hasPositiveLimit(limit)) {
+    return `${usedValue} / $${limit?.toFixed(2)}`
+  }
+  return `${usedValue} / ${t('userSubscriptions.unlimited')}`
 }
 
 function getProgressWidth(used: number | undefined, limit: number | null | undefined): string {

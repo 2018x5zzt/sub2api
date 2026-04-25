@@ -96,7 +96,7 @@
                   {{ t('redeem.redeemSuccess') }}
                 </h3>
                 <div class="mt-2 text-sm text-emerald-700 dark:text-emerald-400">
-                  <p>{{ redeemResult.message }}</p>
+                  <p>{{ getRedeemResultMessage(redeemResult) }}</p>
                   <div class="mt-3 space-y-1">
                     <p v-if="redeemResult.type === 'balance'" class="font-medium">
                       {{ t('redeem.added') }}: ${{ redeemResult.value.toFixed(2) }}
@@ -601,6 +601,13 @@ const formatHistoryValue = (item: RedeemHistoryItem) => {
   }
 }
 
+const getRedeemResultMessage = (result: { message?: string; type: string }) => {
+  if (result.type === 'subscription') {
+    return t('redeem.subscriptionRedeemSuccess')
+  }
+  return result.message || t('redeem.codeRedeemSuccess')
+}
+
 const getApiErrorReason = (error: any): string | undefined =>
   error?.reason || error?.response?.data?.reason
 
@@ -725,7 +732,7 @@ const handleRedeem = async () => {
     await fetchHistory()
 
     // Show success toast
-    appStore.showSuccess(t('redeem.codeRedeemSuccess'))
+    appStore.showSuccess(getRedeemResultMessage(result))
   } catch (error: any) {
     const reason = getApiErrorReason(error)
 
