@@ -846,6 +846,10 @@ func (r *productAuthRepoStub) ListVisibleGroupsByUserID(context.Context, int64) 
 	return nil, nil
 }
 
+func (r *productAuthRepoStub) ListActiveProductsByUserID(context.Context, int64) ([]service.ActiveSubscriptionProduct, error) {
+	return nil, nil
+}
+
 func (r *stubUserSubscriptionRepo) Create(ctx context.Context, sub *service.UserSubscription) error {
 	return errors.New("not implemented")
 }

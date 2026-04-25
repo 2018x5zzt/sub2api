@@ -43,6 +43,34 @@ export PRODUCT_ID=""
 
 If your real group IDs differ from `88` and `89`, replace them before running any command.
 
+## Build Verification Checklist
+
+Run these checks against the exact backend and frontend revisions planned for rollout before Phase 0.
+
+Backend:
+
+```bash
+cd backend
+go test -tags=integration ./internal/repository -run 'Test(MigrationsSharedSubscriptionProductsSchema|SubscriptionProductRepository_|UsageBillingRepositoryApply_ProductSubscriptionCostAdvancesProductWindows)' -count=1
+go test -tags=unit ./internal/service -run 'Test(AdminService_AdminUpdateAPIKeyGroupID_ProductSettledGroupAllowsActiveProductSubscription|APIKeyService_Create_ProductSettledGroupRequiresProductSubscription|RegisterUser_AppliesDefaultProductSubscriptions|OpenAIGatewayRecordUsage_ProductSettlement|SettingService_UpdateSettings_PersistsDefaultProductSubscriptions|RedeemService_Redeem_ProductSubscriptionCodeCreatesUserProductSubscription)' -count=1
+go test -tags=unit ./internal/server/middleware -run 'TestAPIKeyAuth_ProductSettledGroup(LoadsProductContext|ReturnsStructuredRuntimeError)' -count=1
+go test ./internal/handler -run 'TestSubscriptionProductHandler_' -count=1
+go test ./internal/handler/admin -run 'Test(AdminSubscriptionProductHandler_|AdminRedeemHandler_Generate_ProductIDXorGroupID)' -count=1
+go test ./cmd/shared-subscription-products-backfill -run 'Test(BuildBackfillReport_|ApplyBackfill_IdempotentWhenMigrationBatchReruns)' -count=1
+```
+
+The integration repository check uses testcontainers and requires local Docker access. Expected result: all backend commands print `ok`.
+
+Frontend:
+
+```bash
+cd frontend
+npm run test:run -- src/stores/__tests__/subscriptionProducts.spec.ts src/components/common/__tests__/SubscriptionProgressMini.spec.ts src/components/__tests__/ApiKeyCreate.spec.ts src/views/admin/__tests__/SubscriptionProductsView.spec.ts src/views/admin/__tests__/SettingsView.spec.ts
+npm run typecheck
+```
+
+Expected result: Vitest reports all listed files passing and `vue-tsc --noEmit` exits successfully.
+
 ## Phase 0: Preflight Checks
 
 1. Confirm the additive schema is live.
