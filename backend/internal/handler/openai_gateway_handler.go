@@ -192,6 +192,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			return
 		}
 	}
+	if !h.validateUnsupportedHTTPResponsesNativeItemReferences(c, body, reqLog) {
+		return
+	}
 
 	setOpsRequestContext(c, reqModel, reqStream, body)
 	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
@@ -965,6 +968,60 @@ func (h *OpenAIGatewayHandler) validateFunctionCallOutputRequest(c *gin.Context,
 	)
 	h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "function_call_output requires item_reference ids matching each call_id, or previous_response_id/tool_call context; if relying on history, ensure store=true and reuse previous_response_id")
 	return false
+}
+
+func (h *OpenAIGatewayHandler) validateUnsupportedHTTPResponsesNativeItemReferences(c *gin.Context, body []byte, reqLog *zap.Logger) bool {
+	if !gjson.GetBytes(body, `input.#(type=="item_reference")`).Exists() {
+		return true
+	}
+
+	var reqBody map[string]any
+	if err := json.Unmarshal(body, &reqBody); err != nil {
+		// 保持原有容错语义：解析失败时跳过预校验，沿用后续上游校验结果。
+		return true
+	}
+
+	c.Set(service.OpenAIParsedRequestBodyKey, reqBody)
+	unsupportedID := firstUnsupportedHTTPResponsesNativeItemReferenceID(reqBody)
+	if unsupportedID == "" {
+		return true
+	}
+
+	reqLog.Warn("openai.request_validation_failed",
+		zap.String("reason", "unsupported_http_responses_native_item_reference"),
+		zap.Int("item_reference_id_len", len(unsupportedID)),
+	)
+	h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "native item_reference ids like rs_* are not supported on HTTP /v1/responses; use WebSocket v2 continuation or replay full input instead")
+	return false
+}
+
+func firstUnsupportedHTTPResponsesNativeItemReferenceID(reqBody map[string]any) string {
+	if reqBody == nil {
+		return ""
+	}
+
+	input, ok := reqBody["input"].([]any)
+	if !ok {
+		return ""
+	}
+
+	for _, item := range input {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		itemType, _ := itemMap["type"].(string)
+		if itemType != "item_reference" {
+			continue
+		}
+		idValue, _ := itemMap["id"].(string)
+		idValue = strings.TrimSpace(idValue)
+		if strings.HasPrefix(idValue, "rs_") {
+			return idValue
+		}
+	}
+
+	return ""
 }
 
 func (h *OpenAIGatewayHandler) acquireResponsesUserSlot(
