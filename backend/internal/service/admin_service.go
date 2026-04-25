@@ -518,6 +518,7 @@ type adminServiceImpl struct {
 	settingService               *SettingService
 	defaultSubAssigner           DefaultSubscriptionAssigner
 	userSubRepo                  UserSubscriptionRepository
+	subscriptionProductService   *SubscriptionProductService
 	privacyClientFactory         PrivacyClientFactory
 	inviteBindingUserRepo        interface {
 		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
@@ -552,6 +553,7 @@ func NewAdminService(
 	defaultSubAssigner DefaultSubscriptionAssigner,
 	userSubRepo UserSubscriptionRepository,
 	privacyClientFactory PrivacyClientFactory,
+	subscriptionProductService *SubscriptionProductService,
 ) AdminService {
 	var inviteBindingUserRepo interface {
 		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
@@ -584,6 +586,7 @@ func NewAdminService(
 		settingService:               settingService,
 		defaultSubAssigner:           defaultSubAssigner,
 		userSubRepo:                  userSubRepo,
+		subscriptionProductService:   subscriptionProductService,
 		privacyClientFactory:         privacyClientFactory,
 		inviteBindingUserRepo:        inviteBindingUserRepo,
 	}
@@ -1448,14 +1451,10 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 		}
 		// 订阅类型分组：用户须持有该分组的有效订阅才可绑定
 		if group.IsSubscriptionType() {
-			if s.userSubRepo == nil {
-				return nil, infraerrors.InternalServer("SUBSCRIPTION_REPOSITORY_UNAVAILABLE", "subscription repository is not configured")
-			}
-			if _, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, apiKey.UserID, *groupID); err != nil {
-				if errors.Is(err, ErrSubscriptionNotFound) {
-					return nil, infraerrors.BadRequest("SUBSCRIPTION_REQUIRED", "user does not have an active subscription for this group")
-				}
+			if ok, err := s.canUserBindSubscriptionGroup(ctx, apiKey.UserID, group); err != nil {
 				return nil, err
+			} else if !ok {
+				return nil, infraerrors.BadRequest("SUBSCRIPTION_REQUIRED", "user does not have an active subscription for this group")
 			}
 		}
 
@@ -1517,6 +1516,27 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 
 	result.APIKey = apiKey
 	return result, nil
+}
+
+func (s *adminServiceImpl) canUserBindSubscriptionGroup(ctx context.Context, userID int64, group *Group) (bool, error) {
+	if group == nil || !group.IsSubscriptionType() {
+		return true, nil
+	}
+	if s.subscriptionProductService != nil {
+		if productCtx, err := s.subscriptionProductService.GetActiveProductSubscription(ctx, userID, group.ID); err == nil && productCtx != nil {
+			return true, nil
+		}
+	}
+	if s.userSubRepo == nil {
+		return false, infraerrors.InternalServer("SUBSCRIPTION_REPOSITORY_UNAVAILABLE", "subscription repository is not configured")
+	}
+	if _, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, userID, group.ID); err != nil {
+		if errors.Is(err, ErrSubscriptionNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // ReplaceUserGroup 替换用户的专属分组

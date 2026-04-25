@@ -648,7 +648,11 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	isSubscriptionMode := group != nil && group.IsSubscriptionType()
 
 	if isSubscriptionMode {
-		if subscription != nil {
+		if productCtx, ok := ProductSettlementFromContext(ctx); ok {
+			if err := s.checkProductSubscriptionEligibilityFromSnapshot(productCtx.Binding, productCtx.Subscription); err != nil {
+				return err
+			}
+		} else if subscription != nil {
 			if err := s.checkSubscriptionEligibilityFromSnapshot(group, subscription); err != nil {
 				return err
 			}
@@ -671,6 +675,31 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	}
 
 	return nil
+}
+
+func (s *BillingCacheService) checkProductSubscriptionEligibilityFromSnapshot(binding *SubscriptionProductBinding, subscription *UserProductSubscription) error {
+	if binding == nil || subscription == nil {
+		return NewProductSubscriptionInvalidError(binding, subscription)
+	}
+	if binding.ProductStatus != SubscriptionProductStatusActive {
+		return NewSubscriptionProductInactiveError(binding)
+	}
+	if binding.BindingStatus != SubscriptionProductBindingStatusActive {
+		return NewProductBindingInactiveError(binding)
+	}
+	if !subscription.IsActive() {
+		return NewProductSubscriptionInvalidError(binding, subscription)
+	}
+	product := binding.Product()
+	daily, weekly, monthly := subscription.CheckAllLimits(product, 0)
+	if daily && weekly && monthly {
+		return nil
+	}
+	remaining := 0.0
+	if product != nil && product.HasDailyLimit() {
+		remaining = subscription.DailyRemainingTotal(product)
+	}
+	return NewProductLimitExceededError(binding, remaining)
 }
 
 // checkBalanceEligibility 检查余额模式资格

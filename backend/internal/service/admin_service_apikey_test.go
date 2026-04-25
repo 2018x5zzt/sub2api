@@ -486,6 +486,49 @@ func TestAdminService_AdminUpdateAPIKeyGroupID_SubscriptionGroup_AllowsActiveSub
 	require.False(t, userRepo.addGroupCalled)
 }
 
+func TestAdminService_AdminUpdateAPIKeyGroupID_ProductSettledGroupAllowsActiveProductSubscription(t *testing.T) {
+	existing := &APIKey{ID: 1, UserID: 42, Key: "sk-test", GroupID: nil}
+	apiKeyRepo := &apiKeyRepoStubForGroupUpdate{key: existing}
+	groupRepo := &groupRepoStubForGroupUpdate{group: &Group{ID: 10, Name: "Product Sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}}
+	userRepo := &userRepoStubForGroupUpdate{}
+	userSubRepo := &userSubRepoStubForGroupUpdate{getActiveErr: ErrSubscriptionNotFound}
+	productRepo := &subscriptionProductRepoStub{
+		binding: &SubscriptionProductBinding{
+			ProductID:       101,
+			ProductCode:     "shared",
+			ProductName:     "Shared",
+			ProductStatus:   SubscriptionProductStatusActive,
+			BindingStatus:   SubscriptionProductBindingStatusActive,
+			GroupID:         10,
+			DebitMultiplier: 1,
+		},
+		subscription: &UserProductSubscription{
+			ID:        202,
+			UserID:    42,
+			ProductID: 101,
+			Status:    SubscriptionStatusActive,
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	svc := &adminServiceImpl{
+		apiKeyRepo:                 apiKeyRepo,
+		groupRepo:                  groupRepo,
+		userRepo:                   userRepo,
+		userSubRepo:                userSubRepo,
+		subscriptionProductService: NewSubscriptionProductService(productRepo),
+	}
+
+	got, err := svc.AdminUpdateAPIKeyGroupID(context.Background(), 1, int64Ptr(10))
+	require.NoError(t, err)
+	require.NotNil(t, got.APIKey.GroupID)
+	require.Equal(t, int64(10), *got.APIKey.GroupID)
+	require.NotNil(t, apiKeyRepo.updated)
+	require.Equal(t, 1, productRepo.bindingCalls)
+	require.Equal(t, 1, productRepo.subscriptionCalls)
+	require.False(t, userRepo.addGroupCalled)
+	require.False(t, userSubRepo.called, "product subscription should avoid legacy subscription lookup")
+}
+
 func TestAdminService_AdminUpdateAPIKeyGroupID_ExclusiveGroup_AllowedGroupAddFails_ReturnsError(t *testing.T) {
 	existing := &APIKey{ID: 1, UserID: 42, Key: "sk-test", GroupID: nil}
 	apiKeyRepo := &apiKeyRepoStubForGroupUpdate{key: existing}

@@ -1,5 +1,11 @@
 package service
 
+import (
+	"context"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+)
+
 type productSettlementBillingFields struct {
 	productID             int64
 	productSubscriptionID int64
@@ -46,4 +52,22 @@ func productSettlementBilling(settlement *ProductSettlementContext, totalCost fl
 		standardTotalCost:     totalCost,
 		productDebitCost:      totalCost * multiplier,
 	}, true
+}
+
+func ContextWithProductSettlement(ctx context.Context, settlement *ProductSettlementContext) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if settlement == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, ctxkey.ProductSettlement, settlement)
+}
+
+func ProductSettlementFromContext(ctx context.Context) (*ProductSettlementContext, bool) {
+	if ctx == nil {
+		return nil, false
+	}
+	settlement, ok := ctx.Value(ctxkey.ProductSettlement).(*ProductSettlementContext)
+	return settlement, ok && settlement != nil
 }

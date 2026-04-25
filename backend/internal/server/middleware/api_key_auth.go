@@ -7,15 +7,21 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 // NewAPIKeyAuthMiddleware 创建 API Key 认证中间件
-func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) APIKeyAuthMiddleware {
-	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, cfg))
+func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config, productServices ...*service.SubscriptionProductService) APIKeyAuthMiddleware {
+	var productService *service.SubscriptionProductService
+	if len(productServices) > 0 {
+		productService = productServices[0]
+	}
+	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, productService, cfg))
 }
 
 // apiKeyAuthWithSubscription API Key认证中间件（支持订阅验证）
@@ -25,7 +31,7 @@ func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionS
 //   - 计费执行（Billing Enforcement）：过期/配额/订阅/余额检查 —— skipBilling 时整块跳过
 //
 // /v1/usage 端点只需鉴权，不需要计费执行（允许过期/配额耗尽的 Key 查询自身用量）。
-func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
+func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, productService *service.SubscriptionProductService, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// ── 1. 提取 API Key ──────────────────────────────────────────
 
@@ -131,9 +137,25 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		skipBilling := c.Request.URL.Path == "/v1/usage"
 
 		var subscription *service.UserSubscription
+		var productCtx *service.ProductSettlementContext
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 
-		if isSubscriptionType && subscriptionService != nil {
+		if isSubscriptionType && productService != nil {
+			resolved, productErr := productService.GetActiveProductSubscription(
+				c.Request.Context(),
+				apiKey.User.ID,
+				apiKey.Group.ID,
+			)
+			if productErr == nil {
+				productCtx = resolved
+			} else if infraerrors.Reason(productErr) != "SUBSCRIPTION_PRODUCT_NOT_FOUND" && !skipBilling {
+				response.ErrorFrom(c, productErr)
+				c.Abort()
+				return
+			}
+		}
+
+		if isSubscriptionType && productCtx == nil && subscriptionService != nil {
 			sub, subErr := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,
@@ -174,7 +196,13 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			}
 
 			// 订阅模式：验证订阅限额
-			if subscription != nil {
+			if productCtx != nil {
+				if validateErr := productService.CheckProductLimits(productCtx.Binding, productCtx.Subscription, 0); validateErr != nil {
+					response.ErrorFrom(c, validateErr)
+					c.Abort()
+					return
+				}
+			} else if subscription != nil {
 				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
 				if validateErr != nil {
 					code := "SUBSCRIPTION_INVALID"
@@ -207,6 +235,11 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		if subscription != nil {
 			c.Set(string(ContextKeySubscription), subscription)
+		}
+		if productCtx != nil {
+			c.Set(string(ContextKeyProductSubscription), productCtx.Subscription)
+			c.Set(string(ContextKeySubscriptionProduct), productCtx.Binding)
+			c.Request = c.Request.WithContext(service.ContextWithProductSettlement(c.Request.Context(), productCtx))
 		}
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		setAPIKeyContext(c, apiKey)

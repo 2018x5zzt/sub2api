@@ -195,19 +195,20 @@ type RateLimitCacheInvalidator interface {
 }
 
 type APIKeyService struct {
-	apiKeyRepo            APIKeyRepository
-	userRepo              UserRepository
-	groupRepo             GroupRepository
-	userSubRepo           UserSubscriptionRepository
-	userGroupRateRepo     UserGroupRateRepository
-	cache                 APIKeyCache
-	rateLimitCacheInvalid RateLimitCacheInvalidator // optional: invalidate Redis rate limit cache
-	cfg                   *config.Config
-	authCacheL1           *ristretto.Cache
-	authCfg               apiKeyAuthCacheConfig
-	authGroup             singleflight.Group
-	lastUsedTouchL1       sync.Map // keyID -> nextAllowedAt(time.Time)
-	lastUsedTouchSF       singleflight.Group
+	apiKeyRepo                 APIKeyRepository
+	userRepo                   UserRepository
+	groupRepo                  GroupRepository
+	userSubRepo                UserSubscriptionRepository
+	subscriptionProductService *SubscriptionProductService
+	userGroupRateRepo          UserGroupRateRepository
+	cache                      APIKeyCache
+	rateLimitCacheInvalid      RateLimitCacheInvalidator // optional: invalidate Redis rate limit cache
+	cfg                        *config.Config
+	authCacheL1                *ristretto.Cache
+	authCfg                    apiKeyAuthCacheConfig
+	authGroup                  singleflight.Group
+	lastUsedTouchL1            sync.Map // keyID -> nextAllowedAt(time.Time)
+	lastUsedTouchSF            singleflight.Group
 }
 
 // NewAPIKeyService 创建API Key服务实例
@@ -231,6 +232,25 @@ func NewAPIKeyService(
 	}
 	svc.initAuthCache(cfg)
 	return svc
+}
+
+func ProvideAPIKeyService(
+	apiKeyRepo APIKeyRepository,
+	userRepo UserRepository,
+	groupRepo GroupRepository,
+	userSubRepo UserSubscriptionRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	cache APIKeyCache,
+	cfg *config.Config,
+	subscriptionProductService *SubscriptionProductService,
+) *APIKeyService {
+	svc := NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, userGroupRateRepo, cache, cfg)
+	svc.subscriptionProductService = subscriptionProductService
+	return svc
+}
+
+func (s *APIKeyService) SetSubscriptionProductService(subscriptionProductService *SubscriptionProductService) {
+	s.subscriptionProductService = subscriptionProductService
 }
 
 // SetRateLimitCacheInvalidator sets the optional rate limit cache invalidator.
@@ -320,6 +340,14 @@ func (s *APIKeyService) incrementAPIKeyErrorCount(ctx context.Context, userID in
 func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) bool {
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
+		if s.subscriptionProductService != nil {
+			if productCtx, err := s.subscriptionProductService.GetActiveProductSubscription(ctx, user.ID, group.ID); err == nil && productCtx != nil {
+				return true
+			}
+		}
+		if s.userSubRepo == nil {
+			return false
+		}
 		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
 		return err == nil // 有有效订阅则允许
 	}

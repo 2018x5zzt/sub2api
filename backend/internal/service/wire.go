@@ -430,7 +430,7 @@ var ProviderSet = wire.NewSet(
 	ProvideInviteService,
 	ProvideInviteUserRepository,
 	NewUserService,
-	NewAPIKeyService,
+	ProvideAPIKeyService,
 	ProvideAPIKeyAuthCacheInvalidator,
 	NewGroupService,
 	NewAccountService,

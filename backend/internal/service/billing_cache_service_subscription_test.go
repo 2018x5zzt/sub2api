@@ -82,7 +82,9 @@ type billingEligibilityUserRepoStub struct {
 	balance float64
 }
 
-func (s billingEligibilityUserRepoStub) Create(context.Context, *User) error { panic("unexpected Create call") }
+func (s billingEligibilityUserRepoStub) Create(context.Context, *User) error {
+	panic("unexpected Create call")
+}
 func (s billingEligibilityUserRepoStub) GetByID(context.Context, int64) (*User, error) {
 	return &User{Balance: s.balance}, nil
 }
@@ -95,8 +97,12 @@ func (s billingEligibilityUserRepoStub) GetByInviteCode(context.Context, string)
 func (s billingEligibilityUserRepoStub) GetFirstAdmin(context.Context) (*User, error) {
 	panic("unexpected GetFirstAdmin call")
 }
-func (s billingEligibilityUserRepoStub) Update(context.Context, *User) error { panic("unexpected Update call") }
-func (s billingEligibilityUserRepoStub) Delete(context.Context, int64) error { panic("unexpected Delete call") }
+func (s billingEligibilityUserRepoStub) Update(context.Context, *User) error {
+	panic("unexpected Update call")
+}
+func (s billingEligibilityUserRepoStub) Delete(context.Context, int64) error {
+	panic("unexpected Delete call")
+}
 func (s billingEligibilityUserRepoStub) List(context.Context, pagination.PaginationParams) ([]User, *pagination.PaginationResult, error) {
 	panic("unexpected List call")
 }
@@ -170,11 +176,11 @@ func TestBillingCacheServiceCheckSubscriptionEligibilityFromSnapshot_UsesCarryov
 		DailyLimitUSD:    ptrFloat64(45),
 	}
 	sub := &UserSubscription{
-		Status:                    SubscriptionStatusActive,
-		ExpiresAt:                 time.Now().Add(24 * time.Hour),
-		DailyWindowStart:          ptrTime(time.Now().UTC().Truncate(24 * time.Hour)),
-		DailyUsageUSD:             50,
-		DailyCarryoverInUSD:       15,
+		Status:                     SubscriptionStatusActive,
+		ExpiresAt:                  time.Now().Add(24 * time.Hour),
+		DailyWindowStart:           ptrTime(time.Now().UTC().Truncate(24 * time.Hour)),
+		DailyUsageUSD:              50,
+		DailyCarryoverInUSD:        15,
 		DailyCarryoverRemainingUSD: 10,
 	}
 
@@ -203,6 +209,38 @@ func TestBillingCacheServiceCheckBillingEligibility_FallsBackToRepoWhenSnapshotM
 	}
 
 	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1}, nil, group, nil)
+
+	require.NoError(t, err)
+}
+
+func TestBillingCacheServiceCheckBillingEligibility_ProductSettlementContextSkipsLegacySubscription(t *testing.T) {
+	subRepo := billingEligibilitySubRepoStub{err: errors.New("legacy subscription should not be read")}
+	svc := NewBillingCacheService(nil, billingEligibilityUserRepoStub{balance: 0}, subRepo, nil, &config.Config{})
+	t.Cleanup(svc.Stop)
+
+	group := &Group{
+		ID:               99,
+		SubscriptionType: SubscriptionTypeSubscription,
+	}
+	productCtx := &ProductSettlementContext{
+		Binding: &SubscriptionProductBinding{
+			ProductID:       101,
+			ProductStatus:   SubscriptionProductStatusActive,
+			BindingStatus:   SubscriptionProductBindingStatusActive,
+			GroupID:         group.ID,
+			DebitMultiplier: 1,
+		},
+		Subscription: &UserProductSubscription{
+			ID:        202,
+			UserID:    1,
+			ProductID: 101,
+			Status:    SubscriptionStatusActive,
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	ctx := ContextWithProductSettlement(context.Background(), productCtx)
+
+	err := svc.CheckBillingEligibility(ctx, &User{ID: 1}, nil, group, nil)
 
 	require.NoError(t, err)
 }

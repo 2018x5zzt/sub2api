@@ -663,11 +663,11 @@ func TestAPIContracts_GetAvailableGroupModels_MixedSourceIncludesCustomAnthropic
 				"claude-*":          "wildcard-ignored",
 			},
 		},
-		GroupIDs:     []int64{42},
-		Status:       service.StatusActive,
-		Schedulable:  true,
-		CreatedAt:    deps.now,
-		UpdatedAt:    deps.now,
+		GroupIDs:    []int64{42},
+		Status:      service.StatusActive,
+		Schedulable: true,
+		CreatedAt:   deps.now,
+		UpdatedAt:   deps.now,
 		AccountGroups: []service.AccountGroup{
 			{AccountID: 301, GroupID: 42, Priority: 1},
 		},
@@ -683,11 +683,11 @@ func TestAPIContracts_GetAvailableGroupModels_MixedSourceIncludesCustomAnthropic
 				"claude-oauth-shadow": "should-not-surface",
 			},
 		},
-		GroupIDs:     []int64{42},
-		Status:       service.StatusActive,
-		Schedulable:  true,
-		CreatedAt:    deps.now,
-		UpdatedAt:    deps.now,
+		GroupIDs:    []int64{42},
+		Status:      service.StatusActive,
+		Schedulable: true,
+		CreatedAt:   deps.now,
+		UpdatedAt:   deps.now,
 		AccountGroups: []service.AccountGroup{
 			{AccountID: 302, GroupID: 42, Priority: 2},
 		},
@@ -917,7 +917,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	settingRepo := newStubSettingRepo()
 	settingService := service.NewSettingService(settingRepo, cfg)
 
-	adminService := service.NewAdminService(userRepo, groupRepo, accountRepo, nil, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	adminService := service.NewAdminService(userRepo, groupRepo, accountRepo, nil, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil, nil)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService, accountRepo)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService)

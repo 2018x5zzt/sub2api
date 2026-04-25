@@ -368,5 +368,6 @@ func newInviteAdminServiceForIntegration(
 		nil,
 		nil,
 		nil,
+		nil,
 	)
 }
