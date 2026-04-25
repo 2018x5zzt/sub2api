@@ -376,6 +376,8 @@ Rules:
 - legacy rows may leave these fields null
 - all new shared-product subscription traffic must populate them
 - `group_id` remains populated with the real bound group
+- legacy `subscription_id` remains the legacy `user_subscriptions` foreign key only
+- shared-product traffic must leave legacy `subscription_id` null and use `product_subscription_id` as the authoritative entitlement reference
 
 ## Legacy Coexistence Rules
 
@@ -416,7 +418,14 @@ Consequences:
 
 API keys remain single-group credentials.
 
-Create/update validation changes:
+All API key group-binding surfaces must use the same settlement-source rules, including:
+
+- user API key create flows
+- admin API key create flows
+- admin API key rebind or change-group flows
+- any batch import or sync path that writes `api_keys.group_id`
+
+Binding validation changes:
 
 - if the target group is a normal balance-mode group, preserve existing logic
 - if the target group belongs to an active shared subscription product:
@@ -458,6 +467,43 @@ Examples:
 
 - `plus/team` standard cost `$2` with multiplier `1.0` -> debit `$2`
 - `pro` standard cost `$2` with multiplier `1.5` -> debit `$3`
+
+### Billing Contract
+
+The shared-product model must extend the **authoritative post-usage billing path**, not bypass it.
+
+Required runtime contract:
+
+- each product-settled request resolves one authoritative settlement context containing:
+  - real `group_id`
+  - owning `product_id`
+  - owning `user_product_subscription.id`
+  - `debit_multiplier`
+- middleware and gateway code must treat that product settlement context as the one quota owner for the request
+- product mode must not settle quota merely by writing `usage_logs`; the deduplicated post-usage billing apply path remains authoritative
+
+Required billing-command semantics:
+
+- the authoritative post-usage billing command or equivalent write path must carry:
+  - `group_id`
+  - `product_id`
+  - `product_subscription_id`
+  - `group_debit_multiplier`
+  - `standard_total_cost`
+  - `product_debit_cost`
+- `standard_total_cost` means the request cost before the shared-product debit multiplier is applied
+- `product_debit_cost` means `standard_total_cost * group_debit_multiplier`
+- product quota windows are incremented by `product_debit_cost`, not by legacy group subscription usage and not by `usage_logs.actual_cost`
+
+Coexistence with existing billing dimensions:
+
+- in product mode, the shared product pool is the only subscription quota owner
+- legacy `user_subscriptions` must not be incremented for a product-settled request
+- legacy `usage_logs.subscription_id` must remain null for a product-settled request
+- existing non-product sinks that remain keyed by actual billed request cost, such as API key quota or API key rate-limit usage, may continue to use the existing `actual_cost` semantics in the first rollout
+- the implementation must therefore distinguish:
+  - product pool debit amount: `product_debit_cost`
+  - request billed amount for existing non-product sinks: current `actual_cost`
 
 ### Usage Log Semantics
 
@@ -521,7 +567,7 @@ Suggested response shape for active products:
     "weekly_limit_usd": null,
     "monthly_limit_usd": 100,
     "daily_carryover_in_usd": 0,
-    "daily_remaining_carryover_usd": 0,
+    "daily_carryover_remaining_usd": 0,
     "groups": [
       {
         "group_id": 88,
@@ -719,6 +765,9 @@ The following rules are mandatory and not optional implementation details:
 - debit shared pool correctly at `1.0x` and `1.5x`
 - debit two different API keys bound to different real groups against one shared product pool
 - carryover and window resets operate at product subscription level
+- product-settled billing increments `user_product_subscriptions` and does not increment legacy `user_subscriptions`
+- product-settled usage logs populate `product_subscription_id` and leave legacy `subscription_id` null
+- idempotent post-usage billing uses the product subscription as the one authoritative subscription quota owner
 
 ### Handler and Contract Tests
 
@@ -726,6 +775,7 @@ The following rules are mandatory and not optional implementation details:
 - API key create/update authorizes product-settled groups correctly
 - shared-product runtime errors return stable codes and metadata
 - admin redeem endpoints correctly validate `product_id` versus `group_id`
+- admin API key rebind flows authorize product-settled groups using product ownership rules
 
 ### Rollout Verification
 
@@ -801,9 +851,15 @@ Rollback rules:
 - do not delete legacy `user_subscriptions`
 - do not delete new product data during emergency rollback
 - disable product runtime by deactivating the product or the runtime gate
-- once disabled, runtime falls back to legacy settlement for the affected groups
+- for migrated groups that still have a preserved legacy settlement source, runtime may fall back to legacy settlement once product runtime is disabled
+- for product-only groups introduced by the shared-product model and lacking preserved legacy entitlements, runtime must fail closed once product runtime is disabled
+- existing API keys bound to product-only groups become unusable during rollback until product runtime is restored or an operator remaps those keys to a supported group
+- the rollout runbook must therefore include:
+  - identifying product-only groups in the affected product
+  - counting existing API keys bound to those groups before cutover
+  - operator steps for communication, optional key remap, or temporary group restriction during rollback
 
-This rollback is safe only because legacy rows remain intact and old/new settlement are never both active at once for the same group.
+This rollback is safe because legacy rows remain intact for the migrated legacy-source groups, old/new settlement are never both active at once for the same group, and product-only groups explicitly fail closed instead of silently degrading to another settlement source.
 
 The rollout does not require a reverse migration of user data during the first emergency response path.
 
