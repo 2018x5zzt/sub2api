@@ -4546,8 +4546,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 	}
 	if resp.StatusCode >= 400 {
-		// 可选：对部分 400 触发 failover（默认关闭以保持语义）
-		if resp.StatusCode == 400 && s.cfg != nil && s.cfg.Gateway.FailoverOn400 {
+		// 400 默认保守处理；但对于“账号宣称支持、上游实际不支持当前模型”的错误，
+		// 需要无条件切号，否则混合 relay 分组会把可切换的成功机会提前截断。
+		if resp.StatusCode == 400 {
 			respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 			if readErr != nil {
 				// ReadAll failed, fall back to normal error handling without consuming the stream
@@ -4556,7 +4557,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			_ = resp.Body.Close()
 			resp.Body = io.NopCloser(bytes.NewReader(respBody))
 
-			if s.shouldFailoverOn400(respBody) {
+			alwaysFailover := s.shouldFailoverOnUpstreamModelUnsupported400(respBody)
+			configuredFailover := s.cfg != nil && s.cfg.Gateway.FailoverOn400 && s.shouldFailoverOn400(respBody)
+			if alwaysFailover || configuredFailover {
 				upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 				upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 				upstreamDetail := ""
@@ -4578,7 +4581,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					Detail:             upstreamDetail,
 				})
 
-				if s.cfg.Gateway.LogUpstreamErrorBody {
+				if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
 					logger.LegacyPrintf("service.gateway",
 						"Account %d: 400 error, attempting failover: %s",
 						account.ID,
@@ -4587,7 +4590,6 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 				} else {
 					logger.LegacyPrintf("service.gateway", "Account %d: 400 error, attempting failover", account.ID)
 				}
-				s.handleFailoverSideEffects(ctx, resp, account)
 				return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode, ResponseBody: respBody}
 			}
 		}
@@ -6371,6 +6373,35 @@ func (s *GatewayService) shouldFailoverOn400(respBody []byte) bool {
 		return true
 	}
 	if strings.Contains(msg, "tool_use") || strings.Contains(msg, "tool_result") || strings.Contains(msg, "tools") {
+		return true
+	}
+
+	return false
+}
+
+func (s *GatewayService) shouldFailoverOnUpstreamModelUnsupported400(respBody []byte) bool {
+	msg := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(respBody)))
+	if msg == "" {
+		msg = strings.ToLower(strings.TrimSpace(string(respBody)))
+	}
+	if msg == "" {
+		return false
+	}
+
+	if strings.Contains(msg, "暂不支持") ||
+		strings.Contains(msg, "模型暂不支持") ||
+		strings.Contains(msg, "不支持该模型") ||
+		strings.Contains(msg, "不支持当前模型") {
+		return true
+	}
+
+	if strings.Contains(msg, "unsupported model") ||
+		strings.Contains(msg, "model not supported") ||
+		strings.Contains(msg, "model not found") {
+		return true
+	}
+
+	if strings.Contains(msg, "not support") && strings.Contains(msg, "model") {
 		return true
 	}
 

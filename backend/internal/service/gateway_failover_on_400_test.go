@@ -19,3 +19,21 @@ func TestShouldFailoverOn400_InvalidRequestDoesNotFailover(t *testing.T) {
 
 	require.False(t, svc.shouldFailoverOn400([]byte(`{"error":{"message":"messages.0.content.0.text: field required"}}`)))
 }
+
+func TestShouldFailoverOnUpstreamModelUnsupported400_ChineseMessage(t *testing.T) {
+	svc := &GatewayService{}
+
+	require.True(t, svc.shouldFailoverOnUpstreamModelUnsupported400([]byte(`{"error":{"message":"暂不支持","type":"invalid_request_error"}}`)))
+}
+
+func TestShouldFailoverOnUpstreamModelUnsupported400_EnglishMessage(t *testing.T) {
+	svc := &GatewayService{}
+
+	require.True(t, svc.shouldFailoverOnUpstreamModelUnsupported400([]byte(`{"error":{"message":"model not supported: claude-opus-4-7","type":"invalid_request_error"}}`)))
+}
+
+func TestShouldFailoverOnUpstreamModelUnsupported400_InvalidRequestDoesNotFailover(t *testing.T) {
+	svc := &GatewayService{}
+
+	require.False(t, svc.shouldFailoverOnUpstreamModelUnsupported400([]byte(`{"error":{"message":"messages.0.content.0.text: field required"}}`)))
+}
