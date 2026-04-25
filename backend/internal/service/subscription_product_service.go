@@ -40,6 +40,31 @@ func (s *SubscriptionProductService) ListVisibleGroups(ctx context.Context, user
 	return s.repo.ListVisibleGroupsByUserID(ctx, userID)
 }
 
+func (s *SubscriptionProductService) ListActiveUserProducts(ctx context.Context, userID int64) ([]ActiveSubscriptionProduct, error) {
+	return s.repo.ListActiveProductsByUserID(ctx, userID)
+}
+
+func (s *SubscriptionProductService) GetUserProductSummary(ctx context.Context, userID int64) (*SubscriptionProductSummary, error) {
+	products, err := s.ListActiveUserProducts(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	summary := &SubscriptionProductSummary{
+		ActiveCount: len(products),
+		Products:    products,
+	}
+	for _, item := range products {
+		summary.TotalMonthlyUsageUSD += item.Subscription.MonthlyUsageUSD
+		summary.TotalMonthlyLimitUSD += item.Product.MonthlyLimitUSD
+	}
+	return summary, nil
+}
+
+func (s *SubscriptionProductService) GetUserProductProgress(ctx context.Context, userID int64) (*SubscriptionProductSummary, error) {
+	return s.GetUserProductSummary(ctx, userID)
+}
+
 func (s *SubscriptionProductService) CheckProductLimits(binding *SubscriptionProductBinding, sub *UserProductSubscription, additionalDebitCost float64) error {
 	product := binding.Product()
 	daily, weekly, monthly := sub.CheckAllLimits(product, additionalDebitCost)

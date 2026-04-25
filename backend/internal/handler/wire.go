@@ -28,6 +28,7 @@ func ProvideAdminHandlers(
 	opsHandler *admin.OpsHandler,
 	systemHandler *admin.SystemHandler,
 	subscriptionHandler *admin.SubscriptionHandler,
+	subscriptionProductHandler *admin.SubscriptionProductHandler,
 	usageHandler *admin.UsageHandler,
 	userAttributeHandler *admin.UserAttributeHandler,
 	errorPassthroughHandler *admin.ErrorPassthroughHandler,
@@ -56,6 +57,7 @@ func ProvideAdminHandlers(
 		Ops:                   opsHandler,
 		System:                systemHandler,
 		Subscription:          subscriptionHandler,
+		SubscriptionProduct:   subscriptionProductHandler,
 		Usage:                 usageHandler,
 		UserAttribute:         userAttributeHandler,
 		ErrorPassthrough:      errorPassthroughHandler,
@@ -89,6 +91,12 @@ func ProvideAPIKeyHandler(
 	return h
 }
 
+// ProvideSubscriptionProductHandler wires the concrete service into the
+// interface-shaped handler constructor used by tests.
+func ProvideSubscriptionProductHandler(subscriptionProductService *service.SubscriptionProductService) *SubscriptionProductHandler {
+	return NewSubscriptionProductHandler(subscriptionProductService)
+}
+
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	authHandler *AuthHandler,
@@ -98,6 +106,7 @@ func ProvideHandlers(
 	usageHandler *UsageHandler,
 	redeemHandler *RedeemHandler,
 	subscriptionHandler *SubscriptionHandler,
+	subscriptionProductHandler *SubscriptionProductHandler,
 	announcementHandler *AnnouncementHandler,
 	adminHandlers *AdminHandlers,
 	gatewayHandler *GatewayHandler,
@@ -110,21 +119,22 @@ func ProvideHandlers(
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
 	return &Handlers{
-		Auth:          authHandler,
-		User:          userHandler,
-		Invite:        inviteHandler,
-		APIKey:        apiKeyHandler,
-		Usage:         usageHandler,
-		Redeem:        redeemHandler,
-		Subscription:  subscriptionHandler,
-		Announcement:  announcementHandler,
-		Admin:         adminHandlers,
-		Gateway:       gatewayHandler,
-		OpenAIGateway: openaiGatewayHandler,
-		SoraGateway:   soraGatewayHandler,
-		SoraClient:    soraClientHandler,
-		Setting:       settingHandler,
-		Totp:          totpHandler,
+		Auth:                authHandler,
+		User:                userHandler,
+		Invite:              inviteHandler,
+		APIKey:              apiKeyHandler,
+		Usage:               usageHandler,
+		Redeem:              redeemHandler,
+		Subscription:        subscriptionHandler,
+		SubscriptionProduct: subscriptionProductHandler,
+		Announcement:        announcementHandler,
+		Admin:               adminHandlers,
+		Gateway:             gatewayHandler,
+		OpenAIGateway:       openaiGatewayHandler,
+		SoraGateway:         soraGatewayHandler,
+		SoraClient:          soraClientHandler,
+		Setting:             settingHandler,
+		Totp:                totpHandler,
 	}
 }
 
@@ -138,6 +148,7 @@ var ProviderSet = wire.NewSet(
 	NewUsageHandler,
 	NewRedeemHandler,
 	NewSubscriptionHandler,
+	ProvideSubscriptionProductHandler,
 	NewAnnouncementHandler,
 	NewGatewayHandler,
 	NewOpenAIGatewayHandler,
@@ -166,6 +177,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewOpsHandler,
 	ProvideSystemHandler,
 	admin.NewSubscriptionHandler,
+	admin.ProvideSubscriptionProductHandler,
 	admin.NewUsageHandler,
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,

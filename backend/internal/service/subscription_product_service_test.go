@@ -82,3 +82,7 @@ func (s *subscriptionProductRepoStub) ListVisibleGroupsByUserID(context.Context,
 	s.visibleCalls++
 	return s.groups, nil
 }
+
+func (s *subscriptionProductRepoStub) ListActiveProductsByUserID(context.Context, int64) ([]ActiveSubscriptionProduct, error) {
+	return nil, nil
+}

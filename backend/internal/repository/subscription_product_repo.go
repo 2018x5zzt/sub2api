@@ -7,6 +7,10 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	entgroup "github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionproduct"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionproductgroup"
+	"github.com/Wei-Shaw/sub2api/ent/userproductsubscription"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -235,6 +239,148 @@ ORDER BY sp.sort_order ASC, spg.sort_order ASC, g.sort_order ASC, g.id ASC
 		return nil, err
 	}
 	return groups, nil
+}
+
+func (r *subscriptionProductRepository) ListActiveProductsByUserID(ctx context.Context, userID int64) ([]service.ActiveSubscriptionProduct, error) {
+	subs, err := r.client.UserProductSubscription.Query().
+		Where(
+			userproductsubscription.UserIDEQ(userID),
+			userproductsubscription.StatusEQ(service.SubscriptionStatusActive),
+			userproductsubscription.ExpiresAtGT(time.Now()),
+			userproductsubscription.HasProductWith(subscriptionproduct.StatusEQ(service.SubscriptionProductStatusActive)),
+		).
+		WithProduct().
+		Order(dbent.Asc(userproductsubscription.FieldID)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(subs) == 0 {
+		return []service.ActiveSubscriptionProduct{}, nil
+	}
+
+	productIDs := make([]int64, 0, len(subs))
+	for _, sub := range subs {
+		productIDs = append(productIDs, sub.ProductID)
+	}
+
+	bindings, err := r.client.SubscriptionProductGroup.Query().
+		Where(
+			subscriptionproductgroup.ProductIDIn(productIDs...),
+			subscriptionproductgroup.StatusEQ(service.SubscriptionProductBindingStatusActive),
+		).
+		Order(dbent.Asc(subscriptionproductgroup.FieldSortOrder), dbent.Asc(subscriptionproductgroup.FieldGroupID)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	groupIDs := make([]int64, 0, len(bindings))
+	for _, binding := range bindings {
+		groupIDs = append(groupIDs, binding.GroupID)
+	}
+	groupNames, err := r.groupNamesByID(ctx, groupIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	bindingsByProduct := make(map[int64][]service.SubscriptionProductGroupSummary, len(productIDs))
+	for _, binding := range bindings {
+		bindingsByProduct[binding.ProductID] = append(bindingsByProduct[binding.ProductID], service.SubscriptionProductGroupSummary{
+			GroupID:         binding.GroupID,
+			GroupName:       groupNames[binding.GroupID],
+			DebitMultiplier: binding.DebitMultiplier,
+			Status:          binding.Status,
+			SortOrder:       binding.SortOrder,
+		})
+	}
+
+	items := make([]service.ActiveSubscriptionProduct, 0, len(subs))
+	for _, sub := range subs {
+		item := service.ActiveSubscriptionProduct{
+			Subscription: userProductSubscriptionEntToService(sub),
+			Groups:       bindingsByProduct[sub.ProductID],
+		}
+		if item.Groups == nil {
+			item.Groups = []service.SubscriptionProductGroupSummary{}
+		}
+		if sub.Edges.Product != nil {
+			item.Product = subscriptionProductEntToService(sub.Edges.Product)
+			item.Subscription.Product = &item.Product
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func (r *subscriptionProductRepository) groupNamesByID(ctx context.Context, ids []int64) (map[int64]string, error) {
+	out := make(map[int64]string, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	groups, err := r.client.Group.Query().
+		Where(entgroup.IDIn(ids...)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, group := range groups {
+		out[group.ID] = group.Name
+	}
+	return out, nil
+}
+
+func subscriptionProductEntToService(m *dbent.SubscriptionProduct) service.SubscriptionProduct {
+	if m == nil {
+		return service.SubscriptionProduct{}
+	}
+	product := service.SubscriptionProduct{
+		ID:                  m.ID,
+		Code:                m.Code,
+		Name:                m.Name,
+		Status:              m.Status,
+		DefaultValidityDays: m.DefaultValidityDays,
+		DailyLimitUSD:       m.DailyLimitUsd,
+		WeeklyLimitUSD:      m.WeeklyLimitUsd,
+		MonthlyLimitUSD:     m.MonthlyLimitUsd,
+		SortOrder:           m.SortOrder,
+		CreatedAt:           m.CreatedAt,
+		UpdatedAt:           m.UpdatedAt,
+	}
+	if m.Description != nil {
+		product.Description = *m.Description
+	}
+	return product
+}
+
+func userProductSubscriptionEntToService(m *dbent.UserProductSubscription) service.UserProductSubscription {
+	if m == nil {
+		return service.UserProductSubscription{}
+	}
+	sub := service.UserProductSubscription{
+		ID:                         m.ID,
+		UserID:                     m.UserID,
+		ProductID:                  m.ProductID,
+		StartsAt:                   m.StartsAt,
+		ExpiresAt:                  m.ExpiresAt,
+		Status:                     m.Status,
+		DailyWindowStart:           m.DailyWindowStart,
+		WeeklyWindowStart:          m.WeeklyWindowStart,
+		MonthlyWindowStart:         m.MonthlyWindowStart,
+		DailyUsageUSD:              m.DailyUsageUsd,
+		WeeklyUsageUSD:             m.WeeklyUsageUsd,
+		MonthlyUsageUSD:            m.MonthlyUsageUsd,
+		DailyCarryoverInUSD:        m.DailyCarryoverInUsd,
+		DailyCarryoverRemainingUSD: m.DailyCarryoverRemainingUsd,
+		AssignedBy:                 m.AssignedBy,
+		AssignedAt:                 m.AssignedAt,
+		CreatedAt:                  m.CreatedAt,
+		UpdatedAt:                  m.UpdatedAt,
+	}
+	if m.Notes != nil {
+		sub.Notes = *m.Notes
+	}
+	return sub
 }
 
 func nullableFloat64Ptr(v sql.NullFloat64) *float64 {

@@ -25,6 +25,7 @@ type AdminHandlers struct {
 	Ops                   *admin.OpsHandler
 	System                *admin.SystemHandler
 	Subscription          *admin.SubscriptionHandler
+	SubscriptionProduct   *admin.SubscriptionProductHandler
 	Usage                 *admin.UsageHandler
 	UserAttribute         *admin.UserAttributeHandler
 	ErrorPassthrough      *admin.ErrorPassthroughHandler
@@ -36,21 +37,22 @@ type AdminHandlers struct {
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
-	Auth          *AuthHandler
-	User          *UserHandler
-	Invite        *InviteHandler
-	APIKey        *APIKeyHandler
-	Usage         *UsageHandler
-	Redeem        *RedeemHandler
-	Subscription  *SubscriptionHandler
-	Announcement  *AnnouncementHandler
-	Admin         *AdminHandlers
-	Gateway       *GatewayHandler
-	OpenAIGateway *OpenAIGatewayHandler
-	SoraGateway   *SoraGatewayHandler
-	SoraClient    *SoraClientHandler
-	Setting       *SettingHandler
-	Totp          *TotpHandler
+	Auth                *AuthHandler
+	User                *UserHandler
+	Invite              *InviteHandler
+	APIKey              *APIKeyHandler
+	Usage               *UsageHandler
+	Redeem              *RedeemHandler
+	Subscription        *SubscriptionHandler
+	SubscriptionProduct *SubscriptionProductHandler
+	Announcement        *AnnouncementHandler
+	Admin               *AdminHandlers
+	Gateway             *GatewayHandler
+	OpenAIGateway       *OpenAIGatewayHandler
+	SoraGateway         *SoraGatewayHandler
+	SoraClient          *SoraClientHandler
+	Setting             *SettingHandler
+	Totp                *TotpHandler
 }
 
 // BuildInfo contains build-time information

@@ -73,6 +73,9 @@ func RegisterAdminRoutes(
 		// 订阅管理
 		registerSubscriptionRoutes(admin, h)
 
+		// 产品订阅管理
+		registerSubscriptionProductRoutes(admin, h)
+
 		// 使用记录管理
 		registerUsageRoutes(admin, h)
 
@@ -528,6 +531,17 @@ func registerSubscriptionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 	// 用户下的订阅列表
 	admin.GET("/users/:id/subscriptions", h.Admin.Subscription.ListByUser)
+}
+
+func registerSubscriptionProductRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	products := admin.Group("/subscription-products")
+	{
+		products.GET("", h.Admin.SubscriptionProduct.List)
+		products.POST("", h.Admin.SubscriptionProduct.Create)
+		products.PUT("/:id", h.Admin.SubscriptionProduct.Update)
+		products.PUT("/:id/bindings", h.Admin.SubscriptionProduct.SyncBindings)
+		products.GET("/:id/subscriptions", h.Admin.SubscriptionProduct.ListSubscriptions)
+	}
 }
 
 func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {

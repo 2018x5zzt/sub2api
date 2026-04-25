@@ -28,6 +28,32 @@ type SubscriptionProduct struct {
 	UpdatedAt time.Time
 }
 
+type CreateSubscriptionProductInput struct {
+	Code        string
+	Name        string
+	Description string
+	Status      string
+
+	DefaultValidityDays int
+	DailyLimitUSD       float64
+	WeeklyLimitUSD      float64
+	MonthlyLimitUSD     float64
+	SortOrder           int
+}
+
+type UpdateSubscriptionProductInput struct {
+	Code        *string
+	Name        *string
+	Description *string
+	Status      *string
+
+	DefaultValidityDays *int
+	DailyLimitUSD       *float64
+	WeeklyLimitUSD      *float64
+	MonthlyLimitUSD     *float64
+	SortOrder           *int
+}
+
 func (p *SubscriptionProduct) IsActive() bool {
 	return p != nil && p.Status == SubscriptionProductStatusActive
 }
@@ -63,6 +89,45 @@ type SubscriptionProductBinding struct {
 	DebitMultiplier float64
 	ProductStatus   string
 	BindingStatus   string
+}
+
+type SubscriptionProductBindingInput struct {
+	GroupID         int64
+	DebitMultiplier float64
+	Status          string
+	SortOrder       int
+}
+
+type SubscriptionProductBindingDetail struct {
+	ProductID       int64
+	GroupID         int64
+	GroupName       string
+	DebitMultiplier float64
+	Status          string
+	SortOrder       int
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type SubscriptionProductGroupSummary struct {
+	GroupID         int64
+	GroupName       string
+	DebitMultiplier float64
+	Status          string
+	SortOrder       int
+}
+
+type ActiveSubscriptionProduct struct {
+	Product      SubscriptionProduct
+	Subscription UserProductSubscription
+	Groups       []SubscriptionProductGroupSummary
+}
+
+type SubscriptionProductSummary struct {
+	ActiveCount          int
+	TotalMonthlyUsageUSD float64
+	TotalMonthlyLimitUSD float64
+	Products             []ActiveSubscriptionProduct
 }
 
 func (b *SubscriptionProductBinding) Product() *SubscriptionProduct {

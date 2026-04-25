@@ -94,6 +94,14 @@ func RegisterUserRoutes(
 			subscriptions.GET("/summary", h.Subscription.GetSummary)
 		}
 
+		// 用户产品订阅
+		subscriptionProducts := authenticated.Group("/subscription-products")
+		{
+			subscriptionProducts.GET("/active", h.SubscriptionProduct.GetActive)
+			subscriptionProducts.GET("/summary", h.SubscriptionProduct.GetSummary)
+			subscriptionProducts.GET("/progress", h.SubscriptionProduct.GetProgress)
+		}
+
 		invite := authenticated.Group("/invite")
 		{
 			invite.GET("/summary", h.Invite.GetSummary)
