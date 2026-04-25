@@ -61,18 +61,19 @@ type JWTClaims struct {
 
 // AuthService 认证服务
 type AuthService struct {
-	entClient          *dbent.Client
-	userRepo           UserRepository
-	redeemRepo         InvitationCodeLookupRepository
-	refreshTokenCache  RefreshTokenCache
-	cfg                *config.Config
-	settingService     *SettingService
-	emailService       *EmailService
-	turnstileService   *TurnstileService
-	emailQueueService  *EmailQueueService
-	promoService       *PromoService
-	defaultSubAssigner DefaultSubscriptionAssigner
-	inviteService      *InviteService
+	entClient                 *dbent.Client
+	userRepo                  UserRepository
+	redeemRepo                InvitationCodeLookupRepository
+	refreshTokenCache         RefreshTokenCache
+	cfg                       *config.Config
+	settingService            *SettingService
+	emailService              *EmailService
+	turnstileService          *TurnstileService
+	emailQueueService         *EmailQueueService
+	promoService              *PromoService
+	defaultSubAssigner        DefaultSubscriptionAssigner
+	defaultProductSubAssigner ProductSubscriptionAssigner
+	inviteService             *InviteService
 }
 
 type DefaultSubscriptionAssigner interface {
@@ -112,6 +113,10 @@ func NewAuthService(
 		defaultSubAssigner: defaultSubAssigner,
 		inviteService:      inviteService,
 	}
+}
+
+func (s *AuthService) SetDefaultProductSubscriptionAssigner(assigner ProductSubscriptionAssigner) {
+	s.defaultProductSubAssigner = assigner
 }
 
 // Register 用户注册，返回token和用户
@@ -734,18 +739,33 @@ func (s *AuthService) VerifyPendingOAuthToken(tokenStr string) (email, username 
 }
 
 func (s *AuthService) assignDefaultSubscriptions(ctx context.Context, userID int64) {
-	if s.settingService == nil || s.defaultSubAssigner == nil || userID <= 0 {
+	if s.settingService == nil || userID <= 0 {
 		return
 	}
-	items := s.settingService.GetDefaultSubscriptions(ctx)
-	for _, item := range items {
-		if _, _, err := s.defaultSubAssigner.AssignOrExtendSubscription(ctx, &AssignSubscriptionInput{
-			UserID:       userID,
-			GroupID:      item.GroupID,
-			ValidityDays: item.ValidityDays,
-			Notes:        "auto assigned by default user subscriptions setting",
-		}); err != nil {
-			logger.LegacyPrintf("service.auth", "[Auth] Failed to assign default subscription: user_id=%d group_id=%d err=%v", userID, item.GroupID, err)
+	if s.defaultSubAssigner != nil {
+		items := s.settingService.GetDefaultSubscriptions(ctx)
+		for _, item := range items {
+			if _, _, err := s.defaultSubAssigner.AssignOrExtendSubscription(ctx, &AssignSubscriptionInput{
+				UserID:       userID,
+				GroupID:      item.GroupID,
+				ValidityDays: item.ValidityDays,
+				Notes:        "auto assigned by default user subscriptions setting",
+			}); err != nil {
+				logger.LegacyPrintf("service.auth", "[Auth] Failed to assign default subscription: user_id=%d group_id=%d err=%v", userID, item.GroupID, err)
+			}
+		}
+	}
+	if s.defaultProductSubAssigner != nil {
+		items := s.settingService.GetDefaultSubscriptionProducts(ctx)
+		for _, item := range items {
+			if _, _, err := s.defaultProductSubAssigner.AssignOrExtendProductSubscription(ctx, &AssignProductSubscriptionInput{
+				UserID:       userID,
+				ProductID:    item.ProductID,
+				ValidityDays: item.ValidityDays,
+				Notes:        "auto assigned by default user subscription products setting",
+			}); err != nil {
+				logger.LegacyPrintf("service.auth", "[Auth] Failed to assign default product subscription: user_id=%d product_id=%d err=%v", userID, item.ProductID, err)
+			}
 		}
 	}
 }

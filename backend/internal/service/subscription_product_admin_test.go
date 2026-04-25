@@ -1,0 +1,199 @@
+//go:build unit
+
+package service
+
+import (
+	"context"
+	"database/sql"
+	"testing"
+	"time"
+
+	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/enttest"
+	"github.com/Wei-Shaw/sub2api/ent/userproductsubscription"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/stretchr/testify/require"
+
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	_ "modernc.org/sqlite"
+)
+
+func TestSubscriptionProductAdminService_AssignOrExtendProductSubscription(t *testing.T) {
+	client := newSubscriptionProductAdminTestClient(t)
+	ctx := context.Background()
+	product := mustCreateSubscriptionProductAdminTestProduct(t, ctx, client, 14)
+
+	svc := NewSubscriptionProductAdminService(client)
+	sub, reused, err := svc.AssignOrExtendProductSubscription(ctx, &AssignProductSubscriptionInput{
+		UserID:       77,
+		ProductID:    product.ID,
+		ValidityDays: 7,
+		Notes:        "first grant",
+	})
+	require.NoError(t, err)
+	require.False(t, reused)
+	require.Equal(t, int64(77), sub.UserID)
+	require.Equal(t, product.ID, sub.ProductID)
+	require.Equal(t, SubscriptionStatusActive, sub.Status)
+	require.WithinDuration(t, time.Now().AddDate(0, 0, 7), sub.ExpiresAt, 5*time.Second)
+
+	extended, reused, err := svc.AssignOrExtendProductSubscription(ctx, &AssignProductSubscriptionInput{
+		UserID:       77,
+		ProductID:    product.ID,
+		ValidityDays: 3,
+		Notes:        "second grant",
+	})
+	require.NoError(t, err)
+	require.True(t, reused)
+	require.Equal(t, sub.ID, extended.ID)
+	require.WithinDuration(t, sub.ExpiresAt.AddDate(0, 0, 3), extended.ExpiresAt, time.Second)
+	require.Contains(t, extended.Notes, "first grant")
+	require.Contains(t, extended.Notes, "second grant")
+}
+
+func TestRedeemService_Redeem_ProductSubscriptionCodeCreatesUserProductSubscription(t *testing.T) {
+	client := newSubscriptionProductAdminTestClient(t)
+	ctx := context.Background()
+	product := mustCreateSubscriptionProductAdminTestProduct(t, ctx, client, 30)
+	productID := product.ID
+
+	redeemRepo := &productRedeemCodeRepoStub{
+		code: &RedeemCode{
+			ID:           1,
+			Code:         "PRODUCT-30",
+			Type:         RedeemTypeSubscription,
+			Status:       StatusUnused,
+			SourceType:   RedeemSourceSystemGrant,
+			ProductID:    &productID,
+			ValidityDays: 30,
+		},
+	}
+	productAdmin := NewSubscriptionProductAdminService(client)
+	redeemSvc := NewRedeemService(
+		redeemRepo,
+		&userRepoStub{user: &User{ID: 42, Email: "product-redeem@test.com", Status: StatusActive}},
+		nil,
+		nil,
+		nil,
+		nil,
+		client,
+		nil,
+		productAdmin,
+	)
+
+	redeemed, err := redeemSvc.Redeem(ctx, 42, "PRODUCT-30")
+	require.NoError(t, err)
+	require.NotNil(t, redeemed.ProductID)
+	require.Equal(t, product.ID, *redeemed.ProductID)
+	require.Nil(t, redeemed.GroupID)
+
+	subs, err := client.UserProductSubscription.Query().
+		Where(
+			userproductsubscription.UserIDEQ(42),
+			userproductsubscription.ProductIDEQ(product.ID),
+			userproductsubscription.DeletedAtIsNil(),
+		).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, subs, 1)
+	require.Equal(t, SubscriptionStatusActive, subs[0].Status)
+	require.WithinDuration(t, time.Now().AddDate(0, 0, 30), subs[0].ExpiresAt, 5*time.Second)
+	require.Equal(t, StatusUsed, redeemRepo.code.Status)
+}
+
+func newSubscriptionProductAdminTestClient(t *testing.T) *dbent.Client {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", "file:subscription_product_admin_test?mode=memory&cache=shared")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	_, err = db.Exec("PRAGMA foreign_keys = ON")
+	require.NoError(t, err)
+
+	drv := entsql.OpenDB(dialect.SQLite, db)
+	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
+	t.Cleanup(func() { _ = client.Close() })
+	return client
+}
+
+func mustCreateSubscriptionProductAdminTestProduct(t *testing.T, ctx context.Context, client *dbent.Client, defaultValidityDays int) *dbent.SubscriptionProduct {
+	t.Helper()
+
+	product, err := client.SubscriptionProduct.Create().
+		SetCode("product-admin-test").
+		SetName("Product Admin Test").
+		SetStatus(SubscriptionProductStatusActive).
+		SetDefaultValidityDays(defaultValidityDays).
+		Save(ctx)
+	require.NoError(t, err)
+	return product
+}
+
+type productRedeemCodeRepoStub struct {
+	code *RedeemCode
+}
+
+func (s *productRedeemCodeRepoStub) Create(context.Context, *RedeemCode) error {
+	panic("unexpected Create call")
+}
+
+func (s *productRedeemCodeRepoStub) CreateBatch(context.Context, []RedeemCode) error {
+	panic("unexpected CreateBatch call")
+}
+
+func (s *productRedeemCodeRepoStub) GetByID(_ context.Context, id int64) (*RedeemCode, error) {
+	if s.code == nil || s.code.ID != id {
+		return nil, ErrRedeemCodeNotFound
+	}
+	clone := *s.code
+	return &clone, nil
+}
+
+func (s *productRedeemCodeRepoStub) GetByCode(_ context.Context, code string) (*RedeemCode, error) {
+	if s.code == nil || s.code.Code != code {
+		return nil, ErrRedeemCodeNotFound
+	}
+	clone := *s.code
+	return &clone, nil
+}
+
+func (s *productRedeemCodeRepoStub) Update(context.Context, *RedeemCode) error {
+	panic("unexpected Update call")
+}
+
+func (s *productRedeemCodeRepoStub) Delete(context.Context, int64) error {
+	panic("unexpected Delete call")
+}
+
+func (s *productRedeemCodeRepoStub) Use(_ context.Context, id, userID int64) error {
+	if s.code == nil || s.code.ID != id || s.code.Status != StatusUnused {
+		return ErrRedeemCodeUsed
+	}
+	now := time.Now()
+	s.code.Status = StatusUsed
+	s.code.UsedBy = &userID
+	s.code.UsedAt = &now
+	return nil
+}
+
+func (s *productRedeemCodeRepoStub) List(context.Context, pagination.PaginationParams) ([]RedeemCode, *pagination.PaginationResult, error) {
+	panic("unexpected List call")
+}
+
+func (s *productRedeemCodeRepoStub) ListWithFilters(context.Context, pagination.PaginationParams, string, string, string) ([]RedeemCode, *pagination.PaginationResult, error) {
+	panic("unexpected ListWithFilters call")
+}
+
+func (s *productRedeemCodeRepoStub) ListByUser(context.Context, int64, int) ([]RedeemCode, error) {
+	panic("unexpected ListByUser call")
+}
+
+func (s *productRedeemCodeRepoStub) ListByUserPaginated(context.Context, int64, pagination.PaginationParams, string) ([]RedeemCode, *pagination.PaginationResult, error) {
+	panic("unexpected ListByUserPaginated call")
+}
+
+func (s *productRedeemCodeRepoStub) SumPositiveBalanceByUser(context.Context, int64) (float64, error) {
+	panic("unexpected SumPositiveBalanceByUser call")
+}

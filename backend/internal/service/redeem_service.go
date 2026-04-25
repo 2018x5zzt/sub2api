@@ -74,14 +74,15 @@ type RedeemCodeResponse struct {
 
 // RedeemService 兑换码服务
 type RedeemService struct {
-	redeemRepo           RedeemCodeRepository
-	userRepo             UserRepository
-	inviteService        *InviteService
-	subscriptionService  *SubscriptionService
-	cache                RedeemCache
-	billingCacheService  *BillingCacheService
-	entClient            *dbent.Client
-	authCacheInvalidator APIKeyAuthCacheInvalidator
+	redeemRepo                  RedeemCodeRepository
+	userRepo                    UserRepository
+	inviteService               *InviteService
+	subscriptionService         *SubscriptionService
+	cache                       RedeemCache
+	billingCacheService         *BillingCacheService
+	entClient                   *dbent.Client
+	authCacheInvalidator        APIKeyAuthCacheInvalidator
+	productSubscriptionAssigner ProductSubscriptionAssigner
 }
 
 // NewRedeemService 创建兑换码服务实例
@@ -94,8 +95,9 @@ func NewRedeemService(
 	billingCacheService *BillingCacheService,
 	entClient *dbent.Client,
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	productSubscriptionAssigner ...ProductSubscriptionAssigner,
 ) *RedeemService {
-	return &RedeemService{
+	svc := &RedeemService{
 		redeemRepo:           redeemRepo,
 		userRepo:             userRepo,
 		inviteService:        inviteService,
@@ -105,6 +107,14 @@ func NewRedeemService(
 		entClient:            entClient,
 		authCacheInvalidator: authCacheInvalidator,
 	}
+	if len(productSubscriptionAssigner) > 0 {
+		svc.productSubscriptionAssigner = productSubscriptionAssigner[0]
+	}
+	return svc
+}
+
+func (s *RedeemService) SetProductSubscriptionAssigner(assigner ProductSubscriptionAssigner) {
+	s.productSubscriptionAssigner = assigner
 }
 
 // GenerateRandomCode 生成随机兑换码
@@ -291,9 +301,13 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		return nil, ErrRedeemCodeUsed
 	}
 
-	// 验证兑换码类型的前置条件
-	if redeemCode.Type == RedeemTypeSubscription && redeemCode.GroupID == nil {
-		return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing group_id")
+	if redeemCode.Type == RedeemTypeSubscription {
+		if (redeemCode.GroupID == nil) == (redeemCode.ProductID == nil) {
+			return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: exactly one of group_id or product_id is required")
+		}
+		if redeemCode.ProductID != nil && s.productSubscriptionAssigner == nil {
+			return nil, ErrProductSubscriptionAssignerUnavailable
+		}
 	}
 
 	// 获取用户信息
@@ -346,15 +360,28 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		if validityDays <= 0 {
 			validityDays = 30
 		}
-		_, _, err := s.subscriptionService.AssignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
-			UserID:       userID,
-			GroupID:      *redeemCode.GroupID,
-			ValidityDays: validityDays,
-			AssignedBy:   0, // 系统分配
-			Notes:        fmt.Sprintf("通过兑换码 %s 兑换", redeemCode.Code),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("assign or extend subscription: %w", err)
+		if redeemCode.ProductID != nil {
+			_, _, err := s.productSubscriptionAssigner.AssignOrExtendProductSubscription(txCtx, &AssignProductSubscriptionInput{
+				UserID:       userID,
+				ProductID:    *redeemCode.ProductID,
+				ValidityDays: validityDays,
+				AssignedBy:   0, // 系统分配
+				Notes:        fmt.Sprintf("通过兑换码 %s 兑换", redeemCode.Code),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("assign or extend product subscription: %w", err)
+			}
+		} else {
+			_, _, err := s.subscriptionService.AssignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
+				UserID:       userID,
+				GroupID:      *redeemCode.GroupID,
+				ValidityDays: validityDays,
+				AssignedBy:   0, // 系统分配
+				Notes:        fmt.Sprintf("通过兑换码 %s 兑换", redeemCode.Code),
+			})
+			if err != nil {
+				return nil, fmt.Errorf("assign or extend subscription: %w", err)
+			}
 		}
 
 	default:

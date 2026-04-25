@@ -206,3 +206,83 @@ func TestGenerateRedeemCodes_RejectsLegacyInvitationType(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, w.Code)
 }
+
+func TestAdminRedeemHandler_Generate_ProductIDXorGroupID(t *testing.T) {
+	groupID := int64(11)
+	productID := int64(101)
+
+	cases := []struct {
+		name       string
+		body       map[string]any
+		wantStatus int
+	}{
+		{
+			name: "rejects missing group and product",
+			body: map[string]any{
+				"count":         1,
+				"type":          "subscription",
+				"value":         0,
+				"validity_days": 30,
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "rejects both group and product",
+			body: map[string]any{
+				"count":         1,
+				"type":          "subscription",
+				"value":         0,
+				"group_id":      groupID,
+				"product_id":    productID,
+				"validity_days": 30,
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "accepts product only",
+			body: map[string]any{
+				"count":         1,
+				"type":          "subscription",
+				"value":         0,
+				"product_id":    productID,
+				"validity_days": 30,
+			},
+			wantStatus: http.StatusOK,
+		},
+		{
+			name: "accepts group only",
+			body: map[string]any{
+				"count":         1,
+				"type":          "subscription",
+				"value":         0,
+				"group_id":      groupID,
+				"validity_days": 30,
+			},
+			wantStatus: http.StatusOK,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, adminSvc := newGenerateHandler()
+			w := postGenerate(t, h, tc.body)
+
+			require.Equal(t, tc.wantStatus, w.Code)
+			if tc.wantStatus != http.StatusOK {
+				return
+			}
+
+			require.NotNil(t, adminSvc.lastGenerateRedeem)
+			if raw, ok := tc.body["product_id"]; ok {
+				require.NotNil(t, adminSvc.lastGenerateRedeem.ProductID)
+				require.Equal(t, raw, *adminSvc.lastGenerateRedeem.ProductID)
+				require.Nil(t, adminSvc.lastGenerateRedeem.GroupID)
+			}
+			if raw, ok := tc.body["group_id"]; ok {
+				require.NotNil(t, adminSvc.lastGenerateRedeem.GroupID)
+				require.Equal(t, raw, *adminSvc.lastGenerateRedeem.GroupID)
+				require.Nil(t, adminSvc.lastGenerateRedeem.ProductID)
+			}
+		})
+	}
+}

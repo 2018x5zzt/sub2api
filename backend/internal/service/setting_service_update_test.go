@@ -93,6 +93,29 @@ func TestSettingService_UpdateSettings_DefaultSubscriptions_ValidGroup(t *testin
 	}, got)
 }
 
+func TestSettingService_UpdateSettings_PersistsDefaultProductSubscriptions(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		DefaultSubscriptionProducts: []DefaultSubscriptionProductSetting{
+			{ProductID: 101, ValidityDays: 30},
+			{ProductID: 102, ValidityDays: 7},
+		},
+	})
+	require.NoError(t, err)
+
+	raw, ok := repo.updates[SettingKeyDefaultSubscriptionProducts]
+	require.True(t, ok)
+
+	var got []DefaultSubscriptionProductSetting
+	require.NoError(t, json.Unmarshal([]byte(raw), &got))
+	require.Equal(t, []DefaultSubscriptionProductSetting{
+		{ProductID: 101, ValidityDays: 30},
+		{ProductID: 102, ValidityDays: 7},
+	}, got)
+}
+
 func TestSettingService_UpdateSettings_DefaultSubscriptions_RejectsNonSubscriptionGroup(t *testing.T) {
 	repo := &settingUpdateRepoStub{}
 	groupReader := &defaultSubGroupReaderStub{
@@ -227,5 +250,13 @@ func TestParseDefaultSubscriptions_NormalizesValues(t *testing.T) {
 		{GroupID: 11, ValidityDays: 30},
 		{GroupID: 11, ValidityDays: 60},
 		{GroupID: 12, ValidityDays: MaxValidityDays},
+	}, got)
+}
+
+func TestParseDefaultSubscriptionProducts_NormalizesValues(t *testing.T) {
+	got := parseDefaultSubscriptionProducts(`[{"product_id":101,"validity_days":30},{"product_id":0,"validity_days":10},{"product_id":102,"validity_days":99999}]`)
+	require.Equal(t, []DefaultSubscriptionProductSetting{
+		{ProductID: 101, ValidityDays: 30},
+		{ProductID: 102, ValidityDays: MaxValidityDays},
 	}, got)
 }

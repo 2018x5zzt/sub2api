@@ -62,6 +62,11 @@ type defaultSubscriptionAssignerStub struct {
 	err   error
 }
 
+type defaultProductSubscriptionAssignerStub struct {
+	calls []AssignProductSubscriptionInput
+	err   error
+}
+
 type legacyInvitationLookupStub struct {
 	code     *RedeemCode
 	err      error
@@ -87,6 +92,16 @@ func (s *defaultSubscriptionAssignerStub) AssignOrExtendSubscription(_ context.C
 		return nil, false, s.err
 	}
 	return &UserSubscription{UserID: input.UserID, GroupID: input.GroupID}, false, nil
+}
+
+func (s *defaultProductSubscriptionAssignerStub) AssignOrExtendProductSubscription(_ context.Context, input *AssignProductSubscriptionInput) (*UserProductSubscription, bool, error) {
+	if input != nil {
+		s.calls = append(s.calls, *input)
+	}
+	if s.err != nil {
+		return nil, false, s.err
+	}
+	return &UserProductSubscription{UserID: input.UserID, ProductID: input.ProductID}, false, nil
 }
 
 func (s *emailCacheStub) GetVerificationCode(ctx context.Context, email string) (*VerificationCodeData, error) {
@@ -573,6 +588,26 @@ func TestAuthService_Register_AssignsDefaultSubscriptions(t *testing.T) {
 	require.Equal(t, int64(11), assigner.calls[0].GroupID)
 	require.Equal(t, 30, assigner.calls[0].ValidityDays)
 	require.Equal(t, int64(12), assigner.calls[1].GroupID)
+	require.Equal(t, 7, assigner.calls[1].ValidityDays)
+}
+
+func TestRegisterUser_AppliesDefaultProductSubscriptions(t *testing.T) {
+	repo := &userRepoStub{nextID: 43}
+	assigner := &defaultProductSubscriptionAssignerStub{}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled:         "true",
+		SettingKeyDefaultSubscriptionProducts: `[{"product_id":21,"validity_days":30},{"product_id":22,"validity_days":7}]`,
+	}, nil)
+	service.defaultProductSubAssigner = assigner
+
+	_, user, err := service.Register(context.Background(), "default-product-sub@test.com", "password")
+	require.NoError(t, err)
+	require.NotNil(t, user)
+	require.Len(t, assigner.calls, 2)
+	require.Equal(t, int64(43), assigner.calls[0].UserID)
+	require.Equal(t, int64(21), assigner.calls[0].ProductID)
+	require.Equal(t, 30, assigner.calls[0].ValidityDays)
+	require.Equal(t, int64(22), assigner.calls[1].ProductID)
 	require.Equal(t, 7, assigner.calls[1].ValidityDays)
 }
 

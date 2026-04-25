@@ -10,6 +10,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionproduct"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -334,6 +335,7 @@ type GenerateRedeemCodesInput struct {
 	Value        float64
 	SourceType   string
 	GroupID      *int64 // 订阅类型专用：关联的分组ID
+	ProductID    *int64 // 订阅类型专用：关联的产品ID
 	ValidityDays int    // 订阅类型专用：有效天数
 }
 
@@ -517,6 +519,7 @@ type adminServiceImpl struct {
 	entClient                    *dbent.Client // 用于开启数据库事务
 	settingService               *SettingService
 	defaultSubAssigner           DefaultSubscriptionAssigner
+	defaultProductSubAssigner    ProductSubscriptionAssigner
 	userSubRepo                  UserSubscriptionRepository
 	subscriptionProductService   *SubscriptionProductService
 	privacyClientFactory         PrivacyClientFactory
@@ -554,6 +557,7 @@ func NewAdminService(
 	userSubRepo UserSubscriptionRepository,
 	privacyClientFactory PrivacyClientFactory,
 	subscriptionProductService *SubscriptionProductService,
+	defaultProductSubAssigner ...ProductSubscriptionAssigner,
 ) AdminService {
 	var inviteBindingUserRepo interface {
 		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
@@ -564,7 +568,7 @@ func NewAdminService(
 		inviteBindingUserRepo = binder
 	}
 
-	return &adminServiceImpl{
+	svc := &adminServiceImpl{
 		userRepo:                     userRepo,
 		groupRepo:                    groupRepo,
 		accountRepo:                  accountRepo,
@@ -590,6 +594,10 @@ func NewAdminService(
 		privacyClientFactory:         privacyClientFactory,
 		inviteBindingUserRepo:        inviteBindingUserRepo,
 	}
+	if len(defaultProductSubAssigner) > 0 {
+		svc.defaultProductSubAssigner = defaultProductSubAssigner[0]
+	}
+	return svc
 }
 
 // User management implementations
@@ -678,18 +686,33 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 }
 
 func (s *adminServiceImpl) assignDefaultSubscriptions(ctx context.Context, userID int64) {
-	if s.settingService == nil || s.defaultSubAssigner == nil || userID <= 0 {
+	if s.settingService == nil || userID <= 0 {
 		return
 	}
-	items := s.settingService.GetDefaultSubscriptions(ctx)
-	for _, item := range items {
-		if _, _, err := s.defaultSubAssigner.AssignOrExtendSubscription(ctx, &AssignSubscriptionInput{
-			UserID:       userID,
-			GroupID:      item.GroupID,
-			ValidityDays: item.ValidityDays,
-			Notes:        "auto assigned by default user subscriptions setting",
-		}); err != nil {
-			logger.LegacyPrintf("service.admin", "failed to assign default subscription: user_id=%d group_id=%d err=%v", userID, item.GroupID, err)
+	if s.defaultSubAssigner != nil {
+		items := s.settingService.GetDefaultSubscriptions(ctx)
+		for _, item := range items {
+			if _, _, err := s.defaultSubAssigner.AssignOrExtendSubscription(ctx, &AssignSubscriptionInput{
+				UserID:       userID,
+				GroupID:      item.GroupID,
+				ValidityDays: item.ValidityDays,
+				Notes:        "auto assigned by default user subscriptions setting",
+			}); err != nil {
+				logger.LegacyPrintf("service.admin", "failed to assign default subscription: user_id=%d group_id=%d err=%v", userID, item.GroupID, err)
+			}
+		}
+	}
+	if s.defaultProductSubAssigner != nil {
+		items := s.settingService.GetDefaultSubscriptionProducts(ctx)
+		for _, item := range items {
+			if _, _, err := s.defaultProductSubAssigner.AssignOrExtendProductSubscription(ctx, &AssignProductSubscriptionInput{
+				UserID:       userID,
+				ProductID:    item.ProductID,
+				ValidityDays: item.ValidityDays,
+				Notes:        "auto assigned by default user subscription products setting",
+			}); err != nil {
+				logger.LegacyPrintf("service.admin", "failed to assign default product subscription: user_id=%d product_id=%d err=%v", userID, item.ProductID, err)
+			}
 		}
 	}
 }
@@ -2244,18 +2267,32 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 	if input.Type == RedeemTypeInvitation {
 		return nil, errors.New("legacy invitation redeem codes are no longer supported")
 	}
-	// 如果是订阅类型，验证必须有 GroupID
 	if input.Type == RedeemTypeSubscription {
-		if input.GroupID == nil {
-			return nil, errors.New("group_id is required for subscription type")
+		if (input.GroupID == nil) == (input.ProductID == nil) {
+			return nil, errors.New("exactly one of group_id or product_id is required for subscription type")
 		}
-		// 验证分组存在且为订阅类型
-		group, err := s.groupRepo.GetByID(ctx, *input.GroupID)
-		if err != nil {
-			return nil, fmt.Errorf("group not found: %w", err)
+		if input.GroupID != nil {
+			// 验证分组存在且为订阅类型
+			group, err := s.groupRepo.GetByID(ctx, *input.GroupID)
+			if err != nil {
+				return nil, fmt.Errorf("group not found: %w", err)
+			}
+			if !group.IsSubscriptionType() {
+				return nil, errors.New("group must be subscription type")
+			}
 		}
-		if !group.IsSubscriptionType() {
-			return nil, errors.New("group must be subscription type")
+		if input.ProductID != nil && s.entClient != nil {
+			exists, err := s.entClient.SubscriptionProduct.Query().
+				Where(subscriptionproduct.IDEQ(*input.ProductID)).
+				Exist(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("get subscription product: %w", err)
+			}
+			if !exists {
+				return nil, NewSubscriptionProductNotFoundError(0).WithMetadata(map[string]string{
+					"product_id": fmt.Sprintf("%d", *input.ProductID),
+				})
+			}
 		}
 	}
 	sourceType := NormalizeRedeemSourceType(input.SourceType, RedeemSourceSystemGrant)
@@ -2276,6 +2313,7 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 		// 订阅类型专用字段
 		if input.Type == RedeemTypeSubscription {
 			code.GroupID = input.GroupID
+			code.ProductID = input.ProductID
 			code.ValidityDays = input.ValidityDays
 			if code.ValidityDays <= 0 {
 				code.ValidityDays = 30 // 默认30天

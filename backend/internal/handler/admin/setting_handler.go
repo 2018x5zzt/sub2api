@@ -73,6 +73,13 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 			ValidityDays: sub.ValidityDays,
 		})
 	}
+	defaultSubscriptionProducts := make([]dto.DefaultSubscriptionProductSetting, 0, len(settings.DefaultSubscriptionProducts))
+	for _, sub := range settings.DefaultSubscriptionProducts {
+		defaultSubscriptionProducts = append(defaultSubscriptionProducts, dto.DefaultSubscriptionProductSetting{
+			ProductID:    sub.ProductID,
+			ValidityDays: sub.ValidityDays,
+		})
+	}
 	enterpriseVisibleGroups := make([]dto.EnterpriseVisibleGroupSetting, 0, len(settings.EnterpriseVisibleGroups))
 	for _, rule := range settings.EnterpriseVisibleGroups {
 		enterpriseVisibleGroups = append(enterpriseVisibleGroups, dto.EnterpriseVisibleGroupSetting{
@@ -120,6 +127,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		DefaultConcurrency:                   settings.DefaultConcurrency,
 		DefaultBalance:                       settings.DefaultBalance,
 		DefaultSubscriptions:                 defaultSubscriptions,
+		DefaultSubscriptionProducts:          defaultSubscriptionProducts,
 		EnterpriseVisibleGroups:              enterpriseVisibleGroups,
 		EnableModelFallback:                  settings.EnableModelFallback,
 		FallbackModelAnthropic:               settings.FallbackModelAnthropic,
@@ -188,10 +196,11 @@ type UpdateSettingsRequest struct {
 	CustomEndpoints             *[]dto.CustomEndpoint `json:"custom_endpoints"`
 
 	// 默认配置
-	DefaultConcurrency      int                                  `json:"default_concurrency"`
-	DefaultBalance          float64                              `json:"default_balance"`
-	DefaultSubscriptions    []dto.DefaultSubscriptionSetting     `json:"default_subscriptions"`
-	EnterpriseVisibleGroups *[]dto.EnterpriseVisibleGroupSetting `json:"enterprise_visible_groups"`
+	DefaultConcurrency          int                                     `json:"default_concurrency"`
+	DefaultBalance              float64                                 `json:"default_balance"`
+	DefaultSubscriptions        []dto.DefaultSubscriptionSetting        `json:"default_subscriptions"`
+	DefaultSubscriptionProducts []dto.DefaultSubscriptionProductSetting `json:"default_subscription_products"`
+	EnterpriseVisibleGroups     *[]dto.EnterpriseVisibleGroupSetting    `json:"enterprise_visible_groups"`
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -255,6 +264,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		req.SMTPPort = 587
 	}
 	req.DefaultSubscriptions = normalizeDefaultSubscriptions(req.DefaultSubscriptions)
+	req.DefaultSubscriptionProducts = normalizeDefaultSubscriptionProducts(req.DefaultSubscriptionProducts)
 
 	// SMTP 配置保护：如果请求中 smtp_host 为空但数据库中已有配置，则保留已有 SMTP 配置
 	// 防止前端加载设置失败时空表单覆盖已保存的 SMTP 配置
@@ -515,6 +525,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			ValidityDays: sub.ValidityDays,
 		})
 	}
+	defaultSubscriptionProducts := make([]service.DefaultSubscriptionProductSetting, 0, len(req.DefaultSubscriptionProducts))
+	for _, sub := range req.DefaultSubscriptionProducts {
+		defaultSubscriptionProducts = append(defaultSubscriptionProducts, service.DefaultSubscriptionProductSetting{
+			ProductID:    sub.ProductID,
+			ValidityDays: sub.ValidityDays,
+		})
+	}
 	enterpriseVisibleGroups := previousSettings.EnterpriseVisibleGroups
 	if req.EnterpriseVisibleGroups != nil {
 		enterpriseVisibleGroups = make([]service.EnterpriseVisibleGroupSetting, 0, len(*req.EnterpriseVisibleGroups))
@@ -588,6 +605,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DefaultConcurrency:               req.DefaultConcurrency,
 		DefaultBalance:                   req.DefaultBalance,
 		DefaultSubscriptions:             defaultSubscriptions,
+		DefaultSubscriptionProducts:      defaultSubscriptionProducts,
 		EnterpriseVisibleGroups:          enterpriseVisibleGroups,
 		EnableModelFallback:              req.EnableModelFallback,
 		FallbackModelAnthropic:           req.FallbackModelAnthropic,
@@ -658,6 +676,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			ValidityDays: sub.ValidityDays,
 		})
 	}
+	updatedDefaultSubscriptionProducts := make([]dto.DefaultSubscriptionProductSetting, 0, len(updatedSettings.DefaultSubscriptionProducts))
+	for _, sub := range updatedSettings.DefaultSubscriptionProducts {
+		updatedDefaultSubscriptionProducts = append(updatedDefaultSubscriptionProducts, dto.DefaultSubscriptionProductSetting{
+			ProductID:    sub.ProductID,
+			ValidityDays: sub.ValidityDays,
+		})
+	}
 	updatedEnterpriseVisibleGroups := make([]dto.EnterpriseVisibleGroupSetting, 0, len(updatedSettings.EnterpriseVisibleGroups))
 	for _, rule := range updatedSettings.EnterpriseVisibleGroups {
 		updatedEnterpriseVisibleGroups = append(updatedEnterpriseVisibleGroups, dto.EnterpriseVisibleGroupSetting{
@@ -705,6 +730,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DefaultConcurrency:                   updatedSettings.DefaultConcurrency,
 		DefaultBalance:                       updatedSettings.DefaultBalance,
 		DefaultSubscriptions:                 updatedDefaultSubscriptions,
+		DefaultSubscriptionProducts:          updatedDefaultSubscriptionProducts,
 		EnterpriseVisibleGroups:              updatedEnterpriseVisibleGroups,
 		EnableModelFallback:                  updatedSettings.EnableModelFallback,
 		FallbackModelAnthropic:               updatedSettings.FallbackModelAnthropic,
@@ -841,6 +867,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if !equalDefaultSubscriptions(before.DefaultSubscriptions, after.DefaultSubscriptions) {
 		changed = append(changed, "default_subscriptions")
 	}
+	if !equalDefaultSubscriptionProducts(before.DefaultSubscriptionProducts, after.DefaultSubscriptionProducts) {
+		changed = append(changed, "default_subscription_products")
+	}
 	if before.EnableModelFallback != after.EnableModelFallback {
 		changed = append(changed, "enable_model_fallback")
 	}
@@ -921,6 +950,23 @@ func normalizeDefaultSubscriptions(input []dto.DefaultSubscriptionSetting) []dto
 	return normalized
 }
 
+func normalizeDefaultSubscriptionProducts(input []dto.DefaultSubscriptionProductSetting) []dto.DefaultSubscriptionProductSetting {
+	if len(input) == 0 {
+		return nil
+	}
+	normalized := make([]dto.DefaultSubscriptionProductSetting, 0, len(input))
+	for _, item := range input {
+		if item.ProductID <= 0 || item.ValidityDays <= 0 {
+			continue
+		}
+		if item.ValidityDays > service.MaxValidityDays {
+			item.ValidityDays = service.MaxValidityDays
+		}
+		normalized = append(normalized, item)
+	}
+	return normalized
+}
+
 func equalStringSlice(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
@@ -939,6 +985,18 @@ func equalDefaultSubscriptions(a, b []service.DefaultSubscriptionSetting) bool {
 	}
 	for i := range a {
 		if a[i].GroupID != b[i].GroupID || a[i].ValidityDays != b[i].ValidityDays {
+			return false
+		}
+	}
+	return true
+}
+
+func equalDefaultSubscriptionProducts(a, b []service.DefaultSubscriptionProductSetting) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].ProductID != b[i].ProductID || a[i].ValidityDays != b[i].ValidityDays {
 			return false
 		}
 	}

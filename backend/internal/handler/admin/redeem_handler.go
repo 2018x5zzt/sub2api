@@ -38,6 +38,7 @@ type GenerateRedeemCodesRequest struct {
 	Value        float64 `json:"value" binding:"min=0"`
 	SourceType   string  `json:"source_type" binding:"omitempty,oneof=commercial benefit compensation system_grant"`
 	GroupID      *int64  `json:"group_id"`                                    // 订阅类型必填
+	ProductID    *int64  `json:"product_id"`                                  // 订阅类型可选：与 group_id 二选一
 	ValidityDays int     `json:"validity_days" binding:"omitempty,max=36500"` // 订阅类型使用，默认30天，最大100年
 }
 
@@ -50,6 +51,7 @@ type CreateAndRedeemCodeRequest struct {
 	Value        float64 `json:"value" binding:"required,gt=0"`
 	UserID       int64   `json:"user_id" binding:"required,gt=0"`
 	GroupID      *int64  `json:"group_id"`                                    // subscription 类型必填
+	ProductID    *int64  `json:"product_id"`                                  // subscription 类型可选：与 group_id 二选一
 	ValidityDays int     `json:"validity_days" binding:"omitempty,max=36500"` // subscription 类型必填，>0
 	Notes        string  `json:"notes"`
 }
@@ -106,6 +108,10 @@ func (h *RedeemHandler) Generate(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
+	if req.Type == service.RedeemTypeSubscription && ((req.GroupID == nil) == (req.ProductID == nil)) {
+		response.BadRequest(c, "exactly one of group_id or product_id is required for subscription type")
+		return
+	}
 
 	executeAdminIdempotentJSON(c, "admin.redeem_codes.generate", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
 		sourceType := req.SourceType
@@ -118,6 +124,7 @@ func (h *RedeemHandler) Generate(c *gin.Context) {
 			Value:        req.Value,
 			SourceType:   sourceType,
 			GroupID:      req.GroupID,
+			ProductID:    req.ProductID,
 			ValidityDays: req.ValidityDays,
 		})
 		if execErr != nil {
@@ -159,8 +166,8 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 	}
 
 	if req.Type == "subscription" {
-		if req.GroupID == nil {
-			response.BadRequest(c, "group_id is required for subscription type")
+		if (req.GroupID == nil) == (req.ProductID == nil) {
+			response.BadRequest(c, "exactly one of group_id or product_id is required for subscription type")
 			return
 		}
 		if req.ValidityDays <= 0 {
@@ -186,6 +193,7 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 			Status:       service.StatusUnused,
 			Notes:        req.Notes,
 			GroupID:      req.GroupID,
+			ProductID:    req.ProductID,
 			ValidityDays: req.ValidityDays,
 		})
 		if createErr != nil {

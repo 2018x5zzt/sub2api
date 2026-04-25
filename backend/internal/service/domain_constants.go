@@ -135,9 +135,10 @@ const (
 	SettingKeyCustomEndpoints             = "custom_endpoints"              // 自定义端点列表（JSON 数组）
 
 	// 默认配置
-	SettingKeyDefaultConcurrency   = "default_concurrency"   // 新用户默认并发量
-	SettingKeyDefaultBalance       = "default_balance"       // 新用户默认余额
-	SettingKeyDefaultSubscriptions = "default_subscriptions" // 新用户默认订阅列表（JSON）
+	SettingKeyDefaultConcurrency          = "default_concurrency"           // 新用户默认并发量
+	SettingKeyDefaultBalance              = "default_balance"               // 新用户默认余额
+	SettingKeyDefaultSubscriptions        = "default_subscriptions"         // 新用户默认订阅列表（JSON）
+	SettingKeyDefaultSubscriptionProducts = "default_subscription_products" // 新用户默认产品订阅列表（JSON）
 	// 企业可见分组映射（JSON object: enterprise_name -> []group_id）
 	SettingKeyEnterpriseVisibleGroupIDsByEnterprise = "enterprise_visible_group_ids_by_enterprise"
 

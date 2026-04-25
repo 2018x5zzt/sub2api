@@ -489,6 +489,11 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 		return fmt.Errorf("marshal default subscriptions: %w", err)
 	}
 	updates[SettingKeyDefaultSubscriptions] = string(defaultSubsJSON)
+	defaultProductSubsJSON, err := json.Marshal(settings.DefaultSubscriptionProducts)
+	if err != nil {
+		return fmt.Errorf("marshal default subscription products: %w", err)
+	}
+	updates[SettingKeyDefaultSubscriptionProducts] = string(defaultProductSubsJSON)
 	enterpriseVisibleGroups, err := normalizeEnterpriseVisibleGroups(ctx, settings.EnterpriseVisibleGroups, s.defaultSubGroupReader)
 	if err != nil {
 		return fmt.Errorf("normalize enterprise visible groups: %w", err)
@@ -803,6 +808,15 @@ func (s *SettingService) GetDefaultSubscriptions(ctx context.Context) []DefaultS
 	return parseDefaultSubscriptions(value)
 }
 
+// GetDefaultSubscriptionProducts 获取新用户默认产品订阅配置列表。
+func (s *SettingService) GetDefaultSubscriptionProducts(ctx context.Context) []DefaultSubscriptionProductSetting {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyDefaultSubscriptionProducts)
+	if err != nil {
+		return nil
+	}
+	return parseDefaultSubscriptionProducts(value)
+}
+
 // InitializeDefaultSettings 初始化默认设置
 func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 	// 检查是否已有设置
@@ -831,6 +845,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyDefaultConcurrency:               strconv.Itoa(s.cfg.Default.UserConcurrency),
 		SettingKeyDefaultBalance:                   strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
 		SettingKeyDefaultSubscriptions:             "[]",
+		SettingKeyDefaultSubscriptionProducts:      "[]",
 		SettingKeySMTPPort:                         "587",
 		SettingKeySMTPUseTLS:                       "false",
 		// Model fallback defaults
@@ -916,6 +931,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.DefaultBalance = s.cfg.Default.UserBalance
 	}
 	result.DefaultSubscriptions = parseDefaultSubscriptions(settings[SettingKeyDefaultSubscriptions])
+	result.DefaultSubscriptionProducts = parseDefaultSubscriptionProducts(settings[SettingKeyDefaultSubscriptionProducts])
 	if enterpriseVisibleGroups, err := ParseEnterpriseVisibleGroupIDsByEnterprise(settings[SettingKeyEnterpriseVisibleGroupIDsByEnterprise]); err == nil {
 		result.EnterpriseVisibleGroups = BuildEnterpriseVisibleGroupRules(enterpriseVisibleGroups)
 	} else {
@@ -1031,6 +1047,31 @@ func parseDefaultSubscriptions(raw string) []DefaultSubscriptionSetting {
 	normalized := make([]DefaultSubscriptionSetting, 0, len(items))
 	for _, item := range items {
 		if item.GroupID <= 0 || item.ValidityDays <= 0 {
+			continue
+		}
+		if item.ValidityDays > MaxValidityDays {
+			item.ValidityDays = MaxValidityDays
+		}
+		normalized = append(normalized, item)
+	}
+
+	return normalized
+}
+
+func parseDefaultSubscriptionProducts(raw string) []DefaultSubscriptionProductSetting {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	var items []DefaultSubscriptionProductSetting
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return nil
+	}
+
+	normalized := make([]DefaultSubscriptionProductSetting, 0, len(items))
+	for _, item := range items {
+		if item.ProductID <= 0 || item.ValidityDays <= 0 {
 			continue
 		}
 		if item.ValidityDays > MaxValidityDays {

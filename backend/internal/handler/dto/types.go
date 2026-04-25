@@ -355,6 +355,7 @@ type RedeemCode struct {
 	CreatedAt time.Time  `json:"created_at"`
 
 	GroupID      *int64 `json:"group_id"`
+	ProductID    *int64 `json:"product_id"`
 	ValidityDays int    `json:"validity_days"`
 
 	// Notes is only populated for admin_balance/admin_concurrency types
@@ -516,9 +517,9 @@ type UserSubscription struct {
 	WeeklyWindowStart  *time.Time `json:"weekly_window_start"`
 	MonthlyWindowStart *time.Time `json:"monthly_window_start"`
 
-	DailyUsageUSD   float64 `json:"daily_usage_usd"`
-	WeeklyUsageUSD  float64 `json:"weekly_usage_usd"`
-	MonthlyUsageUSD float64 `json:"monthly_usage_usd"`
+	DailyUsageUSD              float64 `json:"daily_usage_usd"`
+	WeeklyUsageUSD             float64 `json:"weekly_usage_usd"`
+	MonthlyUsageUSD            float64 `json:"monthly_usage_usd"`
 	DailyCarryoverInUSD        float64 `json:"daily_carryover_in_usd"`
 	DailyEffectiveLimitUSD     float64 `json:"daily_effective_limit_usd"`
 	DailyRemainingTotalUSD     float64 `json:"daily_remaining_total_usd"`

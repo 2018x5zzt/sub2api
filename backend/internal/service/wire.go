@@ -423,10 +423,98 @@ func ProvideInviteUserRepository(userRepo UserRepository) InviteUserRepository {
 	return userRepo
 }
 
+func ProvideAuthService(
+	entClient *dbent.Client,
+	userRepo UserRepository,
+	redeemRepo InvitationCodeLookupRepository,
+	refreshTokenCache RefreshTokenCache,
+	cfg *config.Config,
+	settingService *SettingService,
+	emailService *EmailService,
+	turnstileService *TurnstileService,
+	emailQueueService *EmailQueueService,
+	promoService *PromoService,
+	defaultSubAssigner DefaultSubscriptionAssigner,
+	productAssigner ProductSubscriptionAssigner,
+	inviteService *InviteService,
+) *AuthService {
+	svc := NewAuthService(entClient, userRepo, redeemRepo, refreshTokenCache, cfg, settingService, emailService, turnstileService, emailQueueService, promoService, defaultSubAssigner, inviteService)
+	svc.SetDefaultProductSubscriptionAssigner(productAssigner)
+	return svc
+}
+
+func ProvideRedeemService(
+	redeemRepo RedeemCodeRepository,
+	userRepo UserRepository,
+	inviteService *InviteService,
+	subscriptionService *SubscriptionService,
+	cache RedeemCache,
+	billingCacheService *BillingCacheService,
+	entClient *dbent.Client,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	productAssigner ProductSubscriptionAssigner,
+) *RedeemService {
+	return NewRedeemService(redeemRepo, userRepo, inviteService, subscriptionService, cache, billingCacheService, entClient, authCacheInvalidator, productAssigner)
+}
+
+func ProvideAdminService(
+	userRepo UserRepository,
+	groupRepo GroupRepository,
+	accountRepo AccountRepository,
+	soraAccountRepo SoraAccountRepository,
+	proxyRepo ProxyRepository,
+	apiKeyRepo APIKeyRepository,
+	redeemCodeRepo RedeemCodeRepository,
+	inviteAdminQueryRepo InviteAdminQueryRepository,
+	inviteRewardRecordRepo InviteRewardAdminRepository,
+	inviteRelationshipEventRepo InviteRelationshipEventAdminRepository,
+	inviteAdminActionRepo InviteAdminActionRepository,
+	inviteQualifyingRechargeRepo InviteQualifyingRechargeRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	billingCacheService *BillingCacheService,
+	proxyProber ProxyExitInfoProber,
+	proxyLatencyCache ProxyLatencyCache,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	entClient *dbent.Client,
+	settingService *SettingService,
+	defaultSubAssigner DefaultSubscriptionAssigner,
+	userSubRepo UserSubscriptionRepository,
+	privacyClientFactory PrivacyClientFactory,
+	subscriptionProductService *SubscriptionProductService,
+	productAssigner ProductSubscriptionAssigner,
+) AdminService {
+	return NewAdminService(
+		userRepo,
+		groupRepo,
+		accountRepo,
+		soraAccountRepo,
+		proxyRepo,
+		apiKeyRepo,
+		redeemCodeRepo,
+		inviteAdminQueryRepo,
+		inviteRewardRecordRepo,
+		inviteRelationshipEventRepo,
+		inviteAdminActionRepo,
+		inviteQualifyingRechargeRepo,
+		userGroupRateRepo,
+		billingCacheService,
+		proxyProber,
+		proxyLatencyCache,
+		authCacheInvalidator,
+		entClient,
+		settingService,
+		defaultSubAssigner,
+		userSubRepo,
+		privacyClientFactory,
+		subscriptionProductService,
+		productAssigner,
+	)
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
-	NewAuthService,
+	ProvideAuthService,
 	ProvideInviteService,
 	ProvideInviteUserRepository,
 	NewUserService,
@@ -435,7 +523,7 @@ var ProviderSet = wire.NewSet(
 	NewGroupService,
 	NewAccountService,
 	NewProxyService,
-	NewRedeemService,
+	ProvideRedeemService,
 	NewPromoService,
 	NewUsageService,
 	NewDashboardService,
@@ -443,7 +531,7 @@ var ProviderSet = wire.NewSet(
 	NewBillingService,
 	NewBillingCacheService,
 	NewAnnouncementService,
-	NewAdminService,
+	ProvideAdminService,
 	NewGatewayService,
 	ProvideSoraMediaStorage,
 	ProvideSoraMediaCleanupService,
@@ -483,7 +571,9 @@ var ProviderSet = wire.NewSet(
 	NewTurnstileService,
 	NewSubscriptionService,
 	NewSubscriptionProductService,
+	NewSubscriptionProductAdminService,
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
+	wire.Bind(new(ProductSubscriptionAssigner), new(*SubscriptionProductAdminService)),
 	ProvideConcurrencyService,
 	ProvideUserMessageQueueService,
 	NewUsageRecordWorkerPool,
