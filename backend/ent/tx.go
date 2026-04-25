@@ -38,6 +38,8 @@ type Tx struct {
 	InviteRelationshipEvent *InviteRelationshipEventClient
 	// InviteRewardRecord is the client for interacting with the InviteRewardRecord builders.
 	InviteRewardRecord *InviteRewardRecordClient
+	// ProductSubscriptionMigrationSource is the client for interacting with the ProductSubscriptionMigrationSource builders.
+	ProductSubscriptionMigrationSource *ProductSubscriptionMigrationSourceClient
 	// PromoCode is the client for interacting with the PromoCode builders.
 	PromoCode *PromoCodeClient
 	// PromoCodeUsage is the client for interacting with the PromoCodeUsage builders.
@@ -50,6 +52,10 @@ type Tx struct {
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
+	// SubscriptionProduct is the client for interacting with the SubscriptionProduct builders.
+	SubscriptionProduct *SubscriptionProductClient
+	// SubscriptionProductGroup is the client for interacting with the SubscriptionProductGroup builders.
+	SubscriptionProductGroup *SubscriptionProductGroupClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
 	TLSFingerprintProfile *TLSFingerprintProfileClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
@@ -64,6 +70,8 @@ type Tx struct {
 	UserAttributeDefinition *UserAttributeDefinitionClient
 	// UserAttributeValue is the client for interacting with the UserAttributeValue builders.
 	UserAttributeValue *UserAttributeValueClient
+	// UserProductSubscription is the client for interacting with the UserProductSubscription builders.
+	UserProductSubscription *UserProductSubscriptionClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
 	UserSubscription *UserSubscriptionClient
 
@@ -209,12 +217,15 @@ func (tx *Tx) init() {
 	tx.InviteAdminAction = NewInviteAdminActionClient(tx.config)
 	tx.InviteRelationshipEvent = NewInviteRelationshipEventClient(tx.config)
 	tx.InviteRewardRecord = NewInviteRewardRecordClient(tx.config)
+	tx.ProductSubscriptionMigrationSource = NewProductSubscriptionMigrationSourceClient(tx.config)
 	tx.PromoCode = NewPromoCodeClient(tx.config)
 	tx.PromoCodeUsage = NewPromoCodeUsageClient(tx.config)
 	tx.Proxy = NewProxyClient(tx.config)
 	tx.RedeemCode = NewRedeemCodeClient(tx.config)
 	tx.SecuritySecret = NewSecuritySecretClient(tx.config)
 	tx.Setting = NewSettingClient(tx.config)
+	tx.SubscriptionProduct = NewSubscriptionProductClient(tx.config)
+	tx.SubscriptionProductGroup = NewSubscriptionProductGroupClient(tx.config)
 	tx.TLSFingerprintProfile = NewTLSFingerprintProfileClient(tx.config)
 	tx.UsageCleanupTask = NewUsageCleanupTaskClient(tx.config)
 	tx.UsageLog = NewUsageLogClient(tx.config)
@@ -222,6 +233,7 @@ func (tx *Tx) init() {
 	tx.UserAllowedGroup = NewUserAllowedGroupClient(tx.config)
 	tx.UserAttributeDefinition = NewUserAttributeDefinitionClient(tx.config)
 	tx.UserAttributeValue = NewUserAttributeValueClient(tx.config)
+	tx.UserProductSubscription = NewUserProductSubscriptionClient(tx.config)
 	tx.UserSubscription = NewUserSubscriptionClient(tx.config)
 }
 

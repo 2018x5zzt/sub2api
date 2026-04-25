@@ -153,6 +153,18 @@ func (f InviteRewardRecordFunc) Mutate(ctx context.Context, m ent.Mutation) (ent
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.InviteRewardRecordMutation", m)
 }
 
+// The ProductSubscriptionMigrationSourceFunc type is an adapter to allow the use of ordinary
+// function as ProductSubscriptionMigrationSource mutator.
+type ProductSubscriptionMigrationSourceFunc func(context.Context, *ent.ProductSubscriptionMigrationSourceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ProductSubscriptionMigrationSourceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ProductSubscriptionMigrationSourceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ProductSubscriptionMigrationSourceMutation", m)
+}
+
 // The PromoCodeFunc type is an adapter to allow the use of ordinary
 // function as PromoCode mutator.
 type PromoCodeFunc func(context.Context, *ent.PromoCodeMutation) (ent.Value, error)
@@ -223,6 +235,30 @@ func (f SettingFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SettingMutation", m)
+}
+
+// The SubscriptionProductFunc type is an adapter to allow the use of ordinary
+// function as SubscriptionProduct mutator.
+type SubscriptionProductFunc func(context.Context, *ent.SubscriptionProductMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SubscriptionProductFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SubscriptionProductMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionProductMutation", m)
+}
+
+// The SubscriptionProductGroupFunc type is an adapter to allow the use of ordinary
+// function as SubscriptionProductGroup mutator.
+type SubscriptionProductGroupFunc func(context.Context, *ent.SubscriptionProductGroupMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f SubscriptionProductGroupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.SubscriptionProductGroupMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.SubscriptionProductGroupMutation", m)
 }
 
 // The TLSFingerprintProfileFunc type is an adapter to allow the use of ordinary
@@ -307,6 +343,18 @@ func (f UserAttributeValueFunc) Mutate(ctx context.Context, m ent.Mutation) (ent
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserAttributeValueMutation", m)
+}
+
+// The UserProductSubscriptionFunc type is an adapter to allow the use of ordinary
+// function as UserProductSubscription mutator.
+type UserProductSubscriptionFunc func(context.Context, *ent.UserProductSubscriptionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f UserProductSubscriptionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.UserProductSubscriptionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.UserProductSubscriptionMutation", m)
 }
 
 // The UserSubscriptionFunc type is an adapter to allow the use of ordinary

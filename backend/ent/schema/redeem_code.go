@@ -69,6 +69,9 @@ func (RedeemCode) Fields() []ent.Field {
 		field.Int64("group_id").
 			Optional().
 			Nillable(),
+		field.Int64("product_id").
+			Optional().
+			Nillable(),
 		field.Int("validity_days").
 			Default(30),
 	}
@@ -93,5 +96,6 @@ func (RedeemCode) Indexes() []ent.Index {
 		index.Fields("status"),
 		index.Fields("used_by"),
 		index.Fields("group_id"),
+		index.Fields("product_id"),
 	}
 }

@@ -27,12 +27,15 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/inviteadminaction"
 	"github.com/Wei-Shaw/sub2api/ent/inviterelationshipevent"
 	"github.com/Wei-Shaw/sub2api/ent/inviterewardrecord"
+	"github.com/Wei-Shaw/sub2api/ent/productsubscriptionmigrationsource"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionproduct"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionproductgroup"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -40,6 +43,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
+	"github.com/Wei-Shaw/sub2api/ent/userproductsubscription"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 
 	stdsql "database/sql"
@@ -74,6 +78,8 @@ type Client struct {
 	InviteRelationshipEvent *InviteRelationshipEventClient
 	// InviteRewardRecord is the client for interacting with the InviteRewardRecord builders.
 	InviteRewardRecord *InviteRewardRecordClient
+	// ProductSubscriptionMigrationSource is the client for interacting with the ProductSubscriptionMigrationSource builders.
+	ProductSubscriptionMigrationSource *ProductSubscriptionMigrationSourceClient
 	// PromoCode is the client for interacting with the PromoCode builders.
 	PromoCode *PromoCodeClient
 	// PromoCodeUsage is the client for interacting with the PromoCodeUsage builders.
@@ -86,6 +92,10 @@ type Client struct {
 	SecuritySecret *SecuritySecretClient
 	// Setting is the client for interacting with the Setting builders.
 	Setting *SettingClient
+	// SubscriptionProduct is the client for interacting with the SubscriptionProduct builders.
+	SubscriptionProduct *SubscriptionProductClient
+	// SubscriptionProductGroup is the client for interacting with the SubscriptionProductGroup builders.
+	SubscriptionProductGroup *SubscriptionProductGroupClient
 	// TLSFingerprintProfile is the client for interacting with the TLSFingerprintProfile builders.
 	TLSFingerprintProfile *TLSFingerprintProfileClient
 	// UsageCleanupTask is the client for interacting with the UsageCleanupTask builders.
@@ -100,6 +110,8 @@ type Client struct {
 	UserAttributeDefinition *UserAttributeDefinitionClient
 	// UserAttributeValue is the client for interacting with the UserAttributeValue builders.
 	UserAttributeValue *UserAttributeValueClient
+	// UserProductSubscription is the client for interacting with the UserProductSubscription builders.
+	UserProductSubscription *UserProductSubscriptionClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
 	UserSubscription *UserSubscriptionClient
 }
@@ -125,12 +137,15 @@ func (c *Client) init() {
 	c.InviteAdminAction = NewInviteAdminActionClient(c.config)
 	c.InviteRelationshipEvent = NewInviteRelationshipEventClient(c.config)
 	c.InviteRewardRecord = NewInviteRewardRecordClient(c.config)
+	c.ProductSubscriptionMigrationSource = NewProductSubscriptionMigrationSourceClient(c.config)
 	c.PromoCode = NewPromoCodeClient(c.config)
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
 	c.Proxy = NewProxyClient(c.config)
 	c.RedeemCode = NewRedeemCodeClient(c.config)
 	c.SecuritySecret = NewSecuritySecretClient(c.config)
 	c.Setting = NewSettingClient(c.config)
+	c.SubscriptionProduct = NewSubscriptionProductClient(c.config)
+	c.SubscriptionProductGroup = NewSubscriptionProductGroupClient(c.config)
 	c.TLSFingerprintProfile = NewTLSFingerprintProfileClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
 	c.UsageLog = NewUsageLogClient(c.config)
@@ -138,6 +153,7 @@ func (c *Client) init() {
 	c.UserAllowedGroup = NewUserAllowedGroupClient(c.config)
 	c.UserAttributeDefinition = NewUserAttributeDefinitionClient(c.config)
 	c.UserAttributeValue = NewUserAttributeValueClient(c.config)
+	c.UserProductSubscription = NewUserProductSubscriptionClient(c.config)
 	c.UserSubscription = NewUserSubscriptionClient(c.config)
 }
 
@@ -229,34 +245,38 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                     ctx,
-		config:                  cfg,
-		APIKey:                  NewAPIKeyClient(cfg),
-		Account:                 NewAccountClient(cfg),
-		AccountGroup:            NewAccountGroupClient(cfg),
-		Announcement:            NewAnnouncementClient(cfg),
-		AnnouncementRead:        NewAnnouncementReadClient(cfg),
-		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
-		Group:                   NewGroupClient(cfg),
-		GroupHealthSnapshot:     NewGroupHealthSnapshotClient(cfg),
-		IdempotencyRecord:       NewIdempotencyRecordClient(cfg),
-		InviteAdminAction:       NewInviteAdminActionClient(cfg),
-		InviteRelationshipEvent: NewInviteRelationshipEventClient(cfg),
-		InviteRewardRecord:      NewInviteRewardRecordClient(cfg),
-		PromoCode:               NewPromoCodeClient(cfg),
-		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
-		Proxy:                   NewProxyClient(cfg),
-		RedeemCode:              NewRedeemCodeClient(cfg),
-		SecuritySecret:          NewSecuritySecretClient(cfg),
-		Setting:                 NewSettingClient(cfg),
-		TLSFingerprintProfile:   NewTLSFingerprintProfileClient(cfg),
-		UsageCleanupTask:        NewUsageCleanupTaskClient(cfg),
-		UsageLog:                NewUsageLogClient(cfg),
-		User:                    NewUserClient(cfg),
-		UserAllowedGroup:        NewUserAllowedGroupClient(cfg),
-		UserAttributeDefinition: NewUserAttributeDefinitionClient(cfg),
-		UserAttributeValue:      NewUserAttributeValueClient(cfg),
-		UserSubscription:        NewUserSubscriptionClient(cfg),
+		ctx:                                ctx,
+		config:                             cfg,
+		APIKey:                             NewAPIKeyClient(cfg),
+		Account:                            NewAccountClient(cfg),
+		AccountGroup:                       NewAccountGroupClient(cfg),
+		Announcement:                       NewAnnouncementClient(cfg),
+		AnnouncementRead:                   NewAnnouncementReadClient(cfg),
+		ErrorPassthroughRule:               NewErrorPassthroughRuleClient(cfg),
+		Group:                              NewGroupClient(cfg),
+		GroupHealthSnapshot:                NewGroupHealthSnapshotClient(cfg),
+		IdempotencyRecord:                  NewIdempotencyRecordClient(cfg),
+		InviteAdminAction:                  NewInviteAdminActionClient(cfg),
+		InviteRelationshipEvent:            NewInviteRelationshipEventClient(cfg),
+		InviteRewardRecord:                 NewInviteRewardRecordClient(cfg),
+		ProductSubscriptionMigrationSource: NewProductSubscriptionMigrationSourceClient(cfg),
+		PromoCode:                          NewPromoCodeClient(cfg),
+		PromoCodeUsage:                     NewPromoCodeUsageClient(cfg),
+		Proxy:                              NewProxyClient(cfg),
+		RedeemCode:                         NewRedeemCodeClient(cfg),
+		SecuritySecret:                     NewSecuritySecretClient(cfg),
+		Setting:                            NewSettingClient(cfg),
+		SubscriptionProduct:                NewSubscriptionProductClient(cfg),
+		SubscriptionProductGroup:           NewSubscriptionProductGroupClient(cfg),
+		TLSFingerprintProfile:              NewTLSFingerprintProfileClient(cfg),
+		UsageCleanupTask:                   NewUsageCleanupTaskClient(cfg),
+		UsageLog:                           NewUsageLogClient(cfg),
+		User:                               NewUserClient(cfg),
+		UserAllowedGroup:                   NewUserAllowedGroupClient(cfg),
+		UserAttributeDefinition:            NewUserAttributeDefinitionClient(cfg),
+		UserAttributeValue:                 NewUserAttributeValueClient(cfg),
+		UserProductSubscription:            NewUserProductSubscriptionClient(cfg),
+		UserSubscription:                   NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -274,34 +294,38 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                     ctx,
-		config:                  cfg,
-		APIKey:                  NewAPIKeyClient(cfg),
-		Account:                 NewAccountClient(cfg),
-		AccountGroup:            NewAccountGroupClient(cfg),
-		Announcement:            NewAnnouncementClient(cfg),
-		AnnouncementRead:        NewAnnouncementReadClient(cfg),
-		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
-		Group:                   NewGroupClient(cfg),
-		GroupHealthSnapshot:     NewGroupHealthSnapshotClient(cfg),
-		IdempotencyRecord:       NewIdempotencyRecordClient(cfg),
-		InviteAdminAction:       NewInviteAdminActionClient(cfg),
-		InviteRelationshipEvent: NewInviteRelationshipEventClient(cfg),
-		InviteRewardRecord:      NewInviteRewardRecordClient(cfg),
-		PromoCode:               NewPromoCodeClient(cfg),
-		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
-		Proxy:                   NewProxyClient(cfg),
-		RedeemCode:              NewRedeemCodeClient(cfg),
-		SecuritySecret:          NewSecuritySecretClient(cfg),
-		Setting:                 NewSettingClient(cfg),
-		TLSFingerprintProfile:   NewTLSFingerprintProfileClient(cfg),
-		UsageCleanupTask:        NewUsageCleanupTaskClient(cfg),
-		UsageLog:                NewUsageLogClient(cfg),
-		User:                    NewUserClient(cfg),
-		UserAllowedGroup:        NewUserAllowedGroupClient(cfg),
-		UserAttributeDefinition: NewUserAttributeDefinitionClient(cfg),
-		UserAttributeValue:      NewUserAttributeValueClient(cfg),
-		UserSubscription:        NewUserSubscriptionClient(cfg),
+		ctx:                                ctx,
+		config:                             cfg,
+		APIKey:                             NewAPIKeyClient(cfg),
+		Account:                            NewAccountClient(cfg),
+		AccountGroup:                       NewAccountGroupClient(cfg),
+		Announcement:                       NewAnnouncementClient(cfg),
+		AnnouncementRead:                   NewAnnouncementReadClient(cfg),
+		ErrorPassthroughRule:               NewErrorPassthroughRuleClient(cfg),
+		Group:                              NewGroupClient(cfg),
+		GroupHealthSnapshot:                NewGroupHealthSnapshotClient(cfg),
+		IdempotencyRecord:                  NewIdempotencyRecordClient(cfg),
+		InviteAdminAction:                  NewInviteAdminActionClient(cfg),
+		InviteRelationshipEvent:            NewInviteRelationshipEventClient(cfg),
+		InviteRewardRecord:                 NewInviteRewardRecordClient(cfg),
+		ProductSubscriptionMigrationSource: NewProductSubscriptionMigrationSourceClient(cfg),
+		PromoCode:                          NewPromoCodeClient(cfg),
+		PromoCodeUsage:                     NewPromoCodeUsageClient(cfg),
+		Proxy:                              NewProxyClient(cfg),
+		RedeemCode:                         NewRedeemCodeClient(cfg),
+		SecuritySecret:                     NewSecuritySecretClient(cfg),
+		Setting:                            NewSettingClient(cfg),
+		SubscriptionProduct:                NewSubscriptionProductClient(cfg),
+		SubscriptionProductGroup:           NewSubscriptionProductGroupClient(cfg),
+		TLSFingerprintProfile:              NewTLSFingerprintProfileClient(cfg),
+		UsageCleanupTask:                   NewUsageCleanupTaskClient(cfg),
+		UsageLog:                           NewUsageLogClient(cfg),
+		User:                               NewUserClient(cfg),
+		UserAllowedGroup:                   NewUserAllowedGroupClient(cfg),
+		UserAttributeDefinition:            NewUserAttributeDefinitionClient(cfg),
+		UserAttributeValue:                 NewUserAttributeValueClient(cfg),
+		UserProductSubscription:            NewUserProductSubscriptionClient(cfg),
+		UserSubscription:                   NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -334,10 +358,11 @@ func (c *Client) Use(hooks ...Hook) {
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.ErrorPassthroughRule, c.Group, c.GroupHealthSnapshot, c.IdempotencyRecord,
 		c.InviteAdminAction, c.InviteRelationshipEvent, c.InviteRewardRecord,
-		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
-		c.Setting, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.ProductSubscriptionMigrationSource, c.PromoCode, c.PromoCodeUsage, c.Proxy,
+		c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionProduct,
+		c.SubscriptionProductGroup, c.TLSFingerprintProfile, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserProductSubscription, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -350,10 +375,11 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
 		c.ErrorPassthroughRule, c.Group, c.GroupHealthSnapshot, c.IdempotencyRecord,
 		c.InviteAdminAction, c.InviteRelationshipEvent, c.InviteRewardRecord,
-		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
-		c.Setting, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.ProductSubscriptionMigrationSource, c.PromoCode, c.PromoCodeUsage, c.Proxy,
+		c.RedeemCode, c.SecuritySecret, c.Setting, c.SubscriptionProduct,
+		c.SubscriptionProductGroup, c.TLSFingerprintProfile, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserProductSubscription, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -386,6 +412,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.InviteRelationshipEvent.mutate(ctx, m)
 	case *InviteRewardRecordMutation:
 		return c.InviteRewardRecord.mutate(ctx, m)
+	case *ProductSubscriptionMigrationSourceMutation:
+		return c.ProductSubscriptionMigrationSource.mutate(ctx, m)
 	case *PromoCodeMutation:
 		return c.PromoCode.mutate(ctx, m)
 	case *PromoCodeUsageMutation:
@@ -398,6 +426,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SecuritySecret.mutate(ctx, m)
 	case *SettingMutation:
 		return c.Setting.mutate(ctx, m)
+	case *SubscriptionProductMutation:
+		return c.SubscriptionProduct.mutate(ctx, m)
+	case *SubscriptionProductGroupMutation:
+		return c.SubscriptionProductGroup.mutate(ctx, m)
 	case *TLSFingerprintProfileMutation:
 		return c.TLSFingerprintProfile.mutate(ctx, m)
 	case *UsageCleanupTaskMutation:
@@ -412,6 +444,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.UserAttributeDefinition.mutate(ctx, m)
 	case *UserAttributeValueMutation:
 		return c.UserAttributeValue.mutate(ctx, m)
+	case *UserProductSubscriptionMutation:
+		return c.UserProductSubscription.mutate(ctx, m)
 	case *UserSubscriptionMutation:
 		return c.UserSubscription.mutate(ctx, m)
 	default:
@@ -2292,6 +2326,155 @@ func (c *InviteRewardRecordClient) mutate(ctx context.Context, m *InviteRewardRe
 	}
 }
 
+// ProductSubscriptionMigrationSourceClient is a client for the ProductSubscriptionMigrationSource schema.
+type ProductSubscriptionMigrationSourceClient struct {
+	config
+}
+
+// NewProductSubscriptionMigrationSourceClient returns a client for the ProductSubscriptionMigrationSource from the given config.
+func NewProductSubscriptionMigrationSourceClient(c config) *ProductSubscriptionMigrationSourceClient {
+	return &ProductSubscriptionMigrationSourceClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `productsubscriptionmigrationsource.Hooks(f(g(h())))`.
+func (c *ProductSubscriptionMigrationSourceClient) Use(hooks ...Hook) {
+	c.hooks.ProductSubscriptionMigrationSource = append(c.hooks.ProductSubscriptionMigrationSource, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `productsubscriptionmigrationsource.Intercept(f(g(h())))`.
+func (c *ProductSubscriptionMigrationSourceClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ProductSubscriptionMigrationSource = append(c.inters.ProductSubscriptionMigrationSource, interceptors...)
+}
+
+// Create returns a builder for creating a ProductSubscriptionMigrationSource entity.
+func (c *ProductSubscriptionMigrationSourceClient) Create() *ProductSubscriptionMigrationSourceCreate {
+	mutation := newProductSubscriptionMigrationSourceMutation(c.config, OpCreate)
+	return &ProductSubscriptionMigrationSourceCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ProductSubscriptionMigrationSource entities.
+func (c *ProductSubscriptionMigrationSourceClient) CreateBulk(builders ...*ProductSubscriptionMigrationSourceCreate) *ProductSubscriptionMigrationSourceCreateBulk {
+	return &ProductSubscriptionMigrationSourceCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ProductSubscriptionMigrationSourceClient) MapCreateBulk(slice any, setFunc func(*ProductSubscriptionMigrationSourceCreate, int)) *ProductSubscriptionMigrationSourceCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ProductSubscriptionMigrationSourceCreateBulk{err: fmt.Errorf("calling to ProductSubscriptionMigrationSourceClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ProductSubscriptionMigrationSourceCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ProductSubscriptionMigrationSourceCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ProductSubscriptionMigrationSource.
+func (c *ProductSubscriptionMigrationSourceClient) Update() *ProductSubscriptionMigrationSourceUpdate {
+	mutation := newProductSubscriptionMigrationSourceMutation(c.config, OpUpdate)
+	return &ProductSubscriptionMigrationSourceUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ProductSubscriptionMigrationSourceClient) UpdateOne(_m *ProductSubscriptionMigrationSource) *ProductSubscriptionMigrationSourceUpdateOne {
+	mutation := newProductSubscriptionMigrationSourceMutation(c.config, OpUpdateOne, withProductSubscriptionMigrationSource(_m))
+	return &ProductSubscriptionMigrationSourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ProductSubscriptionMigrationSourceClient) UpdateOneID(id int64) *ProductSubscriptionMigrationSourceUpdateOne {
+	mutation := newProductSubscriptionMigrationSourceMutation(c.config, OpUpdateOne, withProductSubscriptionMigrationSourceID(id))
+	return &ProductSubscriptionMigrationSourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ProductSubscriptionMigrationSource.
+func (c *ProductSubscriptionMigrationSourceClient) Delete() *ProductSubscriptionMigrationSourceDelete {
+	mutation := newProductSubscriptionMigrationSourceMutation(c.config, OpDelete)
+	return &ProductSubscriptionMigrationSourceDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ProductSubscriptionMigrationSourceClient) DeleteOne(_m *ProductSubscriptionMigrationSource) *ProductSubscriptionMigrationSourceDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ProductSubscriptionMigrationSourceClient) DeleteOneID(id int64) *ProductSubscriptionMigrationSourceDeleteOne {
+	builder := c.Delete().Where(productsubscriptionmigrationsource.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ProductSubscriptionMigrationSourceDeleteOne{builder}
+}
+
+// Query returns a query builder for ProductSubscriptionMigrationSource.
+func (c *ProductSubscriptionMigrationSourceClient) Query() *ProductSubscriptionMigrationSourceQuery {
+	return &ProductSubscriptionMigrationSourceQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeProductSubscriptionMigrationSource},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ProductSubscriptionMigrationSource entity by its id.
+func (c *ProductSubscriptionMigrationSourceClient) Get(ctx context.Context, id int64) (*ProductSubscriptionMigrationSource, error) {
+	return c.Query().Where(productsubscriptionmigrationsource.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ProductSubscriptionMigrationSourceClient) GetX(ctx context.Context, id int64) *ProductSubscriptionMigrationSource {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryProductSubscription queries the product_subscription edge of a ProductSubscriptionMigrationSource.
+func (c *ProductSubscriptionMigrationSourceClient) QueryProductSubscription(_m *ProductSubscriptionMigrationSource) *UserProductSubscriptionQuery {
+	query := (&UserProductSubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(productsubscriptionmigrationsource.Table, productsubscriptionmigrationsource.FieldID, id),
+			sqlgraph.To(userproductsubscription.Table, userproductsubscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, productsubscriptionmigrationsource.ProductSubscriptionTable, productsubscriptionmigrationsource.ProductSubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ProductSubscriptionMigrationSourceClient) Hooks() []Hook {
+	return c.hooks.ProductSubscriptionMigrationSource
+}
+
+// Interceptors returns the client interceptors.
+func (c *ProductSubscriptionMigrationSourceClient) Interceptors() []Interceptor {
+	return c.inters.ProductSubscriptionMigrationSource
+}
+
+func (c *ProductSubscriptionMigrationSourceClient) mutate(ctx context.Context, m *ProductSubscriptionMigrationSourceMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ProductSubscriptionMigrationSourceCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ProductSubscriptionMigrationSourceUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ProductSubscriptionMigrationSourceUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ProductSubscriptionMigrationSourceDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ProductSubscriptionMigrationSource mutation op: %q", m.Op())
+	}
+}
+
 // PromoCodeClient is a client for the PromoCode schema.
 type PromoCodeClient struct {
 	config
@@ -3185,6 +3368,324 @@ func (c *SettingClient) mutate(ctx context.Context, m *SettingMutation) (Value, 
 		return (&SettingDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Setting mutation op: %q", m.Op())
+	}
+}
+
+// SubscriptionProductClient is a client for the SubscriptionProduct schema.
+type SubscriptionProductClient struct {
+	config
+}
+
+// NewSubscriptionProductClient returns a client for the SubscriptionProduct from the given config.
+func NewSubscriptionProductClient(c config) *SubscriptionProductClient {
+	return &SubscriptionProductClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subscriptionproduct.Hooks(f(g(h())))`.
+func (c *SubscriptionProductClient) Use(hooks ...Hook) {
+	c.hooks.SubscriptionProduct = append(c.hooks.SubscriptionProduct, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subscriptionproduct.Intercept(f(g(h())))`.
+func (c *SubscriptionProductClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubscriptionProduct = append(c.inters.SubscriptionProduct, interceptors...)
+}
+
+// Create returns a builder for creating a SubscriptionProduct entity.
+func (c *SubscriptionProductClient) Create() *SubscriptionProductCreate {
+	mutation := newSubscriptionProductMutation(c.config, OpCreate)
+	return &SubscriptionProductCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubscriptionProduct entities.
+func (c *SubscriptionProductClient) CreateBulk(builders ...*SubscriptionProductCreate) *SubscriptionProductCreateBulk {
+	return &SubscriptionProductCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubscriptionProductClient) MapCreateBulk(slice any, setFunc func(*SubscriptionProductCreate, int)) *SubscriptionProductCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubscriptionProductCreateBulk{err: fmt.Errorf("calling to SubscriptionProductClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubscriptionProductCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubscriptionProductCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubscriptionProduct.
+func (c *SubscriptionProductClient) Update() *SubscriptionProductUpdate {
+	mutation := newSubscriptionProductMutation(c.config, OpUpdate)
+	return &SubscriptionProductUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubscriptionProductClient) UpdateOne(_m *SubscriptionProduct) *SubscriptionProductUpdateOne {
+	mutation := newSubscriptionProductMutation(c.config, OpUpdateOne, withSubscriptionProduct(_m))
+	return &SubscriptionProductUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubscriptionProductClient) UpdateOneID(id int64) *SubscriptionProductUpdateOne {
+	mutation := newSubscriptionProductMutation(c.config, OpUpdateOne, withSubscriptionProductID(id))
+	return &SubscriptionProductUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubscriptionProduct.
+func (c *SubscriptionProductClient) Delete() *SubscriptionProductDelete {
+	mutation := newSubscriptionProductMutation(c.config, OpDelete)
+	return &SubscriptionProductDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubscriptionProductClient) DeleteOne(_m *SubscriptionProduct) *SubscriptionProductDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubscriptionProductClient) DeleteOneID(id int64) *SubscriptionProductDeleteOne {
+	builder := c.Delete().Where(subscriptionproduct.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubscriptionProductDeleteOne{builder}
+}
+
+// Query returns a query builder for SubscriptionProduct.
+func (c *SubscriptionProductClient) Query() *SubscriptionProductQuery {
+	return &SubscriptionProductQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubscriptionProduct},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubscriptionProduct entity by its id.
+func (c *SubscriptionProductClient) Get(ctx context.Context, id int64) (*SubscriptionProduct, error) {
+	return c.Query().Where(subscriptionproduct.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubscriptionProductClient) GetX(ctx context.Context, id int64) *SubscriptionProduct {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryGroupBindings queries the group_bindings edge of a SubscriptionProduct.
+func (c *SubscriptionProductClient) QueryGroupBindings(_m *SubscriptionProduct) *SubscriptionProductGroupQuery {
+	query := (&SubscriptionProductGroupClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionproduct.Table, subscriptionproduct.FieldID, id),
+			sqlgraph.To(subscriptionproductgroup.Table, subscriptionproductgroup.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscriptionproduct.GroupBindingsTable, subscriptionproduct.GroupBindingsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUserSubscriptions queries the user_subscriptions edge of a SubscriptionProduct.
+func (c *SubscriptionProductClient) QueryUserSubscriptions(_m *SubscriptionProduct) *UserProductSubscriptionQuery {
+	query := (&UserProductSubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionproduct.Table, subscriptionproduct.FieldID, id),
+			sqlgraph.To(userproductsubscription.Table, userproductsubscription.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscriptionproduct.UserSubscriptionsTable, subscriptionproduct.UserSubscriptionsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SubscriptionProductClient) Hooks() []Hook {
+	hooks := c.hooks.SubscriptionProduct
+	return append(hooks[:len(hooks):len(hooks)], subscriptionproduct.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubscriptionProductClient) Interceptors() []Interceptor {
+	inters := c.inters.SubscriptionProduct
+	return append(inters[:len(inters):len(inters)], subscriptionproduct.Interceptors[:]...)
+}
+
+func (c *SubscriptionProductClient) mutate(ctx context.Context, m *SubscriptionProductMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubscriptionProductCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubscriptionProductUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubscriptionProductUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubscriptionProductDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubscriptionProduct mutation op: %q", m.Op())
+	}
+}
+
+// SubscriptionProductGroupClient is a client for the SubscriptionProductGroup schema.
+type SubscriptionProductGroupClient struct {
+	config
+}
+
+// NewSubscriptionProductGroupClient returns a client for the SubscriptionProductGroup from the given config.
+func NewSubscriptionProductGroupClient(c config) *SubscriptionProductGroupClient {
+	return &SubscriptionProductGroupClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subscriptionproductgroup.Hooks(f(g(h())))`.
+func (c *SubscriptionProductGroupClient) Use(hooks ...Hook) {
+	c.hooks.SubscriptionProductGroup = append(c.hooks.SubscriptionProductGroup, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subscriptionproductgroup.Intercept(f(g(h())))`.
+func (c *SubscriptionProductGroupClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubscriptionProductGroup = append(c.inters.SubscriptionProductGroup, interceptors...)
+}
+
+// Create returns a builder for creating a SubscriptionProductGroup entity.
+func (c *SubscriptionProductGroupClient) Create() *SubscriptionProductGroupCreate {
+	mutation := newSubscriptionProductGroupMutation(c.config, OpCreate)
+	return &SubscriptionProductGroupCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubscriptionProductGroup entities.
+func (c *SubscriptionProductGroupClient) CreateBulk(builders ...*SubscriptionProductGroupCreate) *SubscriptionProductGroupCreateBulk {
+	return &SubscriptionProductGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubscriptionProductGroupClient) MapCreateBulk(slice any, setFunc func(*SubscriptionProductGroupCreate, int)) *SubscriptionProductGroupCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubscriptionProductGroupCreateBulk{err: fmt.Errorf("calling to SubscriptionProductGroupClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubscriptionProductGroupCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubscriptionProductGroupCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubscriptionProductGroup.
+func (c *SubscriptionProductGroupClient) Update() *SubscriptionProductGroupUpdate {
+	mutation := newSubscriptionProductGroupMutation(c.config, OpUpdate)
+	return &SubscriptionProductGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubscriptionProductGroupClient) UpdateOne(_m *SubscriptionProductGroup) *SubscriptionProductGroupUpdateOne {
+	mutation := newSubscriptionProductGroupMutation(c.config, OpUpdateOne, withSubscriptionProductGroup(_m))
+	return &SubscriptionProductGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubscriptionProductGroupClient) UpdateOneID(id int64) *SubscriptionProductGroupUpdateOne {
+	mutation := newSubscriptionProductGroupMutation(c.config, OpUpdateOne, withSubscriptionProductGroupID(id))
+	return &SubscriptionProductGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubscriptionProductGroup.
+func (c *SubscriptionProductGroupClient) Delete() *SubscriptionProductGroupDelete {
+	mutation := newSubscriptionProductGroupMutation(c.config, OpDelete)
+	return &SubscriptionProductGroupDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubscriptionProductGroupClient) DeleteOne(_m *SubscriptionProductGroup) *SubscriptionProductGroupDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubscriptionProductGroupClient) DeleteOneID(id int64) *SubscriptionProductGroupDeleteOne {
+	builder := c.Delete().Where(subscriptionproductgroup.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubscriptionProductGroupDeleteOne{builder}
+}
+
+// Query returns a query builder for SubscriptionProductGroup.
+func (c *SubscriptionProductGroupClient) Query() *SubscriptionProductGroupQuery {
+	return &SubscriptionProductGroupQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubscriptionProductGroup},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubscriptionProductGroup entity by its id.
+func (c *SubscriptionProductGroupClient) Get(ctx context.Context, id int64) (*SubscriptionProductGroup, error) {
+	return c.Query().Where(subscriptionproductgroup.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubscriptionProductGroupClient) GetX(ctx context.Context, id int64) *SubscriptionProductGroup {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryProduct queries the product edge of a SubscriptionProductGroup.
+func (c *SubscriptionProductGroupClient) QueryProduct(_m *SubscriptionProductGroup) *SubscriptionProductQuery {
+	query := (&SubscriptionProductClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionproductgroup.Table, subscriptionproductgroup.FieldID, id),
+			sqlgraph.To(subscriptionproduct.Table, subscriptionproduct.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptionproductgroup.ProductTable, subscriptionproductgroup.ProductColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *SubscriptionProductGroupClient) Hooks() []Hook {
+	hooks := c.hooks.SubscriptionProductGroup
+	return append(hooks[:len(hooks):len(hooks)], subscriptionproductgroup.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubscriptionProductGroupClient) Interceptors() []Interceptor {
+	inters := c.inters.SubscriptionProductGroup
+	return append(inters[:len(inters):len(inters)], subscriptionproductgroup.Interceptors[:]...)
+}
+
+func (c *SubscriptionProductGroupClient) mutate(ctx context.Context, m *SubscriptionProductGroupMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubscriptionProductGroupCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubscriptionProductGroupUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubscriptionProductGroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubscriptionProductGroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubscriptionProductGroup mutation op: %q", m.Op())
 	}
 }
 
@@ -4394,6 +4895,173 @@ func (c *UserAttributeValueClient) mutate(ctx context.Context, m *UserAttributeV
 	}
 }
 
+// UserProductSubscriptionClient is a client for the UserProductSubscription schema.
+type UserProductSubscriptionClient struct {
+	config
+}
+
+// NewUserProductSubscriptionClient returns a client for the UserProductSubscription from the given config.
+func NewUserProductSubscriptionClient(c config) *UserProductSubscriptionClient {
+	return &UserProductSubscriptionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `userproductsubscription.Hooks(f(g(h())))`.
+func (c *UserProductSubscriptionClient) Use(hooks ...Hook) {
+	c.hooks.UserProductSubscription = append(c.hooks.UserProductSubscription, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `userproductsubscription.Intercept(f(g(h())))`.
+func (c *UserProductSubscriptionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.UserProductSubscription = append(c.inters.UserProductSubscription, interceptors...)
+}
+
+// Create returns a builder for creating a UserProductSubscription entity.
+func (c *UserProductSubscriptionClient) Create() *UserProductSubscriptionCreate {
+	mutation := newUserProductSubscriptionMutation(c.config, OpCreate)
+	return &UserProductSubscriptionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of UserProductSubscription entities.
+func (c *UserProductSubscriptionClient) CreateBulk(builders ...*UserProductSubscriptionCreate) *UserProductSubscriptionCreateBulk {
+	return &UserProductSubscriptionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *UserProductSubscriptionClient) MapCreateBulk(slice any, setFunc func(*UserProductSubscriptionCreate, int)) *UserProductSubscriptionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &UserProductSubscriptionCreateBulk{err: fmt.Errorf("calling to UserProductSubscriptionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*UserProductSubscriptionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &UserProductSubscriptionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for UserProductSubscription.
+func (c *UserProductSubscriptionClient) Update() *UserProductSubscriptionUpdate {
+	mutation := newUserProductSubscriptionMutation(c.config, OpUpdate)
+	return &UserProductSubscriptionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *UserProductSubscriptionClient) UpdateOne(_m *UserProductSubscription) *UserProductSubscriptionUpdateOne {
+	mutation := newUserProductSubscriptionMutation(c.config, OpUpdateOne, withUserProductSubscription(_m))
+	return &UserProductSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *UserProductSubscriptionClient) UpdateOneID(id int64) *UserProductSubscriptionUpdateOne {
+	mutation := newUserProductSubscriptionMutation(c.config, OpUpdateOne, withUserProductSubscriptionID(id))
+	return &UserProductSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for UserProductSubscription.
+func (c *UserProductSubscriptionClient) Delete() *UserProductSubscriptionDelete {
+	mutation := newUserProductSubscriptionMutation(c.config, OpDelete)
+	return &UserProductSubscriptionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *UserProductSubscriptionClient) DeleteOne(_m *UserProductSubscription) *UserProductSubscriptionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *UserProductSubscriptionClient) DeleteOneID(id int64) *UserProductSubscriptionDeleteOne {
+	builder := c.Delete().Where(userproductsubscription.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &UserProductSubscriptionDeleteOne{builder}
+}
+
+// Query returns a query builder for UserProductSubscription.
+func (c *UserProductSubscriptionClient) Query() *UserProductSubscriptionQuery {
+	return &UserProductSubscriptionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeUserProductSubscription},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a UserProductSubscription entity by its id.
+func (c *UserProductSubscriptionClient) Get(ctx context.Context, id int64) (*UserProductSubscription, error) {
+	return c.Query().Where(userproductsubscription.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *UserProductSubscriptionClient) GetX(ctx context.Context, id int64) *UserProductSubscription {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryProduct queries the product edge of a UserProductSubscription.
+func (c *UserProductSubscriptionClient) QueryProduct(_m *UserProductSubscription) *SubscriptionProductQuery {
+	query := (&SubscriptionProductClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(userproductsubscription.Table, userproductsubscription.FieldID, id),
+			sqlgraph.To(subscriptionproduct.Table, subscriptionproduct.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, userproductsubscription.ProductTable, userproductsubscription.ProductColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryMigrationSources queries the migration_sources edge of a UserProductSubscription.
+func (c *UserProductSubscriptionClient) QueryMigrationSources(_m *UserProductSubscription) *ProductSubscriptionMigrationSourceQuery {
+	query := (&ProductSubscriptionMigrationSourceClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(userproductsubscription.Table, userproductsubscription.FieldID, id),
+			sqlgraph.To(productsubscriptionmigrationsource.Table, productsubscriptionmigrationsource.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, userproductsubscription.MigrationSourcesTable, userproductsubscription.MigrationSourcesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *UserProductSubscriptionClient) Hooks() []Hook {
+	hooks := c.hooks.UserProductSubscription
+	return append(hooks[:len(hooks):len(hooks)], userproductsubscription.Hooks[:]...)
+}
+
+// Interceptors returns the client interceptors.
+func (c *UserProductSubscriptionClient) Interceptors() []Interceptor {
+	inters := c.inters.UserProductSubscription
+	return append(inters[:len(inters):len(inters)], userproductsubscription.Interceptors[:]...)
+}
+
+func (c *UserProductSubscriptionClient) mutate(ctx context.Context, m *UserProductSubscriptionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&UserProductSubscriptionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&UserProductSubscriptionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&UserProductSubscriptionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&UserProductSubscriptionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown UserProductSubscription mutation op: %q", m.Op())
+	}
+}
+
 // UserSubscriptionClient is a client for the UserSubscription schema.
 type UserSubscriptionClient struct {
 	config
@@ -4598,18 +5266,22 @@ type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
 		ErrorPassthroughRule, Group, GroupHealthSnapshot, IdempotencyRecord,
-		InviteAdminAction, InviteRelationshipEvent, InviteRewardRecord, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Hook
+		InviteAdminAction, InviteRelationshipEvent, InviteRewardRecord,
+		ProductSubscriptionMigrationSource, PromoCode, PromoCodeUsage, Proxy,
+		RedeemCode, SecuritySecret, Setting, SubscriptionProduct,
+		SubscriptionProductGroup, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
+		User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserProductSubscription, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
 		ErrorPassthroughRule, Group, GroupHealthSnapshot, IdempotencyRecord,
-		InviteAdminAction, InviteRelationshipEvent, InviteRewardRecord, PromoCode,
-		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
-		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Interceptor
+		InviteAdminAction, InviteRelationshipEvent, InviteRewardRecord,
+		ProductSubscriptionMigrationSource, PromoCode, PromoCodeUsage, Proxy,
+		RedeemCode, SecuritySecret, Setting, SubscriptionProduct,
+		SubscriptionProductGroup, TLSFingerprintProfile, UsageCleanupTask, UsageLog,
+		User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserProductSubscription, UserSubscription []ent.Interceptor
 	}
 )
 

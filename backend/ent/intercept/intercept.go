@@ -21,12 +21,15 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/inviterelationshipevent"
 	"github.com/Wei-Shaw/sub2api/ent/inviterewardrecord"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/Wei-Shaw/sub2api/ent/productsubscriptionmigrationsource"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionproduct"
+	"github.com/Wei-Shaw/sub2api/ent/subscriptionproductgroup"
 	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -34,6 +37,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
+	"github.com/Wei-Shaw/sub2api/ent/userproductsubscription"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -417,6 +421,33 @@ func (f TraverseInviteRewardRecord) Traverse(ctx context.Context, q ent.Query) e
 	return fmt.Errorf("unexpected query type %T. expect *ent.InviteRewardRecordQuery", q)
 }
 
+// The ProductSubscriptionMigrationSourceFunc type is an adapter to allow the use of ordinary function as a Querier.
+type ProductSubscriptionMigrationSourceFunc func(context.Context, *ent.ProductSubscriptionMigrationSourceQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f ProductSubscriptionMigrationSourceFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.ProductSubscriptionMigrationSourceQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.ProductSubscriptionMigrationSourceQuery", q)
+}
+
+// The TraverseProductSubscriptionMigrationSource type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseProductSubscriptionMigrationSource func(context.Context, *ent.ProductSubscriptionMigrationSourceQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseProductSubscriptionMigrationSource) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseProductSubscriptionMigrationSource) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.ProductSubscriptionMigrationSourceQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.ProductSubscriptionMigrationSourceQuery", q)
+}
+
 // The PromoCodeFunc type is an adapter to allow the use of ordinary function as a Querier.
 type PromoCodeFunc func(context.Context, *ent.PromoCodeQuery) (ent.Value, error)
 
@@ -577,6 +608,60 @@ func (f TraverseSetting) Traverse(ctx context.Context, q ent.Query) error {
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.SettingQuery", q)
+}
+
+// The SubscriptionProductFunc type is an adapter to allow the use of ordinary function as a Querier.
+type SubscriptionProductFunc func(context.Context, *ent.SubscriptionProductQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f SubscriptionProductFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.SubscriptionProductQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.SubscriptionProductQuery", q)
+}
+
+// The TraverseSubscriptionProduct type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseSubscriptionProduct func(context.Context, *ent.SubscriptionProductQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseSubscriptionProduct) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseSubscriptionProduct) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.SubscriptionProductQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.SubscriptionProductQuery", q)
+}
+
+// The SubscriptionProductGroupFunc type is an adapter to allow the use of ordinary function as a Querier.
+type SubscriptionProductGroupFunc func(context.Context, *ent.SubscriptionProductGroupQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f SubscriptionProductGroupFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.SubscriptionProductGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.SubscriptionProductGroupQuery", q)
+}
+
+// The TraverseSubscriptionProductGroup type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseSubscriptionProductGroup func(context.Context, *ent.SubscriptionProductGroupQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseSubscriptionProductGroup) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseSubscriptionProductGroup) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.SubscriptionProductGroupQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.SubscriptionProductGroupQuery", q)
 }
 
 // The TLSFingerprintProfileFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -768,6 +853,33 @@ func (f TraverseUserAttributeValue) Traverse(ctx context.Context, q ent.Query) e
 	return fmt.Errorf("unexpected query type %T. expect *ent.UserAttributeValueQuery", q)
 }
 
+// The UserProductSubscriptionFunc type is an adapter to allow the use of ordinary function as a Querier.
+type UserProductSubscriptionFunc func(context.Context, *ent.UserProductSubscriptionQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f UserProductSubscriptionFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.UserProductSubscriptionQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.UserProductSubscriptionQuery", q)
+}
+
+// The TraverseUserProductSubscription type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseUserProductSubscription func(context.Context, *ent.UserProductSubscriptionQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseUserProductSubscription) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseUserProductSubscription) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.UserProductSubscriptionQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.UserProductSubscriptionQuery", q)
+}
+
 // The UserSubscriptionFunc type is an adapter to allow the use of ordinary function as a Querier.
 type UserSubscriptionFunc func(context.Context, *ent.UserSubscriptionQuery) (ent.Value, error)
 
@@ -822,6 +934,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.InviteRelationshipEventQuery, predicate.InviteRelationshipEvent, inviterelationshipevent.OrderOption]{typ: ent.TypeInviteRelationshipEvent, tq: q}, nil
 	case *ent.InviteRewardRecordQuery:
 		return &query[*ent.InviteRewardRecordQuery, predicate.InviteRewardRecord, inviterewardrecord.OrderOption]{typ: ent.TypeInviteRewardRecord, tq: q}, nil
+	case *ent.ProductSubscriptionMigrationSourceQuery:
+		return &query[*ent.ProductSubscriptionMigrationSourceQuery, predicate.ProductSubscriptionMigrationSource, productsubscriptionmigrationsource.OrderOption]{typ: ent.TypeProductSubscriptionMigrationSource, tq: q}, nil
 	case *ent.PromoCodeQuery:
 		return &query[*ent.PromoCodeQuery, predicate.PromoCode, promocode.OrderOption]{typ: ent.TypePromoCode, tq: q}, nil
 	case *ent.PromoCodeUsageQuery:
@@ -834,6 +948,10 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.SecuritySecretQuery, predicate.SecuritySecret, securitysecret.OrderOption]{typ: ent.TypeSecuritySecret, tq: q}, nil
 	case *ent.SettingQuery:
 		return &query[*ent.SettingQuery, predicate.Setting, setting.OrderOption]{typ: ent.TypeSetting, tq: q}, nil
+	case *ent.SubscriptionProductQuery:
+		return &query[*ent.SubscriptionProductQuery, predicate.SubscriptionProduct, subscriptionproduct.OrderOption]{typ: ent.TypeSubscriptionProduct, tq: q}, nil
+	case *ent.SubscriptionProductGroupQuery:
+		return &query[*ent.SubscriptionProductGroupQuery, predicate.SubscriptionProductGroup, subscriptionproductgroup.OrderOption]{typ: ent.TypeSubscriptionProductGroup, tq: q}, nil
 	case *ent.TLSFingerprintProfileQuery:
 		return &query[*ent.TLSFingerprintProfileQuery, predicate.TLSFingerprintProfile, tlsfingerprintprofile.OrderOption]{typ: ent.TypeTLSFingerprintProfile, tq: q}, nil
 	case *ent.UsageCleanupTaskQuery:
@@ -848,6 +966,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.UserAttributeDefinitionQuery, predicate.UserAttributeDefinition, userattributedefinition.OrderOption]{typ: ent.TypeUserAttributeDefinition, tq: q}, nil
 	case *ent.UserAttributeValueQuery:
 		return &query[*ent.UserAttributeValueQuery, predicate.UserAttributeValue, userattributevalue.OrderOption]{typ: ent.TypeUserAttributeValue, tq: q}, nil
+	case *ent.UserProductSubscriptionQuery:
+		return &query[*ent.UserProductSubscriptionQuery, predicate.UserProductSubscription, userproductsubscription.OrderOption]{typ: ent.TypeUserProductSubscription, tq: q}, nil
 	case *ent.UserSubscriptionQuery:
 		return &query[*ent.UserSubscriptionQuery, predicate.UserSubscription, usersubscription.OrderOption]{typ: ent.TypeUserSubscription, tq: q}, nil
 	default:

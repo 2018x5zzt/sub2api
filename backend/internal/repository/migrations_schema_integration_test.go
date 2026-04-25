@@ -98,6 +98,18 @@ func TestMigrationsSchema_DynamicBudgetColumnsExist(t *testing.T) {
 	requireColumn(t, tx, "api_keys", "budget_multiplier", "numeric", 0, true)
 }
 
+func TestMigrationsSharedSubscriptionProductsSchema(t *testing.T) {
+	tx := testTx(t)
+
+	requireColumn(t, tx, "subscription_products", "code", "character varying", 64, false)
+	requireColumn(t, tx, "subscription_product_groups", "debit_multiplier", "numeric", 0, false)
+	requireColumn(t, tx, "user_product_subscriptions", "daily_carryover_remaining_usd", "numeric", 0, false)
+	requireColumn(t, tx, "product_subscription_migration_sources", "legacy_user_subscription_id", "bigint", 0, false)
+	requireColumn(t, tx, "redeem_codes", "product_id", "bigint", 0, true)
+	requireColumn(t, tx, "usage_logs", "product_subscription_id", "bigint", 0, true)
+	requireColumn(t, tx, "usage_logs", "product_debit_cost", "numeric", 0, true)
+}
+
 func requireIndex(t *testing.T, tx *sql.Tx, table, index string) {
 	t.Helper()
 

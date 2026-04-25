@@ -169,6 +169,34 @@ func (_c *UsageLogCreate) SetNillableSubscriptionID(v *int64) *UsageLogCreate {
 	return _c
 }
 
+// SetProductID sets the "product_id" field.
+func (_c *UsageLogCreate) SetProductID(v int64) *UsageLogCreate {
+	_c.mutation.SetProductID(v)
+	return _c
+}
+
+// SetNillableProductID sets the "product_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableProductID(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetProductID(*v)
+	}
+	return _c
+}
+
+// SetProductSubscriptionID sets the "product_subscription_id" field.
+func (_c *UsageLogCreate) SetProductSubscriptionID(v int64) *UsageLogCreate {
+	_c.mutation.SetProductSubscriptionID(v)
+	return _c
+}
+
+// SetNillableProductSubscriptionID sets the "product_subscription_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableProductSubscriptionID(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetProductSubscriptionID(*v)
+	}
+	return _c
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (_c *UsageLogCreate) SetInputTokens(v int) *UsageLogCreate {
 	_c.mutation.SetInputTokens(v)
@@ -361,6 +389,34 @@ func (_c *UsageLogCreate) SetAccountRateMultiplier(v float64) *UsageLogCreate {
 func (_c *UsageLogCreate) SetNillableAccountRateMultiplier(v *float64) *UsageLogCreate {
 	if v != nil {
 		_c.SetAccountRateMultiplier(*v)
+	}
+	return _c
+}
+
+// SetGroupDebitMultiplier sets the "group_debit_multiplier" field.
+func (_c *UsageLogCreate) SetGroupDebitMultiplier(v float64) *UsageLogCreate {
+	_c.mutation.SetGroupDebitMultiplier(v)
+	return _c
+}
+
+// SetNillableGroupDebitMultiplier sets the "group_debit_multiplier" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableGroupDebitMultiplier(v *float64) *UsageLogCreate {
+	if v != nil {
+		_c.SetGroupDebitMultiplier(*v)
+	}
+	return _c
+}
+
+// SetProductDebitCost sets the "product_debit_cost" field.
+func (_c *UsageLogCreate) SetProductDebitCost(v float64) *UsageLogCreate {
+	_c.mutation.SetProductDebitCost(v)
+	return _c
+}
+
+// SetNillableProductDebitCost sets the "product_debit_cost" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableProductDebitCost(v *float64) *UsageLogCreate {
+	if v != nil {
+		_c.SetProductDebitCost(*v)
 	}
 	return _c
 }
@@ -847,6 +903,14 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_spec.SetField(usagelog.FieldBillingMode, field.TypeString, value)
 		_node.BillingMode = &value
 	}
+	if value, ok := _c.mutation.ProductID(); ok {
+		_spec.SetField(usagelog.FieldProductID, field.TypeInt64, value)
+		_node.ProductID = &value
+	}
+	if value, ok := _c.mutation.ProductSubscriptionID(); ok {
+		_spec.SetField(usagelog.FieldProductSubscriptionID, field.TypeInt64, value)
+		_node.ProductSubscriptionID = &value
+	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
 		_node.InputTokens = value
@@ -902,6 +966,14 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AccountRateMultiplier(); ok {
 		_spec.SetField(usagelog.FieldAccountRateMultiplier, field.TypeFloat64, value)
 		_node.AccountRateMultiplier = &value
+	}
+	if value, ok := _c.mutation.GroupDebitMultiplier(); ok {
+		_spec.SetField(usagelog.FieldGroupDebitMultiplier, field.TypeFloat64, value)
+		_node.GroupDebitMultiplier = &value
+	}
+	if value, ok := _c.mutation.ProductDebitCost(); ok {
+		_spec.SetField(usagelog.FieldProductDebitCost, field.TypeFloat64, value)
+		_node.ProductDebitCost = &value
 	}
 	if value, ok := _c.mutation.BillingType(); ok {
 		_spec.SetField(usagelog.FieldBillingType, field.TypeInt8, value)
@@ -1294,6 +1366,54 @@ func (u *UsageLogUpsert) ClearSubscriptionID() *UsageLogUpsert {
 	return u
 }
 
+// SetProductID sets the "product_id" field.
+func (u *UsageLogUpsert) SetProductID(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldProductID, v)
+	return u
+}
+
+// UpdateProductID sets the "product_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateProductID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldProductID)
+	return u
+}
+
+// AddProductID adds v to the "product_id" field.
+func (u *UsageLogUpsert) AddProductID(v int64) *UsageLogUpsert {
+	u.Add(usagelog.FieldProductID, v)
+	return u
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (u *UsageLogUpsert) ClearProductID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldProductID)
+	return u
+}
+
+// SetProductSubscriptionID sets the "product_subscription_id" field.
+func (u *UsageLogUpsert) SetProductSubscriptionID(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldProductSubscriptionID, v)
+	return u
+}
+
+// UpdateProductSubscriptionID sets the "product_subscription_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateProductSubscriptionID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldProductSubscriptionID)
+	return u
+}
+
+// AddProductSubscriptionID adds v to the "product_subscription_id" field.
+func (u *UsageLogUpsert) AddProductSubscriptionID(v int64) *UsageLogUpsert {
+	u.Add(usagelog.FieldProductSubscriptionID, v)
+	return u
+}
+
+// ClearProductSubscriptionID clears the value of the "product_subscription_id" field.
+func (u *UsageLogUpsert) ClearProductSubscriptionID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldProductSubscriptionID)
+	return u
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (u *UsageLogUpsert) SetInputTokens(v int) *UsageLogUpsert {
 	u.Set(usagelog.FieldInputTokens, v)
@@ -1549,6 +1669,54 @@ func (u *UsageLogUpsert) AddAccountRateMultiplier(v float64) *UsageLogUpsert {
 // ClearAccountRateMultiplier clears the value of the "account_rate_multiplier" field.
 func (u *UsageLogUpsert) ClearAccountRateMultiplier() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldAccountRateMultiplier)
+	return u
+}
+
+// SetGroupDebitMultiplier sets the "group_debit_multiplier" field.
+func (u *UsageLogUpsert) SetGroupDebitMultiplier(v float64) *UsageLogUpsert {
+	u.Set(usagelog.FieldGroupDebitMultiplier, v)
+	return u
+}
+
+// UpdateGroupDebitMultiplier sets the "group_debit_multiplier" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateGroupDebitMultiplier() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldGroupDebitMultiplier)
+	return u
+}
+
+// AddGroupDebitMultiplier adds v to the "group_debit_multiplier" field.
+func (u *UsageLogUpsert) AddGroupDebitMultiplier(v float64) *UsageLogUpsert {
+	u.Add(usagelog.FieldGroupDebitMultiplier, v)
+	return u
+}
+
+// ClearGroupDebitMultiplier clears the value of the "group_debit_multiplier" field.
+func (u *UsageLogUpsert) ClearGroupDebitMultiplier() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldGroupDebitMultiplier)
+	return u
+}
+
+// SetProductDebitCost sets the "product_debit_cost" field.
+func (u *UsageLogUpsert) SetProductDebitCost(v float64) *UsageLogUpsert {
+	u.Set(usagelog.FieldProductDebitCost, v)
+	return u
+}
+
+// UpdateProductDebitCost sets the "product_debit_cost" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateProductDebitCost() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldProductDebitCost)
+	return u
+}
+
+// AddProductDebitCost adds v to the "product_debit_cost" field.
+func (u *UsageLogUpsert) AddProductDebitCost(v float64) *UsageLogUpsert {
+	u.Add(usagelog.FieldProductDebitCost, v)
+	return u
+}
+
+// ClearProductDebitCost clears the value of the "product_debit_cost" field.
+func (u *UsageLogUpsert) ClearProductDebitCost() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldProductDebitCost)
 	return u
 }
 
@@ -2022,6 +2190,62 @@ func (u *UsageLogUpsertOne) ClearSubscriptionID() *UsageLogUpsertOne {
 	})
 }
 
+// SetProductID sets the "product_id" field.
+func (u *UsageLogUpsertOne) SetProductID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetProductID(v)
+	})
+}
+
+// AddProductID adds v to the "product_id" field.
+func (u *UsageLogUpsertOne) AddProductID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddProductID(v)
+	})
+}
+
+// UpdateProductID sets the "product_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateProductID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateProductID()
+	})
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (u *UsageLogUpsertOne) ClearProductID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearProductID()
+	})
+}
+
+// SetProductSubscriptionID sets the "product_subscription_id" field.
+func (u *UsageLogUpsertOne) SetProductSubscriptionID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetProductSubscriptionID(v)
+	})
+}
+
+// AddProductSubscriptionID adds v to the "product_subscription_id" field.
+func (u *UsageLogUpsertOne) AddProductSubscriptionID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddProductSubscriptionID(v)
+	})
+}
+
+// UpdateProductSubscriptionID sets the "product_subscription_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateProductSubscriptionID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateProductSubscriptionID()
+	})
+}
+
+// ClearProductSubscriptionID clears the value of the "product_subscription_id" field.
+func (u *UsageLogUpsertOne) ClearProductSubscriptionID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearProductSubscriptionID()
+	})
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (u *UsageLogUpsertOne) SetInputTokens(v int) *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
@@ -2320,6 +2544,62 @@ func (u *UsageLogUpsertOne) UpdateAccountRateMultiplier() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearAccountRateMultiplier() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearAccountRateMultiplier()
+	})
+}
+
+// SetGroupDebitMultiplier sets the "group_debit_multiplier" field.
+func (u *UsageLogUpsertOne) SetGroupDebitMultiplier(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetGroupDebitMultiplier(v)
+	})
+}
+
+// AddGroupDebitMultiplier adds v to the "group_debit_multiplier" field.
+func (u *UsageLogUpsertOne) AddGroupDebitMultiplier(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddGroupDebitMultiplier(v)
+	})
+}
+
+// UpdateGroupDebitMultiplier sets the "group_debit_multiplier" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateGroupDebitMultiplier() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateGroupDebitMultiplier()
+	})
+}
+
+// ClearGroupDebitMultiplier clears the value of the "group_debit_multiplier" field.
+func (u *UsageLogUpsertOne) ClearGroupDebitMultiplier() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearGroupDebitMultiplier()
+	})
+}
+
+// SetProductDebitCost sets the "product_debit_cost" field.
+func (u *UsageLogUpsertOne) SetProductDebitCost(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetProductDebitCost(v)
+	})
+}
+
+// AddProductDebitCost adds v to the "product_debit_cost" field.
+func (u *UsageLogUpsertOne) AddProductDebitCost(v float64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddProductDebitCost(v)
+	})
+}
+
+// UpdateProductDebitCost sets the "product_debit_cost" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateProductDebitCost() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateProductDebitCost()
+	})
+}
+
+// ClearProductDebitCost clears the value of the "product_debit_cost" field.
+func (u *UsageLogUpsertOne) ClearProductDebitCost() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearProductDebitCost()
 	})
 }
 
@@ -2989,6 +3269,62 @@ func (u *UsageLogUpsertBulk) ClearSubscriptionID() *UsageLogUpsertBulk {
 	})
 }
 
+// SetProductID sets the "product_id" field.
+func (u *UsageLogUpsertBulk) SetProductID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetProductID(v)
+	})
+}
+
+// AddProductID adds v to the "product_id" field.
+func (u *UsageLogUpsertBulk) AddProductID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddProductID(v)
+	})
+}
+
+// UpdateProductID sets the "product_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateProductID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateProductID()
+	})
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (u *UsageLogUpsertBulk) ClearProductID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearProductID()
+	})
+}
+
+// SetProductSubscriptionID sets the "product_subscription_id" field.
+func (u *UsageLogUpsertBulk) SetProductSubscriptionID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetProductSubscriptionID(v)
+	})
+}
+
+// AddProductSubscriptionID adds v to the "product_subscription_id" field.
+func (u *UsageLogUpsertBulk) AddProductSubscriptionID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddProductSubscriptionID(v)
+	})
+}
+
+// UpdateProductSubscriptionID sets the "product_subscription_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateProductSubscriptionID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateProductSubscriptionID()
+	})
+}
+
+// ClearProductSubscriptionID clears the value of the "product_subscription_id" field.
+func (u *UsageLogUpsertBulk) ClearProductSubscriptionID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearProductSubscriptionID()
+	})
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (u *UsageLogUpsertBulk) SetInputTokens(v int) *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
@@ -3287,6 +3623,62 @@ func (u *UsageLogUpsertBulk) UpdateAccountRateMultiplier() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearAccountRateMultiplier() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearAccountRateMultiplier()
+	})
+}
+
+// SetGroupDebitMultiplier sets the "group_debit_multiplier" field.
+func (u *UsageLogUpsertBulk) SetGroupDebitMultiplier(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetGroupDebitMultiplier(v)
+	})
+}
+
+// AddGroupDebitMultiplier adds v to the "group_debit_multiplier" field.
+func (u *UsageLogUpsertBulk) AddGroupDebitMultiplier(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddGroupDebitMultiplier(v)
+	})
+}
+
+// UpdateGroupDebitMultiplier sets the "group_debit_multiplier" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateGroupDebitMultiplier() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateGroupDebitMultiplier()
+	})
+}
+
+// ClearGroupDebitMultiplier clears the value of the "group_debit_multiplier" field.
+func (u *UsageLogUpsertBulk) ClearGroupDebitMultiplier() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearGroupDebitMultiplier()
+	})
+}
+
+// SetProductDebitCost sets the "product_debit_cost" field.
+func (u *UsageLogUpsertBulk) SetProductDebitCost(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetProductDebitCost(v)
+	})
+}
+
+// AddProductDebitCost adds v to the "product_debit_cost" field.
+func (u *UsageLogUpsertBulk) AddProductDebitCost(v float64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddProductDebitCost(v)
+	})
+}
+
+// UpdateProductDebitCost sets the "product_debit_cost" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateProductDebitCost() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateProductDebitCost()
+	})
+}
+
+// ClearProductDebitCost clears the value of the "product_debit_cost" field.
+func (u *UsageLogUpsertBulk) ClearProductDebitCost() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearProductDebitCost()
 	})
 }
 

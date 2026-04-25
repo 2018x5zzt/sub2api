@@ -40,6 +40,10 @@ const (
 	FieldGroupID = "group_id"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
 	FieldSubscriptionID = "subscription_id"
+	// FieldProductID holds the string denoting the product_id field in the database.
+	FieldProductID = "product_id"
+	// FieldProductSubscriptionID holds the string denoting the product_subscription_id field in the database.
+	FieldProductSubscriptionID = "product_subscription_id"
 	// FieldInputTokens holds the string denoting the input_tokens field in the database.
 	FieldInputTokens = "input_tokens"
 	// FieldOutputTokens holds the string denoting the output_tokens field in the database.
@@ -68,6 +72,10 @@ const (
 	FieldRateMultiplier = "rate_multiplier"
 	// FieldAccountRateMultiplier holds the string denoting the account_rate_multiplier field in the database.
 	FieldAccountRateMultiplier = "account_rate_multiplier"
+	// FieldGroupDebitMultiplier holds the string denoting the group_debit_multiplier field in the database.
+	FieldGroupDebitMultiplier = "group_debit_multiplier"
+	// FieldProductDebitCost holds the string denoting the product_debit_cost field in the database.
+	FieldProductDebitCost = "product_debit_cost"
 	// FieldBillingType holds the string denoting the billing_type field in the database.
 	FieldBillingType = "billing_type"
 	// FieldStream holds the string denoting the stream field in the database.
@@ -155,6 +163,8 @@ var Columns = []string{
 	FieldBillingMode,
 	FieldGroupID,
 	FieldSubscriptionID,
+	FieldProductID,
+	FieldProductSubscriptionID,
 	FieldInputTokens,
 	FieldOutputTokens,
 	FieldCacheCreationTokens,
@@ -169,6 +179,8 @@ var Columns = []string{
 	FieldActualCost,
 	FieldRateMultiplier,
 	FieldAccountRateMultiplier,
+	FieldGroupDebitMultiplier,
+	FieldProductDebitCost,
 	FieldBillingType,
 	FieldStream,
 	FieldDurationMs,
@@ -326,6 +338,16 @@ func BySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionID, opts...).ToFunc()
 }
 
+// ByProductID orders the results by the product_id field.
+func ByProductID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProductID, opts...).ToFunc()
+}
+
+// ByProductSubscriptionID orders the results by the product_subscription_id field.
+func ByProductSubscriptionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProductSubscriptionID, opts...).ToFunc()
+}
+
 // ByInputTokens orders the results by the input_tokens field.
 func ByInputTokens(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInputTokens, opts...).ToFunc()
@@ -394,6 +416,16 @@ func ByRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 // ByAccountRateMultiplier orders the results by the account_rate_multiplier field.
 func ByAccountRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAccountRateMultiplier, opts...).ToFunc()
+}
+
+// ByGroupDebitMultiplier orders the results by the group_debit_multiplier field.
+func ByGroupDebitMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGroupDebitMultiplier, opts...).ToFunc()
+}
+
+// ByProductDebitCost orders the results by the product_debit_cost field.
+func ByProductDebitCost(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProductDebitCost, opts...).ToFunc()
 }
 
 // ByBillingType orders the results by the billing_type field.

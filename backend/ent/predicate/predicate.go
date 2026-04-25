@@ -42,6 +42,9 @@ type InviteRelationshipEvent func(*sql.Selector)
 // InviteRewardRecord is the predicate function for inviterewardrecord builders.
 type InviteRewardRecord func(*sql.Selector)
 
+// ProductSubscriptionMigrationSource is the predicate function for productsubscriptionmigrationsource builders.
+type ProductSubscriptionMigrationSource func(*sql.Selector)
+
 // PromoCode is the predicate function for promocode builders.
 type PromoCode func(*sql.Selector)
 
@@ -59,6 +62,12 @@ type SecuritySecret func(*sql.Selector)
 
 // Setting is the predicate function for setting builders.
 type Setting func(*sql.Selector)
+
+// SubscriptionProduct is the predicate function for subscriptionproduct builders.
+type SubscriptionProduct func(*sql.Selector)
+
+// SubscriptionProductGroup is the predicate function for subscriptionproductgroup builders.
+type SubscriptionProductGroup func(*sql.Selector)
 
 // TLSFingerprintProfile is the predicate function for tlsfingerprintprofile builders.
 type TLSFingerprintProfile func(*sql.Selector)
@@ -80,6 +89,9 @@ type UserAttributeDefinition func(*sql.Selector)
 
 // UserAttributeValue is the predicate function for userattributevalue builders.
 type UserAttributeValue func(*sql.Selector)
+
+// UserProductSubscription is the predicate function for userproductsubscription builders.
+type UserProductSubscription func(*sql.Selector)
 
 // UserSubscription is the predicate function for usersubscription builders.
 type UserSubscription func(*sql.Selector)
