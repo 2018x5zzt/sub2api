@@ -2628,10 +2628,11 @@ func sortAccountsByPriorityAndLastUsed(accounts []*Account, preferOAuth bool) {
 
 // shuffleWithinSortGroups 对排序后的 accountWithLoad 切片，按 (Priority, LoadRate, LastUsedAt) 分组后组内随机打乱。
 // 防止并发请求读取同一快照时，确定性排序导致所有请求命中相同账号。
-func shuffleWithinSortGroups(accounts []accountWithLoad) {
+func shuffleWithinSortGroups(accounts []accountWithLoad, preferOAuthValues ...bool) {
 	if len(accounts) <= 1 {
 		return
 	}
+	preferOAuth := len(preferOAuthValues) > 0 && preferOAuthValues[0]
 	i := 0
 	for i < len(accounts) {
 		j := i + 1
@@ -2639,9 +2640,29 @@ func shuffleWithinSortGroups(accounts []accountWithLoad) {
 			j++
 		}
 		if j-i > 1 {
-			mathrand.Shuffle(j-i, func(a, b int) {
-				accounts[i+a], accounts[i+b] = accounts[i+b], accounts[i+a]
-			})
+			if preferOAuth {
+				oauth := make([]accountWithLoad, 0, j-i)
+				others := make([]accountWithLoad, 0, j-i)
+				for _, acc := range accounts[i:j] {
+					if acc.account.Type == AccountTypeOAuth {
+						oauth = append(oauth, acc)
+					} else {
+						others = append(others, acc)
+					}
+				}
+				if len(oauth) > 1 {
+					mathrand.Shuffle(len(oauth), func(a, b int) { oauth[a], oauth[b] = oauth[b], oauth[a] })
+				}
+				if len(others) > 1 {
+					mathrand.Shuffle(len(others), func(a, b int) { others[a], others[b] = others[b], others[a] })
+				}
+				copy(accounts[i:], oauth)
+				copy(accounts[i+len(oauth):], others)
+			} else {
+				mathrand.Shuffle(j-i, func(a, b int) {
+					accounts[i+a], accounts[i+b] = accounts[i+b], accounts[i+a]
+				})
+			}
 		}
 		i = j
 	}
@@ -2780,7 +2801,7 @@ func (s *GatewayService) sortAccountLoadsForSelection(ctx context.Context, group
 	if group := dynamicPricingGroupFromContext(ctx, groupID); group != nil && group.IsDynamicPricing() {
 		return
 	}
-	shuffleWithinSortGroups(accounts)
+	shuffleWithinSortGroups(accounts, preferOAuth)
 }
 
 // sortCandidatesForFallback 根据配置选择排序策略

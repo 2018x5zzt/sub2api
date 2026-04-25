@@ -1922,7 +1922,7 @@ func TestSaveToStorage_S3EnabledUploadSuccess(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	resp := parseResponse(t, rec)
 	data := resp["data"].(map[string]any)
-	require.Contains(t, data["message"], "云存储")
+	require.Contains(t, data["message"], "S3")
 	require.NotEmpty(t, data["object_key"])
 	// 验证记录已更新为 S3 存储
 	require.Equal(t, service.SoraStorageTypeS3, repo.gens[1].StorageType)

@@ -312,13 +312,14 @@ func TestAPIContracts(t *testing.T) {
 						"value": 1.25,
 						"status": "used",
 						"used_by": 1,
-						"used_at": "2025-01-02T03:04:05Z",
-						"created_at": "2025-01-02T03:04:05Z",
-						"group_id": null,
-						"validity_days": 0
-					}
-				]
-			}`,
+							"used_at": "2025-01-02T03:04:05Z",
+							"created_at": "2025-01-02T03:04:05Z",
+							"group_id": null,
+							"product_id": null,
+							"validity_days": 0
+						}
+					]
+				}`,
 		},
 		{
 			name: "GET /api/v1/usage/stats",
@@ -532,6 +533,7 @@ func TestAPIContracts(t *testing.T) {
 					"default_concurrency": 5,
 					"default_balance": 1.25,
 					"default_subscriptions": [],
+					"default_subscription_products": [],
 					"enterprise_visible_groups": [],
 					"enable_model_fallback": false,
 					"fallback_model_anthropic": "claude-3-5-sonnet-20241022",
@@ -728,7 +730,7 @@ func TestAPIContracts_GetAvailableGroupModels_MixedSourceIncludesCustomAnthropic
 	require.Contains(t, modelIDs, "claude-sonnet-4-6")
 	require.Contains(t, modelIDs, "claude-opus-4-6")
 	require.Contains(t, modelIDs, "claude-opus-4-7")
-	require.Equal(t, "claude-opus-4-7", modelDisplayNames["claude-opus-4-7"])
+	require.Equal(t, "Claude Opus 4.7", modelDisplayNames["claude-opus-4-7"])
 	require.NotContains(t, modelIDs, "claude-*")
 	require.NotContains(t, modelIDs, "claude-oauth-shadow")
 }

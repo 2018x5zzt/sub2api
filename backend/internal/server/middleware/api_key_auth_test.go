@@ -65,15 +65,17 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 
 		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 
-		past := time.Now().Add(-48 * time.Hour)
+		dailyPast := time.Now().Add(-48 * time.Hour)
+		weeklyPast := time.Now().Add(-8 * 24 * time.Hour)
 		sub := &service.UserSubscription{
-			ID:               55,
-			UserID:           user.ID,
-			GroupID:          group.ID,
-			Status:           service.SubscriptionStatusActive,
-			ExpiresAt:        time.Now().Add(24 * time.Hour),
-			DailyWindowStart: &past,
-			DailyUsageUSD:    0,
+			ID:                55,
+			UserID:            user.ID,
+			GroupID:           group.ID,
+			Status:            service.SubscriptionStatusActive,
+			ExpiresAt:         time.Now().Add(24 * time.Hour),
+			DailyWindowStart:  &dailyPast,
+			WeeklyWindowStart: &weeklyPast,
+			DailyUsageUSD:     0,
 		}
 		maintenanceCalled := make(chan struct{}, 1)
 		subscriptionRepo := &stubUserSubscriptionRepo{
@@ -84,10 +86,12 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 			updateStatus:   func(ctx context.Context, subscriptionID int64, status string) error { return nil },
 			activateWindow: func(ctx context.Context, id int64, start time.Time) error { return nil },
 			resetDaily: func(ctx context.Context, id int64, start time.Time) error {
+				return nil
+			},
+			resetWeekly: func(ctx context.Context, id int64, start time.Time) error {
 				maintenanceCalled <- struct{}{}
 				return nil
 			},
-			resetWeekly:  func(ctx context.Context, id int64, start time.Time) error { return nil },
 			resetMonthly: func(ctx context.Context, id int64, start time.Time) error { return nil },
 		}
 		subscriptionService := service.NewSubscriptionService(nil, subscriptionRepo, nil, nil, cfg)
