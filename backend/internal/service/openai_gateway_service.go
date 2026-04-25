@@ -55,6 +55,7 @@ const (
 	openAIWSRetryJitterRatioDefault    = 0.2
 	openAICompactSessionSeedKey        = "openai_compact_session_seed"
 	codexCLIVersion                    = "0.104.0"
+	openAIResponsesDefaultInstructions = "You are a helpful coding assistant."
 	// Codex 限额快照仅用于后台展示/诊断，不需要每个成功请求都立即落库。
 	openAICodexSnapshotPersistMinInterval = 30 * time.Second
 )
@@ -330,27 +331,27 @@ var defaultOpenAICodexSnapshotPersistThrottle = newAccountWriteThrottle(openAICo
 
 // OpenAIGatewayService handles OpenAI API gateway operations
 type OpenAIGatewayService struct {
-	accountRepo           AccountRepository
-	usageLogRepo          UsageLogRepository
-	usageBillingRepo      UsageBillingRepository
-	userRepo              UserRepository
-	userSubRepo           UserSubscriptionRepository
-	cache                 GatewayCache
-	cfg                   *config.Config
-	codexDetector         CodexClientRestrictionDetector
-	schedulerSnapshot     *SchedulerSnapshotService
-	concurrencyService    *ConcurrencyService
-	billingService        *BillingService
-	rateLimitService      *RateLimitService
-	billingCacheService   *BillingCacheService
-	userGroupRateResolver *userGroupRateResolver
-	httpUpstream          HTTPUpstream
-	deferredService       *DeferredService
-	openAITokenProvider   *OpenAITokenProvider
-	toolCorrector         *CodexToolCorrector
-	openaiWSResolver      OpenAIWSProtocolResolver
-	resolver              *ModelPricingResolver
-	channelService        *ChannelService
+	accountRepo                      AccountRepository
+	usageLogRepo                     UsageLogRepository
+	usageBillingRepo                 UsageBillingRepository
+	userRepo                         UserRepository
+	userSubRepo                      UserSubscriptionRepository
+	cache                            GatewayCache
+	cfg                              *config.Config
+	codexDetector                    CodexClientRestrictionDetector
+	schedulerSnapshot                *SchedulerSnapshotService
+	concurrencyService               *ConcurrencyService
+	billingService                   *BillingService
+	rateLimitService                 *RateLimitService
+	billingCacheService              *BillingCacheService
+	userGroupRateResolver            *userGroupRateResolver
+	httpUpstream                     HTTPUpstream
+	deferredService                  *DeferredService
+	openAITokenProvider              *OpenAITokenProvider
+	toolCorrector                    *CodexToolCorrector
+	openaiWSResolver                 OpenAIWSProtocolResolver
+	resolver                         *ModelPricingResolver
+	channelService                   *ChannelService
 	subscriptionReadCacheInvalidator subscriptionReadCacheInvalidator
 
 	openaiWSPoolOnce              sync.Once
@@ -470,12 +471,12 @@ func (s *OpenAIGatewayService) getCodexSnapshotThrottle() *accountWriteThrottle 
 
 func (s *OpenAIGatewayService) billingDeps() *billingDeps {
 	return &billingDeps{
-		accountRepo:         s.accountRepo,
-		userRepo:            s.userRepo,
-		userSubRepo:         s.userSubRepo,
-		billingCacheService: s.billingCacheService,
+		accountRepo:                      s.accountRepo,
+		userRepo:                         s.userRepo,
+		userSubRepo:                      s.userSubRepo,
+		billingCacheService:              s.billingCacheService,
 		subscriptionReadCacheInvalidator: s.subscriptionReadCacheInvalidator,
-		deferredService:     s.deferredService,
+		deferredService:                  s.deferredService,
 	}
 }
 
@@ -1921,9 +1922,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 	// 非透传模式下，instructions 为空时注入默认指令。
 	if isInstructionsEmpty(reqBody) {
-		reqBody["instructions"] = "You are a helpful coding assistant."
+		reqBody["instructions"] = openAIResponsesDefaultInstructions
 		bodyModified = true
-		markPatchSet("instructions", "You are a helpful coding assistant.")
+		markPatchSet("instructions", openAIResponsesDefaultInstructions)
 	}
 
 	// 对所有请求执行模型映射（包含 Codex CLI）。
@@ -5510,8 +5511,13 @@ func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byt
 	return ""
 }
 
-func ensureOpenAIPassthroughInstructions(body []byte) ([]byte, bool, error) {
+func ensureOpenAIRequestInstructions(body []byte) ([]byte, bool, error) {
 	if len(body) == 0 {
+		return body, false, nil
+	}
+
+	eventType := strings.TrimSpace(gjson.GetBytes(body, "type").String())
+	if eventType != "" && eventType != "response.create" {
 		return body, false, nil
 	}
 
@@ -5520,11 +5526,15 @@ func ensureOpenAIPassthroughInstructions(body []byte) ([]byte, bool, error) {
 		return body, false, nil
 	}
 
-	updated, err := sjson.SetBytes(body, "instructions", "You are a helpful coding assistant.")
+	updated, err := sjson.SetBytes(body, "instructions", openAIResponsesDefaultInstructions)
 	if err != nil {
-		return body, false, fmt.Errorf("normalize passthrough body instructions: %w", err)
+		return body, false, fmt.Errorf("normalize body instructions: %w", err)
 	}
 	return updated, true, nil
+}
+
+func ensureOpenAIPassthroughInstructions(body []byte) ([]byte, bool, error) {
+	return ensureOpenAIRequestInstructions(body)
 }
 
 func extractOpenAIReasoningEffortFromBody(body []byte, requestedModel string) *string {

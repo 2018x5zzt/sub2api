@@ -508,7 +508,7 @@ func applyInstructions(reqBody map[string]any, isCodexCLI bool) bool {
 	if !isInstructionsEmpty(reqBody) {
 		return false
 	}
-	reqBody["instructions"] = "You are a helpful coding assistant."
+	reqBody["instructions"] = openAIResponsesDefaultInstructions
 	return true
 }
 
