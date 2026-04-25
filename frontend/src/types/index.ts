@@ -1521,6 +1521,41 @@ export interface SubscriptionProgress {
   days_remaining: number | null
 }
 
+export interface SubscriptionProductGroup {
+  group_id: number
+  group_name: string
+  platform?: GroupPlatform
+  debit_multiplier: number
+  status: string
+  sort_order: number
+}
+
+export interface ActiveSubscriptionProduct {
+  product_id: number
+  subscription_id: number
+  code: string
+  name: string
+  description: string
+  expires_at: string | null
+  status: 'active' | 'expired' | 'revoked' | string
+  daily_usage_usd: number
+  weekly_usage_usd: number
+  monthly_usage_usd: number
+  daily_limit_usd: number | null
+  weekly_limit_usd: number | null
+  monthly_limit_usd: number | null
+  daily_carryover_in_usd: number
+  daily_carryover_remaining_usd: number
+  groups: SubscriptionProductGroup[]
+}
+
+export interface SubscriptionProductSummary {
+  active_count: number
+  total_monthly_usage_usd: number
+  total_monthly_limit_usd: number
+  products: ActiveSubscriptionProduct[]
+}
+
 export interface AssignSubscriptionRequest {
   user_id: number
   group_id: number

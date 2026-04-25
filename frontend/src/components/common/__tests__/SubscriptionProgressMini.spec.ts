@@ -8,8 +8,15 @@ const mockStore = {
   fetchActiveSubscriptions: vi.fn().mockResolvedValue(undefined)
 }
 
+const mockProductStore = {
+  items: [] as any[],
+  hasActiveProducts: false,
+  fetchActive: vi.fn().mockResolvedValue(undefined)
+}
+
 vi.mock('@/stores', () => ({
-  useSubscriptionStore: () => mockStore
+  useSubscriptionStore: () => mockStore,
+  useSubscriptionProductStore: () => mockProductStore
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -39,37 +46,36 @@ describe('SubscriptionProgressMini', () => {
     mockStore.fetchActiveSubscriptions.mockClear()
     mockStore.activeSubscriptions = []
     mockStore.hasActiveSubscriptions = false
+    mockProductStore.fetchActive.mockClear()
+    mockProductStore.items = []
+    mockProductStore.hasActiveProducts = false
   })
 
-  it('uses the effective daily limit and shows carryover guidance', async () => {
-    mockStore.activeSubscriptions = [
+  it('renders one product card with multiple groups', async () => {
+    mockProductStore.items = [
       {
-        id: 1,
-        group_id: 88,
-        status: 'active',
-        daily_usage_usd: 50,
-        weekly_usage_usd: 0,
-        monthly_usage_usd: 0,
-        daily_window_start: new Date().toISOString(),
-        weekly_window_start: null,
-        monthly_window_start: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
+        product_id: 101,
+        subscription_id: 501,
+        code: 'gpt_team',
+        name: 'GPT Team',
+        description: 'Shared GPT access',
         expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-        daily_carryover_in_usd: 15,
-        daily_effective_limit_usd: 60,
-        daily_remaining_total_usd: 10,
-        daily_remaining_carryover_usd: 10,
-        group: {
-          id: 88,
-          name: 'Pro',
-          daily_limit_usd: 45,
-          weekly_limit_usd: null,
-          monthly_limit_usd: null
-        }
+        status: 'active',
+        daily_usage_usd: 4,
+        weekly_usage_usd: 12,
+        monthly_usage_usd: 17.5,
+        daily_limit_usd: 10,
+        weekly_limit_usd: 50,
+        monthly_limit_usd: 100,
+        daily_carryover_in_usd: 2,
+        daily_carryover_remaining_usd: 1.25,
+        groups: [
+          { group_id: 201, group_name: 'gpt-4', debit_multiplier: 1.5, status: 'active', sort_order: 1 },
+          { group_id: 202, group_name: 'gpt-4o', debit_multiplier: 1, status: 'active', sort_order: 2 }
+        ]
       }
     ]
-    mockStore.hasActiveSubscriptions = true
+    mockProductStore.hasActiveProducts = true
 
     const wrapper = mount(SubscriptionProgressMini, {
       global: {
@@ -82,8 +88,10 @@ describe('SubscriptionProgressMini', () => {
 
     await wrapper.find('button').trigger('click')
 
-    expect(wrapper.text()).toContain('$50.00/$60.00')
-    expect(wrapper.text()).toContain('Today available $60.00 (includes carryover $15.00)')
-    expect(wrapper.text()).toContain('Carryover is used first and expires at end of day.')
+    expect(wrapper.text()).toContain('GPT Team')
+    expect(wrapper.text()).toContain('gpt-4')
+    expect(wrapper.text()).toContain('gpt-4o')
+    expect(wrapper.text()).toContain('$17.50/$100.00')
+    expect(wrapper.text()).toContain('Today available $12.00 (includes carryover $2.00)')
   })
 })

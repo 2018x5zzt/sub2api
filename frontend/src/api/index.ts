@@ -16,6 +16,7 @@ export { userAPI } from './user'
 export { redeemAPI, type RedeemHistoryItem } from './redeem'
 export { inviteAPI } from './invite'
 export { userGroupsAPI } from './groups'
+export { subscriptionProductsAPI } from './subscriptionProducts'
 export { totpAPI } from './totp'
 export { default as announcementsAPI } from './announcements'
 

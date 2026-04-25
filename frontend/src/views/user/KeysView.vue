@@ -403,22 +403,22 @@
             <template #selected="{ option }">
               <GroupBadge
                 v-if="option"
-                :name="(option as unknown as GroupOption).label"
-                :platform="(option as unknown as GroupOption).platform"
-                :subscription-type="(option as unknown as GroupOption).subscriptionType"
-                :rate-multiplier="(option as unknown as GroupOption).rate"
-                :user-rate-multiplier="(option as unknown as GroupOption).userRate"
+                :name="(option as unknown as ApiKeyGroupOption).label"
+                :platform="(option as unknown as ApiKeyGroupOption).platform"
+                :subscription-type="(option as unknown as ApiKeyGroupOption).subscriptionType"
+                :rate-multiplier="(option as unknown as ApiKeyGroupOption).rate"
+                :user-rate-multiplier="(option as unknown as ApiKeyGroupOption).userRate"
               />
               <span v-else class="text-gray-400">{{ t('keys.selectGroup') }}</span>
             </template>
             <template #option="{ option, selected }">
               <GroupOptionItem
-                :name="(option as unknown as GroupOption).label"
-                :platform="(option as unknown as GroupOption).platform"
-                :subscription-type="(option as unknown as GroupOption).subscriptionType"
-                :rate-multiplier="(option as unknown as GroupOption).rate"
-                :user-rate-multiplier="(option as unknown as GroupOption).userRate"
-                :description="(option as unknown as GroupOption).description"
+                :name="(option as unknown as ApiKeyGroupOption).label"
+                :platform="(option as unknown as ApiKeyGroupOption).platform"
+                :subscription-type="(option as unknown as ApiKeyGroupOption).subscriptionType"
+                :rate-multiplier="(option as unknown as ApiKeyGroupOption).rate"
+                :user-rate-multiplier="(option as unknown as ApiKeyGroupOption).userRate"
+                :description="(option as unknown as ApiKeyGroupOption).description"
                 :selected="selected"
               />
             </template>
@@ -985,9 +985,11 @@
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
+import { useSubscriptionProductStore } from '@/stores/subscriptionProducts'
 	import { useClipboard } from '@/composables/useClipboard'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { isDynamicPricingGroup, resolveApiKeyBudgetMultiplier, resolveGroupBudgetMultiplier } from '@/utils/dynamicPricing'
+import { buildApiKeyGroupOptions, type ApiKeyGroupOption } from '@/views/user/keyGroupOptions'
 
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
@@ -1005,7 +1007,7 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import EndpointPopover from '@/components/keys/EndpointPopover.vue'
 	import GroupBadge from '@/components/common/GroupBadge.vue'
 	import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
-	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform } from '@/types'
+	import type { ApiKey, Group, PublicSettings } from '@/types'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
@@ -1017,18 +1019,9 @@ const formatDateTimeLocal = (isoDate: string): string => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
-interface GroupOption {
-  value: number
-  label: string
-  description: string | null
-  rate: number
-  userRate: number | null
-  subscriptionType: SubscriptionType
-  platform: GroupPlatform
-}
-
 const appStore = useAppStore()
 const onboardingStore = useOnboardingStore()
+const subscriptionProductStore = useSubscriptionProductStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
 
 const columns = computed<Column[]>(() => [
@@ -1167,15 +1160,7 @@ const onStatusFilterChange = (value: string | number | boolean | null) => {
 
 // Convert groups to Select options format with rate multiplier and subscription type
 const groupOptions = computed(() =>
-  groups.value.map((group) => ({
-    value: group.id,
-    label: group.name,
-    description: group.description,
-    rate: group.rate_multiplier,
-    userRate: userGroupRates.value[group.id] ?? null,
-    subscriptionType: group.subscription_type,
-    platform: group.platform
-  }))
+  buildApiKeyGroupOptions(groups.value, userGroupRates.value, subscriptionProductStore.items)
 )
 
 const maskKey = (key: string): string => {
@@ -1250,6 +1235,14 @@ const loadGroups = async () => {
     groups.value = await userGroupsAPI.getAvailable()
   } catch (error) {
     console.error('Failed to load groups:', error)
+  }
+}
+
+const loadSubscriptionProducts = async () => {
+  try {
+    await subscriptionProductStore.fetchActive()
+  } catch (error) {
+    console.error('Failed to load subscription products:', error)
   }
 }
 
@@ -1685,6 +1678,7 @@ function formatResetTime(resetAt: string | null): string {
 onMounted(() => {
   loadApiKeys()
   loadGroups()
+  loadSubscriptionProducts()
   loadUserGroupRates()
   loadPublicSettings()
   resetTimer = setInterval(() => { now.value = new Date() }, 60000)
