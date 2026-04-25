@@ -50,6 +50,8 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // upstream_model
 			sqlmock.AnyArg(), // group_id
 			sqlmock.AnyArg(), // subscription_id
+			sqlmock.AnyArg(), // product_id
+			sqlmock.AnyArg(), // product_subscription_id
 			log.InputTokens,
 			log.OutputTokens,
 			log.CacheCreationTokens,
@@ -64,6 +66,8 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			log.ActualCost,
 			log.RateMultiplier,
 			log.AccountRateMultiplier,
+			log.GroupDebitMultiplier,
+			log.ProductDebitCost,
 			log.BillingType,
 			int16(service.RequestTypeWSV2),
 			true,
@@ -127,6 +131,8 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
+			sqlmock.AnyArg(),
 			log.InputTokens,
 			log.OutputTokens,
 			log.CacheCreationTokens,
@@ -141,6 +147,8 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			log.ActualCost,
 			log.RateMultiplier,
 			log.AccountRateMultiplier,
+			log.GroupDebitMultiplier,
+			log.ProductDebitCost,
 			log.BillingType,
 			int16(service.RequestTypeSync),
 			false,
@@ -441,6 +449,8 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // upstream_model
 			sql.NullInt64{},   // group_id
 			sql.NullInt64{},   // subscription_id
+			sql.NullInt64{},   // product_id
+			sql.NullInt64{},   // product_subscription_id
 			1,                 // input_tokens
 			2,                 // output_tokens
 			3,                 // cache_creation_tokens
@@ -455,6 +465,8 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			0.9,               // actual_cost
 			1.0,               // rate_multiplier
 			sql.NullFloat64{}, // account_rate_multiplier
+			sql.NullFloat64{}, // group_debit_multiplier
+			sql.NullFloat64{}, // product_debit_cost
 			int16(service.BillingTypeBalance),
 			int16(service.RequestTypeWSV2),
 			false, // legacy stream
@@ -498,9 +510,13 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			sql.NullInt64{},
 			sql.NullInt64{},
+			sql.NullInt64{},
+			sql.NullInt64{},
 			1, 2, 3, 4, 5, 6,
 			0.1, 0.2, 0.3, 0.4, 1.0, 0.9,
 			1.0,
+			sql.NullFloat64{},
+			sql.NullFloat64{},
 			sql.NullFloat64{},
 			int16(service.BillingTypeBalance),
 			int16(service.RequestTypeUnknown),
@@ -545,9 +561,13 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			sql.NullInt64{},
 			sql.NullInt64{},
+			sql.NullInt64{},
+			sql.NullInt64{},
 			1, 2, 3, 4, 5, 6,
 			0.1, 0.2, 0.3, 0.4, 1.0, 0.9,
 			1.0,
+			sql.NullFloat64{},
+			sql.NullFloat64{},
 			sql.NullFloat64{},
 			int16(service.BillingTypeBalance),
 			int16(service.RequestTypeSync),

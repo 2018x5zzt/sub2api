@@ -200,6 +200,58 @@ func TestUsageBillingRepositoryApply_SubscriptionCostAdvancesDailyWindowAndConsu
 	require.InDelta(t, 20.0, carryoverRemaining, 0.000001)
 }
 
+func TestUsageBillingRepositoryApply_ProductSubscriptionCostAdvancesProductWindows(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-product-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+	})
+	group := mustCreateGroup(t, client, &service.Group{
+		Name:             "usage-billing-product-group-" + uuid.NewString(),
+		Platform:         service.PlatformOpenAI,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID:  user.ID,
+		GroupID: &group.ID,
+		Key:     "sk-usage-billing-product-" + uuid.NewString(),
+		Name:    "billing-product",
+	})
+	product := mustCreateSubscriptionProduct(t, "usage_billing_product", "Usage Billing Product", "active")
+	mustCreateSubscriptionProductGroup(t, product.ID, group.ID, 1.5, "active", 10)
+	productSub := mustCreateUserProductSubscription(t, user.ID, product.ID, service.SubscriptionStatusActive, time.Now().Add(24*time.Hour))
+
+	multiplier := 1.5
+	cmd := &service.UsageBillingCommand{
+		RequestID:             uuid.NewString(),
+		APIKeyID:              apiKey.ID,
+		UserID:                user.ID,
+		ProductID:             &product.ID,
+		ProductSubscriptionID: &productSub.ID,
+		GroupID:               &group.ID,
+		GroupDebitMultiplier:  &multiplier,
+		StandardTotalCost:     4,
+		ProductDebitCost:      6,
+	}
+
+	result, err := repo.Apply(ctx, cmd)
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+
+	var dailyUsage, weeklyUsage, monthlyUsage float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT daily_usage_usd, weekly_usage_usd, monthly_usage_usd
+		FROM user_product_subscriptions
+		WHERE id = $1
+	`, productSub.ID).Scan(&dailyUsage, &weeklyUsage, &monthlyUsage))
+	require.InDelta(t, 6.0, dailyUsage, 0.000001)
+	require.InDelta(t, 6.0, weeklyUsage, 0.000001)
+	require.InDelta(t, 6.0, monthlyUsage, 0.000001)
+}
+
 func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)

@@ -36,12 +36,14 @@ type openAIRecordUsageBillingRepoStub struct {
 	err        error
 	calls      int
 	lastCmd    *UsageBillingCommand
+	cmds       []*UsageBillingCommand
 	lastCtxErr error
 }
 
 func (s *openAIRecordUsageBillingRepoStub) Apply(ctx context.Context, cmd *UsageBillingCommand) (*UsageBillingApplyResult, error) {
 	s.calls++
 	s.lastCmd = cmd
+	s.cmds = append(s.cmds, cmd)
 	s.lastCtxErr = ctx.Err()
 	if s.err != nil {
 		return nil, s.err
@@ -1005,6 +1007,55 @@ func TestOpenAIGatewayServiceRecordUsage_SubscriptionBillingSetsSubscriptionFiel
 	require.NotNil(t, usageRepo.lastLog.SubscriptionID)
 	require.Equal(t, subscription.ID, *usageRepo.lastLog.SubscriptionID)
 	require.Equal(t, 1, subRepo.incrementCalls)
+	require.Equal(t, 0, userRepo.deductCalls)
+}
+
+func TestOpenAIGatewayRecordUsage_ProductSettlementLeavesLegacySubscriptionIDNil(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, userRepo, subRepo, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_product_settlement",
+			Usage:     OpenAIUsage{InputTokens: 10, OutputTokens: 5},
+			Model:     "gpt-5.1",
+			Duration:  time.Second,
+		},
+		APIKey: &APIKey{ID: 100, GroupID: i64p(88), Group: &Group{ID: 88, SubscriptionType: SubscriptionTypeSubscription}},
+		User:   &User{ID: 200},
+		Account: &Account{
+			ID: 300,
+		},
+		ProductSettlement: &ProductSettlementContext{
+			Binding: &SubscriptionProductBinding{
+				ProductID:       101,
+				GroupID:         88,
+				DebitMultiplier: 1.5,
+			},
+			Subscription: &UserProductSubscription{ID: 202, UserID: 200, ProductID: 101, Status: SubscriptionStatusActive, ExpiresAt: time.Now().Add(time.Hour)},
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Nil(t, usageRepo.lastLog.SubscriptionID)
+	require.NotNil(t, usageRepo.lastLog.ProductID)
+	require.Equal(t, int64(101), *usageRepo.lastLog.ProductID)
+	require.NotNil(t, usageRepo.lastLog.ProductSubscriptionID)
+	require.Equal(t, int64(202), *usageRepo.lastLog.ProductSubscriptionID)
+	require.NotNil(t, usageRepo.lastLog.GroupDebitMultiplier)
+	require.Equal(t, 1.5, *usageRepo.lastLog.GroupDebitMultiplier)
+	require.NotNil(t, usageRepo.lastLog.ProductDebitCost)
+	require.InDelta(t, usageRepo.lastLog.TotalCost*1.5, *usageRepo.lastLog.ProductDebitCost, 1e-12)
+
+	require.NotNil(t, billingRepo.lastCmd)
+	require.Nil(t, billingRepo.lastCmd.SubscriptionID)
+	require.Equal(t, int64(202), *billingRepo.lastCmd.ProductSubscriptionID)
+	require.InDelta(t, usageRepo.lastLog.TotalCost*1.5, billingRepo.lastCmd.ProductDebitCost, 1e-12)
+	require.Equal(t, 0, subRepo.incrementCalls)
 	require.Equal(t, 0, userRepo.deductCalls)
 }
 

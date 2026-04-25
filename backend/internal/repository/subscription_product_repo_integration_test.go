@@ -116,10 +116,10 @@ func mustCreateSubscriptionProductGroup(t *testing.T, productID, groupID int64, 
 	require.NoError(t, err, "create subscription product group")
 }
 
-func mustCreateUserProductSubscription(t *testing.T, userID, productID int64, status string, expiresAt time.Time) {
+func mustCreateUserProductSubscription(t *testing.T, userID, productID int64, status string, expiresAt time.Time) *service.UserProductSubscription {
 	t.Helper()
 	now := time.Now()
-	_, err := integrationEntClient.UserProductSubscription.Create().
+	created, err := integrationEntClient.UserProductSubscription.Create().
 		SetUserID(userID).
 		SetProductID(productID).
 		SetStartsAt(now.Add(-time.Hour)).
@@ -130,6 +130,19 @@ func mustCreateUserProductSubscription(t *testing.T, userID, productID int64, st
 		SetDailyCarryoverRemainingUsd(1).
 		Save(context.Background())
 	require.NoError(t, err, "create user product subscription")
+	return &service.UserProductSubscription{
+		ID:                         created.ID,
+		UserID:                     created.UserID,
+		ProductID:                  created.ProductID,
+		StartsAt:                   created.StartsAt,
+		ExpiresAt:                  created.ExpiresAt,
+		Status:                     created.Status,
+		DailyCarryoverInUSD:        created.DailyCarryoverInUsd,
+		DailyCarryoverRemainingUSD: created.DailyCarryoverRemainingUsd,
+		AssignedAt:                 created.AssignedAt,
+		CreatedAt:                  created.CreatedAt,
+		UpdatedAt:                  created.UpdatedAt,
+	}
 }
 
 func uniqueProductTestName(prefix string) string {

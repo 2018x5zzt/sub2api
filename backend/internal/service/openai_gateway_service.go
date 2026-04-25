@@ -4758,6 +4758,7 @@ type OpenAIRecordUsageInput struct {
 	User               *User
 	Account            *Account
 	Subscription       *UserSubscription
+	ProductSettlement  *ProductSettlementContext
 	InboundEndpoint    string
 	UpstreamEndpoint   string
 	UserAgent          string // 请求的 User-Agent
@@ -4782,6 +4783,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
+	productSettlement := input.ProductSettlement
 
 	// 计算实际的新输入token（减去缓存读取的token）
 	// 因为 input_tokens 包含了 cache_read_tokens，而缓存读取的token不应按输入价格计费
@@ -4828,7 +4830,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 
 	// Determine billing type
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	isSubscriptionBilling := (subscription != nil || hasProductSettlement(productSettlement)) && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription
@@ -4903,6 +4905,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if subscription != nil {
 		usageLog.SubscriptionID = &subscription.ID
 	}
+	applyProductSettlementUsageLog(usageLog, productSettlement, cost.TotalCost)
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
@@ -4918,6 +4921,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			APIKey:                apiKey,
 			Account:               account,
 			Subscription:          subscription,
+			ProductSettlement:     productSettlement,
 			RequestPayloadHash:    resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
 			IsSubscriptionBill:    isSubscriptionBilling,
 			AccountRateMultiplier: accountRateMultiplier,

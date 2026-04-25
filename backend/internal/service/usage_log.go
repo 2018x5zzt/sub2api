@@ -123,8 +123,10 @@ type UsageLog struct {
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string
 
-	GroupID        *int64
-	SubscriptionID *int64
+	GroupID               *int64
+	SubscriptionID        *int64
+	ProductID             *int64
+	ProductSubscriptionID *int64
 
 	InputTokens         int
 	OutputTokens        int
@@ -143,6 +145,8 @@ type UsageLog struct {
 	RateMultiplier    float64
 	// AccountRateMultiplier 账号计费倍率快照（nil 表示历史数据，按 1.0 处理）
 	AccountRateMultiplier *float64
+	GroupDebitMultiplier  *float64
+	ProductDebitCost      *float64
 
 	BillingType  int8
 	RequestType  RequestType
