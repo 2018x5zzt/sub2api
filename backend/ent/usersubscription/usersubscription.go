@@ -43,6 +43,10 @@ const (
 	FieldWeeklyUsageUsd = "weekly_usage_usd"
 	// FieldMonthlyUsageUsd holds the string denoting the monthly_usage_usd field in the database.
 	FieldMonthlyUsageUsd = "monthly_usage_usd"
+	// FieldDailyCarryoverInUsd holds the string denoting the daily_carryover_in_usd field in the database.
+	FieldDailyCarryoverInUsd = "daily_carryover_in_usd"
+	// FieldDailyCarryoverRemainingUsd holds the string denoting the daily_carryover_remaining_usd field in the database.
+	FieldDailyCarryoverRemainingUsd = "daily_carryover_remaining_usd"
 	// FieldAssignedBy holds the string denoting the assigned_by field in the database.
 	FieldAssignedBy = "assigned_by"
 	// FieldAssignedAt holds the string denoting the assigned_at field in the database.
@@ -106,6 +110,8 @@ var Columns = []string{
 	FieldDailyUsageUsd,
 	FieldWeeklyUsageUsd,
 	FieldMonthlyUsageUsd,
+	FieldDailyCarryoverInUsd,
+	FieldDailyCarryoverRemainingUsd,
 	FieldAssignedBy,
 	FieldAssignedAt,
 	FieldNotes,
@@ -145,6 +151,10 @@ var (
 	DefaultWeeklyUsageUsd float64
 	// DefaultMonthlyUsageUsd holds the default value on creation for the "monthly_usage_usd" field.
 	DefaultMonthlyUsageUsd float64
+	// DefaultDailyCarryoverInUsd holds the default value on creation for the "daily_carryover_in_usd" field.
+	DefaultDailyCarryoverInUsd float64
+	// DefaultDailyCarryoverRemainingUsd holds the default value on creation for the "daily_carryover_remaining_usd" field.
+	DefaultDailyCarryoverRemainingUsd float64
 	// DefaultAssignedAt holds the default value on creation for the "assigned_at" field.
 	DefaultAssignedAt func() time.Time
 )
@@ -225,6 +235,16 @@ func ByWeeklyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
 // ByMonthlyUsageUsd orders the results by the monthly_usage_usd field.
 func ByMonthlyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMonthlyUsageUsd, opts...).ToFunc()
+}
+
+// ByDailyCarryoverInUsd orders the results by the daily_carryover_in_usd field.
+func ByDailyCarryoverInUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDailyCarryoverInUsd, opts...).ToFunc()
+}
+
+// ByDailyCarryoverRemainingUsd orders the results by the daily_carryover_remaining_usd field.
+func ByDailyCarryoverRemainingUsd(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDailyCarryoverRemainingUsd, opts...).ToFunc()
 }
 
 // ByAssignedBy orders the results by the assigned_by field.

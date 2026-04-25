@@ -351,6 +351,7 @@ type OpenAIGatewayService struct {
 	openaiWSResolver      OpenAIWSProtocolResolver
 	resolver              *ModelPricingResolver
 	channelService        *ChannelService
+	subscriptionReadCacheInvalidator subscriptionReadCacheInvalidator
 
 	openaiWSPoolOnce              sync.Once
 	openaiWSStateStoreOnce        sync.Once
@@ -424,6 +425,13 @@ func NewOpenAIGatewayService(
 	return svc
 }
 
+func (s *OpenAIGatewayService) SetSubscriptionReadCacheInvalidator(v subscriptionReadCacheInvalidator) {
+	if s == nil {
+		return
+	}
+	s.subscriptionReadCacheInvalidator = v
+}
+
 // ResolveChannelMapping 解析渠道级模型映射（代理到 ChannelService）
 func (s *OpenAIGatewayService) ResolveChannelMapping(ctx context.Context, groupID int64, model string) ChannelMappingResult {
 	if s.channelService == nil {
@@ -466,6 +474,7 @@ func (s *OpenAIGatewayService) billingDeps() *billingDeps {
 		userRepo:            s.userRepo,
 		userSubRepo:         s.userSubRepo,
 		billingCacheService: s.billingCacheService,
+		subscriptionReadCacheInvalidator: s.subscriptionReadCacheInvalidator,
 		deferredService:     s.deferredService,
 	}
 }

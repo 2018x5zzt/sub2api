@@ -519,6 +519,10 @@ type UserSubscription struct {
 	DailyUsageUSD   float64 `json:"daily_usage_usd"`
 	WeeklyUsageUSD  float64 `json:"weekly_usage_usd"`
 	MonthlyUsageUSD float64 `json:"monthly_usage_usd"`
+	DailyCarryoverInUSD        float64 `json:"daily_carryover_in_usd"`
+	DailyEffectiveLimitUSD     float64 `json:"daily_effective_limit_usd"`
+	DailyRemainingTotalUSD     float64 `json:"daily_remaining_total_usd"`
+	DailyRemainingCarryoverUSD float64 `json:"daily_remaining_carryover_usd"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

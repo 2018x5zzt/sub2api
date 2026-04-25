@@ -1864,6 +1864,9 @@ export default {
         dailyLimit: 'Daily Limit (USD)',
         weeklyLimit: 'Weekly Limit (USD)',
         monthlyLimit: 'Monthly Limit (USD)',
+        dailyLimitHint: 'Unused daily quota can roll over for 1 day, is consumed first the next day, and expires at day end.',
+        weeklyLimitHint: 'If the daily limit is $45, a weekly limit of $360 is recommended.',
+        monthlyLimitHint: 'For a 30-day subscription, a monthly limit of $1395 is recommended ($1350 base + $45 cross-month carryover buffer).',
         defaultValidityDays: 'Default Validity (Days)',
         validityHint: 'Number of days the subscription is valid when assigned to a user',
         noLimit: 'No limit'
@@ -2060,6 +2063,7 @@ export default {
       daily: 'Daily',
       weekly: 'Weekly',
       monthly: 'Monthly',
+      carryoverHint: 'Includes carryover ${carryover}; ${remaining} remains and expires at end of day.',
       noLimits: 'No limits configured',
       unlimited: 'Unlimited',
       resetNow: 'Resetting soon',
@@ -5052,7 +5056,9 @@ export default {
     expiresTomorrow: 'Expires tomorrow',
     viewAll: 'View all subscriptions',
     noSubscriptions: 'No active subscriptions',
-    unlimited: 'Unlimited'
+    unlimited: 'Unlimited',
+    todayAvailable: 'Today available ${total} (includes carryover ${carryover})',
+    carryoverRule: 'Carryover is used first and expires at end of day.'
   },
 
   // Version Badge

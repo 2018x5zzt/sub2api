@@ -1950,6 +1950,9 @@ export default {
         dailyLimit: '每日限额（USD）',
         weeklyLimit: '每周限额（USD）',
         monthlyLimit: '每月限额（USD）',
+        dailyLimitHint: '未用完的日额度可结转 1 天，次日优先消耗，次日结束后失效。',
+        weeklyLimitHint: '若日限额为 $45，建议周限额设为 $360。',
+        monthlyLimitHint: '30 天月卡建议月限额设为 $1395（$1350 基础额度 + $45 跨月结转缓冲）。',
         defaultValidityDays: '默认有效期（天）',
         validityHint: '分配给用户时订阅的有效天数',
         noLimit: '无限制'
@@ -2140,6 +2143,7 @@ export default {
       daily: '每日',
       weekly: '每周',
       monthly: '每月',
+      carryoverHint: '含昨日结转 ${carryover}，当前剩余 ${remaining}，优先消耗并在今日结束后失效。',
       noLimits: '未配置限额',
       unlimited: '无限制',
       resetNow: '即将重置',
@@ -5215,7 +5219,9 @@ export default {
     expiresTomorrow: '明天到期',
     viewAll: '查看全部订阅',
     noSubscriptions: '暂无有效订阅',
-    unlimited: '无限制'
+    unlimited: '无限制',
+    todayAvailable: '今日可用 ${total}（含昨日结转 ${carryover}）',
+    carryoverRule: '系统会优先消耗昨日结转，未用完部分将在今日结束后失效。'
   },
 
   // Version Badge

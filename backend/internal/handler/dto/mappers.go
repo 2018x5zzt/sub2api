@@ -690,6 +690,11 @@ func UserSubscriptionFromServiceAdmin(sub *service.UserSubscription) *AdminUserS
 }
 
 func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscription {
+	dailyRemainingCarryover := sub.DailyCarryoverRemainingUSD
+	if dailyRemainingCarryover < 0 {
+		dailyRemainingCarryover = 0
+	}
+
 	return UserSubscription{
 		ID:                 sub.ID,
 		UserID:             sub.UserID,
@@ -703,6 +708,10 @@ func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscrip
 		DailyUsageUSD:      sub.DailyUsageUSD,
 		WeeklyUsageUSD:     sub.WeeklyUsageUSD,
 		MonthlyUsageUSD:    sub.MonthlyUsageUSD,
+		DailyCarryoverInUSD:        sub.DailyCarryoverInUSD,
+		DailyEffectiveLimitUSD:     sub.DailyEffectiveLimit(sub.Group),
+		DailyRemainingTotalUSD:     sub.DailyRemainingTotal(sub.Group),
+		DailyRemainingCarryoverUSD: dailyRemainingCarryover,
 		CreatedAt:          sub.CreatedAt,
 		UpdatedAt:          sub.UpdatedAt,
 		User:               UserFromServiceShallow(sub.User),

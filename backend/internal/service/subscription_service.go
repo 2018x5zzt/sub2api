@@ -652,8 +652,18 @@ func normalizeExpiredWindows(subs []UserSubscription) {
 		sub := &subs[i]
 		// 日窗口过期：清零展示数据
 		if sub.NeedsDailyReset() {
-			sub.DailyWindowStart = nil
-			sub.DailyUsageUSD = 0
+			if sub.Group != nil && sub.Group.HasDailyLimit() {
+				preview := previewDailyWindowAdvance(sub, sub.Group, startOfDay(time.Now()))
+				sub.DailyWindowStart = &preview.WindowStart
+				sub.DailyUsageUSD = 0
+				sub.DailyCarryoverInUSD = preview.CarryoverInUSD
+				sub.DailyCarryoverRemainingUSD = preview.CarryoverRemainingUSD
+			} else {
+				sub.DailyWindowStart = nil
+				sub.DailyUsageUSD = 0
+				sub.DailyCarryoverInUSD = 0
+				sub.DailyCarryoverRemainingUSD = 0
+			}
 		}
 		// 周窗口过期：清零展示数据
 		if sub.NeedsWeeklyReset() {
@@ -742,15 +752,7 @@ func (s *SubscriptionService) CheckAndResetWindows(ctx context.Context, sub *Use
 	windowStart := startOfDay(time.Now())
 	needsInvalidateCache := false
 
-	// 日窗口重置（24小时）
-	if sub.NeedsDailyReset() {
-		if err := s.userSubRepo.ResetDailyUsage(ctx, sub.ID, windowStart); err != nil {
-			return err
-		}
-		sub.DailyWindowStart = &windowStart
-		sub.DailyUsageUSD = 0
-		needsInvalidateCache = true
-	}
+	// 日窗口推进由权威扣费写路径负责，异步维护不再持久化 daily carryover 状态。
 
 	// 周窗口重置（7天）
 	if sub.NeedsWeeklyReset() {
@@ -816,7 +818,12 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 	// 2. 内存中修正过期窗口的用量，确保 CheckUsageLimits 不会误拒绝用户
 	//    实际的 DB 窗口重置由 DoWindowMaintenance 异步完成
 	if sub.NeedsDailyReset() {
+		windowStart := startOfDay(time.Now())
+		preview := previewDailyWindowAdvance(sub, group, windowStart)
+		sub.DailyWindowStart = &preview.WindowStart
 		sub.DailyUsageUSD = 0
+		sub.DailyCarryoverInUSD = preview.CarryoverInUSD
+		sub.DailyCarryoverRemainingUSD = preview.CarryoverRemainingUSD
 		needsMaintenance = true
 	}
 	if sub.NeedsWeeklyReset() {
@@ -892,6 +899,60 @@ func (s *SubscriptionService) RecordUsage(ctx context.Context, subscriptionID in
 	return s.userSubRepo.IncrementUsage(ctx, subscriptionID, costUSD)
 }
 
+// BulkResetDailyQuotaResult captures the outcome of an admin compensation reset.
+type BulkResetDailyQuotaResult struct {
+	ResetCount  int64     `json:"reset_count"`
+	WindowStart time.Time `json:"window_start"`
+}
+
+// AdminBulkResetDailyQuota performs a one-off compensation reset for daily quota state.
+// It only touches active subscriptions and only resets the daily window.
+func (s *SubscriptionService) AdminBulkResetDailyQuota(ctx context.Context, groupID *int64) (*BulkResetDailyQuotaResult, error) {
+	windowStart := startOfDay(time.Now())
+	var resetCount int64
+
+	for page := 1; ; page++ {
+		subs, pag, err := s.userSubRepo.List(
+			ctx,
+			pagination.PaginationParams{Page: page, PageSize: 200},
+			nil,
+			groupID,
+			SubscriptionStatusActive,
+			"",
+			"created_at",
+			"asc",
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		for i := range subs {
+			sub := subs[i]
+			if err := s.userSubRepo.ResetDailyUsage(ctx, sub.ID, windowStart); err != nil {
+				return nil, err
+			}
+			resetCount++
+			s.InvalidateSubCache(sub.UserID, sub.GroupID)
+			if s.billingCacheService != nil {
+				_ = s.billingCacheService.InvalidateSubscription(ctx, sub.UserID, sub.GroupID)
+			}
+		}
+
+		if pag == nil || len(subs) == 0 || page >= pag.Pages {
+			break
+		}
+	}
+
+	if s.subCacheL1 != nil {
+		s.subCacheL1.Wait()
+	}
+
+	return &BulkResetDailyQuotaResult{
+		ResetCount:  resetCount,
+		WindowStart: windowStart,
+	}, nil
+}
+
 // SubscriptionProgress 订阅进度
 type SubscriptionProgress struct {
 	ID            int64                `json:"id"`
@@ -943,13 +1004,17 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 
 	// 日进度
 	if group.HasDailyLimit() && sub.DailyWindowStart != nil {
-		limit := *group.DailyLimitUSD
+		limit := sub.DailyEffectiveLimit(group)
 		resetsAt := sub.DailyWindowStart.Add(24 * time.Hour)
+		percentage := 0.0
+		if limit > 0 {
+			percentage = (sub.DailyUsageUSD / limit) * 100
+		}
 		progress.Daily = &UsageWindowProgress{
 			LimitUSD:        limit,
 			UsedUSD:         sub.DailyUsageUSD,
-			RemainingUSD:    limit - sub.DailyUsageUSD,
-			Percentage:      (sub.DailyUsageUSD / limit) * 100,
+			RemainingUSD:    sub.DailyRemainingTotal(group),
+			Percentage:      percentage,
 			WindowStart:     *sub.DailyWindowStart,
 			ResetsAt:        resetsAt,
 			ResetsInSeconds: int64(time.Until(resetsAt).Seconds()),

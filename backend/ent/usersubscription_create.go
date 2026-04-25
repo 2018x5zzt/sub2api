@@ -189,6 +189,34 @@ func (_c *UserSubscriptionCreate) SetNillableMonthlyUsageUsd(v *float64) *UserSu
 	return _c
 }
 
+// SetDailyCarryoverInUsd sets the "daily_carryover_in_usd" field.
+func (_c *UserSubscriptionCreate) SetDailyCarryoverInUsd(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetDailyCarryoverInUsd(v)
+	return _c
+}
+
+// SetNillableDailyCarryoverInUsd sets the "daily_carryover_in_usd" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableDailyCarryoverInUsd(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetDailyCarryoverInUsd(*v)
+	}
+	return _c
+}
+
+// SetDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field.
+func (_c *UserSubscriptionCreate) SetDailyCarryoverRemainingUsd(v float64) *UserSubscriptionCreate {
+	_c.mutation.SetDailyCarryoverRemainingUsd(v)
+	return _c
+}
+
+// SetNillableDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableDailyCarryoverRemainingUsd(v *float64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetDailyCarryoverRemainingUsd(*v)
+	}
+	return _c
+}
+
 // SetAssignedBy sets the "assigned_by" field.
 func (_c *UserSubscriptionCreate) SetAssignedBy(v int64) *UserSubscriptionCreate {
 	_c.mutation.SetAssignedBy(v)
@@ -342,6 +370,14 @@ func (_c *UserSubscriptionCreate) defaults() error {
 		v := usersubscription.DefaultMonthlyUsageUsd
 		_c.mutation.SetMonthlyUsageUsd(v)
 	}
+	if _, ok := _c.mutation.DailyCarryoverInUsd(); !ok {
+		v := usersubscription.DefaultDailyCarryoverInUsd
+		_c.mutation.SetDailyCarryoverInUsd(v)
+	}
+	if _, ok := _c.mutation.DailyCarryoverRemainingUsd(); !ok {
+		v := usersubscription.DefaultDailyCarryoverRemainingUsd
+		_c.mutation.SetDailyCarryoverRemainingUsd(v)
+	}
 	if _, ok := _c.mutation.AssignedAt(); !ok {
 		if usersubscription.DefaultAssignedAt == nil {
 			return fmt.Errorf("ent: uninitialized usersubscription.DefaultAssignedAt (forgotten import ent/runtime?)")
@@ -388,6 +424,12 @@ func (_c *UserSubscriptionCreate) check() error {
 	}
 	if _, ok := _c.mutation.MonthlyUsageUsd(); !ok {
 		return &ValidationError{Name: "monthly_usage_usd", err: errors.New(`ent: missing required field "UserSubscription.monthly_usage_usd"`)}
+	}
+	if _, ok := _c.mutation.DailyCarryoverInUsd(); !ok {
+		return &ValidationError{Name: "daily_carryover_in_usd", err: errors.New(`ent: missing required field "UserSubscription.daily_carryover_in_usd"`)}
+	}
+	if _, ok := _c.mutation.DailyCarryoverRemainingUsd(); !ok {
+		return &ValidationError{Name: "daily_carryover_remaining_usd", err: errors.New(`ent: missing required field "UserSubscription.daily_carryover_remaining_usd"`)}
 	}
 	if _, ok := _c.mutation.AssignedAt(); !ok {
 		return &ValidationError{Name: "assigned_at", err: errors.New(`ent: missing required field "UserSubscription.assigned_at"`)}
@@ -472,6 +514,14 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 	if value, ok := _c.mutation.MonthlyUsageUsd(); ok {
 		_spec.SetField(usersubscription.FieldMonthlyUsageUsd, field.TypeFloat64, value)
 		_node.MonthlyUsageUsd = value
+	}
+	if value, ok := _c.mutation.DailyCarryoverInUsd(); ok {
+		_spec.SetField(usersubscription.FieldDailyCarryoverInUsd, field.TypeFloat64, value)
+		_node.DailyCarryoverInUsd = value
+	}
+	if value, ok := _c.mutation.DailyCarryoverRemainingUsd(); ok {
+		_spec.SetField(usersubscription.FieldDailyCarryoverRemainingUsd, field.TypeFloat64, value)
+		_node.DailyCarryoverRemainingUsd = value
 	}
 	if value, ok := _c.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)
@@ -798,6 +848,42 @@ func (u *UserSubscriptionUpsert) AddMonthlyUsageUsd(v float64) *UserSubscription
 	return u
 }
 
+// SetDailyCarryoverInUsd sets the "daily_carryover_in_usd" field.
+func (u *UserSubscriptionUpsert) SetDailyCarryoverInUsd(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldDailyCarryoverInUsd, v)
+	return u
+}
+
+// UpdateDailyCarryoverInUsd sets the "daily_carryover_in_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateDailyCarryoverInUsd() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldDailyCarryoverInUsd)
+	return u
+}
+
+// AddDailyCarryoverInUsd adds v to the "daily_carryover_in_usd" field.
+func (u *UserSubscriptionUpsert) AddDailyCarryoverInUsd(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldDailyCarryoverInUsd, v)
+	return u
+}
+
+// SetDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field.
+func (u *UserSubscriptionUpsert) SetDailyCarryoverRemainingUsd(v float64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldDailyCarryoverRemainingUsd, v)
+	return u
+}
+
+// UpdateDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateDailyCarryoverRemainingUsd() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldDailyCarryoverRemainingUsd)
+	return u
+}
+
+// AddDailyCarryoverRemainingUsd adds v to the "daily_carryover_remaining_usd" field.
+func (u *UserSubscriptionUpsert) AddDailyCarryoverRemainingUsd(v float64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldDailyCarryoverRemainingUsd, v)
+	return u
+}
+
 // SetAssignedBy sets the "assigned_by" field.
 func (u *UserSubscriptionUpsert) SetAssignedBy(v int64) *UserSubscriptionUpsert {
 	u.Set(usersubscription.FieldAssignedBy, v)
@@ -1119,6 +1205,48 @@ func (u *UserSubscriptionUpsertOne) AddMonthlyUsageUsd(v float64) *UserSubscript
 func (u *UserSubscriptionUpsertOne) UpdateMonthlyUsageUsd() *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateMonthlyUsageUsd()
+	})
+}
+
+// SetDailyCarryoverInUsd sets the "daily_carryover_in_usd" field.
+func (u *UserSubscriptionUpsertOne) SetDailyCarryoverInUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetDailyCarryoverInUsd(v)
+	})
+}
+
+// AddDailyCarryoverInUsd adds v to the "daily_carryover_in_usd" field.
+func (u *UserSubscriptionUpsertOne) AddDailyCarryoverInUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddDailyCarryoverInUsd(v)
+	})
+}
+
+// UpdateDailyCarryoverInUsd sets the "daily_carryover_in_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateDailyCarryoverInUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateDailyCarryoverInUsd()
+	})
+}
+
+// SetDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field.
+func (u *UserSubscriptionUpsertOne) SetDailyCarryoverRemainingUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetDailyCarryoverRemainingUsd(v)
+	})
+}
+
+// AddDailyCarryoverRemainingUsd adds v to the "daily_carryover_remaining_usd" field.
+func (u *UserSubscriptionUpsertOne) AddDailyCarryoverRemainingUsd(v float64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddDailyCarryoverRemainingUsd(v)
+	})
+}
+
+// UpdateDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateDailyCarryoverRemainingUsd() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateDailyCarryoverRemainingUsd()
 	})
 }
 
@@ -1617,6 +1745,48 @@ func (u *UserSubscriptionUpsertBulk) AddMonthlyUsageUsd(v float64) *UserSubscrip
 func (u *UserSubscriptionUpsertBulk) UpdateMonthlyUsageUsd() *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.UpdateMonthlyUsageUsd()
+	})
+}
+
+// SetDailyCarryoverInUsd sets the "daily_carryover_in_usd" field.
+func (u *UserSubscriptionUpsertBulk) SetDailyCarryoverInUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetDailyCarryoverInUsd(v)
+	})
+}
+
+// AddDailyCarryoverInUsd adds v to the "daily_carryover_in_usd" field.
+func (u *UserSubscriptionUpsertBulk) AddDailyCarryoverInUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddDailyCarryoverInUsd(v)
+	})
+}
+
+// UpdateDailyCarryoverInUsd sets the "daily_carryover_in_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateDailyCarryoverInUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateDailyCarryoverInUsd()
+	})
+}
+
+// SetDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field.
+func (u *UserSubscriptionUpsertBulk) SetDailyCarryoverRemainingUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetDailyCarryoverRemainingUsd(v)
+	})
+}
+
+// AddDailyCarryoverRemainingUsd adds v to the "daily_carryover_remaining_usd" field.
+func (u *UserSubscriptionUpsertBulk) AddDailyCarryoverRemainingUsd(v float64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddDailyCarryoverRemainingUsd(v)
+	})
+}
+
+// UpdateDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateDailyCarryoverRemainingUsd() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateDailyCarryoverRemainingUsd()
 	})
 }
 

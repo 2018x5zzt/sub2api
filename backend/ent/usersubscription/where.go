@@ -125,6 +125,16 @@ func MonthlyUsageUsd(v float64) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldMonthlyUsageUsd, v))
 }
 
+// DailyCarryoverInUsd applies equality check predicate on the "daily_carryover_in_usd" field. It's identical to DailyCarryoverInUsdEQ.
+func DailyCarryoverInUsd(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldDailyCarryoverInUsd, v))
+}
+
+// DailyCarryoverRemainingUsd applies equality check predicate on the "daily_carryover_remaining_usd" field. It's identical to DailyCarryoverRemainingUsdEQ.
+func DailyCarryoverRemainingUsd(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldDailyCarryoverRemainingUsd, v))
+}
+
 // AssignedBy applies equality check predicate on the "assigned_by" field. It's identical to AssignedByEQ.
 func AssignedBy(v int64) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldAssignedBy, v))
@@ -723,6 +733,86 @@ func MonthlyUsageUsdLT(v float64) predicate.UserSubscription {
 // MonthlyUsageUsdLTE applies the LTE predicate on the "monthly_usage_usd" field.
 func MonthlyUsageUsdLTE(v float64) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldLTE(FieldMonthlyUsageUsd, v))
+}
+
+// DailyCarryoverInUsdEQ applies the EQ predicate on the "daily_carryover_in_usd" field.
+func DailyCarryoverInUsdEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldDailyCarryoverInUsd, v))
+}
+
+// DailyCarryoverInUsdNEQ applies the NEQ predicate on the "daily_carryover_in_usd" field.
+func DailyCarryoverInUsdNEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldDailyCarryoverInUsd, v))
+}
+
+// DailyCarryoverInUsdIn applies the In predicate on the "daily_carryover_in_usd" field.
+func DailyCarryoverInUsdIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldDailyCarryoverInUsd, vs...))
+}
+
+// DailyCarryoverInUsdNotIn applies the NotIn predicate on the "daily_carryover_in_usd" field.
+func DailyCarryoverInUsdNotIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldDailyCarryoverInUsd, vs...))
+}
+
+// DailyCarryoverInUsdGT applies the GT predicate on the "daily_carryover_in_usd" field.
+func DailyCarryoverInUsdGT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldDailyCarryoverInUsd, v))
+}
+
+// DailyCarryoverInUsdGTE applies the GTE predicate on the "daily_carryover_in_usd" field.
+func DailyCarryoverInUsdGTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldDailyCarryoverInUsd, v))
+}
+
+// DailyCarryoverInUsdLT applies the LT predicate on the "daily_carryover_in_usd" field.
+func DailyCarryoverInUsdLT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldDailyCarryoverInUsd, v))
+}
+
+// DailyCarryoverInUsdLTE applies the LTE predicate on the "daily_carryover_in_usd" field.
+func DailyCarryoverInUsdLTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldDailyCarryoverInUsd, v))
+}
+
+// DailyCarryoverRemainingUsdEQ applies the EQ predicate on the "daily_carryover_remaining_usd" field.
+func DailyCarryoverRemainingUsdEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldDailyCarryoverRemainingUsd, v))
+}
+
+// DailyCarryoverRemainingUsdNEQ applies the NEQ predicate on the "daily_carryover_remaining_usd" field.
+func DailyCarryoverRemainingUsdNEQ(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldDailyCarryoverRemainingUsd, v))
+}
+
+// DailyCarryoverRemainingUsdIn applies the In predicate on the "daily_carryover_remaining_usd" field.
+func DailyCarryoverRemainingUsdIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldDailyCarryoverRemainingUsd, vs...))
+}
+
+// DailyCarryoverRemainingUsdNotIn applies the NotIn predicate on the "daily_carryover_remaining_usd" field.
+func DailyCarryoverRemainingUsdNotIn(vs ...float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldDailyCarryoverRemainingUsd, vs...))
+}
+
+// DailyCarryoverRemainingUsdGT applies the GT predicate on the "daily_carryover_remaining_usd" field.
+func DailyCarryoverRemainingUsdGT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldDailyCarryoverRemainingUsd, v))
+}
+
+// DailyCarryoverRemainingUsdGTE applies the GTE predicate on the "daily_carryover_remaining_usd" field.
+func DailyCarryoverRemainingUsdGTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldDailyCarryoverRemainingUsd, v))
+}
+
+// DailyCarryoverRemainingUsdLT applies the LT predicate on the "daily_carryover_remaining_usd" field.
+func DailyCarryoverRemainingUsdLT(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldDailyCarryoverRemainingUsd, v))
+}
+
+// DailyCarryoverRemainingUsdLTE applies the LTE predicate on the "daily_carryover_remaining_usd" field.
+func DailyCarryoverRemainingUsdLTE(v float64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldDailyCarryoverRemainingUsd, v))
 }
 
 // AssignedByEQ applies the EQ predicate on the "assigned_by" field.

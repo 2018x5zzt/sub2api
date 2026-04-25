@@ -476,6 +476,7 @@
                 class="input"
                 :placeholder="t('admin.groups.subscription.noLimit')"
               />
+              <p class="input-hint">{{ t('admin.groups.subscription.dailyLimitHint') }}</p>
             </div>
             <div>
               <label class="input-label">{{ t('admin.groups.subscription.weeklyLimit') }}</label>
@@ -487,6 +488,7 @@
                 class="input"
                 :placeholder="t('admin.groups.subscription.noLimit')"
               />
+              <p class="input-hint">{{ t('admin.groups.subscription.weeklyLimitHint') }}</p>
             </div>
             <div>
               <label class="input-label">{{ t('admin.groups.subscription.monthlyLimit') }}</label>
@@ -498,6 +500,7 @@
                 class="input"
                 :placeholder="t('admin.groups.subscription.noLimit')"
               />
+              <p class="input-hint">{{ t('admin.groups.subscription.monthlyLimitHint') }}</p>
             </div>
           </div>
         </div>
@@ -1230,6 +1233,7 @@
                 class="input"
                 :placeholder="t('admin.groups.subscription.noLimit')"
               />
+              <p class="input-hint">{{ t('admin.groups.subscription.dailyLimitHint') }}</p>
             </div>
             <div>
               <label class="input-label">{{ t('admin.groups.subscription.weeklyLimit') }}</label>
@@ -1241,6 +1245,7 @@
                 class="input"
                 :placeholder="t('admin.groups.subscription.noLimit')"
               />
+              <p class="input-hint">{{ t('admin.groups.subscription.weeklyLimitHint') }}</p>
             </div>
             <div>
               <label class="input-label">{{ t('admin.groups.subscription.monthlyLimit') }}</label>
@@ -1252,6 +1257,7 @@
                 class="input"
                 :placeholder="t('admin.groups.subscription.noLimit')"
               />
+              <p class="input-hint">{{ t('admin.groups.subscription.monthlyLimitHint') }}</p>
             </div>
           </div>
         </div>

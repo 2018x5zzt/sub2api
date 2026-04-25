@@ -569,6 +569,7 @@ type GatewayService struct {
 	debugClaudeMimic      atomic.Bool
 	channelService        *ChannelService
 	resolver              *ModelPricingResolver
+	subscriptionReadCacheInvalidator subscriptionReadCacheInvalidator
 	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
 	tlsFPProfileService   *TLSFingerprintProfileService
 }
@@ -645,6 +646,13 @@ func NewGatewayService(
 	svc.debugModelRouting.Store(parseDebugEnvBool(os.Getenv("SUB2API_DEBUG_MODEL_ROUTING")))
 	svc.debugClaudeMimic.Store(parseDebugEnvBool(os.Getenv("SUB2API_DEBUG_CLAUDE_MIMIC")))
 	return svc
+}
+
+func (s *GatewayService) SetSubscriptionReadCacheInvalidator(v subscriptionReadCacheInvalidator) {
+	if s == nil {
+		return
+	}
+	s.subscriptionReadCacheInvalidator = v
 }
 
 // GenerateSessionHash 从预解析请求计算粘性会话 hash
@@ -7422,6 +7430,10 @@ type apiKeyAuthCacheInvalidator interface {
 	InvalidateAuthCacheByKey(ctx context.Context, key string)
 }
 
+type subscriptionReadCacheInvalidator interface {
+	InvalidateSubCache(userID, groupID int64)
+}
+
 type usageLogBestEffortWriter interface {
 	CreateBestEffort(ctx context.Context, log *UsageLog) error
 }
@@ -7456,14 +7468,15 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 			if err := deps.userSubRepo.IncrementUsage(billingCtx, p.Subscription.ID, cost.TotalCost); err != nil {
 				slog.Error("increment subscription usage failed", "subscription_id", p.Subscription.ID, "error", err)
 			}
-			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, cost.TotalCost)
 		}
 	} else {
 		if cost.ActualCost > 0 {
 			if err := deps.userRepo.DeductBalance(billingCtx, p.User.ID, cost.ActualCost); err != nil {
 				slog.Error("deduct balance failed", "user_id", p.User.ID, "error", err)
 			}
-			deps.billingCacheService.QueueDeductBalance(p.User.ID, cost.ActualCost)
+			if deps.billingCacheService != nil {
+				deps.billingCacheService.QueueDeductBalance(p.User.ID, cost.ActualCost)
+			}
 		}
 	}
 
@@ -7489,7 +7502,7 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 		}
 	}
 
-	finalizePostUsageBilling(p, deps)
+	finalizePostUsageBilling(billingCtx, p, deps)
 }
 
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
@@ -7608,28 +7621,40 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		}
 	}
 
-	finalizePostUsageBilling(p, deps)
+	finalizePostUsageBilling(billingCtx, p, deps)
 	return true, nil
 }
 
-func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps) {
+func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) {
 	if p == nil || p.Cost == nil || deps == nil {
 		return
 	}
 
 	if p.IsSubscriptionBill {
 		if p.Cost.TotalCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
-			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.TotalCost)
+			invalidateSubscriptionReadState(ctx, deps, p.User.ID, *p.APIKey.GroupID)
 		}
-	} else if p.Cost.ActualCost > 0 && p.User != nil {
+	} else if p.Cost.ActualCost > 0 && p.User != nil && deps.billingCacheService != nil {
 		deps.billingCacheService.QueueDeductBalance(p.User.ID, p.Cost.ActualCost)
 	}
 
-	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {
+	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() && deps.billingCacheService != nil {
 		deps.billingCacheService.QueueUpdateAPIKeyRateLimitUsage(p.APIKey.ID, p.Cost.ActualCost)
 	}
 
 	deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
+}
+
+func invalidateSubscriptionReadState(ctx context.Context, deps *billingDeps, userID, groupID int64) {
+	if deps == nil {
+		return
+	}
+	if deps.subscriptionReadCacheInvalidator != nil {
+		deps.subscriptionReadCacheInvalidator.InvalidateSubCache(userID, groupID)
+	}
+	if deps.billingCacheService != nil {
+		_ = deps.billingCacheService.InvalidateSubscription(ctx, userID, groupID)
+	}
 }
 
 func detachedBillingContext(ctx context.Context) (context.Context, context.CancelFunc) {
@@ -7656,6 +7681,7 @@ type billingDeps struct {
 	userRepo            UserRepository
 	userSubRepo         UserSubscriptionRepository
 	billingCacheService *BillingCacheService
+	subscriptionReadCacheInvalidator subscriptionReadCacheInvalidator
 	deferredService     *DeferredService
 }
 
@@ -7665,6 +7691,7 @@ func (s *GatewayService) billingDeps() *billingDeps {
 		userRepo:            s.userRepo,
 		userSubRepo:         s.userSubRepo,
 		billingCacheService: s.billingCacheService,
+		subscriptionReadCacheInvalidator: s.subscriptionReadCacheInvalidator,
 		deferredService:     s.deferredService,
 	}
 }

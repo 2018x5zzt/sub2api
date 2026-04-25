@@ -218,16 +218,16 @@
                   <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
                     <div
                       class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.daily_usage_usd, row.group?.daily_limit_usd)"
+                      :class="getProgressClass(row.daily_usage_usd, getDailyDisplayLimit(row))"
                       :style="{
-                        width: getProgressWidth(row.daily_usage_usd, row.group?.daily_limit_usd)
+                        width: getProgressWidth(row.daily_usage_usd, getDailyDisplayLimit(row))
                       }"
                     ></div>
                   </div>
                   <span class="usage-amount">
                     ${{ row.daily_usage_usd?.toFixed(2) || '0.00' }}
                     <span class="text-gray-400">/</span>
-                    ${{ row.group?.daily_limit_usd?.toFixed(2) }}
+                    ${{ getDailyDisplayLimit(row)?.toFixed(2) || '0.00' }}
                   </span>
                 </div>
                 <div class="reset-info" v-if="row.daily_window_start">
@@ -245,6 +245,17 @@
                     />
                   </svg>
                   <span>{{ formatResetTime(row.daily_window_start, 'daily') }}</span>
+                </div>
+                <div
+                  v-if="row.daily_carryover_in_usd > 0"
+                  class="text-[11px] text-amber-600 dark:text-amber-400"
+                >
+                  {{
+                    t('admin.subscriptions.carryoverHint', {
+                      carryover: row.daily_carryover_in_usd?.toFixed(2) || '0.00',
+                      remaining: row.daily_remaining_carryover_usd?.toFixed(2) || '0.00'
+                    })
+                  }}
                 </div>
               </div>
 
@@ -1294,6 +1305,13 @@ const getDaysRemaining = (expiresAt: string): number | null => {
 const isExpiringSoon = (expiresAt: string): boolean => {
   const days = getDaysRemaining(expiresAt)
   return days !== null && days <= 7
+}
+
+const getDailyDisplayLimit = (sub: UserSubscription): number | null => {
+  if (sub.daily_effective_limit_usd && sub.daily_effective_limit_usd > 0) {
+    return sub.daily_effective_limit_usd
+  }
+  return sub.group?.daily_limit_usd ?? null
 }
 
 const getProgressWidth = (used: number | null | undefined, limit: number | null): string => {

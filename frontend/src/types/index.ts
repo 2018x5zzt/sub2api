@@ -1483,6 +1483,10 @@ export interface UserSubscription {
   daily_usage_usd: number
   weekly_usage_usd: number
   monthly_usage_usd: number
+  daily_carryover_in_usd: number
+  daily_effective_limit_usd: number
+  daily_remaining_total_usd: number
+  daily_remaining_carryover_usd: number
   daily_window_start: string | null
   weekly_window_start: string | null
   monthly_window_start: string | null

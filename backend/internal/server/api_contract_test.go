@@ -266,6 +266,10 @@ func TestAPIContracts(t *testing.T) {
 						"daily_window_start": null,
 						"weekly_window_start": null,
 						"monthly_window_start": null,
+						"daily_carryover_in_usd": 0,
+						"daily_effective_limit_usd": 0,
+						"daily_remaining_carryover_usd": 0,
+						"daily_remaining_total_usd": 0,
 						"daily_usage_usd": 1.23,
 						"weekly_usage_usd": 2.34,
 						"monthly_usage_usd": 3.45,
@@ -592,6 +596,44 @@ func TestAPIContracts(t *testing.T) {
 	}
 }
 
+func TestAPIContracts_AdminSubscriptionsResetDaily(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	deps := newContractDeps(t)
+	deps.userSubRepo.SetAdminList([]service.UserSubscription{
+		{ID: 11, UserID: 101, GroupID: 88, Status: service.SubscriptionStatusActive},
+		{ID: 12, UserID: 102, GroupID: 88, Status: service.SubscriptionStatusActive},
+	})
+
+	status, body := doRequest(t, deps.router, http.MethodPost, "/api/v1/admin/subscriptions/reset-daily", `{
+		"group_id": 88
+	}`, map[string]string{
+		"Content-Type": "application/json",
+	})
+	require.Equal(t, http.StatusOK, status)
+
+	var resp struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    struct {
+			ResetCount  int64     `json:"reset_count"`
+			WindowStart time.Time `json:"window_start"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &resp))
+	require.Equal(t, 0, resp.Code)
+	require.Equal(t, "success", resp.Message)
+	require.Equal(t, int64(2), resp.Data.ResetCount)
+	require.False(t, resp.Data.WindowStart.IsZero())
+	require.Equal(t, 0, resp.Data.WindowStart.Hour())
+	require.Equal(t, 0, resp.Data.WindowStart.Minute())
+	require.Equal(t, 0, resp.Data.WindowStart.Second())
+	require.Equal(t, service.SubscriptionStatusActive, deps.userSubRepo.lastListStatus)
+	require.NotNil(t, deps.userSubRepo.lastListGroupID)
+	require.Equal(t, int64(88), *deps.userSubRepo.lastListGroupID)
+	require.Equal(t, []int64{11, 12}, deps.userSubRepo.resetDailyCalls)
+}
+
 func TestAPIContracts_GetAvailableGroupModels_MixedSourceIncludesCustomAnthropicMapping(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -867,6 +909,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 
 	subscriptionService := service.NewSubscriptionService(groupRepo, userSubRepo, nil, nil, cfg)
 	subscriptionHandler := handler.NewSubscriptionHandler(subscriptionService)
+	adminSubscriptionHandler := adminhandler.NewSubscriptionHandler(subscriptionService)
 
 	redeemService := service.NewRedeemService(redeemRepo, userRepo, nil, subscriptionService, nil, nil, nil, nil)
 	redeemHandler := handler.NewRedeemHandler(redeemService, nil, nil)
@@ -932,6 +975,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Admin.POST("/accounts", adminAccountHandler.Create)
 	v1Admin.PUT("/accounts/:id", adminAccountHandler.Update)
 	v1Admin.POST("/accounts/bulk-update", adminAccountHandler.BulkUpdate)
+	v1Admin.POST("/subscriptions/reset-daily", adminSubscriptionHandler.ResetDailyQuota)
 
 	return &contractDeps{
 		now:         now,
@@ -1604,8 +1648,12 @@ func (stubRedeemCodeRepo) SumPositiveBalanceByUser(ctx context.Context, userID i
 }
 
 type stubUserSubscriptionRepo struct {
-	byUser       map[int64][]service.UserSubscription
-	activeByUser map[int64][]service.UserSubscription
+	byUser          map[int64][]service.UserSubscription
+	activeByUser    map[int64][]service.UserSubscription
+	adminList       []service.UserSubscription
+	lastListStatus  string
+	lastListGroupID *int64
+	resetDailyCalls []int64
 }
 
 func (r *stubUserSubscriptionRepo) SetByUserID(userID int64, subs []service.UserSubscription) {
@@ -1620,6 +1668,10 @@ func (r *stubUserSubscriptionRepo) SetActiveByUserID(userID int64, subs []servic
 		r.activeByUser = make(map[int64][]service.UserSubscription)
 	}
 	r.activeByUser[userID] = append([]service.UserSubscription(nil), subs...)
+}
+
+func (r *stubUserSubscriptionRepo) SetAdminList(subs []service.UserSubscription) {
+	r.adminList = append([]service.UserSubscription(nil), subs...)
 }
 
 func (stubUserSubscriptionRepo) Create(ctx context.Context, sub *service.UserSubscription) error {
@@ -1655,8 +1707,65 @@ func (r *stubUserSubscriptionRepo) ListActiveByUserID(ctx context.Context, userI
 func (stubUserSubscriptionRepo) ListByGroupID(ctx context.Context, groupID int64, params pagination.PaginationParams) ([]service.UserSubscription, *pagination.PaginationResult, error) {
 	return nil, nil, errors.New("not implemented")
 }
-func (stubUserSubscriptionRepo) List(ctx context.Context, params pagination.PaginationParams, userID, groupID *int64, status, platform, sortBy, sortOrder string) ([]service.UserSubscription, *pagination.PaginationResult, error) {
-	return nil, nil, errors.New("not implemented")
+func (r *stubUserSubscriptionRepo) List(ctx context.Context, params pagination.PaginationParams, userID, groupID *int64, status, platform, sortBy, sortOrder string) ([]service.UserSubscription, *pagination.PaginationResult, error) {
+	r.lastListStatus = status
+	if groupID != nil {
+		groupIDCopy := *groupID
+		r.lastListGroupID = &groupIDCopy
+	} else {
+		r.lastListGroupID = nil
+	}
+
+	filtered := make([]service.UserSubscription, 0, len(r.adminList))
+	for i := range r.adminList {
+		sub := r.adminList[i]
+		if userID != nil && sub.UserID != *userID {
+			continue
+		}
+		if groupID != nil && sub.GroupID != *groupID {
+			continue
+		}
+		if status != "" && sub.Status != status {
+			continue
+		}
+		filtered = append(filtered, sub)
+	}
+
+	page := params.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := params.PageSize
+	if pageSize <= 0 {
+		pageSize = len(filtered)
+		if pageSize == 0 {
+			pageSize = 1
+		}
+	}
+	start := (page - 1) * pageSize
+	pages := 1
+	if len(filtered) > 0 {
+		pages = int(math.Ceil(float64(len(filtered)) / float64(pageSize)))
+	}
+	if start >= len(filtered) {
+		return []service.UserSubscription{}, &pagination.PaginationResult{
+			Total:    int64(len(filtered)),
+			Page:     page,
+			PageSize: pageSize,
+			Pages:    pages,
+		}, nil
+	}
+	end := start + pageSize
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+
+	return append([]service.UserSubscription(nil), filtered[start:end]...), &pagination.PaginationResult{
+		Total:    int64(len(filtered)),
+		Page:     page,
+		PageSize: pageSize,
+		Pages:    pages,
+	}, nil
 }
 func (stubUserSubscriptionRepo) ExistsByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (bool, error) {
 	return false, errors.New("not implemented")
@@ -1673,8 +1782,12 @@ func (stubUserSubscriptionRepo) UpdateNotes(ctx context.Context, subscriptionID 
 func (stubUserSubscriptionRepo) ActivateWindows(ctx context.Context, id int64, start time.Time) error {
 	return errors.New("not implemented")
 }
-func (stubUserSubscriptionRepo) ResetDailyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
+func (stubUserSubscriptionRepo) AdvanceDailyWindow(ctx context.Context, id int64, newWindowStart time.Time, carryoverIn, carryoverRemaining float64) error {
 	return errors.New("not implemented")
+}
+func (r *stubUserSubscriptionRepo) ResetDailyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
+	r.resetDailyCalls = append(r.resetDailyCalls, id)
+	return nil
 }
 func (stubUserSubscriptionRepo) ResetWeeklyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
 	return errors.New("not implemented")

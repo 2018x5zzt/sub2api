@@ -38,6 +38,8 @@ func (r *resetQuotaUserSubRepoStub) ResetDailyUsage(_ context.Context, _ int64, 
 	r.resetDailyCalled = true
 	if r.resetDailyErr == nil && r.sub != nil {
 		r.sub.DailyUsageUSD = 0
+		r.sub.DailyCarryoverInUSD = 0
+		r.sub.DailyCarryoverRemainingUSD = 0
 		r.sub.DailyWindowStart = &windowStart
 	}
 	return r.resetDailyErr
@@ -85,6 +87,28 @@ func TestAdminResetQuota_ResetDailyOnly(t *testing.T) {
 	require.True(t, stub.resetDailyCalled, "应调用 ResetDailyUsage")
 	require.False(t, stub.resetWeeklyCalled, "不应调用 ResetWeeklyUsage")
 	require.False(t, stub.resetMonthlyCalled, "不应调用 ResetMonthlyUsage")
+}
+
+func TestAdminResetQuota_ResetDailyClearsCarryover(t *testing.T) {
+	stub := &resetQuotaUserSubRepoStub{
+		sub: &UserSubscription{
+			ID:                        12,
+			UserID:                    10,
+			GroupID:                   20,
+			DailyUsageUSD:             18,
+			DailyCarryoverInUSD:       9,
+			DailyCarryoverRemainingUSD: 4,
+		},
+	}
+	svc := newResetQuotaSvc(stub)
+
+	result, err := svc.AdminResetQuota(context.Background(), 12, true, false, false)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.InDelta(t, 0, result.DailyUsageUSD, 1e-6)
+	require.InDelta(t, 0, result.DailyCarryoverInUSD, 1e-6)
+	require.InDelta(t, 0, result.DailyCarryoverRemainingUSD, 1e-6)
 }
 
 func TestAdminResetQuota_ResetWeeklyOnly(t *testing.T) {

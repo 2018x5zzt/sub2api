@@ -32030,39 +32030,43 @@ func (m *UserAttributeValueMutation) ResetEdge(name string) error {
 // UserSubscriptionMutation represents an operation that mutates the UserSubscription nodes in the graph.
 type UserSubscriptionMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *int64
-	created_at              *time.Time
-	updated_at              *time.Time
-	deleted_at              *time.Time
-	starts_at               *time.Time
-	expires_at              *time.Time
-	status                  *string
-	daily_window_start      *time.Time
-	weekly_window_start     *time.Time
-	monthly_window_start    *time.Time
-	daily_usage_usd         *float64
-	adddaily_usage_usd      *float64
-	weekly_usage_usd        *float64
-	addweekly_usage_usd     *float64
-	monthly_usage_usd       *float64
-	addmonthly_usage_usd    *float64
-	assigned_at             *time.Time
-	notes                   *string
-	clearedFields           map[string]struct{}
-	user                    *int64
-	cleareduser             bool
-	group                   *int64
-	clearedgroup            bool
-	assigned_by_user        *int64
-	clearedassigned_by_user bool
-	usage_logs              map[int64]struct{}
-	removedusage_logs       map[int64]struct{}
-	clearedusage_logs       bool
-	done                    bool
-	oldValue                func(context.Context) (*UserSubscription, error)
-	predicates              []predicate.UserSubscription
+	op                               Op
+	typ                              string
+	id                               *int64
+	created_at                       *time.Time
+	updated_at                       *time.Time
+	deleted_at                       *time.Time
+	starts_at                        *time.Time
+	expires_at                       *time.Time
+	status                           *string
+	daily_window_start               *time.Time
+	weekly_window_start              *time.Time
+	monthly_window_start             *time.Time
+	daily_usage_usd                  *float64
+	adddaily_usage_usd               *float64
+	weekly_usage_usd                 *float64
+	addweekly_usage_usd              *float64
+	monthly_usage_usd                *float64
+	addmonthly_usage_usd             *float64
+	daily_carryover_in_usd           *float64
+	adddaily_carryover_in_usd        *float64
+	daily_carryover_remaining_usd    *float64
+	adddaily_carryover_remaining_usd *float64
+	assigned_at                      *time.Time
+	notes                            *string
+	clearedFields                    map[string]struct{}
+	user                             *int64
+	cleareduser                      bool
+	group                            *int64
+	clearedgroup                     bool
+	assigned_by_user                 *int64
+	clearedassigned_by_user          bool
+	usage_logs                       map[int64]struct{}
+	removedusage_logs                map[int64]struct{}
+	clearedusage_logs                bool
+	done                             bool
+	oldValue                         func(context.Context) (*UserSubscription, error)
+	predicates                       []predicate.UserSubscription
 }
 
 var _ ent.Mutation = (*UserSubscriptionMutation)(nil)
@@ -32779,6 +32783,118 @@ func (m *UserSubscriptionMutation) ResetMonthlyUsageUsd() {
 	m.addmonthly_usage_usd = nil
 }
 
+// SetDailyCarryoverInUsd sets the "daily_carryover_in_usd" field.
+func (m *UserSubscriptionMutation) SetDailyCarryoverInUsd(f float64) {
+	m.daily_carryover_in_usd = &f
+	m.adddaily_carryover_in_usd = nil
+}
+
+// DailyCarryoverInUsd returns the value of the "daily_carryover_in_usd" field in the mutation.
+func (m *UserSubscriptionMutation) DailyCarryoverInUsd() (r float64, exists bool) {
+	v := m.daily_carryover_in_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyCarryoverInUsd returns the old "daily_carryover_in_usd" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldDailyCarryoverInUsd(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyCarryoverInUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyCarryoverInUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyCarryoverInUsd: %w", err)
+	}
+	return oldValue.DailyCarryoverInUsd, nil
+}
+
+// AddDailyCarryoverInUsd adds f to the "daily_carryover_in_usd" field.
+func (m *UserSubscriptionMutation) AddDailyCarryoverInUsd(f float64) {
+	if m.adddaily_carryover_in_usd != nil {
+		*m.adddaily_carryover_in_usd += f
+	} else {
+		m.adddaily_carryover_in_usd = &f
+	}
+}
+
+// AddedDailyCarryoverInUsd returns the value that was added to the "daily_carryover_in_usd" field in this mutation.
+func (m *UserSubscriptionMutation) AddedDailyCarryoverInUsd() (r float64, exists bool) {
+	v := m.adddaily_carryover_in_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDailyCarryoverInUsd resets all changes to the "daily_carryover_in_usd" field.
+func (m *UserSubscriptionMutation) ResetDailyCarryoverInUsd() {
+	m.daily_carryover_in_usd = nil
+	m.adddaily_carryover_in_usd = nil
+}
+
+// SetDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field.
+func (m *UserSubscriptionMutation) SetDailyCarryoverRemainingUsd(f float64) {
+	m.daily_carryover_remaining_usd = &f
+	m.adddaily_carryover_remaining_usd = nil
+}
+
+// DailyCarryoverRemainingUsd returns the value of the "daily_carryover_remaining_usd" field in the mutation.
+func (m *UserSubscriptionMutation) DailyCarryoverRemainingUsd() (r float64, exists bool) {
+	v := m.daily_carryover_remaining_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDailyCarryoverRemainingUsd returns the old "daily_carryover_remaining_usd" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldDailyCarryoverRemainingUsd(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDailyCarryoverRemainingUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDailyCarryoverRemainingUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDailyCarryoverRemainingUsd: %w", err)
+	}
+	return oldValue.DailyCarryoverRemainingUsd, nil
+}
+
+// AddDailyCarryoverRemainingUsd adds f to the "daily_carryover_remaining_usd" field.
+func (m *UserSubscriptionMutation) AddDailyCarryoverRemainingUsd(f float64) {
+	if m.adddaily_carryover_remaining_usd != nil {
+		*m.adddaily_carryover_remaining_usd += f
+	} else {
+		m.adddaily_carryover_remaining_usd = &f
+	}
+}
+
+// AddedDailyCarryoverRemainingUsd returns the value that was added to the "daily_carryover_remaining_usd" field in this mutation.
+func (m *UserSubscriptionMutation) AddedDailyCarryoverRemainingUsd() (r float64, exists bool) {
+	v := m.adddaily_carryover_remaining_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDailyCarryoverRemainingUsd resets all changes to the "daily_carryover_remaining_usd" field.
+func (m *UserSubscriptionMutation) ResetDailyCarryoverRemainingUsd() {
+	m.daily_carryover_remaining_usd = nil
+	m.adddaily_carryover_remaining_usd = nil
+}
+
 // SetAssignedBy sets the "assigned_by" field.
 func (m *UserSubscriptionMutation) SetAssignedBy(i int64) {
 	m.assigned_by_user = &i
@@ -33095,7 +33211,7 @@ func (m *UserSubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserSubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 19)
 	if m.created_at != nil {
 		fields = append(fields, usersubscription.FieldCreatedAt)
 	}
@@ -33137,6 +33253,12 @@ func (m *UserSubscriptionMutation) Fields() []string {
 	}
 	if m.monthly_usage_usd != nil {
 		fields = append(fields, usersubscription.FieldMonthlyUsageUsd)
+	}
+	if m.daily_carryover_in_usd != nil {
+		fields = append(fields, usersubscription.FieldDailyCarryoverInUsd)
+	}
+	if m.daily_carryover_remaining_usd != nil {
+		fields = append(fields, usersubscription.FieldDailyCarryoverRemainingUsd)
 	}
 	if m.assigned_by_user != nil {
 		fields = append(fields, usersubscription.FieldAssignedBy)
@@ -33183,6 +33305,10 @@ func (m *UserSubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.WeeklyUsageUsd()
 	case usersubscription.FieldMonthlyUsageUsd:
 		return m.MonthlyUsageUsd()
+	case usersubscription.FieldDailyCarryoverInUsd:
+		return m.DailyCarryoverInUsd()
+	case usersubscription.FieldDailyCarryoverRemainingUsd:
+		return m.DailyCarryoverRemainingUsd()
 	case usersubscription.FieldAssignedBy:
 		return m.AssignedBy()
 	case usersubscription.FieldAssignedAt:
@@ -33226,6 +33352,10 @@ func (m *UserSubscriptionMutation) OldField(ctx context.Context, name string) (e
 		return m.OldWeeklyUsageUsd(ctx)
 	case usersubscription.FieldMonthlyUsageUsd:
 		return m.OldMonthlyUsageUsd(ctx)
+	case usersubscription.FieldDailyCarryoverInUsd:
+		return m.OldDailyCarryoverInUsd(ctx)
+	case usersubscription.FieldDailyCarryoverRemainingUsd:
+		return m.OldDailyCarryoverRemainingUsd(ctx)
 	case usersubscription.FieldAssignedBy:
 		return m.OldAssignedBy(ctx)
 	case usersubscription.FieldAssignedAt:
@@ -33339,6 +33469,20 @@ func (m *UserSubscriptionMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetMonthlyUsageUsd(v)
 		return nil
+	case usersubscription.FieldDailyCarryoverInUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyCarryoverInUsd(v)
+		return nil
+	case usersubscription.FieldDailyCarryoverRemainingUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDailyCarryoverRemainingUsd(v)
+		return nil
 	case usersubscription.FieldAssignedBy:
 		v, ok := value.(int64)
 		if !ok {
@@ -33377,6 +33521,12 @@ func (m *UserSubscriptionMutation) AddedFields() []string {
 	if m.addmonthly_usage_usd != nil {
 		fields = append(fields, usersubscription.FieldMonthlyUsageUsd)
 	}
+	if m.adddaily_carryover_in_usd != nil {
+		fields = append(fields, usersubscription.FieldDailyCarryoverInUsd)
+	}
+	if m.adddaily_carryover_remaining_usd != nil {
+		fields = append(fields, usersubscription.FieldDailyCarryoverRemainingUsd)
+	}
 	return fields
 }
 
@@ -33391,6 +33541,10 @@ func (m *UserSubscriptionMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedWeeklyUsageUsd()
 	case usersubscription.FieldMonthlyUsageUsd:
 		return m.AddedMonthlyUsageUsd()
+	case usersubscription.FieldDailyCarryoverInUsd:
+		return m.AddedDailyCarryoverInUsd()
+	case usersubscription.FieldDailyCarryoverRemainingUsd:
+		return m.AddedDailyCarryoverRemainingUsd()
 	}
 	return nil, false
 }
@@ -33420,6 +33574,20 @@ func (m *UserSubscriptionMutation) AddField(name string, value ent.Value) error 
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddMonthlyUsageUsd(v)
+		return nil
+	case usersubscription.FieldDailyCarryoverInUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailyCarryoverInUsd(v)
+		return nil
+	case usersubscription.FieldDailyCarryoverRemainingUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDailyCarryoverRemainingUsd(v)
 		return nil
 	}
 	return fmt.Errorf("unknown UserSubscription numeric field %s", name)
@@ -33528,6 +33696,12 @@ func (m *UserSubscriptionMutation) ResetField(name string) error {
 		return nil
 	case usersubscription.FieldMonthlyUsageUsd:
 		m.ResetMonthlyUsageUsd()
+		return nil
+	case usersubscription.FieldDailyCarryoverInUsd:
+		m.ResetDailyCarryoverInUsd()
+		return nil
+	case usersubscription.FieldDailyCarryoverRemainingUsd:
+		m.ResetDailyCarryoverRemainingUsd()
 		return nil
 	case usersubscription.FieldAssignedBy:
 		m.ResetAssignedBy()

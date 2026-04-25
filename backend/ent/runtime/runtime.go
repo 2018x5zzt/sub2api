@@ -1329,8 +1329,16 @@ func init() {
 	usersubscriptionDescMonthlyUsageUsd := usersubscriptionFields[10].Descriptor()
 	// usersubscription.DefaultMonthlyUsageUsd holds the default value on creation for the monthly_usage_usd field.
 	usersubscription.DefaultMonthlyUsageUsd = usersubscriptionDescMonthlyUsageUsd.Default.(float64)
+	// usersubscriptionDescDailyCarryoverInUsd is the schema descriptor for daily_carryover_in_usd field.
+	usersubscriptionDescDailyCarryoverInUsd := usersubscriptionFields[11].Descriptor()
+	// usersubscription.DefaultDailyCarryoverInUsd holds the default value on creation for the daily_carryover_in_usd field.
+	usersubscription.DefaultDailyCarryoverInUsd = usersubscriptionDescDailyCarryoverInUsd.Default.(float64)
+	// usersubscriptionDescDailyCarryoverRemainingUsd is the schema descriptor for daily_carryover_remaining_usd field.
+	usersubscriptionDescDailyCarryoverRemainingUsd := usersubscriptionFields[12].Descriptor()
+	// usersubscription.DefaultDailyCarryoverRemainingUsd holds the default value on creation for the daily_carryover_remaining_usd field.
+	usersubscription.DefaultDailyCarryoverRemainingUsd = usersubscriptionDescDailyCarryoverRemainingUsd.Default.(float64)
 	// usersubscriptionDescAssignedAt is the schema descriptor for assigned_at field.
-	usersubscriptionDescAssignedAt := usersubscriptionFields[12].Descriptor()
+	usersubscriptionDescAssignedAt := usersubscriptionFields[14].Descriptor()
 	// usersubscription.DefaultAssignedAt holds the default value on creation for the assigned_at field.
 	usersubscription.DefaultAssignedAt = usersubscriptionDescAssignedAt.Default.(func() time.Time)
 }

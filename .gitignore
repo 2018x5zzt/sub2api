@@ -129,6 +129,9 @@ deploy/docker-compose.override.yml
 .gocache/
 vite.config.js
 docs/*
+!docs/superpowers/
+!docs/superpowers/plans/
+!docs/superpowers/plans/2026-04-25-subscription-daily-carryover-rollout.md
 .serena/
 .codex/
 .worktrees/

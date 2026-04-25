@@ -645,11 +645,17 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	}
 
 	// 判断计费模式
-	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
+	isSubscriptionMode := group != nil && group.IsSubscriptionType()
 
 	if isSubscriptionMode {
-		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
-			return err
+		if subscription != nil {
+			if err := s.checkSubscriptionEligibilityFromSnapshot(group, subscription); err != nil {
+				return err
+			}
+		} else {
+			if err := s.checkSubscriptionEligibility(ctx, user.ID, group); err != nil {
+				return err
+			}
 		}
 	} else {
 		if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
@@ -689,9 +695,8 @@ func (s *BillingCacheService) checkBalanceEligibility(ctx context.Context, userI
 }
 
 // checkSubscriptionEligibility 检查订阅模式资格
-func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, userID int64, group *Group, subscription *UserSubscription) error {
-	// 获取订阅缓存数据
-	subData, err := s.GetSubscriptionStatus(ctx, userID, group.ID)
+func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, userID int64, group *Group) error {
+	subscription, err := s.subRepo.GetActiveByUserIDAndGroupID(ctx, userID, group.ID)
 	if err != nil {
 		if s.circuitBreaker != nil {
 			s.circuitBreaker.OnFailure(err)
@@ -703,26 +708,27 @@ func (s *BillingCacheService) checkSubscriptionEligibility(ctx context.Context, 
 		s.circuitBreaker.OnSuccess()
 	}
 
-	// 检查订阅状态
-	if subData.Status != SubscriptionStatusActive {
+	return s.checkSubscriptionEligibilityFromSnapshot(group, subscription)
+}
+
+func (s *BillingCacheService) checkSubscriptionEligibilityFromSnapshot(group *Group, subscription *UserSubscription) error {
+	if subscription == nil {
 		return ErrSubscriptionInvalid
 	}
 
-	// 检查是否过期
-	if time.Now().After(subData.ExpiresAt) {
+	if subscription.Status != SubscriptionStatusActive {
 		return ErrSubscriptionInvalid
 	}
-
-	// 检查限额（使用传入的Group限额配置）
-	if group.HasDailyLimit() && subData.DailyUsage >= *group.DailyLimitUSD {
+	if subscription.IsExpired() {
+		return ErrSubscriptionInvalid
+	}
+	if !subscription.CheckDailyLimit(group, 0) {
 		return ErrDailyLimitExceeded
 	}
-
-	if group.HasWeeklyLimit() && subData.WeeklyUsage >= *group.WeeklyLimitUSD {
+	if !subscription.CheckWeeklyLimit(group, 0) {
 		return ErrWeeklyLimitExceeded
 	}
-
-	if group.HasMonthlyLimit() && subData.MonthlyUsage >= *group.MonthlyLimitUSD {
+	if !subscription.CheckMonthlyLimit(group, 0) {
 		return ErrMonthlyLimitExceeded
 	}
 
