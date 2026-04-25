@@ -434,6 +434,8 @@ func TestFrontendServer_Middleware(t *testing.T) {
 			"/api/v1/users",
 			"/v1/models",
 			"/v1beta/chat",
+			"/api-proxy/v1/images/generations",
+			"/openai/v1/images/generations",
 			"/sora/v1/models",
 			"/antigravity/test",
 			"/setup/init",
@@ -485,6 +487,31 @@ func TestFrontendServer_Middleware(t *testing.T) {
 		assert.True(t, nextCalled, "next handler should be called for compact API route")
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.JSONEq(t, `{"ok":true}`, w.Body.String())
+	})
+
+	t.Run("does_not_serve_index_for_unknown_api_proxy_routes", func(t *testing.T) {
+		provider := &mockSettingsProvider{
+			settings: map[string]string{"test": "value"},
+		}
+
+		server, err := NewFrontendServer(provider)
+		require.NoError(t, err)
+
+		router := gin.New()
+		router.Use(func(c *gin.Context) {
+			c.Set(middleware.CSPNonceKey, "test-nonce")
+			c.Next()
+		})
+		router.Use(server.Middleware())
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api-proxy/v1/images/generations", strings.NewReader(`{"model":"gpt-image-2"}`))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+
+		assert.NotEqual(t, http.StatusOK, w.Code)
+		assert.NotContains(t, strings.ToLower(w.Header().Get("Content-Type")), "text/html")
+		assert.NotContains(t, strings.ToLower(w.Body.String()), "<!doctype html")
 	})
 
 	t.Run("serves_index_for_spa_routes", func(t *testing.T) {

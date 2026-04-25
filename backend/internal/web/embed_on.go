@@ -254,8 +254,10 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 func shouldBypassEmbeddedFrontend(path string) bool {
 	trimmed := strings.TrimSpace(path)
 	return strings.HasPrefix(trimmed, "/api/") ||
+		strings.HasPrefix(trimmed, "/api-proxy/") ||
 		strings.HasPrefix(trimmed, "/v1/") ||
 		strings.HasPrefix(trimmed, "/v1beta/") ||
+		strings.HasPrefix(trimmed, "/openai/") ||
 		strings.HasPrefix(trimmed, "/sora/") ||
 		strings.HasPrefix(trimmed, "/antigravity/") ||
 		strings.HasPrefix(trimmed, "/setup/") ||
