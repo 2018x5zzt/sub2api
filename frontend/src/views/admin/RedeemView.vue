@@ -238,8 +238,19 @@
             <!-- 订阅类型：显示分组选择和有效天数 -->
             <template v-if="generateForm.type === 'subscription'">
               <div>
-                <label class="input-label">{{ t('admin.redeem.selectGroup') }}</label>
+                <label class="input-label">{{ t('admin.redeem.subscriptionTarget') }}</label>
+                <Select v-model="generateForm.subscription_target" :options="subscriptionTargetOptions" />
+              </div>
+              <div>
+                <label class="input-label">
+                  {{
+                    generateForm.subscription_target === 'product'
+                      ? t('admin.redeem.selectProduct')
+                      : t('admin.redeem.selectGroup')
+                  }}
+                </label>
                 <Select
+                  v-if="generateForm.subscription_target === 'group'"
                   v-model="generateForm.group_id"
                   :options="subscriptionGroupOptions"
                   :placeholder="t('admin.redeem.selectGroupPlaceholder')"
@@ -267,6 +278,12 @@
                     />
                   </template>
                 </Select>
+                <Select
+                  v-else
+                  v-model="generateForm.product_id"
+                  :options="subscriptionProductOptions"
+                  :placeholder="t('admin.redeem.selectProductPlaceholder')"
+                />
               </div>
               <div>
                 <label class="input-label">{{ t('admin.redeem.validityDays') }}</label>
@@ -405,7 +422,8 @@ import type {
   RedeemCodeSourceType,
   Group,
   GroupPlatform,
-  SubscriptionType
+  SubscriptionType,
+  AdminSubscriptionProduct
 } from '@/types'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
@@ -435,6 +453,7 @@ const showGenerateDialog = ref(false)
 const showResultDialog = ref(false)
 const generatedCodes = ref<RedeemCode[]>([])
 const subscriptionGroups = ref<Group[]>([])
+const subscriptionProducts = ref<AdminSubscriptionProduct[]>([])
 
 // 订阅类型分组选项
 const subscriptionGroupOptions = computed(() => {
@@ -449,6 +468,20 @@ const subscriptionGroupOptions = computed(() => {
       rate: g.rate_multiplier
     }))
 })
+
+const subscriptionProductOptions = computed(() =>
+  subscriptionProducts.value
+    .filter((product) => product.status === 'active' || product.status === 'draft')
+    .map((product) => ({
+      value: product.id,
+      label: product.name
+    }))
+)
+
+const subscriptionTargetOptions = computed(() => [
+  { value: 'group', label: t('admin.redeem.subscriptionTargetGroup') },
+  { value: 'product', label: t('admin.redeem.subscriptionTargetProduct') }
+])
 
 const generatedCodesText = computed(() => {
   return generatedCodes.value.map((code) => code.code).join('\n')
@@ -563,7 +596,9 @@ const generateForm = reactive({
   source_type: 'system_grant' as RedeemCodeSourceType,
   value: 10,
   count: 1,
+  subscription_target: 'group' as 'group' | 'product',
   group_id: null as number | null,
+  product_id: null as number | null,
   validity_days: 30
 })
 
@@ -647,9 +682,21 @@ const handlePageSizeChange = (pageSize: number) => {
 }
 
 const handleGenerateCodes = async () => {
-  // 订阅类型必须选择分组
-  if (generateForm.type === 'subscription' && !generateForm.group_id) {
+  // 订阅类型必须选择一个目标：legacy group 或 shared product。
+  if (
+    generateForm.type === 'subscription' &&
+    generateForm.subscription_target === 'group' &&
+    !generateForm.group_id
+  ) {
     appStore.showError(t('admin.redeem.groupRequired'))
+    return
+  }
+  if (
+    generateForm.type === 'subscription' &&
+    generateForm.subscription_target === 'product' &&
+    !generateForm.product_id
+  ) {
+    appStore.showError(t('admin.redeem.productRequired'))
     return
   }
 
@@ -660,15 +707,22 @@ const handleGenerateCodes = async () => {
       generateForm.type,
       generateForm.value,
       generateForm.type === 'balance' ? generateForm.source_type : 'system_grant',
-      generateForm.type === 'subscription' ? generateForm.group_id : undefined,
-      generateForm.type === 'subscription' ? generateForm.validity_days : undefined
+      generateForm.type === 'subscription' && generateForm.subscription_target === 'group'
+        ? generateForm.group_id
+        : undefined,
+      generateForm.type === 'subscription' ? generateForm.validity_days : undefined,
+      generateForm.type === 'subscription' && generateForm.subscription_target === 'product'
+        ? generateForm.product_id
+        : undefined
     )
     showGenerateDialog.value = false
     generatedCodes.value = result
     showResultDialog.value = true
     // 重置表单
     generateForm.source_type = 'system_grant'
+    generateForm.subscription_target = 'group'
     generateForm.group_id = null
+    generateForm.product_id = null
     generateForm.validity_days = 30
     loadCodes()
   } catch (error: any) {
@@ -765,9 +819,19 @@ const loadSubscriptionGroups = async () => {
   }
 }
 
+const loadSubscriptionProducts = async () => {
+  try {
+    subscriptionProducts.value = await adminAPI.subscriptionProducts.listProducts()
+  } catch (error) {
+    console.error('Error loading subscription products:', error)
+    subscriptionProducts.value = []
+  }
+}
+
 onMounted(() => {
   loadCodes()
   loadSubscriptionGroups()
+  loadSubscriptionProducts()
 })
 
 onUnmounted(() => {

@@ -341,6 +341,7 @@ export default {
     users: 'Users',
     groups: 'Groups',
     subscriptions: 'Subscriptions',
+    subscriptionProducts: 'Subscription Products',
     accounts: 'Accounts',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
@@ -2159,6 +2160,34 @@ export default {
       }
     },
 
+    subscriptionProducts: {
+      title: 'Subscription Products',
+      description: 'Manage shared product subscriptions and group debit multipliers',
+      empty: 'No subscription products yet',
+      create: 'Create Product',
+      code: 'Code',
+      name: 'Name',
+      descriptionLabel: 'Description',
+      status: 'Status',
+      validityDays: 'Validity Days',
+      monthlyLimit: 'Monthly Limit',
+      save: 'Save',
+      bindings: 'Group Bindings',
+      selectProduct: 'Select a product',
+      selectProductHint: 'Select a product to edit group bindings',
+      addBinding: 'Add Binding',
+      saveBindings: 'Save Bindings',
+      days: 'days',
+      statusDraft: 'Draft',
+      statusActive: 'Active',
+      statusDisabled: 'Disabled',
+      created: 'Subscription product created',
+      bindingsSaved: 'Bindings saved',
+      loadFailed: 'Failed to load subscription products',
+      createFailed: 'Failed to create subscription product',
+      bindingsSaveFailed: 'Failed to save bindings'
+    },
+
     // Accounts
     accounts: {
       title: 'Account Management',
@@ -3424,10 +3453,16 @@ export default {
         compensation: 'Compensation',
         system_grant: 'System Grant'
       },
+      subscriptionTarget: 'Subscription Target',
+      subscriptionTargetGroup: 'Group',
+      subscriptionTargetProduct: 'Product',
       selectGroup: 'Select Group',
       selectGroupPlaceholder: 'Choose a subscription group',
+      selectProduct: 'Select Product',
+      selectProductPlaceholder: 'Choose a subscription product',
       validityDays: 'Validity Days',
       groupRequired: 'Please select a subscription group',
+      productRequired: 'Please select a subscription product',
       days: ' days',
       status: {
         unused: 'Unused',
@@ -4555,6 +4590,11 @@ export default {
         defaultSubscriptionsDuplicate:
           'Duplicate subscription group: {groupId}. Each group can only appear once.',
         subscriptionGroup: 'Subscription Group',
+        defaultProductSubscriptions: 'Default Product Subscriptions',
+        defaultProductSubscriptionsHint: 'Auto-assign these shared products to new users',
+        addDefaultProductSubscription: 'Add Product Subscription',
+        defaultProductSubscriptionsEmpty: 'No default product subscriptions configured.',
+        subscriptionProduct: 'Subscription Product',
         subscriptionValidityDays: 'Validity (days)'
       },
       enterpriseVisibleGroups: {

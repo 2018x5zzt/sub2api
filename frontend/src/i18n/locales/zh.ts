@@ -341,6 +341,7 @@ export default {
     users: '用户管理',
     groups: '分组管理',
     subscriptions: '订阅管理',
+    subscriptionProducts: '订阅产品',
     accounts: '账号管理',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
@@ -2238,6 +2239,34 @@ export default {
       }
     },
 
+    subscriptionProducts: {
+      title: '订阅产品',
+      description: '管理共享订阅产品和分组扣费倍率',
+      empty: '暂无订阅产品',
+      create: '创建产品',
+      code: '代码',
+      name: '名称',
+      descriptionLabel: '描述',
+      status: '状态',
+      validityDays: '有效期天数',
+      monthlyLimit: '月额度',
+      save: '保存',
+      bindings: '分组绑定',
+      selectProduct: '选择产品',
+      selectProductHint: '选择一个产品后编辑分组绑定',
+      addBinding: '添加绑定',
+      saveBindings: '保存绑定',
+      days: '天',
+      statusDraft: '草稿',
+      statusActive: '启用',
+      statusDisabled: '禁用',
+      created: '订阅产品已创建',
+      bindingsSaved: '绑定已保存',
+      loadFailed: '加载订阅产品失败',
+      createFailed: '创建订阅产品失败',
+      bindingsSaveFailed: '保存绑定失败'
+    },
+
     // Accounts Management
     accounts: {
       title: '账号管理',
@@ -3544,10 +3573,16 @@ export default {
         compensation: '补偿发放',
         system_grant: '系统发放'
       },
+      subscriptionTarget: '订阅目标',
+      subscriptionTargetGroup: '分组',
+      subscriptionTargetProduct: '产品',
       selectGroup: '选择分组',
       selectGroupPlaceholder: '选择订阅分组',
+      selectProduct: '选择产品',
+      selectProductPlaceholder: '选择订阅产品',
       validityDays: '有效天数',
       groupRequired: '请选择订阅分组',
+      productRequired: '请选择订阅产品',
       days: '天',
       status: {
         unused: '未使用',
@@ -4719,6 +4754,11 @@ export default {
         defaultSubscriptionsEmpty: '未配置默认订阅。新用户不会自动获得订阅套餐。',
         defaultSubscriptionsDuplicate: '默认订阅存在重复分组：{groupId}。每个分组只能出现一次。',
         subscriptionGroup: '订阅分组',
+        defaultProductSubscriptions: '默认产品订阅',
+        defaultProductSubscriptionsHint: '新用户创建或注册时自动分配这些共享产品',
+        addDefaultProductSubscription: '添加产品订阅',
+        defaultProductSubscriptionsEmpty: '未配置默认产品订阅。',
+        subscriptionProduct: '订阅产品',
         subscriptionValidityDays: '有效期（天）'
       },
       enterpriseVisibleGroups: {

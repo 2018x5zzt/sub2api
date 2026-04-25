@@ -1164,6 +1164,74 @@
                 </div>
               </div>
             </div>
+
+            <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+              <div class="mb-3 flex items-center justify-between">
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">
+                    {{ t('admin.settings.defaults.defaultProductSubscriptions') }}
+                  </label>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.defaults.defaultProductSubscriptionsHint') }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  @click="addDefaultProductSubscription"
+                  :disabled="subscriptionProducts.length === 0"
+                >
+                  {{ t('admin.settings.defaults.addDefaultProductSubscription') }}
+                </button>
+              </div>
+
+              <div
+                v-if="form.default_subscription_products.length === 0"
+                class="rounded border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
+              >
+                {{ t('admin.settings.defaults.defaultProductSubscriptionsEmpty') }}
+              </div>
+
+              <div v-else class="space-y-3">
+                <div
+                  v-for="(item, index) in form.default_subscription_products"
+                  :key="`default-product-sub-${index}`"
+                  class="grid grid-cols-1 gap-3 rounded border border-gray-200 p-3 md:grid-cols-[1fr_160px_auto] dark:border-dark-600"
+                >
+                  <div>
+                    <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                      {{ t('admin.settings.defaults.subscriptionProduct') }}
+                    </label>
+                    <Select
+                      v-model="item.product_id"
+                      :options="defaultSubscriptionProductOptions"
+                      :placeholder="t('admin.settings.defaults.subscriptionProduct')"
+                    />
+                  </div>
+                  <div>
+                    <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                      {{ t('admin.settings.defaults.subscriptionValidityDays') }}
+                    </label>
+                    <input
+                      v-model.number="item.validity_days"
+                      type="number"
+                      min="1"
+                      max="36500"
+                      class="input h-[42px]"
+                    />
+                  </div>
+                  <div class="flex items-end">
+                    <button
+                      type="button"
+                      class="btn btn-secondary default-sub-delete-btn w-full text-red-600 hover:text-red-700 dark:text-red-400"
+                      @click="removeDefaultProductSubscription(index)"
+                    >
+                      {{ t('common.delete') }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2074,9 +2142,10 @@ import { adminAPI } from '@/api'
 import type {
   SystemSettings,
   UpdateSettingsRequest,
-  DefaultSubscriptionSetting
+  DefaultSubscriptionSetting,
+  DefaultSubscriptionProductSetting
 } from '@/api/admin/settings'
-import type { AdminGroup } from '@/types'
+import type { AdminGroup, AdminSubscriptionProduct } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import Select from '@/components/common/Select.vue'
@@ -2132,6 +2201,7 @@ const adminApiKeyOperating = ref(false)
 const newAdminApiKey = ref('')
 const availableEnterpriseGroups = ref<AdminGroup[]>([])
 const subscriptionGroups = ref<AdminGroup[]>([])
+const subscriptionProducts = ref<AdminSubscriptionProduct[]>([])
 
 // Overload Cooldown (529) 状态
 const overloadCooldownLoading = ref(true)
@@ -2202,6 +2272,7 @@ const form = reactive<SettingsForm>({
   default_balance: 0,
   default_concurrency: 1,
   default_subscriptions: [],
+  default_subscription_products: [],
   enterprise_visible_groups: [] as Array<{ enterprise_name: string; visible_group_ids: number[] }>,
   site_name: 'Sub2API',
   site_logo: '',
@@ -2269,6 +2340,13 @@ const defaultSubscriptionGroupOptions = computed<DefaultSubscriptionGroupOption[
     platform: group.platform,
     subscriptionType: group.subscription_type,
     rate: group.rate_multiplier
+  }))
+)
+
+const defaultSubscriptionProductOptions = computed(() =>
+  subscriptionProducts.value.map((product) => ({
+    value: product.id,
+    label: product.name
   }))
 )
 
@@ -2413,6 +2491,14 @@ async function loadSettings() {
             validity_days: item.validity_days
           }))
       : []
+    form.default_subscription_products = Array.isArray(settings.default_subscription_products)
+      ? settings.default_subscription_products
+          .filter((item) => item.product_id > 0 && item.validity_days > 0)
+          .map((item) => ({
+            product_id: item.product_id,
+            validity_days: item.validity_days
+          }))
+      : []
     form.enterprise_visible_groups = Array.isArray(settings.enterprise_visible_groups)
       ? settings.enterprise_visible_groups.map((rule) => ({
           enterprise_name: rule.enterprise_name,
@@ -2453,6 +2539,15 @@ async function loadSubscriptionGroups() {
   }
 }
 
+async function loadSubscriptionProducts() {
+  try {
+    subscriptionProducts.value = await adminAPI.subscriptionProducts.listProducts()
+  } catch (error) {
+    console.error('Failed to load subscription products:', error)
+    subscriptionProducts.value = []
+  }
+}
+
 function addDefaultSubscription() {
   if (subscriptionGroups.value.length === 0) return
   const existing = new Set(form.default_subscriptions.map((item) => item.group_id))
@@ -2466,6 +2561,21 @@ function addDefaultSubscription() {
 
 function removeDefaultSubscription(index: number) {
   form.default_subscriptions.splice(index, 1)
+}
+
+function addDefaultProductSubscription() {
+  if (subscriptionProducts.value.length === 0) return
+  const existing = new Set(form.default_subscription_products.map((item) => item.product_id))
+  const candidate = subscriptionProducts.value.find((product) => !existing.has(product.id))
+  if (!candidate) return
+  form.default_subscription_products.push({
+    product_id: candidate.id,
+    validity_days: candidate.default_validity_days || 30
+  })
+}
+
+function removeDefaultProductSubscription(index: number) {
+  form.default_subscription_products.splice(index, 1)
 }
 
 function addEnterpriseVisibleGroupRule() {
@@ -2541,6 +2651,19 @@ async function saveSettings() {
       return
     }
 
+    const seenProductIDs = new Set<number>()
+    const normalizedDefaultProductSubscriptions = form.default_subscription_products
+      .filter((item) => item.product_id > 0 && item.validity_days > 0)
+      .filter((item) => {
+        if (seenProductIDs.has(item.product_id)) return false
+        seenProductIDs.add(item.product_id)
+        return true
+      })
+      .map((item: DefaultSubscriptionProductSetting) => ({
+        product_id: item.product_id,
+        validity_days: Math.min(36500, Math.max(1, Math.floor(item.validity_days)))
+      }))
+
     const normalizedEnterpriseVisibleGroups = normalizeEnterpriseVisibleGroupsForSave(
       form.enterprise_visible_groups
     )
@@ -2586,6 +2709,7 @@ async function saveSettings() {
       default_balance: form.default_balance,
       default_concurrency: form.default_concurrency,
       default_subscriptions: normalizedDefaultSubscriptions,
+      default_subscription_products: normalizedDefaultProductSubscriptions,
       enterprise_visible_groups: normalizedEnterpriseVisibleGroups,
       site_name: form.site_name,
       site_logo: form.site_logo,
@@ -2642,6 +2766,14 @@ async function saveSettings() {
             ? rule.visible_group_ids.filter((groupID) => groupID > 0)
             : []
         }))
+      : []
+    form.default_subscription_products = Array.isArray(updated.default_subscription_products)
+      ? updated.default_subscription_products
+          .filter((item) => item.product_id > 0 && item.validity_days > 0)
+          .map((item) => ({
+            product_id: item.product_id,
+            validity_days: item.validity_days
+          }))
       : []
     form.smtp_password = ''
     smtpPasswordManuallyEdited.value = false
@@ -2936,6 +3068,7 @@ async function saveBetaPolicySettings() {
 onMounted(() => {
   loadSettings()
   loadSubscriptionGroups()
+  loadSubscriptionProducts()
   loadAdminApiKey()
   loadOverloadCooldownSettings()
   loadStreamTimeoutSettings()

@@ -12,6 +12,7 @@ const {
   getRectifierSettings,
   getBetaPolicySettings,
   getAllGroups,
+  listProducts,
   showError,
   showSuccess,
   fetchPublicSettings,
@@ -25,6 +26,7 @@ const {
   getRectifierSettings: vi.fn(),
   getBetaPolicySettings: vi.fn(),
   getAllGroups: vi.fn(),
+  listProducts: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
   fetchPublicSettings: vi.fn(),
@@ -44,6 +46,9 @@ vi.mock('@/api', () => ({
     },
     groups: {
       getAll: getAllGroups
+    },
+    subscriptionProducts: {
+      listProducts
     }
   }
 }))
@@ -96,6 +101,7 @@ const createSystemSettings = () =>
     default_balance: 0,
     default_concurrency: 1,
     default_subscriptions: [],
+    default_subscription_products: [],
     enterprise_visible_groups: [
       {
         enterprise_name: 'acme',
@@ -158,6 +164,7 @@ describe('admin SettingsView enterprise visible groups', () => {
     getRectifierSettings.mockReset()
     getBetaPolicySettings.mockReset()
     getAllGroups.mockReset()
+    listProducts.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
     fetchPublicSettings.mockReset()
@@ -215,6 +222,22 @@ describe('admin SettingsView enterprise visible groups', () => {
         status: 'active',
         rate_multiplier: 1,
         sort_order: 3
+      }
+    ])
+    listProducts.mockResolvedValue([
+      {
+        id: 101,
+        code: 'gpt_monthly',
+        name: 'GPT 月卡',
+        description: 'GPT monthly shared subscription',
+        status: 'active',
+        default_validity_days: 30,
+        daily_limit_usd: 0,
+        weekly_limit_usd: 0,
+        monthly_limit_usd: 100,
+        sort_order: 10,
+        created_at: '2026-04-25T00:00:00Z',
+        updated_at: '2026-04-25T00:00:00Z'
       }
     ])
     fetchPublicSettings.mockResolvedValue(undefined)
@@ -282,5 +305,51 @@ describe('admin SettingsView enterprise visible groups', () => {
       })
     )
     expect(showSuccess).toHaveBeenCalledWith('admin.settings.settingsSaved')
+  })
+
+  it('persists default product subscriptions from settings', async () => {
+    getSettings.mockResolvedValue({
+      ...createSystemSettings(),
+      default_subscription_products: [{ product_id: 101, validity_days: 30 }]
+    })
+
+    const wrapper = mount(SettingsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+          Select: true,
+          GroupBadge: true,
+          GroupOptionItem: true,
+          Toggle: true,
+          ImageUpload: true,
+          BackupSettings: true,
+          DataManagementSettings: true,
+          GroupSelector: true,
+          Teleport: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const setupState = (wrapper.vm as any).$?.setupState
+    expect(setupState.form.default_subscription_products).toEqual([
+      { product_id: 101, validity_days: 30 }
+    ])
+
+    setupState.form.default_subscription_products = [
+      { product_id: 101, validity_days: 30 },
+      { product_id: 0, validity_days: 30 },
+      { product_id: 101, validity_days: 7 }
+    ]
+
+    await setupState.saveSettings()
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        default_subscription_products: [{ product_id: 101, validity_days: 30 }]
+      })
+    )
   })
 })

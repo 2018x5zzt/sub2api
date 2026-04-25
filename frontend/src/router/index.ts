@@ -325,6 +325,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/subscription-products',
+    name: 'AdminSubscriptionProducts',
+    component: () => import('@/views/admin/SubscriptionProductsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Subscription Products',
+      titleKey: 'admin.subscriptionProducts.title',
+      descriptionKey: 'admin.subscriptionProducts.description'
+    }
+  },
+  {
     path: '/admin/accounts',
     name: 'AdminAccounts',
     component: () => import('@/views/admin/AccountsView.vue'),

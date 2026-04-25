@@ -1277,6 +1277,7 @@ export interface RedeemCode {
   created_at: string
   updated_at?: string
   group_id?: number | null // 订阅类型专用
+  product_id?: number | null // 产品订阅类型专用
   validity_days?: number // 订阅类型专用
   user?: User
   group?: Group // 关联的分组
@@ -1288,6 +1289,7 @@ export interface GenerateRedeemCodesRequest {
   value: number
   source_type?: RedeemCodeSourceType
   group_id?: number | null // 订阅类型专用
+  product_id?: number | null // 产品订阅类型专用
   validity_days?: number // 订阅类型专用
 }
 
@@ -1554,6 +1556,78 @@ export interface SubscriptionProductSummary {
   total_monthly_usage_usd: number
   total_monthly_limit_usd: number
   products: ActiveSubscriptionProduct[]
+}
+
+export interface AdminSubscriptionProduct {
+  id: number
+  code: string
+  name: string
+  description: string
+  status: 'draft' | 'active' | 'disabled' | string
+  default_validity_days: number
+  daily_limit_usd: number
+  weekly_limit_usd: number
+  monthly_limit_usd: number
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateSubscriptionProductRequest {
+  code: string
+  name: string
+  description?: string
+  status?: 'draft' | 'active' | 'disabled' | string
+  default_validity_days?: number
+  daily_limit_usd?: number
+  weekly_limit_usd?: number
+  monthly_limit_usd?: number
+  sort_order?: number
+}
+
+export interface UpdateSubscriptionProductRequest {
+  code?: string
+  name?: string
+  description?: string
+  status?: 'draft' | 'active' | 'disabled' | string
+  default_validity_days?: number
+  daily_limit_usd?: number
+  weekly_limit_usd?: number
+  monthly_limit_usd?: number
+  sort_order?: number
+}
+
+export interface ProductGroupBindingInput {
+  group_id: number
+  debit_multiplier: number
+  status: 'active' | 'inactive' | string
+  sort_order: number
+}
+
+export interface AdminSubscriptionProductBinding extends ProductGroupBindingInput {
+  product_id: number
+  group_name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminUserProductSubscription {
+  id: number
+  user_id: number
+  product_id: number
+  starts_at: string
+  expires_at: string
+  status: string
+  daily_usage_usd: number
+  weekly_usage_usd: number
+  monthly_usage_usd: number
+  daily_carryover_in_usd: number
+  daily_carryover_remaining_usd: number
+  assigned_by?: number | null
+  assigned_at: string
+  notes: string
+  created_at: string
+  updated_at: string
 }
 
 export interface AssignSubscriptionRequest {
