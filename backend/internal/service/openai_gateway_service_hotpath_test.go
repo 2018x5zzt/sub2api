@@ -81,11 +81,10 @@ func TestExtractOpenAIReasoningEffortFromBody(t *testing.T) {
 			wantValue: "xhigh",
 		},
 		{
-			name:      "minimal 保持为 minimal",
-			body:      []byte(`{"reasoning":{"effort":"minimal"}}`),
-			model:     "gpt-5-high",
-			wantNil:   false,
-			wantValue: "minimal",
+			name:    "minimal 归一化为空",
+			body:    []byte(`{"reasoning":{"effort":"minimal"}}`),
+			model:   "gpt-5-high",
+			wantNil: true,
 		},
 		{
 			name:      "缺失字段时从模型后缀推导",
@@ -209,10 +208,25 @@ func TestNormalizeOpenAIPassthroughReasoningBody(t *testing.T) {
 
 		normalized, changed, err := normalizeOpenAIPassthroughReasoningBody(body)
 		require.NoError(t, err)
-		require.True(t, changed)
+		require.False(t, changed)
 		require.Equal(t, "minimal", gjson.GetBytes(normalized, "reasoning.effort").String())
-		require.Equal(t, "auto", gjson.GetBytes(normalized, "reasoning.summary").String())
 	})
+}
+
+func TestNormalizeOpenAIResponsesMinimalReasoning(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.5",
+		"reasoning": map[string]any{
+			"effort":  "minimal",
+			"summary": "auto",
+		},
+	}
+
+	require.True(t, normalizeOpenAIResponsesMinimalReasoning(reqBody))
+
+	reasoning := reqBody["reasoning"].(map[string]any)
+	require.Equal(t, "none", reasoning["effort"])
+	require.Equal(t, "auto", reasoning["summary"])
 }
 
 func TestGetOpenAIRequestBodyMap_UsesContextCache(t *testing.T) {

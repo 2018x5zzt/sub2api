@@ -8,3 +8,7 @@ type ProductSubscriptionRepository interface {
 	ListVisibleGroupsByUserID(ctx context.Context, userID int64) ([]Group, error)
 	ListActiveProductsByUserID(ctx context.Context, userID int64) ([]ActiveSubscriptionProduct, error)
 }
+
+type ProductSubscriptionByUserGroupRepository interface {
+	GetActiveProductSubscriptionByUserAndGroupID(ctx context.Context, userID, groupID int64) (*SubscriptionProductBinding, *UserProductSubscription, error)
+}

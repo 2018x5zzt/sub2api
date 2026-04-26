@@ -1962,6 +1962,13 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
+	// 规范化 reasoning.effort 参数（minimal -> none），与上游允许值对齐。
+	if normalizeOpenAIResponsesMinimalReasoning(reqBody) {
+		bodyModified = true
+		markPatchSet("reasoning.effort", "none")
+		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized reasoning.effort: minimal -> none (account: %s)", account.Name)
+	}
+
 	if account.Type == AccountTypeOAuth {
 		codexResult := applyCodexOAuthTransformWithOptions(reqBody, isCodexCLI, isOpenAIResponsesCompactPath(c), codexTransformOptions{
 			DropStoreFalseNativeItemReferences: account.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled(),
@@ -3957,6 +3964,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	}
 
 	needModelReplace := originalModel != mappedModel
+	responsesAccumulator := newResponsesStreamAccumulator()
 	resultWithUsage := func() *openaiStreamingResult {
 		return &openaiStreamingResult{usage: usage, firstTokenMs: firstTokenMs}
 	}
@@ -4007,7 +4015,13 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			// Replace model in response if needed.
 			// Fast path: most events do not contain model field values.
 			if needModelReplace && mappedModel != "" && strings.Contains(data, mappedModel) {
-				line = s.replaceModelInSSELine(line, mappedModel, originalModel)
+				replacedLine := s.replaceModelInSSELine(line, mappedModel, originalModel)
+				if replacedLine != line {
+					line = replacedLine
+					if replacedData, ok := extractOpenAISSEDataLine(line); ok {
+						data = replacedData
+					}
+				}
 			}
 
 			dataBytes := []byte(data)
@@ -4019,6 +4033,11 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			if correctedData, corrected := s.toolCorrector.CorrectToolCallsInSSEBytes(dataBytes); corrected {
 				dataBytes = correctedData
 				data = string(correctedData)
+				line = "data: " + data
+			}
+			if patchedData, patched := patchResponsesTerminalOutputSSEData(dataBytes, responsesAccumulator); patched {
+				dataBytes = patchedData
+				data = string(patchedData)
 				line = "data: " + data
 			}
 
@@ -4175,6 +4194,215 @@ func extractOpenAISSEDataLine(line string) (string, bool) {
 		start++
 	}
 	return line[start:], true
+}
+
+func patchResponsesTerminalOutputSSEData(data []byte, accumulator *responsesStreamAccumulator) ([]byte, bool) {
+	if accumulator == nil {
+		return data, false
+	}
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("[DONE]")) || !bytes.Contains(trimmed, []byte("response.")) {
+		return data, false
+	}
+
+	var event apicompat.ResponsesStreamEvent
+	if err := json.Unmarshal(trimmed, &event); err != nil || event.Type == "" {
+		return data, false
+	}
+	accumulator.ApplyEvent(&event)
+
+	switch event.Type {
+	case "response.completed", "response.done", "response.incomplete", "response.failed":
+	default:
+		return data, false
+	}
+
+	finalResponse, ok := accumulator.FinalResponse()
+	if !ok || len(finalResponse.Output) == 0 {
+		return data, false
+	}
+	finalOutput := normalizeResponsesTerminalOutput(finalResponse.Output)
+	if len(finalOutput) == 0 || !responsesTerminalOutputNeedsPatch(trimmed, finalOutput) {
+		return data, false
+	}
+
+	outputBytes, err := json.Marshal(finalOutput)
+	if err != nil {
+		return data, false
+	}
+	patched, err := sjson.SetRawBytes(trimmed, "response.output", outputBytes)
+	if err != nil {
+		return data, false
+	}
+	return patched, true
+}
+
+func normalizeResponsesTerminalOutput(output []apicompat.ResponsesOutput) []apicompat.ResponsesOutput {
+	out := cloneResponsesOutputs(output)
+	for i := range out {
+		item := &out[i]
+		if item.Type == "" {
+			item.Type = inferResponsesOutputType(item)
+		}
+		switch item.Type {
+		case "message":
+			if item.Role == "" {
+				item.Role = "assistant"
+			}
+			if len(item.Content) == 0 {
+				item.Content = []apicompat.ResponsesContentPart{{Type: "output_text"}}
+				continue
+			}
+			for j := range item.Content {
+				if item.Content[j].Type == "" {
+					item.Content[j].Type = inferResponsesContentPartType(item.Content[j])
+				}
+			}
+		case "reasoning":
+			for j := range item.Summary {
+				if item.Summary[j].Type == "" {
+					item.Summary[j].Type = "summary_text"
+				}
+			}
+		}
+	}
+	return out
+}
+
+func inferResponsesOutputType(item *apicompat.ResponsesOutput) string {
+	if item == nil {
+		return ""
+	}
+	if len(item.Content) > 0 || item.Role != "" {
+		return "message"
+	}
+	if len(item.Summary) > 0 || item.EncryptedContent != "" {
+		return "reasoning"
+	}
+	if item.CallID != "" || item.Name != "" || item.Arguments != "" {
+		return "function_call"
+	}
+	if item.Action != nil {
+		return "web_search_call"
+	}
+	return ""
+}
+
+func inferResponsesContentPartType(part apicompat.ResponsesContentPart) string {
+	if part.ImageURL != "" {
+		return "output_image"
+	}
+	return "output_text"
+}
+
+func responsesTerminalOutputNeedsPatch(data []byte, finalOutput []apicompat.ResponsesOutput) bool {
+	output := gjson.GetBytes(data, "response.output")
+	if !output.Exists() || !output.IsArray() {
+		return true
+	}
+	items := output.Array()
+	if len(items) < len(finalOutput) {
+		return true
+	}
+	for i := range finalOutput {
+		basePath := fmt.Sprintf("response.output.%d", i)
+		item := finalOutput[i]
+		currentType := gjson.GetBytes(data, basePath+".type").String()
+		if currentType == "" && item.Type != "" {
+			return true
+		}
+		typ := firstNonEmpty(currentType, item.Type)
+		switch typ {
+		case "message":
+			if item.Role != "" && gjson.GetBytes(data, basePath+".role").String() == "" {
+				return true
+			}
+			if responsesTerminalContentNeedsPatch(data, basePath, item.Content) {
+				return true
+			}
+		case "reasoning":
+			if responsesTerminalSummaryNeedsPatch(data, basePath, item.Summary) {
+				return true
+			}
+		case "function_call":
+			if item.CallID != "" && gjson.GetBytes(data, basePath+".call_id").String() != item.CallID {
+				return true
+			}
+			if item.Name != "" && gjson.GetBytes(data, basePath+".name").String() != item.Name {
+				return true
+			}
+			if item.Arguments != "" && gjson.GetBytes(data, basePath+".arguments").String() != item.Arguments {
+				return true
+			}
+		case "web_search_call":
+			if item.Action != nil {
+				actionPath := basePath + ".action"
+				if !gjson.GetBytes(data, actionPath).Exists() {
+					return true
+				}
+				if item.Action.Type != "" && gjson.GetBytes(data, actionPath+".type").String() != item.Action.Type {
+					return true
+				}
+				if item.Action.Query != "" && gjson.GetBytes(data, actionPath+".query").String() != item.Action.Query {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func responsesTerminalContentNeedsPatch(data []byte, itemPath string, finalContent []apicompat.ResponsesContentPart) bool {
+	if len(finalContent) == 0 {
+		return false
+	}
+	contentPath := itemPath + ".content"
+	content := gjson.GetBytes(data, contentPath)
+	if !content.Exists() || !content.IsArray() {
+		return true
+	}
+	parts := content.Array()
+	if len(parts) < len(finalContent) {
+		return true
+	}
+	for i, part := range finalContent {
+		partPath := fmt.Sprintf("%s.%d", contentPath, i)
+		if part.Type != "" && gjson.GetBytes(data, partPath+".type").String() != part.Type {
+			return true
+		}
+		if part.Text != "" && gjson.GetBytes(data, partPath+".text").String() != part.Text {
+			return true
+		}
+		if part.ImageURL != "" && gjson.GetBytes(data, partPath+".image_url").String() != part.ImageURL {
+			return true
+		}
+	}
+	return false
+}
+
+func responsesTerminalSummaryNeedsPatch(data []byte, itemPath string, finalSummary []apicompat.ResponsesSummary) bool {
+	if len(finalSummary) == 0 {
+		return false
+	}
+	summaryPath := itemPath + ".summary"
+	summary := gjson.GetBytes(data, summaryPath)
+	if !summary.Exists() || !summary.IsArray() {
+		return true
+	}
+	parts := summary.Array()
+	if len(parts) < len(finalSummary) {
+		return true
+	}
+	for i, part := range finalSummary {
+		partPath := fmt.Sprintf("%s.%d", summaryPath, i)
+		if part.Type != "" && gjson.GetBytes(data, partPath+".type").String() != part.Type {
+			return true
+		}
+		if part.Text != "" && gjson.GetBytes(data, partPath+".text").String() != part.Text {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *OpenAIGatewayService) replaceModelInSSELine(line, fromModel, toModel string) string {
@@ -5610,6 +5838,24 @@ func ensureOpenAIResponsesReasoning(reqBody map[string]any, requestedModel strin
 	return changed
 }
 
+func normalizeOpenAIResponsesMinimalReasoning(reqBody map[string]any) bool {
+	if reqBody == nil {
+		return false
+	}
+
+	reasoning, ok := reqBody["reasoning"].(map[string]any)
+	if !ok {
+		return false
+	}
+	effort, ok := reasoning["effort"].(string)
+	if !ok || !strings.EqualFold(strings.TrimSpace(effort), "minimal") {
+		return false
+	}
+
+	reasoning["effort"] = "none"
+	return true
+}
+
 func extractOpenAIServiceTier(reqBody map[string]any) *string {
 	if reqBody == nil {
 		return nil
@@ -5823,9 +6069,7 @@ func normalizeOpenAIReasoningEffort(raw string) string {
 	value = strings.NewReplacer("-", "", "_", "", " ", "").Replace(value)
 
 	switch value {
-	case "minimal":
-		return value
-	case "none":
+	case "none", "minimal":
 		return ""
 	case "low", "medium", "high":
 		return value

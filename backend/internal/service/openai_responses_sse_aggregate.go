@@ -127,6 +127,9 @@ func (a *responsesStreamAccumulator) mergeOutputItem(outputIndex int, item *apic
 	}
 	existing := a.ensureOutputItem(outputIndex, item.Type)
 	merged := mergeResponsesOutput(*existing, *item)
+	if item.Status != "" {
+		merged.Status = item.Status
+	}
 	a.outputByIndex[outputIndex] = &merged
 }
 

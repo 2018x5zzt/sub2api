@@ -9,7 +9,7 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="subscriptions.length === 0 && subscriptionProducts.length === 0" class="card p-12 text-center">
+      <div v-else-if="displayedSubscriptions.length === 0 && subscriptionProducts.length === 0" class="card p-12 text-center">
         <div
           class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
         >
@@ -121,7 +121,7 @@
             <div v-if="shouldShowProductPeriodUsage(product.weekly_limit_usd, product.weekly_usage_usd)" class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('userSubscriptions.weekly') }}
+                  {{ t('userSubscriptions.last7DaysUsage') }}
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
                   {{ formatPeriodUsage(product.weekly_usage_usd, product.weekly_limit_usd) }}
@@ -142,7 +142,7 @@
             <div v-if="shouldShowProductPeriodUsage(product.monthly_limit_usd, product.monthly_usage_usd)" class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  {{ t('userSubscriptions.monthly') }}
+                  {{ t('userSubscriptions.last30DaysUsage') }}
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
                   {{ formatPeriodUsage(product.monthly_usage_usd, product.monthly_limit_usd) }}
@@ -180,7 +180,7 @@
         </div>
 
         <div
-          v-for="subscription in subscriptions"
+          v-for="subscription in displayedSubscriptions"
           :key="`subscription-${subscription.id}`"
           class="card overflow-hidden"
         >
@@ -412,6 +412,18 @@ const subscriptionProductStore = useSubscriptionProductStore()
 const subscriptions = ref<UserSubscription[]>([])
 const loading = ref(true)
 const subscriptionProducts = computed(() => subscriptionProductStore.items)
+const productCoveredGroupIds = computed(() => {
+  const groupIds = new Set<number>()
+  for (const product of subscriptionProducts.value) {
+    for (const group of product.groups || []) {
+      groupIds.add(group.group_id)
+    }
+  }
+  return groupIds
+})
+const displayedSubscriptions = computed(() =>
+  subscriptions.value.filter((subscription) => !productCoveredGroupIds.value.has(subscription.group_id))
+)
 
 async function loadSubscriptions() {
   try {
@@ -430,6 +442,10 @@ async function loadSubscriptions() {
 }
 
 function getProductDailyDisplayLimit(product: ActiveSubscriptionProduct): number | null {
+  return product.daily_limit_usd
+}
+
+function getProductDailyAvailableWithCarryover(product: ActiveSubscriptionProduct): number | null {
   if (!product.daily_limit_usd) return product.daily_limit_usd
   return product.daily_limit_usd + (product.daily_carryover_in_usd || 0)
 }
@@ -441,7 +457,7 @@ function hasProductDailyCarryover(product: ActiveSubscriptionProduct): boolean {
 function formatProductDailyQuotaBreakdown(product: ActiveSubscriptionProduct): string {
   const carryover = (product.daily_carryover_in_usd || 0).toFixed(2)
   const today = (product.daily_limit_usd || 0).toFixed(2)
-  const total = (getProductDailyDisplayLimit(product) || 0).toFixed(2)
+  const total = (getProductDailyAvailableWithCarryover(product) || 0).toFixed(2)
   return t('userSubscriptions.dailyQuotaBreakdown', { carryover, today, total })
 }
 
