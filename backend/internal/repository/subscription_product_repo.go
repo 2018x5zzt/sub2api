@@ -82,6 +82,116 @@ LIMIT 1
 	return &binding, nil
 }
 
+func (r *subscriptionProductRepository) GetActiveProductSubscriptionByUserAndGroupID(ctx context.Context, userID, groupID int64) (*service.SubscriptionProductBinding, *service.UserProductSubscription, error) {
+	var binding service.SubscriptionProductBinding
+	var sub service.UserProductSubscription
+	var dailyWindowStart sql.NullTime
+	var weeklyWindowStart sql.NullTime
+	var monthlyWindowStart sql.NullTime
+	var assignedBy sql.NullInt64
+	var notes sql.NullString
+	err := scanSingleRow(ctx, r.sql, `
+SELECT
+	sp.id,
+	sp.code,
+	sp.name,
+	sp.status,
+	sp.default_validity_days,
+	sp.daily_limit_usd,
+	sp.weekly_limit_usd,
+	sp.monthly_limit_usd,
+	spg.group_id,
+	g.name,
+	g.platform,
+	g.status,
+	g.subscription_type,
+	spg.debit_multiplier,
+	spg.status,
+	ups.id,
+	ups.user_id,
+	ups.product_id,
+	ups.starts_at,
+	ups.expires_at,
+	ups.status,
+	ups.daily_window_start,
+	ups.weekly_window_start,
+	ups.monthly_window_start,
+	ups.daily_usage_usd,
+	ups.weekly_usage_usd,
+	ups.monthly_usage_usd,
+	ups.daily_carryover_in_usd,
+	ups.daily_carryover_remaining_usd,
+	ups.assigned_by,
+	ups.assigned_at,
+	ups.notes,
+	ups.created_at,
+	ups.updated_at
+FROM user_product_subscriptions ups
+JOIN subscription_products sp ON sp.id = ups.product_id
+JOIN subscription_product_groups spg ON spg.product_id = sp.id
+JOIN groups g ON g.id = spg.group_id
+WHERE ups.user_id = $1
+  AND spg.group_id = $2
+  AND ups.status = 'active'
+  AND ups.expires_at > NOW()
+  AND ups.deleted_at IS NULL
+  AND sp.status = 'active'
+  AND sp.deleted_at IS NULL
+  AND spg.status = 'active'
+  AND spg.deleted_at IS NULL
+  AND g.deleted_at IS NULL
+ORDER BY ups.assigned_at DESC NULLS LAST, ups.id DESC
+LIMIT 1
+`, []any{userID, groupID},
+		&binding.ProductID,
+		&binding.ProductCode,
+		&binding.ProductName,
+		&binding.ProductStatus,
+		&binding.DefaultValidityDays,
+		&binding.DailyLimitUSD,
+		&binding.WeeklyLimitUSD,
+		&binding.MonthlyLimitUSD,
+		&binding.GroupID,
+		&binding.GroupName,
+		&binding.GroupPlatform,
+		&binding.GroupStatus,
+		&binding.GroupSubscription,
+		&binding.DebitMultiplier,
+		&binding.BindingStatus,
+		&sub.ID,
+		&sub.UserID,
+		&sub.ProductID,
+		&sub.StartsAt,
+		&sub.ExpiresAt,
+		&sub.Status,
+		&dailyWindowStart,
+		&weeklyWindowStart,
+		&monthlyWindowStart,
+		&sub.DailyUsageUSD,
+		&sub.WeeklyUsageUSD,
+		&sub.MonthlyUsageUSD,
+		&sub.DailyCarryoverInUSD,
+		&sub.DailyCarryoverRemainingUSD,
+		&assignedBy,
+		&sub.AssignedAt,
+		&notes,
+		&sub.CreatedAt,
+		&sub.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, nil
+		}
+		return nil, nil, err
+	}
+	sub.DailyWindowStart = nullableTimePtr(dailyWindowStart)
+	sub.WeeklyWindowStart = nullableTimePtr(weeklyWindowStart)
+	sub.MonthlyWindowStart = nullableTimePtr(monthlyWindowStart)
+	sub.AssignedBy = nullableInt64Ptr(assignedBy)
+	sub.Notes = notes.String
+	return &binding, &sub, nil
+}
+
 func (r *subscriptionProductRepository) GetActiveUserProductSubscription(ctx context.Context, userID, productID int64) (*service.UserProductSubscription, error) {
 	var sub service.UserProductSubscription
 	var dailyWindowStart sql.NullTime

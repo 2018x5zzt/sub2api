@@ -41,6 +41,55 @@ func TestSubscriptionProductService_GetActiveProductSubscription(t *testing.T) {
 	require.Equal(t, 1, repo.subscriptionCalls)
 }
 
+func TestSubscriptionProductService_GetActiveProductSubscriptionSharedGroupUsesUserProduct(t *testing.T) {
+	repo := &subscriptionProductRepoStub{
+		binding: &SubscriptionProductBinding{
+			ProductID:       10,
+			ProductCode:     "gpt_daily_45",
+			ProductName:     "GPT Daily 45",
+			ProductStatus:   SubscriptionProductStatusActive,
+			GroupID:         20,
+			GroupName:       "pro",
+			BindingStatus:   SubscriptionProductBindingStatusActive,
+			DebitMultiplier: 1,
+		},
+		bindingByUserGroup: &SubscriptionProductBinding{
+			ProductID:       11,
+			ProductCode:     "gpt_daily_150",
+			ProductName:     "GPT Daily 150",
+			ProductStatus:   SubscriptionProductStatusActive,
+			GroupID:         20,
+			GroupName:       "pro",
+			BindingStatus:   SubscriptionProductBindingStatusActive,
+			DebitMultiplier: 1.5,
+		},
+		subscriptionByUserGroup: &UserProductSubscription{
+			ID:        31,
+			UserID:    40,
+			ProductID: 11,
+			Status:    SubscriptionStatusActive,
+			StartsAt:  time.Now().Add(-time.Hour),
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	repo.getSubscription = func(_ context.Context, _ int64, productID int64) (*UserProductSubscription, error) {
+		require.Equal(t, int64(10), productID)
+		return nil, ErrSubscriptionNotFound
+	}
+	svc := NewSubscriptionProductService(repo)
+
+	got, err := svc.GetActiveProductSubscription(context.Background(), 40, 20)
+
+	require.NoError(t, err)
+	require.Equal(t, int64(11), got.Binding.ProductID)
+	require.Equal(t, "gpt_daily_150", got.Binding.ProductCode)
+	require.Equal(t, int64(31), got.Subscription.ID)
+	require.Equal(t, 1.5, got.Binding.DebitMultiplier)
+	require.Equal(t, 1, repo.bindingByUserGroupCalls)
+	require.Equal(t, 0, repo.bindingCalls)
+	require.Equal(t, 0, repo.subscriptionCalls)
+}
+
 func TestSubscriptionProductService_ListVisibleGroups(t *testing.T) {
 	repo := &subscriptionProductRepoStub{
 		groups: []Group{
@@ -59,13 +108,17 @@ func TestSubscriptionProductService_ListVisibleGroups(t *testing.T) {
 }
 
 type subscriptionProductRepoStub struct {
-	binding      *SubscriptionProductBinding
-	subscription *UserProductSubscription
-	groups       []Group
+	binding                 *SubscriptionProductBinding
+	subscription            *UserProductSubscription
+	bindingByUserGroup      *SubscriptionProductBinding
+	subscriptionByUserGroup *UserProductSubscription
+	groups                  []Group
+	getSubscription         func(ctx context.Context, userID, productID int64) (*UserProductSubscription, error)
 
-	bindingCalls      int
-	subscriptionCalls int
-	visibleCalls      int
+	bindingCalls            int
+	subscriptionCalls       int
+	bindingByUserGroupCalls int
+	visibleCalls            int
 }
 
 func (s *subscriptionProductRepoStub) GetActiveProductBindingByGroupID(context.Context, int64) (*SubscriptionProductBinding, error) {
@@ -73,9 +126,17 @@ func (s *subscriptionProductRepoStub) GetActiveProductBindingByGroupID(context.C
 	return s.binding, nil
 }
 
-func (s *subscriptionProductRepoStub) GetActiveUserProductSubscription(context.Context, int64, int64) (*UserProductSubscription, error) {
+func (s *subscriptionProductRepoStub) GetActiveUserProductSubscription(ctx context.Context, userID, productID int64) (*UserProductSubscription, error) {
 	s.subscriptionCalls++
+	if s.getSubscription != nil {
+		return s.getSubscription(ctx, userID, productID)
+	}
 	return s.subscription, nil
+}
+
+func (s *subscriptionProductRepoStub) GetActiveProductSubscriptionByUserAndGroupID(context.Context, int64, int64) (*SubscriptionProductBinding, *UserProductSubscription, error) {
+	s.bindingByUserGroupCalls++
+	return s.bindingByUserGroup, s.subscriptionByUserGroup, nil
 }
 
 func (s *subscriptionProductRepoStub) ListVisibleGroupsByUserID(context.Context, int64) ([]Group, error) {
