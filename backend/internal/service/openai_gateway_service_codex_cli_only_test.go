@@ -274,7 +274,7 @@ func TestOpenAIGatewayService_Forward_LogsInstructionsRequiredDetails(t *testing
 
 	_, err := svc.Forward(context.Background(), c, account, body)
 	require.Error(t, err)
-	require.Equal(t, http.StatusBadGateway, rec.Code)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 	require.Contains(t, err.Error(), "upstream error: 400")
 
 	require.True(t, logSink.ContainsMessageAtLevel("OpenAI 上游返回 Instructions are required，已记录请求详情用于排查", "warn"))
@@ -283,6 +283,54 @@ func TestOpenAIGatewayService_Forward_LogsInstructionsRequiredDetails(t *testing
 	require.True(t, logSink.ContainsFieldValue("request_headers", "openai-beta"))
 	require.True(t, logSink.ContainsField("request_body_size"))
 	require.False(t, logSink.ContainsField("request_body_preview"))
+}
+
+func TestOpenAIGatewayService_Forward_PassesThroughOpenAIInvalidRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	upstream := &httpUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Header: http.Header{
+				"Content-Type": []string{"application/json"},
+				"x-request-id": []string{"rid-upstream"},
+			},
+			Body: io.NopCloser(strings.NewReader(`{"error":{"message":"No tool output found for tool search call fc_123.","type":"invalid_request_error","param":"input","code":null}}`)),
+		},
+	}
+	svc := &OpenAIGatewayService{
+		cfg: &config.Config{
+			Gateway: config.GatewayConfig{ForceCodexCLI: false},
+		},
+		httpUpstream: upstream,
+	}
+	account := &Account{
+		ID:             1001,
+		Name:           "codex max套餐",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeAPIKey,
+		Concurrency:    1,
+		Credentials:    map[string]any{"api_key": "sk-test"},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+	body := []byte(`{"model":"gpt-5.5","stream":true,"input":[{"type":"text","text":"continue"}]}`)
+
+	_, err := svc.Forward(context.Background(), c, account, body)
+	require.Error(t, err)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.JSONEq(t,
+		`{"error":{"type":"invalid_request_error","message":"No tool output found for tool search call fc_123."}}`,
+		rec.Body.String(),
+	)
+	require.Contains(t, err.Error(), "upstream error: 400")
 }
 
 func TestOpenAIGatewayService_Forward_TransientProcessingErrorTriggersFailover(t *testing.T) {

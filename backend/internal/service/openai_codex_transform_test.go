@@ -254,6 +254,36 @@ func TestApplyCodexOAuthTransform_NonContinuationDefaultsStoreFalseAndStripsIDs(
 	require.False(t, hasID)
 }
 
+func TestApplyCodexOAuthTransform_ToolCallHistoryPreservesIDs(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.5",
+		"input": []any{
+			map[string]any{"type": "message", "id": "msg_1", "role": "assistant", "content": "done"},
+			map[string]any{"type": "web_search_call", "id": "fc_search_1", "status": "completed"},
+			map[string]any{"type": "message", "id": "msg_2", "role": "user", "content": "continue"},
+		},
+	}
+
+	applyCodexOAuthTransform(reqBody, true, false)
+
+	input, ok := reqBody["input"].([]any)
+	require.True(t, ok)
+	require.Len(t, input, 3)
+
+	first, ok := input[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "msg_1", first["id"])
+
+	second, ok := input[1].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "fc_search_1", second["id"])
+	require.Equal(t, "fc_search_1", second["call_id"])
+
+	third, ok := input[2].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "msg_2", third["id"])
+}
+
 func TestFilterCodexInput_RemovesItemReferenceWhenNotPreserved(t *testing.T) {
 	input := []any{
 		map[string]any{"type": "item_reference", "id": "ref1"},

@@ -97,3 +97,49 @@ func TestShrinkToEssentials_IncludesThinking(t *testing.T) {
 		t.Fatalf("expected thinking to be included in essentials: %#v", out)
 	}
 }
+
+func TestShrinkToEssentials_IncludesResponsesContinuationFields(t *testing.T) {
+	t.Parallel()
+
+	root := map[string]any{
+		"model":                "gpt-5.5",
+		"stream":               true,
+		"previous_response_id": "resp_123",
+		"tool_choice":          "auto",
+		"tools": []any{
+			map[string]any{"type": "web_search"},
+		},
+		"input": []any{
+			map[string]any{"type": "message", "id": "msg_1", "role": "user", "content": "first"},
+			map[string]any{"type": "function_call", "call_id": "fc_1", "name": "search"},
+			map[string]any{"type": "message", "id": "msg_2", "role": "user", "content": "last"},
+		},
+	}
+
+	out := shrinkToEssentials(root)
+	if got := out["previous_response_id"]; got != "resp_123" {
+		t.Fatalf("expected previous_response_id to be included, got %#v", got)
+	}
+	if got := out["tool_choice"]; got != "auto" {
+		t.Fatalf("expected tool_choice to be included, got %#v", got)
+	}
+	if _, ok := out["tools"]; !ok {
+		t.Fatalf("expected tools to be included: %#v", out)
+	}
+	tools, ok := out["tools"].([]any)
+	if !ok || len(tools) != 1 {
+		t.Fatalf("expected compact tools summary, got %#v", out["tools"])
+	}
+	tool, ok := tools[0].(map[string]any)
+	if !ok || tool["type"] != "web_search" {
+		t.Fatalf("expected compact web_search tool summary, got %#v", tools[0])
+	}
+	input, ok := out["input"].([]any)
+	if !ok || len(input) != 1 {
+		t.Fatalf("expected last input item to be included, got %#v", out["input"])
+	}
+	last, ok := input[0].(map[string]any)
+	if !ok || last["id"] != "msg_2" {
+		t.Fatalf("expected last input item msg_2, got %#v", input[0])
+	}
+}
