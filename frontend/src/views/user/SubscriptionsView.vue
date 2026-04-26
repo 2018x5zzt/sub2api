@@ -442,12 +442,15 @@ async function loadSubscriptions() {
 }
 
 function getProductDailyDisplayLimit(product: ActiveSubscriptionProduct): number | null {
-  return product.daily_limit_usd
+  if (product.daily_effective_limit_usd && product.daily_effective_limit_usd > 0) {
+    return product.daily_effective_limit_usd
+  }
+  if (!product.daily_limit_usd) return product.daily_limit_usd
+  return product.daily_limit_usd + (product.daily_carryover_in_usd || 0)
 }
 
 function getProductDailyAvailableWithCarryover(product: ActiveSubscriptionProduct): number | null {
-  if (!product.daily_limit_usd) return product.daily_limit_usd
-  return product.daily_limit_usd + (product.daily_carryover_in_usd || 0)
+  return getProductDailyDisplayLimit(product)
 }
 
 function hasProductDailyCarryover(product: ActiveSubscriptionProduct): boolean {

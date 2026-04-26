@@ -26,6 +26,9 @@ type ActiveSubscriptionProduct struct {
 
 	DailyCarryoverInUSD        float64 `json:"daily_carryover_in_usd"`
 	DailyCarryoverRemainingUSD float64 `json:"daily_carryover_remaining_usd"`
+	DailyEffectiveLimitUSD     float64 `json:"daily_effective_limit_usd"`
+	DailyRemainingTotalUSD     float64 `json:"daily_remaining_total_usd"`
+	DailyRemainingCarryoverUSD float64 `json:"daily_remaining_carryover_usd"`
 
 	Groups []SubscriptionProductGroup `json:"groups"`
 }
@@ -90,6 +93,9 @@ type AdminUserProductSubscription struct {
 	MonthlyUsageUSD            float64 `json:"monthly_usage_usd"`
 	DailyCarryoverInUSD        float64 `json:"daily_carryover_in_usd"`
 	DailyCarryoverRemainingUSD float64 `json:"daily_carryover_remaining_usd"`
+	DailyEffectiveLimitUSD     float64 `json:"daily_effective_limit_usd"`
+	DailyRemainingTotalUSD     float64 `json:"daily_remaining_total_usd"`
+	DailyRemainingCarryoverUSD float64 `json:"daily_remaining_carryover_usd"`
 
 	AssignedBy *int64    `json:"assigned_by"`
 	AssignedAt time.Time `json:"assigned_at"`
@@ -117,6 +123,9 @@ func ActiveSubscriptionProductFromService(item *service.ActiveSubscriptionProduc
 		MonthlyLimitUSD:            item.Product.MonthlyLimitUSD,
 		DailyCarryoverInUSD:        item.Subscription.DailyCarryoverInUSD,
 		DailyCarryoverRemainingUSD: item.Subscription.DailyCarryoverRemainingUSD,
+		DailyEffectiveLimitUSD:     item.Subscription.DailyEffectiveLimit(&item.Product),
+		DailyRemainingTotalUSD:     item.Subscription.DailyRemainingTotal(&item.Product),
+		DailyRemainingCarryoverUSD: item.Subscription.DailyRemainingCarryover(),
 		Groups:                     make([]SubscriptionProductGroup, 0, len(item.Groups)),
 	}
 	if !item.Subscription.ExpiresAt.IsZero() {
@@ -218,6 +227,9 @@ func AdminUserProductSubscriptionsFromService(subscriptions []service.UserProduc
 			MonthlyUsageUSD:            sub.MonthlyUsageUSD,
 			DailyCarryoverInUSD:        sub.DailyCarryoverInUSD,
 			DailyCarryoverRemainingUSD: sub.DailyCarryoverRemainingUSD,
+			DailyEffectiveLimitUSD:     sub.DailyEffectiveLimit(sub.Product),
+			DailyRemainingTotalUSD:     sub.DailyRemainingTotal(sub.Product),
+			DailyRemainingCarryoverUSD: sub.DailyRemainingCarryover(),
 			AssignedBy:                 sub.AssignedBy,
 			AssignedAt:                 sub.AssignedAt,
 			Notes:                      sub.Notes,

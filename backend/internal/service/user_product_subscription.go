@@ -58,6 +58,13 @@ func (s *UserProductSubscription) DailyRemainingTotal(product *SubscriptionProdu
 	return remaining
 }
 
+func (s *UserProductSubscription) DailyRemainingCarryover() float64 {
+	if s == nil || s.DailyCarryoverRemainingUSD < 0 {
+		return 0
+	}
+	return s.DailyCarryoverRemainingUSD
+}
+
 func (s *UserProductSubscription) CheckDailyLimit(product *SubscriptionProduct, additionalCost float64) bool {
 	if product == nil || !product.HasDailyLimit() {
 		return true

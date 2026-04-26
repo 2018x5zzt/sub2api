@@ -1468,6 +1468,9 @@ export interface ActiveSubscriptionProduct {
   monthly_limit_usd: number | null
   daily_carryover_in_usd: number
   daily_carryover_remaining_usd: number
+  daily_effective_limit_usd: number
+  daily_remaining_total_usd: number
+  daily_remaining_carryover_usd: number
   groups: SubscriptionProductGroup[]
 }
 
@@ -1543,6 +1546,9 @@ export interface AdminUserProductSubscription {
   monthly_usage_usd: number
   daily_carryover_in_usd: number
   daily_carryover_remaining_usd: number
+  daily_effective_limit_usd: number
+  daily_remaining_total_usd: number
+  daily_remaining_carryover_usd: number
   assigned_by?: number | null
   assigned_at: string
   notes: string

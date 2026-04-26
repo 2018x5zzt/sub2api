@@ -116,9 +116,9 @@ describe('SubscriptionsView', () => {
     await flushPromises()
 
     const text = wrapper.text()
-    expect(text).toContain('$3.00 / $45.00')
+    expect(text).toContain('$3.00 / $47.00')
     expect(text).toContain('Yesterday carryover $2.00 + today $45.00 = today available $47.00')
-    expect(text).not.toContain('$3.00 / $47.00')
+    expect(text).not.toContain('$3.00 / $45.00')
     expect(text).toContain('Past 7 days usage')
     expect(text).toContain('Past 30 days usage')
     expect(text).toContain('$12.34 / Unlimited')

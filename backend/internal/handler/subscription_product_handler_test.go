@@ -56,6 +56,7 @@ func TestSubscriptionProductHandler_GetActive(t *testing.T) {
 				Subscription: service.UserProductSubscription{
 					ID:                         501,
 					ExpiresAt:                  expiresAt,
+					DailyUsageUSD:              4,
 					MonthlyUsageUSD:            17.5,
 					DailyCarryoverInUSD:        2,
 					DailyCarryoverRemainingUSD: 1.25,
@@ -86,6 +87,9 @@ func TestSubscriptionProductHandler_GetActive(t *testing.T) {
 	require.Equal(t, float64(100), payload[0]["monthly_limit_usd"])
 	require.Equal(t, float64(2), payload[0]["daily_carryover_in_usd"])
 	require.Equal(t, float64(1.25), payload[0]["daily_carryover_remaining_usd"])
+	require.Equal(t, float64(12), payload[0]["daily_effective_limit_usd"])
+	require.Equal(t, float64(8), payload[0]["daily_remaining_total_usd"])
+	require.Equal(t, float64(1.25), payload[0]["daily_remaining_carryover_usd"])
 
 	groups, ok := payload[0]["groups"].([]any)
 	require.True(t, ok)

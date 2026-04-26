@@ -1154,20 +1154,16 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 			"unit":     "USD",
 		}
 
-		// 订阅信息可能不在 context 中（/v1/usage 路径跳过了中间件的计费检查）
-		subscription, ok := middleware2.GetSubscriptionFromContext(c)
-		if ok {
+		// 订阅信息可能不在 context 中（/v1/usage 路径跳过了中间件的计费检查）。
+		if productSettlement := GetProductSettlement(c); productSettlement != nil && productSettlement.Subscription != nil {
+			product := productSettlement.Binding.Product()
+			remaining := h.calculateProductSubscriptionRemaining(product, productSettlement.Subscription)
+			resp["remaining"] = remaining
+			resp["subscription"] = h.productSubscriptionUsagePayload(productSettlement, product)
+		} else if subscription, ok := middleware2.GetSubscriptionFromContext(c); ok {
 			remaining := h.calculateSubscriptionRemaining(apiKey.Group, subscription)
 			resp["remaining"] = remaining
-			resp["subscription"] = gin.H{
-				"daily_usage_usd":   subscription.DailyUsageUSD,
-				"weekly_usage_usd":  subscription.WeeklyUsageUSD,
-				"monthly_usage_usd": subscription.MonthlyUsageUSD,
-				"daily_limit_usd":   apiKey.Group.DailyLimitUSD,
-				"weekly_limit_usd":  apiKey.Group.WeeklyLimitUSD,
-				"monthly_limit_usd": apiKey.Group.MonthlyLimitUSD,
-				"expires_at":        subscription.ExpiresAt,
-			}
+			resp["subscription"] = h.subscriptionUsagePayload(apiKey.Group, subscription)
 		}
 
 		if usageData != nil {
@@ -1213,7 +1209,7 @@ func (h *GatewayHandler) calculateSubscriptionRemaining(group *service.Group, su
 
 	// 检查日限额
 	if group.HasDailyLimit() {
-		remaining := *group.DailyLimitUSD - sub.DailyUsageUSD
+		remaining := sub.DailyRemainingTotal(group)
 		if remaining <= 0 {
 			return 0
 		}
@@ -1251,6 +1247,103 @@ func (h *GatewayHandler) calculateSubscriptionRemaining(group *service.Group, su
 		}
 	}
 	return min
+}
+
+func (h *GatewayHandler) calculateProductSubscriptionRemaining(product *service.SubscriptionProduct, sub *service.UserProductSubscription) float64 {
+	if sub == nil {
+		return 0
+	}
+
+	var remainingValues []float64
+
+	if product.HasDailyLimit() {
+		remaining := sub.DailyRemainingTotal(product)
+		if remaining <= 0 {
+			return 0
+		}
+		remainingValues = append(remainingValues, remaining)
+	}
+
+	if product.HasWeeklyLimit() {
+		remaining := product.WeeklyLimitUSD - sub.WeeklyUsageUSD
+		if remaining <= 0 {
+			return 0
+		}
+		remainingValues = append(remainingValues, remaining)
+	}
+
+	if product.HasMonthlyLimit() {
+		remaining := product.MonthlyLimitUSD - sub.MonthlyUsageUSD
+		if remaining <= 0 {
+			return 0
+		}
+		remainingValues = append(remainingValues, remaining)
+	}
+
+	if len(remainingValues) == 0 {
+		return -1
+	}
+
+	min := remainingValues[0]
+	for _, v := range remainingValues[1:] {
+		if v < min {
+			min = v
+		}
+	}
+	return min
+}
+
+func (h *GatewayHandler) subscriptionUsagePayload(group *service.Group, subscription *service.UserSubscription) gin.H {
+	dailyRemainingCarryover := subscription.DailyCarryoverRemainingUSD
+	if dailyRemainingCarryover < 0 {
+		dailyRemainingCarryover = 0
+	}
+
+	return gin.H{
+		"daily_usage_usd":               subscription.DailyUsageUSD,
+		"weekly_usage_usd":              subscription.WeeklyUsageUSD,
+		"monthly_usage_usd":             subscription.MonthlyUsageUSD,
+		"daily_limit_usd":               group.DailyLimitUSD,
+		"weekly_limit_usd":              group.WeeklyLimitUSD,
+		"monthly_limit_usd":             group.MonthlyLimitUSD,
+		"daily_carryover_in_usd":        subscription.DailyCarryoverInUSD,
+		"daily_effective_limit_usd":     subscription.DailyEffectiveLimit(group),
+		"daily_remaining_total_usd":     subscription.DailyRemainingTotal(group),
+		"daily_remaining_carryover_usd": dailyRemainingCarryover,
+		"expires_at":                    subscription.ExpiresAt,
+	}
+}
+
+func (h *GatewayHandler) productSubscriptionUsagePayload(productSettlement *service.ProductSettlementContext, product *service.SubscriptionProduct) gin.H {
+	subscription := productSettlement.Subscription
+	var dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD float64
+	if product != nil {
+		dailyLimitUSD = product.DailyLimitUSD
+		weeklyLimitUSD = product.WeeklyLimitUSD
+		monthlyLimitUSD = product.MonthlyLimitUSD
+	}
+	payload := gin.H{
+		"daily_usage_usd":               subscription.DailyUsageUSD,
+		"weekly_usage_usd":              subscription.WeeklyUsageUSD,
+		"monthly_usage_usd":             subscription.MonthlyUsageUSD,
+		"daily_limit_usd":               dailyLimitUSD,
+		"weekly_limit_usd":              weeklyLimitUSD,
+		"monthly_limit_usd":             monthlyLimitUSD,
+		"daily_carryover_in_usd":        subscription.DailyCarryoverInUSD,
+		"daily_carryover_remaining_usd": subscription.DailyCarryoverRemainingUSD,
+		"daily_effective_limit_usd":     subscription.DailyEffectiveLimit(product),
+		"daily_remaining_total_usd":     subscription.DailyRemainingTotal(product),
+		"daily_remaining_carryover_usd": subscription.DailyRemainingCarryover(),
+		"expires_at":                    subscription.ExpiresAt,
+	}
+
+	if productSettlement.Binding != nil {
+		payload["product_id"] = productSettlement.Binding.ProductID
+		payload["product_code"] = productSettlement.Binding.ProductCode
+		payload["product_name"] = productSettlement.Binding.ProductName
+	}
+
+	return payload
 }
 
 // handleConcurrencyError handles concurrency-related errors with proper 429 response
