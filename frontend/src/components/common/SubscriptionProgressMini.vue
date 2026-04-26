@@ -110,11 +110,17 @@
                   <div>{{ t('subscriptionProgress.carryoverRule') }}</div>
                 </div>
 
-                <div v-if="product.weekly_limit_usd" class="flex items-center gap-2">
+                <div
+                  v-if="shouldShowProductPeriodUsage(product.weekly_limit_usd, product.weekly_usage_usd)"
+                  class="flex items-center gap-2"
+                >
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
-                    t('subscriptionProgress.weekly')
+                    t('subscriptionProgress.last7DaysShort')
                   }}</span>
-                  <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                  <div
+                    v-if="hasPositiveLimit(product.weekly_limit_usd)"
+                    class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600"
+                  >
                     <div
                       class="h-1.5 rounded-full transition-all"
                       :class="getProgressBarClass(product.weekly_usage_usd, product.weekly_limit_usd)"
@@ -123,16 +129,23 @@
                       }"
                     ></div>
                   </div>
+                  <div v-else class="min-w-0 flex-1"></div>
                   <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
                     {{ formatUsage(product.weekly_usage_usd, product.weekly_limit_usd) }}
                   </span>
                 </div>
 
-                <div v-if="product.monthly_limit_usd" class="flex items-center gap-2">
+                <div
+                  v-if="shouldShowProductPeriodUsage(product.monthly_limit_usd, product.monthly_usage_usd)"
+                  class="flex items-center gap-2"
+                >
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
-                    t('subscriptionProgress.monthly')
+                    t('subscriptionProgress.last30DaysShort')
                   }}</span>
-                  <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                  <div
+                    v-if="hasPositiveLimit(product.monthly_limit_usd)"
+                    class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-200 dark:bg-dark-600"
+                  >
                     <div
                       class="h-1.5 rounded-full transition-all"
                       :class="getProgressBarClass(product.monthly_usage_usd, product.monthly_limit_usd)"
@@ -141,6 +154,7 @@
                       }"
                     ></div>
                   </div>
+                  <div v-else class="min-w-0 flex-1"></div>
                   <span class="w-24 flex-shrink-0 text-right text-[10px] text-gray-500">
                     {{ formatUsage(product.monthly_usage_usd, product.monthly_limit_usd) }}
                   </span>
@@ -312,7 +326,7 @@ const tooltipOpen = ref(false)
 // Use store data instead of local state
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
 const activeProducts = computed(() => subscriptionProductStore.items)
-const activeCount = computed(() => activeSubscriptions.value.length + activeProducts.value.length)
+const activeCount = computed(() => displaySubscriptions.value.length + displayProducts.value.length)
 const hasActiveSubscriptions = computed(() => activeCount.value > 0)
 
 interface ProgressIndicator {
@@ -339,13 +353,25 @@ const displayProducts = computed(() => {
   })
 })
 
+const productCoveredGroupIds = computed(() => {
+  const groupIds = new Set<number>()
+  for (const product of activeProducts.value) {
+    for (const group of product.groups || []) {
+      groupIds.add(group.group_id)
+    }
+  }
+  return groupIds
+})
+
 const displaySubscriptions = computed(() => {
   // Sort by most usage (highest percentage first)
-  return [...activeSubscriptions.value].sort((a, b) => {
-    const aMax = getMaxUsagePercentage(a)
-    const bMax = getMaxUsagePercentage(b)
-    return bMax - aMax
-  })
+  return activeSubscriptions.value
+    .filter((subscription) => !productCoveredGroupIds.value.has(subscription.group_id))
+    .sort((a, b) => {
+      const aMax = getMaxUsagePercentage(a)
+      const bMax = getMaxUsagePercentage(b)
+      return bMax - aMax
+    })
 })
 
 function getMaxUsagePercentage(sub: UserSubscription): number {
@@ -398,6 +424,10 @@ function formatDailyCarryoverMessage(sub: UserSubscription): string {
 }
 
 function getProductDailyDisplayLimit(product: ActiveSubscriptionProduct): number | null {
+  return product.daily_limit_usd
+}
+
+function getProductDailyAvailableWithCarryover(product: ActiveSubscriptionProduct): number | null {
   if (!product.daily_limit_usd) return product.daily_limit_usd
   return product.daily_limit_usd + (product.daily_carryover_in_usd || 0)
 }
@@ -407,7 +437,7 @@ function hasProductDailyCarryover(product: ActiveSubscriptionProduct): boolean {
 }
 
 function formatProductDailyCarryoverMessage(product: ActiveSubscriptionProduct): string {
-  const total = (getProductDailyDisplayLimit(product) || 0).toFixed(2)
+  const total = (getProductDailyAvailableWithCarryover(product) || 0).toFixed(2)
   const carryover = (product.daily_carryover_in_usd || 0).toFixed(2)
   return t('subscriptionProgress.todayAvailable', { total, carryover })
 }
@@ -449,8 +479,21 @@ function getProgressWidth(used: number | undefined, limit: number | null | undef
 
 function formatUsage(used: number | undefined, limit: number | null | undefined): string {
   const usedValue = (used || 0).toFixed(2)
-  const limitValue = limit?.toFixed(2) || '∞'
-  return `$${usedValue}/$${limitValue}`
+  if (hasPositiveLimit(limit)) {
+    return `$${usedValue}/$${limit?.toFixed(2)}`
+  }
+  return `$${usedValue}/∞`
+}
+
+function hasPositiveLimit(limit: number | null | undefined): boolean {
+  return !!limit && limit > 0
+}
+
+function shouldShowProductPeriodUsage(
+  limit: number | null | undefined,
+  used: number | undefined
+): boolean {
+  return (limit !== null && limit !== undefined) || (used || 0) > 0
 }
 
 function formatDaysRemaining(expiresAt: string): string {

@@ -887,6 +887,7 @@ export default {
     subscriptionDays: '{days} days',
     days: ' days',
     codeRedeemSuccess: 'Code redeemed successfully!',
+    subscriptionRedeemSuccess: 'Subscription activated. Create a new API key for the subscription group.',
     failedToRedeem: 'Failed to redeem code. Please check the code and try again.',
     failedToLoadLeaderboard: 'Failed to load the lucky leaderboard.',
     subscriptionRefreshFailed: 'Redeemed successfully, but failed to refresh subscription status.',
@@ -5090,6 +5091,8 @@ export default {
     daily: 'Daily',
     weekly: 'Weekly',
     monthly: 'Monthly',
+    last7DaysShort: '7d',
+    last30DaysShort: '30d',
     daysRemaining: '{days} days left',
     expired: 'Expired',
     expiresToday: 'Expires today',
@@ -5192,11 +5195,15 @@ export default {
     daily: 'Daily',
     weekly: 'Weekly',
     monthly: 'Monthly',
+    last7DaysUsage: 'Past 7 days usage',
+    last30DaysUsage: 'Past 30 days usage',
     daysRemaining: '{days} days remaining',
     expiresOn: 'Expires on {date}',
     resetIn: 'Resets in {time}',
     windowNotActive: 'Awaiting first use',
-    usageOf: '{used} of {limit}'
+    usageOf: '{used} of {limit}',
+    dailyQuotaBreakdown:
+      'Yesterday carryover ${carryover} + today ${today} = today available ${total}'
   },
 
   // Onboarding Tour

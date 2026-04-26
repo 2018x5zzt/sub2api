@@ -892,6 +892,7 @@ export default {
     subscriptionDays: '{days} 天',
     days: '天',
     codeRedeemSuccess: '兑换成功！',
+    subscriptionRedeemSuccess: '订阅成功！去生成一个新的订阅分组 API Key 吧！',
     failedToRedeem: '兑换失败，请检查兑换码后重试。',
     failedToLoadLeaderboard: '加载手气排行榜失败。',
     subscriptionRefreshFailed: '兑换成功，但订阅状态刷新失败。',
@@ -5253,6 +5254,8 @@ export default {
     daily: '每日',
     weekly: '每周',
     monthly: '每月',
+    last7DaysShort: '7天',
+    last30DaysShort: '30天',
     daysRemaining: '剩余 {days} 天',
     expired: '已过期',
     expiresToday: '今天到期',
@@ -5353,11 +5356,14 @@ export default {
     daily: '每日',
     weekly: '每周',
     monthly: '每月',
+    last7DaysUsage: '过去7天用量',
+    last30DaysUsage: '过去30天用量',
     daysRemaining: '剩余 {days} 天',
     expiresOn: '{date} 到期',
     resetIn: '{time} 后重置',
     windowNotActive: '等待首次使用',
-    usageOf: '已用 {used} / {limit}'
+    usageOf: '已用 {used} / {limit}',
+    dailyQuotaBreakdown: '昨日结转 ${carryover} + 今日 ${today} = 今日可用 ${total}'
   },
 
   // Onboarding Tour

@@ -183,4 +183,25 @@ describe('RedeemView', () => {
     expect(wrapper.text()).toContain(zh.redeem.usernameRequiredTitle)
     expect(wrapper.text()).not.toContain(zh.redeem.repeatRedeemDialogTitle)
   })
+
+  it('tells users to create a subscription-group API key after redeeming a subscription', async () => {
+    mocks.redeem.mockResolvedValueOnce({
+      message: 'Code redeemed successfully',
+      type: 'subscription',
+      value: 30,
+      group_name: '【订阅】plus/team混合池',
+      validity_days: 30
+    })
+
+    const wrapper = await mountView()
+
+    await wrapper.get('#code').setValue('SUB2026')
+    await wrapper.get('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mocks.showSuccess).toHaveBeenCalledWith(
+      '订阅成功！去生成一个新的订阅分组 API Key 吧！'
+    )
+    expect(wrapper.text()).toContain('订阅成功！去生成一个新的订阅分组 API Key 吧！')
+  })
 })
