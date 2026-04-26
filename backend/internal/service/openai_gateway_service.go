@@ -1962,6 +1962,13 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
+	// 规范化 reasoning.effort 参数（minimal -> none），与上游允许值对齐。
+	if normalizeOpenAIResponsesMinimalReasoning(reqBody) {
+		bodyModified = true
+		markPatchSet("reasoning.effort", "none")
+		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized reasoning.effort: minimal -> none (account: %s)", account.Name)
+	}
+
 	if account.Type == AccountTypeOAuth {
 		codexResult := applyCodexOAuthTransformWithOptions(reqBody, isCodexCLI, isOpenAIResponsesCompactPath(c), codexTransformOptions{
 			DropStoreFalseNativeItemReferences: account.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled(),
@@ -5603,6 +5610,24 @@ func ensureOpenAIResponsesReasoning(reqBody map[string]any, requestedModel strin
 	return changed
 }
 
+func normalizeOpenAIResponsesMinimalReasoning(reqBody map[string]any) bool {
+	if reqBody == nil {
+		return false
+	}
+
+	reasoning, ok := reqBody["reasoning"].(map[string]any)
+	if !ok {
+		return false
+	}
+	effort, ok := reasoning["effort"].(string)
+	if !ok || !strings.EqualFold(strings.TrimSpace(effort), "minimal") {
+		return false
+	}
+
+	reasoning["effort"] = "none"
+	return true
+}
+
 func extractOpenAIServiceTier(reqBody map[string]any) *string {
 	if reqBody == nil {
 		return nil
@@ -5816,9 +5841,7 @@ func normalizeOpenAIReasoningEffort(raw string) string {
 	value = strings.NewReplacer("-", "", "_", "", " ", "").Replace(value)
 
 	switch value {
-	case "minimal":
-		return value
-	case "none":
+	case "none", "minimal":
 		return ""
 	case "low", "medium", "high":
 		return value
