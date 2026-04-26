@@ -1381,6 +1381,75 @@ func TestOpenAIStreamingClientDisconnectDrainsUpstreamUsage(t *testing.T) {
 	}
 }
 
+func TestOpenAIStreamingResponseCompletedBackfillsAggregatedOutput(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			StreamDataIntervalTimeout: 0,
+			StreamKeepaliveInterval:   0,
+			MaxLineSize:               defaultMaxLineSize,
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	pr, pw := io.Pipe()
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       pr,
+		Header:     http.Header{},
+	}
+
+	go func() {
+		defer func() { _ = pw.Close() }()
+		_, _ = pw.Write([]byte("event: response.created\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_stream\",\"object\":\"response\",\"model\":\"gpt-5.5\",\"status\":\"in_progress\",\"output\":[]}}\n\n"))
+		_, _ = pw.Write([]byte("event: response.output_item.added\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"id\":\"rs_1\",\"type\":\"reasoning\",\"summary\":[]}}\n\n"))
+		_, _ = pw.Write([]byte("event: response.output_item.done\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"id\":\"rs_1\",\"type\":\"reasoning\",\"summary\":[]}}\n\n"))
+		_, _ = pw.Write([]byte("event: response.output_item.added\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"output_index\":1,\"item\":{\"id\":\"msg_1\",\"type\":\"message\",\"status\":\"in_progress\",\"role\":\"assistant\",\"content\":[]}}\n\n"))
+		_, _ = pw.Write([]byte("event: response.output_text.delta\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"output_index\":1,\"content_index\":0,\"item_id\":\"msg_1\",\"delta\":\"ok\"}\n\n"))
+		_, _ = pw.Write([]byte("event: response.output_text.done\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_text.done\",\"output_index\":1,\"content_index\":0,\"item_id\":\"msg_1\",\"text\":\"ok\"}\n\n"))
+		_, _ = pw.Write([]byte("event: response.output_item.done\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.done\",\"output_index\":1,\"item\":{\"id\":\"msg_1\",\"type\":\"message\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}\n\n"))
+		_, _ = pw.Write([]byte("event: response.completed\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_stream\",\"object\":\"response\",\"model\":\"gpt-5.5\",\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":3,\"output_tokens\":4,\"total_tokens\":7}},\"sequence_number\":10}\n\n"))
+	}()
+
+	result, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "gpt-5.5", "gpt-5.5")
+	_ = pr.Close()
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, result.usage)
+	require.Equal(t, 3, result.usage.InputTokens)
+	require.Equal(t, 4, result.usage.OutputTokens)
+
+	var terminalData string
+	for _, line := range strings.Split(rec.Body.String(), "\n") {
+		data, ok := extractOpenAISSEDataLine(line)
+		if !ok || data == "" || data == "[DONE]" {
+			continue
+		}
+		if gjson.Get(data, "type").String() == "response.completed" {
+			terminalData = data
+			break
+		}
+	}
+	require.NotEmpty(t, terminalData)
+	require.Equal(t, "reasoning", gjson.Get(terminalData, "response.output.0.type").String())
+	require.Equal(t, "message", gjson.Get(terminalData, "response.output.1.type").String())
+	require.Equal(t, "completed", gjson.Get(terminalData, "response.output.1.status").String())
+	require.Equal(t, "output_text", gjson.Get(terminalData, "response.output.1.content.0.type").String())
+	require.Equal(t, "ok", gjson.Get(terminalData, "response.output.1.content.0.text").String())
+}
+
 func TestOpenAIStreamingMissingTerminalEventReturnsIncompleteError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{

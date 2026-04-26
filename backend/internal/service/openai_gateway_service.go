@@ -3957,6 +3957,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	}
 
 	needModelReplace := originalModel != mappedModel
+	responsesAccumulator := newResponsesStreamAccumulator()
 	resultWithUsage := func() *openaiStreamingResult {
 		return &openaiStreamingResult{usage: usage, firstTokenMs: firstTokenMs}
 	}
@@ -4007,7 +4008,13 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			// Replace model in response if needed.
 			// Fast path: most events do not contain model field values.
 			if needModelReplace && mappedModel != "" && strings.Contains(data, mappedModel) {
-				line = s.replaceModelInSSELine(line, mappedModel, originalModel)
+				replacedLine := s.replaceModelInSSELine(line, mappedModel, originalModel)
+				if replacedLine != line {
+					line = replacedLine
+					if replacedData, ok := extractOpenAISSEDataLine(line); ok {
+						data = replacedData
+					}
+				}
 			}
 
 			dataBytes := []byte(data)
@@ -4019,6 +4026,11 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			if correctedData, corrected := s.toolCorrector.CorrectToolCallsInSSEBytes(dataBytes); corrected {
 				dataBytes = correctedData
 				data = string(correctedData)
+				line = "data: " + data
+			}
+			if patchedData, patched := patchResponsesTerminalOutputSSEData(dataBytes, responsesAccumulator); patched {
+				dataBytes = patchedData
+				data = string(patchedData)
 				line = "data: " + data
 			}
 
@@ -4175,6 +4187,46 @@ func extractOpenAISSEDataLine(line string) (string, bool) {
 		start++
 	}
 	return line[start:], true
+}
+
+func patchResponsesTerminalOutputSSEData(data []byte, accumulator *responsesStreamAccumulator) ([]byte, bool) {
+	if accumulator == nil {
+		return data, false
+	}
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("[DONE]")) || !bytes.Contains(trimmed, []byte("response.")) {
+		return data, false
+	}
+
+	var event apicompat.ResponsesStreamEvent
+	if err := json.Unmarshal(trimmed, &event); err != nil || event.Type == "" {
+		return data, false
+	}
+	accumulator.ApplyEvent(&event)
+
+	switch event.Type {
+	case "response.completed", "response.done", "response.incomplete", "response.failed":
+	default:
+		return data, false
+	}
+
+	finalResponse, ok := accumulator.FinalResponse()
+	if !ok || len(finalResponse.Output) == 0 {
+		return data, false
+	}
+	if gjson.GetBytes(trimmed, "response.output.0.type").String() != "" {
+		return data, false
+	}
+
+	outputBytes, err := json.Marshal(finalResponse.Output)
+	if err != nil {
+		return data, false
+	}
+	patched, err := sjson.SetRawBytes(trimmed, "response.output", outputBytes)
+	if err != nil {
+		return data, false
+	}
+	return patched, true
 }
 
 func (s *OpenAIGatewayService) replaceModelInSSELine(line, fromModel, toModel string) string {
