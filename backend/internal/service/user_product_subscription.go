@@ -40,6 +40,31 @@ func (s *UserProductSubscription) IsExpired() bool {
 	return s == nil || time.Now().After(s.ExpiresAt)
 }
 
+func (s *UserProductSubscription) IsWindowActivated() bool {
+	return s != nil && (s.DailyWindowStart != nil || s.WeeklyWindowStart != nil || s.MonthlyWindowStart != nil)
+}
+
+func (s *UserProductSubscription) NeedsDailyReset() bool {
+	if s == nil || s.DailyWindowStart == nil {
+		return false
+	}
+	return time.Since(*s.DailyWindowStart) >= 24*time.Hour
+}
+
+func (s *UserProductSubscription) NeedsWeeklyReset() bool {
+	if s == nil || s.WeeklyWindowStart == nil {
+		return false
+	}
+	return time.Since(*s.WeeklyWindowStart) >= 7*24*time.Hour
+}
+
+func (s *UserProductSubscription) NeedsMonthlyReset() bool {
+	if s == nil || s.MonthlyWindowStart == nil {
+		return false
+	}
+	return time.Since(*s.MonthlyWindowStart) >= 30*24*time.Hour
+}
+
 func (s *UserProductSubscription) DailyEffectiveLimit(product *SubscriptionProduct) float64 {
 	if product == nil || !product.HasDailyLimit() {
 		return 0

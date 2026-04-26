@@ -107,12 +107,81 @@ func TestSubscriptionProductService_ListVisibleGroups(t *testing.T) {
 	require.Equal(t, "pro", groups[1].Name)
 }
 
+func TestSubscriptionProductService_CheckProductLimits_PreviewsExpiredDailyWindow(t *testing.T) {
+	svc := NewSubscriptionProductService(&subscriptionProductRepoStub{})
+	windowStart := startOfDay(time.Now()).Add(-24 * time.Hour)
+	expectedWindowStart := startOfDay(time.Now())
+	binding := &SubscriptionProductBinding{
+		ProductID:      10,
+		ProductCode:    "gpt_daily_45",
+		ProductName:    "GPT Daily 45",
+		ProductStatus:  SubscriptionProductStatusActive,
+		BindingStatus:  SubscriptionProductBindingStatusActive,
+		DailyLimitUSD:  45,
+		WeeklyLimitUSD: 0,
+	}
+	sub := &UserProductSubscription{
+		ID:               30,
+		UserID:           40,
+		ProductID:        10,
+		Status:           SubscriptionStatusActive,
+		ExpiresAt:        time.Now().Add(72 * time.Hour),
+		DailyWindowStart: ptrTime(windowStart),
+		DailyUsageUSD:    60,
+	}
+
+	err := svc.CheckProductLimits(binding, sub, 0)
+
+	require.NoError(t, err)
+	require.NotNil(t, sub.DailyWindowStart)
+	require.Equal(t, expectedWindowStart, *sub.DailyWindowStart)
+	require.InDelta(t, 0, sub.DailyUsageUSD, 1e-6)
+	require.InDelta(t, 0, sub.DailyCarryoverInUSD, 1e-6)
+	require.InDelta(t, 0, sub.DailyCarryoverRemainingUSD, 1e-6)
+}
+
+func TestSubscriptionProductService_ListActiveUserProducts_NormalizesExpiredDailyWindow(t *testing.T) {
+	windowStart := startOfDay(time.Now()).Add(-24 * time.Hour)
+	expectedWindowStart := startOfDay(time.Now())
+	repo := &subscriptionProductRepoStub{
+		activeProducts: []ActiveSubscriptionProduct{
+			{
+				Product: SubscriptionProduct{
+					ID:            10,
+					Code:          "gpt_daily_45",
+					Status:        SubscriptionProductStatusActive,
+					DailyLimitUSD: 45,
+				},
+				Subscription: UserProductSubscription{
+					ID:               30,
+					UserID:           40,
+					ProductID:        10,
+					Status:           SubscriptionStatusActive,
+					ExpiresAt:        time.Now().Add(72 * time.Hour),
+					DailyWindowStart: ptrTime(windowStart),
+					DailyUsageUSD:    60,
+				},
+			},
+		},
+	}
+	svc := NewSubscriptionProductService(repo)
+
+	products, err := svc.ListActiveUserProducts(context.Background(), 40)
+
+	require.NoError(t, err)
+	require.Len(t, products, 1)
+	require.NotNil(t, products[0].Subscription.DailyWindowStart)
+	require.Equal(t, expectedWindowStart, *products[0].Subscription.DailyWindowStart)
+	require.InDelta(t, 0, products[0].Subscription.DailyUsageUSD, 1e-6)
+}
+
 type subscriptionProductRepoStub struct {
 	binding                 *SubscriptionProductBinding
 	subscription            *UserProductSubscription
 	bindingByUserGroup      *SubscriptionProductBinding
 	subscriptionByUserGroup *UserProductSubscription
 	groups                  []Group
+	activeProducts          []ActiveSubscriptionProduct
 	getSubscription         func(ctx context.Context, userID, productID int64) (*UserProductSubscription, error)
 
 	bindingCalls            int
@@ -145,5 +214,5 @@ func (s *subscriptionProductRepoStub) ListVisibleGroupsByUserID(context.Context,
 }
 
 func (s *subscriptionProductRepoStub) ListActiveProductsByUserID(context.Context, int64) ([]ActiveSubscriptionProduct, error) {
-	return nil, nil
+	return s.activeProducts, nil
 }

@@ -244,3 +244,43 @@ func TestBillingCacheServiceCheckBillingEligibility_ProductSettlementContextSkip
 
 	require.NoError(t, err)
 }
+
+func TestBillingCacheServiceCheckBillingEligibility_ProductSettlementContextPreviewsExpiredDailyWindow(t *testing.T) {
+	subRepo := billingEligibilitySubRepoStub{err: errors.New("legacy subscription should not be read")}
+	svc := NewBillingCacheService(nil, billingEligibilityUserRepoStub{balance: 0}, subRepo, nil, &config.Config{})
+	t.Cleanup(svc.Stop)
+
+	windowStart := startOfDay(time.Now()).Add(-24 * time.Hour)
+	expectedWindowStart := startOfDay(time.Now())
+	group := &Group{
+		ID:               99,
+		SubscriptionType: SubscriptionTypeSubscription,
+	}
+	productCtx := &ProductSettlementContext{
+		Binding: &SubscriptionProductBinding{
+			ProductID:       101,
+			ProductStatus:   SubscriptionProductStatusActive,
+			BindingStatus:   SubscriptionProductBindingStatusActive,
+			GroupID:         group.ID,
+			DailyLimitUSD:   45,
+			DebitMultiplier: 1,
+		},
+		Subscription: &UserProductSubscription{
+			ID:               202,
+			UserID:           1,
+			ProductID:        101,
+			Status:           SubscriptionStatusActive,
+			ExpiresAt:        time.Now().Add(72 * time.Hour),
+			DailyWindowStart: ptrTime(windowStart),
+			DailyUsageUSD:    60,
+		},
+	}
+	ctx := ContextWithProductSettlement(context.Background(), productCtx)
+
+	err := svc.CheckBillingEligibility(ctx, &User{ID: 1}, nil, group, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, productCtx.Subscription.DailyWindowStart)
+	require.Equal(t, expectedWindowStart, *productCtx.Subscription.DailyWindowStart)
+	require.InDelta(t, 0, productCtx.Subscription.DailyUsageUSD, 1e-6)
+}

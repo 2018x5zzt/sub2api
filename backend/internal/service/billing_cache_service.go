@@ -691,6 +691,7 @@ func (s *BillingCacheService) checkProductSubscriptionEligibilityFromSnapshot(bi
 		return NewProductSubscriptionInvalidError(binding, subscription)
 	}
 	product := binding.Product()
+	normalizeExpiredProductSubscriptionWindow(subscription, product, time.Now())
 	daily, weekly, monthly := subscription.CheckAllLimits(product, 0)
 	if daily && weekly && monthly {
 		return nil
