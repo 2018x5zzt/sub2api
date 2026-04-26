@@ -59,7 +59,7 @@ func isResponsesToolContinuationItemType(itemType string) bool {
 		return false
 	}
 	switch itemType {
-	case "item_reference", "function_call", "tool_call", "function_call_output":
+	case "item_reference", "function_call", "tool_call", "function_call_output", "tool_search_output":
 		return true
 	}
 	return strings.HasSuffix(itemType, "_call") || strings.HasSuffix(itemType, "_call_output")

@@ -472,32 +472,55 @@ func convertChatToolsToResponses(tools []ChatTool, functions []ChatFunction) []R
 	var out []ResponsesTool
 
 	for _, t := range tools {
-		if t.Type != "function" || t.Function == nil {
+		if strings.TrimSpace(t.Type) != "function" {
+			continue
+		}
+		f := chatToolFunctionDefinition(t)
+		if strings.TrimSpace(f.Name) == "" {
 			continue
 		}
 		rt := ResponsesTool{
 			Type:        "function",
-			Name:        t.Function.Name,
-			Description: t.Function.Description,
-			Parameters:  t.Function.Parameters,
-			Strict:      t.Function.Strict,
+			Name:        f.Name,
+			Description: f.Description,
+			Parameters:  normalizeToolParameters(f.Parameters),
+			Strict:      f.Strict,
 		}
 		out = append(out, rt)
 	}
 
 	// Legacy functions[] are treated as function-type tools.
 	for _, f := range functions {
+		if strings.TrimSpace(f.Name) == "" {
+			continue
+		}
 		rt := ResponsesTool{
 			Type:        "function",
 			Name:        f.Name,
 			Description: f.Description,
-			Parameters:  f.Parameters,
+			Parameters:  normalizeToolParameters(f.Parameters),
 			Strict:      f.Strict,
 		}
 		out = append(out, rt)
 	}
 
 	return out
+}
+
+func chatToolFunctionDefinition(t ChatTool) ChatFunction {
+	if t.Function != nil {
+		return *t.Function
+	}
+	name := strings.TrimSpace(t.Name)
+	if name == "" {
+		name = strings.TrimSpace(t.FunctionName)
+	}
+	return ChatFunction{
+		Name:        name,
+		Description: t.Description,
+		Parameters:  t.Parameters,
+		Strict:      t.Strict,
+	}
 }
 
 // convertChatFunctionCallToToolChoice maps the legacy function_call field to a

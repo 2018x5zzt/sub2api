@@ -418,9 +418,11 @@ func convertAnthropicToolsToResponses(tools []AnthropicTool) []ResponsesTool {
 }
 
 // normalizeToolParameters ensures the tool parameter schema is valid for
-// OpenAI's Responses API, which requires "properties" on object schemas.
+// OpenAI's Responses API, which requires a schema type and "properties" on
+// object schemas.
 //
 //   - nil/empty → {"type":"object","properties":{}}
+//   - schema without type → {"type":"object","properties":{}}
 //   - type=object without properties → adds "properties": {}
 //   - otherwise → returned unchanged
 func normalizeToolParameters(schema json.RawMessage) json.RawMessage {
@@ -433,8 +435,15 @@ func normalizeToolParameters(schema json.RawMessage) json.RawMessage {
 		return schema
 	}
 
-	typ := m["type"]
-	if string(typ) != `"object"` {
+	var typ string
+	if rawType, ok := m["type"]; ok {
+		_ = json.Unmarshal(rawType, &typ)
+	}
+	if strings.TrimSpace(typ) == "" {
+		m["type"] = json.RawMessage(`"object"`)
+		typ = "object"
+	}
+	if typ != "object" {
 		return schema
 	}
 
