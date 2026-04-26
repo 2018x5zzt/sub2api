@@ -182,6 +182,7 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 
 	streamStarted := false
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	productSettlement := GetProductSettlement(c)
 
 	maxWait := service.CalculateMaxWait(subject.Concurrency)
 	canWait, err := h.concurrencyHelper.IncrementWaitCount(c.Request.Context(), subject.UserID, maxWait)
@@ -420,6 +421,7 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 				User:               apiKey.User,
 				Account:            account,
 				Subscription:       subscription,
+				ProductSettlement:  productSettlement,
 				InboundEndpoint:    inboundEndpoint,
 				UpstreamEndpoint:   upstreamEndpoint,
 				UserAgent:          userAgent,

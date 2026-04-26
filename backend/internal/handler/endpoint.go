@@ -181,3 +181,11 @@ func GetUpstreamEndpoint(c *gin.Context, platform string) string {
 	}
 	return DeriveUpstreamEndpoint(inbound, rawPath, platform)
 }
+
+func GetProductSettlement(c *gin.Context) *service.ProductSettlementContext {
+	if c == nil || c.Request == nil {
+		return nil
+	}
+	settlement, _ := service.ProductSettlementFromContext(c.Request.Context())
+	return settlement
+}
