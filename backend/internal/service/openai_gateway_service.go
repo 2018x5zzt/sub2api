@@ -4214,11 +4214,12 @@ func patchResponsesTerminalOutputSSEData(data []byte, accumulator *responsesStre
 	if !ok || len(finalResponse.Output) == 0 {
 		return data, false
 	}
-	if gjson.GetBytes(trimmed, "response.output.0.type").String() != "" {
+	finalOutput := normalizeResponsesTerminalOutput(finalResponse.Output)
+	if len(finalOutput) == 0 || !responsesTerminalOutputNeedsPatch(trimmed, finalOutput) {
 		return data, false
 	}
 
-	outputBytes, err := json.Marshal(finalResponse.Output)
+	outputBytes, err := json.Marshal(finalOutput)
 	if err != nil {
 		return data, false
 	}
@@ -4227,6 +4228,174 @@ func patchResponsesTerminalOutputSSEData(data []byte, accumulator *responsesStre
 		return data, false
 	}
 	return patched, true
+}
+
+func normalizeResponsesTerminalOutput(output []apicompat.ResponsesOutput) []apicompat.ResponsesOutput {
+	out := cloneResponsesOutputs(output)
+	for i := range out {
+		item := &out[i]
+		if item.Type == "" {
+			item.Type = inferResponsesOutputType(item)
+		}
+		switch item.Type {
+		case "message":
+			if item.Role == "" {
+				item.Role = "assistant"
+			}
+			if len(item.Content) == 0 {
+				item.Content = []apicompat.ResponsesContentPart{{Type: "output_text"}}
+				continue
+			}
+			for j := range item.Content {
+				if item.Content[j].Type == "" {
+					item.Content[j].Type = inferResponsesContentPartType(item.Content[j])
+				}
+			}
+		case "reasoning":
+			for j := range item.Summary {
+				if item.Summary[j].Type == "" {
+					item.Summary[j].Type = "summary_text"
+				}
+			}
+		}
+	}
+	return out
+}
+
+func inferResponsesOutputType(item *apicompat.ResponsesOutput) string {
+	if item == nil {
+		return ""
+	}
+	if len(item.Content) > 0 || item.Role != "" {
+		return "message"
+	}
+	if len(item.Summary) > 0 || item.EncryptedContent != "" {
+		return "reasoning"
+	}
+	if item.CallID != "" || item.Name != "" || item.Arguments != "" {
+		return "function_call"
+	}
+	if item.Action != nil {
+		return "web_search_call"
+	}
+	return ""
+}
+
+func inferResponsesContentPartType(part apicompat.ResponsesContentPart) string {
+	if part.ImageURL != "" {
+		return "output_image"
+	}
+	return "output_text"
+}
+
+func responsesTerminalOutputNeedsPatch(data []byte, finalOutput []apicompat.ResponsesOutput) bool {
+	output := gjson.GetBytes(data, "response.output")
+	if !output.Exists() || !output.IsArray() {
+		return true
+	}
+	items := output.Array()
+	if len(items) < len(finalOutput) {
+		return true
+	}
+	for i := range finalOutput {
+		basePath := fmt.Sprintf("response.output.%d", i)
+		item := finalOutput[i]
+		currentType := gjson.GetBytes(data, basePath+".type").String()
+		if currentType == "" && item.Type != "" {
+			return true
+		}
+		typ := firstNonEmpty(currentType, item.Type)
+		switch typ {
+		case "message":
+			if item.Role != "" && gjson.GetBytes(data, basePath+".role").String() == "" {
+				return true
+			}
+			if responsesTerminalContentNeedsPatch(data, basePath, item.Content) {
+				return true
+			}
+		case "reasoning":
+			if responsesTerminalSummaryNeedsPatch(data, basePath, item.Summary) {
+				return true
+			}
+		case "function_call":
+			if item.CallID != "" && gjson.GetBytes(data, basePath+".call_id").String() != item.CallID {
+				return true
+			}
+			if item.Name != "" && gjson.GetBytes(data, basePath+".name").String() != item.Name {
+				return true
+			}
+			if item.Arguments != "" && gjson.GetBytes(data, basePath+".arguments").String() != item.Arguments {
+				return true
+			}
+		case "web_search_call":
+			if item.Action != nil {
+				actionPath := basePath + ".action"
+				if !gjson.GetBytes(data, actionPath).Exists() {
+					return true
+				}
+				if item.Action.Type != "" && gjson.GetBytes(data, actionPath+".type").String() != item.Action.Type {
+					return true
+				}
+				if item.Action.Query != "" && gjson.GetBytes(data, actionPath+".query").String() != item.Action.Query {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func responsesTerminalContentNeedsPatch(data []byte, itemPath string, finalContent []apicompat.ResponsesContentPart) bool {
+	if len(finalContent) == 0 {
+		return false
+	}
+	contentPath := itemPath + ".content"
+	content := gjson.GetBytes(data, contentPath)
+	if !content.Exists() || !content.IsArray() {
+		return true
+	}
+	parts := content.Array()
+	if len(parts) < len(finalContent) {
+		return true
+	}
+	for i, part := range finalContent {
+		partPath := fmt.Sprintf("%s.%d", contentPath, i)
+		if part.Type != "" && gjson.GetBytes(data, partPath+".type").String() != part.Type {
+			return true
+		}
+		if part.Text != "" && gjson.GetBytes(data, partPath+".text").String() != part.Text {
+			return true
+		}
+		if part.ImageURL != "" && gjson.GetBytes(data, partPath+".image_url").String() != part.ImageURL {
+			return true
+		}
+	}
+	return false
+}
+
+func responsesTerminalSummaryNeedsPatch(data []byte, itemPath string, finalSummary []apicompat.ResponsesSummary) bool {
+	if len(finalSummary) == 0 {
+		return false
+	}
+	summaryPath := itemPath + ".summary"
+	summary := gjson.GetBytes(data, summaryPath)
+	if !summary.Exists() || !summary.IsArray() {
+		return true
+	}
+	parts := summary.Array()
+	if len(parts) < len(finalSummary) {
+		return true
+	}
+	for i, part := range finalSummary {
+		partPath := fmt.Sprintf("%s.%d", summaryPath, i)
+		if part.Type != "" && gjson.GetBytes(data, partPath+".type").String() != part.Type {
+			return true
+		}
+		if part.Text != "" && gjson.GetBytes(data, partPath+".text").String() != part.Text {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *OpenAIGatewayService) replaceModelInSSELine(line, fromModel, toModel string) string {
