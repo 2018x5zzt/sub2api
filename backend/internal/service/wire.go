@@ -222,6 +222,13 @@ func ProvideGroupHealthHistoryService(groupRepo GroupRepository, snapshotRepo Gr
 	return svc
 }
 
+func ProvideChannelService(repo ChannelRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, groupRepo GroupRepository, pricingService *PricingService) *ChannelService {
+	svc := NewChannelService(repo, authCacheInvalidator)
+	svc.groupRepo = groupRepo
+	svc.pricingService = pricingService
+	return svc
+}
+
 // ProvideRateLimitService creates RateLimitService with optional dependencies.
 func ProvideRateLimitService(
 	accountRepo AccountRepository,
@@ -442,9 +449,9 @@ func ProvideAuthService(
 	promoService *PromoService,
 	defaultSubAssigner DefaultSubscriptionAssigner,
 	productAssigner ProductSubscriptionAssigner,
-	inviteService *InviteService,
+	affiliateService *AffiliateService,
 ) *AuthService {
-	svc := NewAuthService(entClient, userRepo, redeemRepo, refreshTokenCache, cfg, settingService, emailService, turnstileService, emailQueueService, promoService, defaultSubAssigner, inviteService)
+	svc := NewAuthService(entClient, userRepo, redeemRepo, refreshTokenCache, cfg, settingService, emailService, turnstileService, emailQueueService, promoService, defaultSubAssigner, affiliateService)
 	svc.SetDefaultProductSubscriptionAssigner(productAssigner)
 	return svc
 }
@@ -452,7 +459,7 @@ func ProvideAuthService(
 func ProvideRedeemService(
 	redeemRepo RedeemCodeRepository,
 	userRepo UserRepository,
-	inviteService *InviteService,
+	affiliateService *AffiliateService,
 	subscriptionService *SubscriptionService,
 	cache RedeemCache,
 	billingCacheService *BillingCacheService,
@@ -460,7 +467,7 @@ func ProvideRedeemService(
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
 	productAssigner ProductSubscriptionAssigner,
 ) *RedeemService {
-	return NewRedeemService(redeemRepo, userRepo, inviteService, subscriptionService, cache, billingCacheService, entClient, authCacheInvalidator, productAssigner)
+	return NewRedeemService(redeemRepo, userRepo, affiliateService, subscriptionService, cache, billingCacheService, entClient, authCacheInvalidator, productAssigner)
 }
 
 func ProvideAdminService(
@@ -536,6 +543,7 @@ var ProviderSet = wire.NewSet(
 	ProvidePricingService,
 	NewBillingService,
 	NewBillingCacheService,
+	NewAffiliateService,
 	NewAnnouncementService,
 	ProvideAdminService,
 	NewGatewayService,
@@ -611,6 +619,6 @@ var ProviderSet = wire.NewSet(
 	ProvideScheduledTestService,
 	ProvideScheduledTestRunnerService,
 	NewGroupCapacityService,
-	NewChannelService,
+	ProvideChannelService,
 	NewModelPricingResolver,
 )

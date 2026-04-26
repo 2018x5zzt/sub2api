@@ -328,6 +328,8 @@ export const useAppStore = defineStore('app', () => {
         hide_ccs_import_button: false,
         purchase_subscription_enabled: false,
         purchase_subscription_url: '',
+        available_channels_enabled: true,
+        affiliate_enabled: true,
         custom_menu_items: [],
         custom_endpoints: [],
         linuxdo_oauth_enabled: false,

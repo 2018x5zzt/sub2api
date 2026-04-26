@@ -25,6 +25,8 @@ func RegisterUserRoutes(
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
+			user.GET("/aff", h.User.GetAffiliate)
+			user.POST("/aff/transfer", h.User.TransferAffiliateQuota)
 
 			// TOTP 双因素认证
 			totp := user.Group("/totp")
@@ -55,6 +57,11 @@ func RegisterUserRoutes(
 			groups.GET("/models", h.APIKey.GetAvailableGroupModels)
 			groups.GET("/rates", h.APIKey.GetUserGroupRates)
 			groups.GET("/pool-status", h.APIKey.GetVisibleGroupPoolStatus)
+		}
+
+		channels := authenticated.Group("/channels")
+		{
+			channels.GET("/available", h.AvailableChannel.List)
 		}
 
 		// 使用记录
@@ -102,10 +109,5 @@ func RegisterUserRoutes(
 			subscriptionProducts.GET("/progress", h.SubscriptionProduct.GetProgress)
 		}
 
-		invite := authenticated.Group("/invite")
-		{
-			invite.GET("/summary", h.Invite.GetSummary)
-			invite.GET("/rewards", h.Invite.ListRewards)
-		}
 	}
 }

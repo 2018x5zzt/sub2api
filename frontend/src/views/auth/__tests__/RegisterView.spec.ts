@@ -57,6 +57,8 @@ describe('RegisterView', () => {
     registerMock.mockReset()
     authApiMocks.getPublicSettingsMock.mockReset()
     authApiMocks.validateInvitationCodeMock.mockClear()
+    localStorage.clear()
+    sessionStorage.clear()
     routeMock.query = { invite: 'hello123' }
     authApiMocks.getPublicSettingsMock.mockResolvedValue({
       registration_enabled: true,
@@ -68,6 +70,41 @@ describe('RegisterView', () => {
       linuxdo_oauth_enabled: false,
       registration_email_suffix_whitelist: []
     })
+  })
+
+  it('locks affiliate code from aff-link query and sends both new and legacy payload fields', async () => {
+    routeMock.query = { aff: 'AFF2026' } as any
+    registerMock.mockResolvedValue(undefined)
+
+    const wrapper = mount(RegisterView, {
+      global: {
+        stubs: {
+          AuthLayout: { template: '<div><slot /></div>' },
+          LinuxDoOAuthSection: { template: '<div />' },
+          TurnstileWidget: { template: '<div />' },
+          Icon: { template: '<span />' },
+          RouterLink: { template: '<a><slot /></a>' }
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const inviteInput = wrapper.find('#invitation_code')
+    expect((inviteInput.element as HTMLInputElement).value).toBe('AFF2026')
+    expect(inviteInput.attributes('readonly')).toBeDefined()
+
+    await wrapper.find('#email').setValue('user@example.com')
+    await wrapper.find('#password').setValue('secret123')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(registerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aff_code: 'AFF2026',
+        invitation_code: 'AFF2026'
+      })
+    )
   })
 
   it('locks invite code from invite-link query and shows locked helper copy', async () => {

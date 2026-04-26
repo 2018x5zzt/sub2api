@@ -302,7 +302,12 @@ import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
 import { getPublicSettings, validatePromoCode, validateInvitationCode } from '@/api/auth'
 import { buildAuthErrorMessage } from '@/utils/authError'
-import { getInviteCodeFromQuery } from '@/utils/inviteQuery'
+import {
+  clearAffiliateReferralCode,
+  loadAffiliateReferralCode,
+  pickOAuthAffiliateCode,
+  resolveAffiliateReferralCode
+} from '@/utils/oauthAffiliate'
 import {
   isRegistrationEmailSuffixAllowed,
   normalizeRegistrationEmailSuffixWhitelist
@@ -333,7 +338,11 @@ const turnstileSiteKey = ref<string>('')
 const siteName = ref<string>('Sub2API')
 const linuxdoOAuthEnabled = ref<boolean>(false)
 const registrationEmailSuffixWhitelist = ref<string[]>([])
-const lockedInviteCode = computed(() => getInviteCodeFromQuery(route.query.invite))
+const lockedInviteCode = computed(
+  () =>
+    pickOAuthAffiliateCode(route.query.aff, route.query.aff_code, route.query.invite) ||
+    loadAffiliateReferralCode()
+)
 const inviteCodeLocked = computed(() => lockedInviteCode.value !== '')
 
 // Turnstile
@@ -363,7 +372,8 @@ const formData = reactive({
   email: '',
   password: '',
   promo_code: '',
-  invitation_code: ''
+  invitation_code: '',
+  aff_code: ''
 })
 
 const errors = reactive({
@@ -399,8 +409,18 @@ onMounted(async () => {
       }
     }
 
+    const affiliateCode = resolveAffiliateReferralCode(
+      route.query.aff,
+      route.query.aff_code,
+      route.query.invite
+    )
+    if (affiliateCode) {
+      formData.aff_code = affiliateCode
+    }
+
     if (inviteCodeLocked.value && !formData.invitation_code) {
       formData.invitation_code = lockedInviteCode.value
+      formData.aff_code = lockedInviteCode.value
       await validateInvitationCodeDebounced(lockedInviteCode.value)
     }
   } catch (error) {
@@ -497,6 +517,7 @@ function getPromoErrorMessage(errorCode?: string): string {
 function handleInvitationCodeInput(): void {
   if (inviteCodeLocked.value) {
     formData.invitation_code = lockedInviteCode.value
+    formData.aff_code = lockedInviteCode.value
     return
   }
 
@@ -689,6 +710,15 @@ async function handleRegister(): Promise<void> {
   isLoading.value = true
 
   try {
+    const affiliateCode = (
+      formData.aff_code.trim() ||
+      formData.invitation_code.trim() ||
+      loadAffiliateReferralCode()
+    ).trim()
+    if (affiliateCode) {
+      formData.aff_code = affiliateCode
+    }
+
     // If email verification is enabled, redirect to verification page
     if (emailVerifyEnabled.value) {
       // Store registration data in sessionStorage
@@ -699,7 +729,8 @@ async function handleRegister(): Promise<void> {
           password: formData.password,
           turnstile_token: turnstileToken.value,
           promo_code: formData.promo_code || undefined,
-          invitation_code: formData.invitation_code || undefined
+          invitation_code: formData.invitation_code || undefined,
+          aff_code: affiliateCode || undefined
         })
       )
 
@@ -714,8 +745,10 @@ async function handleRegister(): Promise<void> {
       password: formData.password,
       turnstile_token: turnstileEnabled.value ? turnstileToken.value : undefined,
       promo_code: formData.promo_code || undefined,
-      invitation_code: formData.invitation_code || undefined
+      invitation_code: formData.invitation_code || undefined,
+      aff_code: affiliateCode || undefined
     })
+    clearAffiliateReferralCode()
 
     // Show success toast
     appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))

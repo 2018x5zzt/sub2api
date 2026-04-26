@@ -126,6 +126,12 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		CustomEndpoints:                      dto.ParseCustomEndpoints(settings.CustomEndpoints),
 		DefaultConcurrency:                   settings.DefaultConcurrency,
 		DefaultBalance:                       settings.DefaultBalance,
+		AffiliateEnabled:                     settings.AffiliateEnabled,
+		AffiliateRebateRate:                  settings.AffiliateRebateRate,
+		AffiliateRebateFreezeHours:           settings.AffiliateRebateFreezeHours,
+		AffiliateRebateDurationDays:          settings.AffiliateRebateDurationDays,
+		AffiliateRebatePerInviteeCap:         settings.AffiliateRebatePerInviteeCap,
+		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
 		DefaultSubscriptions:                 defaultSubscriptions,
 		DefaultSubscriptionProducts:          defaultSubscriptionProducts,
 		EnterpriseVisibleGroups:              enterpriseVisibleGroups,
@@ -196,11 +202,17 @@ type UpdateSettingsRequest struct {
 	CustomEndpoints             *[]dto.CustomEndpoint `json:"custom_endpoints"`
 
 	// 默认配置
-	DefaultConcurrency          int                                     `json:"default_concurrency"`
-	DefaultBalance              float64                                 `json:"default_balance"`
-	DefaultSubscriptions        []dto.DefaultSubscriptionSetting        `json:"default_subscriptions"`
-	DefaultSubscriptionProducts []dto.DefaultSubscriptionProductSetting `json:"default_subscription_products"`
-	EnterpriseVisibleGroups     *[]dto.EnterpriseVisibleGroupSetting    `json:"enterprise_visible_groups"`
+	DefaultConcurrency           int                                     `json:"default_concurrency"`
+	DefaultBalance               float64                                 `json:"default_balance"`
+	AffiliateEnabled             bool                                    `json:"affiliate_enabled"`
+	AffiliateRebateRate          float64                                 `json:"affiliate_rebate_rate"`
+	AffiliateRebateFreezeHours   int                                     `json:"affiliate_rebate_freeze_hours"`
+	AffiliateRebateDurationDays  int                                     `json:"affiliate_rebate_duration_days"`
+	AffiliateRebatePerInviteeCap float64                                 `json:"affiliate_rebate_per_invitee_cap"`
+	AvailableChannelsEnabled     bool                                    `json:"available_channels_enabled"`
+	DefaultSubscriptions         []dto.DefaultSubscriptionSetting        `json:"default_subscriptions"`
+	DefaultSubscriptionProducts  []dto.DefaultSubscriptionProductSetting `json:"default_subscription_products"`
+	EnterpriseVisibleGroups      *[]dto.EnterpriseVisibleGroupSetting    `json:"enterprise_visible_groups"`
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -604,6 +616,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		CustomEndpoints:                  customEndpointsJSON,
 		DefaultConcurrency:               req.DefaultConcurrency,
 		DefaultBalance:                   req.DefaultBalance,
+		AffiliateEnabled:                 req.AffiliateEnabled,
+		AffiliateRebateRate:              req.AffiliateRebateRate,
+		AffiliateRebateFreezeHours:       req.AffiliateRebateFreezeHours,
+		AffiliateRebateDurationDays:      req.AffiliateRebateDurationDays,
+		AffiliateRebatePerInviteeCap:     req.AffiliateRebatePerInviteeCap,
+		AvailableChannelsEnabled:         req.AvailableChannelsEnabled,
 		DefaultSubscriptions:             defaultSubscriptions,
 		DefaultSubscriptionProducts:      defaultSubscriptionProducts,
 		EnterpriseVisibleGroups:          enterpriseVisibleGroups,
@@ -729,6 +747,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		CustomEndpoints:                      dto.ParseCustomEndpoints(updatedSettings.CustomEndpoints),
 		DefaultConcurrency:                   updatedSettings.DefaultConcurrency,
 		DefaultBalance:                       updatedSettings.DefaultBalance,
+		AffiliateEnabled:                     updatedSettings.AffiliateEnabled,
+		AffiliateRebateRate:                  updatedSettings.AffiliateRebateRate,
+		AffiliateRebateFreezeHours:           updatedSettings.AffiliateRebateFreezeHours,
+		AffiliateRebateDurationDays:          updatedSettings.AffiliateRebateDurationDays,
+		AffiliateRebatePerInviteeCap:         updatedSettings.AffiliateRebatePerInviteeCap,
+		AvailableChannelsEnabled:             updatedSettings.AvailableChannelsEnabled,
 		DefaultSubscriptions:                 updatedDefaultSubscriptions,
 		DefaultSubscriptionProducts:          updatedDefaultSubscriptionProducts,
 		EnterpriseVisibleGroups:              updatedEnterpriseVisibleGroups,

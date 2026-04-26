@@ -76,7 +76,7 @@ type RedeemCodeResponse struct {
 type RedeemService struct {
 	redeemRepo                  RedeemCodeRepository
 	userRepo                    UserRepository
-	inviteService               *InviteService
+	affiliateService            *AffiliateService
 	subscriptionService         *SubscriptionService
 	cache                       RedeemCache
 	billingCacheService         *BillingCacheService
@@ -89,7 +89,7 @@ type RedeemService struct {
 func NewRedeemService(
 	redeemRepo RedeemCodeRepository,
 	userRepo UserRepository,
-	inviteService *InviteService,
+	affiliateService *AffiliateService,
 	subscriptionService *SubscriptionService,
 	cache RedeemCache,
 	billingCacheService *BillingCacheService,
@@ -100,7 +100,7 @@ func NewRedeemService(
 	svc := &RedeemService{
 		redeemRepo:           redeemRepo,
 		userRepo:             userRepo,
-		inviteService:        inviteService,
+		affiliateService:     affiliateService,
 		subscriptionService:  subscriptionService,
 		cache:                cache,
 		billingCacheService:  billingCacheService,
@@ -343,9 +343,9 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		if err := s.userRepo.UpdateBalance(txCtx, userID, redeemCode.Value); err != nil {
 			return nil, fmt.Errorf("update user balance: %w", err)
 		}
-		if s.inviteService != nil {
-			if err := s.inviteService.ApplyBaseRechargeRewards(txCtx, userID, redeemCode); err != nil {
-				return nil, fmt.Errorf("apply invite rewards: %w", err)
+		if s.affiliateService != nil && NormalizeRedeemSourceType(redeemCode.SourceType, "") == RedeemSourceCommercial {
+			if _, err := s.affiliateService.AccrueInviteRebate(txCtx, userID, redeemCode.Value); err != nil {
+				return nil, fmt.Errorf("apply affiliate rebate: %w", err)
 			}
 		}
 

@@ -11,13 +11,15 @@ import (
 
 // UserHandler handles user-related requests
 type UserHandler struct {
-	userService *service.UserService
+	userService      *service.UserService
+	affiliateService *service.AffiliateService
 }
 
 // NewUserHandler creates a new UserHandler
-func NewUserHandler(userService *service.UserService) *UserHandler {
+func NewUserHandler(userService *service.UserService, affiliateService *service.AffiliateService) *UserHandler {
 	return &UserHandler{
-		userService: userService,
+		userService:      userService,
+		affiliateService: affiliateService,
 	}
 }
 
@@ -103,4 +105,47 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	response.Success(c, dto.UserFromService(updatedUser))
+}
+
+// GetAffiliate returns the current user's affiliate details.
+func (h *UserHandler) GetAffiliate(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	if h.affiliateService == nil {
+		response.InternalError(c, "Affiliate service unavailable")
+		return
+	}
+
+	detail, err := h.affiliateService.GetAffiliateDetail(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, detail)
+}
+
+// TransferAffiliateQuota transfers available affiliate quota into balance.
+func (h *UserHandler) TransferAffiliateQuota(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	if h.affiliateService == nil {
+		response.InternalError(c, "Affiliate service unavailable")
+		return
+	}
+
+	transferred, balance, err := h.affiliateService.TransferAffiliateQuota(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{
+		"transferred": transferred,
+		"balance":     balance,
+	})
 }

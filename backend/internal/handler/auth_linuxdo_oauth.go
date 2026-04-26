@@ -230,6 +230,7 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 type completeLinuxDoOAuthRequest struct {
 	PendingOAuthToken string `json:"pending_oauth_token" binding:"required"`
 	InvitationCode    string `json:"invitation_code"`
+	AffCode           string `json:"aff_code"`
 }
 
 // CompleteLinuxDoOAuthRegistration completes a pending OAuth registration and
@@ -248,7 +249,12 @@ func (h *AuthHandler) CompleteLinuxDoOAuthRegistration(c *gin.Context) {
 		return
 	}
 
-	tokenPair, _, err := h.authService.LoginOrRegisterOAuthWithTokenPair(c.Request.Context(), email, username, req.InvitationCode)
+	affiliateCode := strings.TrimSpace(req.AffCode)
+	if affiliateCode == "" {
+		affiliateCode = req.InvitationCode
+	}
+
+	tokenPair, _, err := h.authService.LoginOrRegisterOAuthWithTokenPair(c.Request.Context(), email, username, affiliateCode)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

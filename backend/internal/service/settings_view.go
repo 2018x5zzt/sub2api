@@ -44,11 +44,16 @@ type SystemSettings struct {
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
 
-	DefaultConcurrency          int
-	DefaultBalance              float64
-	DefaultSubscriptions        []DefaultSubscriptionSetting
-	DefaultSubscriptionProducts []DefaultSubscriptionProductSetting
-	EnterpriseVisibleGroups     []EnterpriseVisibleGroupSetting
+	DefaultConcurrency           int
+	DefaultBalance               float64
+	AffiliateEnabled             bool
+	AffiliateRebateRate          float64
+	AffiliateRebateFreezeHours   int
+	AffiliateRebateDurationDays  int
+	AffiliateRebatePerInviteeCap float64
+	DefaultSubscriptions         []DefaultSubscriptionSetting
+	DefaultSubscriptionProducts  []DefaultSubscriptionProductSetting
+	EnterpriseVisibleGroups      []EnterpriseVisibleGroupSetting
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -75,7 +80,8 @@ type SystemSettings struct {
 	AllowUngroupedKeyScheduling bool
 
 	// Backend 模式：禁用用户注册和自助服务，仅管理员可登录
-	BackendModeEnabled bool
+	BackendModeEnabled       bool
+	AvailableChannelsEnabled bool
 
 	// Gateway forwarding behavior
 	EnableFingerprintUnification bool // 是否统一 OAuth 账号的指纹头（默认 true）
@@ -116,9 +122,11 @@ type PublicSettings struct {
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
 
-	LinuxDoOAuthEnabled bool
-	BackendModeEnabled  bool
-	Version             string
+	LinuxDoOAuthEnabled      bool
+	BackendModeEnabled       bool
+	Version                  string
+	AffiliateEnabled         bool
+	AvailableChannelsEnabled bool
 }
 
 // SoraS3Settings Sora S3 存储配置

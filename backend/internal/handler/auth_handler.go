@@ -23,12 +23,11 @@ type AuthHandler struct {
 	settingSvc    *service.SettingService
 	promoService  *service.PromoService
 	redeemService *service.RedeemService
-	inviteService *service.InviteService
 	totpService   *service.TotpService
 }
 
 // NewAuthHandler creates a new AuthHandler
-func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, redeemService *service.RedeemService, inviteService *service.InviteService, totpService *service.TotpService) *AuthHandler {
+func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, redeemService *service.RedeemService, totpService *service.TotpService) *AuthHandler {
 	return &AuthHandler{
 		cfg:           cfg,
 		authService:   authService,
@@ -36,7 +35,6 @@ func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userSe
 		settingSvc:    settingService,
 		promoService:  promoService,
 		redeemService: redeemService,
-		inviteService: inviteService,
 		totpService:   totpService,
 	}
 }
@@ -48,7 +46,8 @@ type RegisterRequest struct {
 	VerifyCode     string `json:"verify_code"`
 	TurnstileToken string `json:"turnstile_token"`
 	PromoCode      string `json:"promo_code"`      // 注册优惠码
-	InvitationCode string `json:"invitation_code"` // 邀请码
+	InvitationCode string `json:"invitation_code"` // 兼容旧 invite 链接字段
+	AffCode        string `json:"aff_code"`        // 邀请返利码
 }
 
 // SendVerifyCodeRequest 发送验证码请求
@@ -122,7 +121,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	_, user, err := h.authService.RegisterWithVerification(c.Request.Context(), req.Email, req.Password, req.VerifyCode, req.PromoCode, req.InvitationCode)
+	affiliateCode := strings.TrimSpace(req.AffCode)
+	if affiliateCode == "" {
+		affiliateCode = req.InvitationCode
+	}
+
+	_, user, err := h.authService.RegisterWithVerification(c.Request.Context(), req.Email, req.Password, req.VerifyCode, req.PromoCode, affiliateCode)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

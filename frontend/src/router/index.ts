@@ -143,14 +143,18 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/models',
-    name: 'ModelHub',
-    component: () => import('@/views/user/ModelHubView.vue'),
+    redirect: '/available-channels'
+  },
+  {
+    path: '/available-channels',
+    name: 'AvailableChannels',
+    component: () => import('@/views/user/AvailableChannelsView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: 'Model Hub',
-      titleKey: 'modelHub.title',
-      descriptionKey: 'modelHub.description'
+      title: 'Available Channels',
+      titleKey: 'availableChannels.title',
+      descriptionKey: 'availableChannels.description'
     }
   },
   {
@@ -179,14 +183,18 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/invite',
-    name: 'Invite',
-    component: () => import('@/views/user/InviteView.vue'),
+    redirect: '/affiliate'
+  },
+  {
+    path: '/affiliate',
+    name: 'Affiliate',
+    component: () => import('@/views/user/AffiliateView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
-      title: 'Invite Center',
-      titleKey: 'invite.title',
-      descriptionKey: 'invite.description'
+      title: 'Affiliate',
+      titleKey: 'affiliate.title',
+      descriptionKey: 'affiliate.description'
     }
   },
   {
@@ -386,15 +394,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/admin/invites',
-    name: 'AdminInvites',
-    component: () => import('@/views/admin/InvitesView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Invite Operations',
-      titleKey: 'admin.invites.title',
-      descriptionKey: 'admin.invites.description'
-    }
+    redirect: '/admin/users'
   },
   {
     path: '/admin/promo-codes',

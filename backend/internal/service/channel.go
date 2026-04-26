@@ -1,6 +1,7 @@
 package service
 
 import (
+	"sort"
 	"strings"
 	"time"
 )
@@ -85,6 +86,15 @@ type PricingInterval struct {
 // IsActive 判断渠道是否启用
 func (c *Channel) IsActive() bool {
 	return c.Status == StatusActive
+}
+
+func (c *Channel) normalizeBillingModelSource() {
+	if c == nil {
+		return
+	}
+	if c.BillingModelSource == "" {
+		c.BillingModelSource = BillingModelSourceRequested
+	}
 }
 
 // GetModelPricing 根据模型名查找渠道定价，未找到返回 nil。
@@ -182,4 +192,166 @@ type ChannelUsageFields struct {
 	OriginalModel      string // 用户原始请求模型（渠道映射前）
 	BillingModelSource string // 计费模型来源："requested" / "upstream"
 	ModelMappingChain  string // 映射链描述，如 "a→b→c"
+}
+
+// SupportedModel is a concrete model exposed by a channel without wildcard patterns.
+type SupportedModel struct {
+	Name     string
+	Platform string
+	Pricing  *ChannelModelPricing
+}
+
+const wildcardSuffix = "*"
+
+func splitWildcardSuffix(pattern string) (prefix string, isWildcard bool) {
+	if strings.HasSuffix(pattern, wildcardSuffix) {
+		return strings.TrimSuffix(pattern, wildcardSuffix), true
+	}
+	return pattern, false
+}
+
+func (c *Channel) GetModelPricingByPlatform(platform, model string) *ChannelModelPricing {
+	if c == nil {
+		return nil
+	}
+	modelLower := strings.ToLower(model)
+	for i := range c.ModelPricing {
+		if c.ModelPricing[i].Platform != platform {
+			continue
+		}
+		for _, m := range c.ModelPricing[i].Models {
+			if strings.ToLower(m) == modelLower {
+				cp := c.ModelPricing[i].Clone()
+				return &cp
+			}
+		}
+	}
+	return nil
+}
+
+type platformPricingIndex struct {
+	byLower      map[string]*ChannelModelPricing
+	originalCase map[string]string
+	names        []string
+}
+
+func buildPricingIndex(pricings []ChannelModelPricing) map[string]*platformPricingIndex {
+	idx := make(map[string]*platformPricingIndex)
+	for i := range pricings {
+		p := pricings[i]
+		pidx, ok := idx[p.Platform]
+		if !ok {
+			pidx = &platformPricingIndex{
+				byLower:      make(map[string]*ChannelModelPricing),
+				originalCase: make(map[string]string),
+				names:        make([]string, 0),
+			}
+			idx[p.Platform] = pidx
+		}
+		for _, m := range p.Models {
+			if _, wild := splitWildcardSuffix(m); wild {
+				continue
+			}
+			lower := strings.ToLower(m)
+			if _, exists := pidx.byLower[lower]; exists {
+				continue
+			}
+			cp := pricings[i].Clone()
+			pidx.byLower[lower] = &cp
+			pidx.originalCase[lower] = m
+			pidx.names = append(pidx.names, m)
+		}
+	}
+	return idx
+}
+
+func (c *Channel) SupportedModels() []SupportedModel {
+	if c == nil {
+		return nil
+	}
+	if len(c.ModelMapping) == 0 && len(c.ModelPricing) == 0 {
+		return nil
+	}
+
+	idx := buildPricingIndex(c.ModelPricing)
+
+	type dedupKey struct {
+		platform string
+		name     string
+	}
+	seen := make(map[dedupKey]struct{})
+	result := make([]SupportedModel, 0)
+
+	lookup := func(pidx *platformPricingIndex, name string) (display string, pricing *ChannelModelPricing) {
+		if pidx == nil || name == "" {
+			return name, nil
+		}
+		lower := strings.ToLower(name)
+		if p, ok := pidx.byLower[lower]; ok {
+			return pidx.originalCase[lower], p
+		}
+		return name, nil
+	}
+
+	add := func(platform, displayName string, pricing *ChannelModelPricing) {
+		key := dedupKey{platform: platform, name: strings.ToLower(displayName)}
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		result = append(result, SupportedModel{
+			Name:     displayName,
+			Platform: platform,
+			Pricing:  pricing,
+		})
+	}
+
+	for platform, mapping := range c.ModelMapping {
+		if len(mapping) == 0 {
+			continue
+		}
+		pidx := idx[platform]
+		for src, target := range mapping {
+			prefix, isWild := splitWildcardSuffix(src)
+			if isWild {
+				if pidx == nil {
+					continue
+				}
+				prefixLower := strings.ToLower(prefix)
+				for _, candidate := range pidx.names {
+					if strings.HasPrefix(strings.ToLower(candidate), prefixLower) {
+						display, pricing := lookup(pidx, candidate)
+						add(platform, display, pricing)
+					}
+				}
+				continue
+			}
+
+			pricingKey := target
+			if pricingKey == "" {
+				pricingKey = src
+			}
+			if _, targetWild := splitWildcardSuffix(pricingKey); targetWild {
+				pricingKey = src
+			}
+			_, pricing := lookup(pidx, pricingKey)
+			displayName, _ := lookup(pidx, src)
+			add(platform, displayName, pricing)
+		}
+	}
+
+	for platform, pidx := range idx {
+		for _, name := range pidx.names {
+			display, pricing := lookup(pidx, name)
+			add(platform, display, pricing)
+		}
+	}
+
+	sort.SliceStable(result, func(i, j int) bool {
+		if result[i].Platform != result[j].Platform {
+			return result[i].Platform < result[j].Platform
+		}
+		return result[i].Name < result[j].Name
+	})
+	return result
 }

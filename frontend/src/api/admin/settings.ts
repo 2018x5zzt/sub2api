@@ -51,6 +51,12 @@ export interface SystemSettings {
   hide_ccs_import_button: boolean
   purchase_subscription_enabled: boolean
   purchase_subscription_url: string
+  available_channels_enabled: boolean
+  affiliate_enabled: boolean
+  affiliate_rebate_rate: number
+  affiliate_rebate_freeze_hours: number
+  affiliate_rebate_duration_days: number
+  affiliate_rebate_per_invitee_cap: number
   sora_client_enabled: boolean
   backend_mode_enabled: boolean
   custom_menu_items: CustomMenuItem[]
@@ -126,6 +132,12 @@ export interface UpdateSettingsRequest {
   hide_ccs_import_button?: boolean
   purchase_subscription_enabled?: boolean
   purchase_subscription_url?: string
+  available_channels_enabled?: boolean
+  affiliate_enabled?: boolean
+  affiliate_rebate_rate?: number
+  affiliate_rebate_freeze_hours?: number
+  affiliate_rebate_duration_days?: number
+  affiliate_rebate_per_invitee_cap?: number
   sora_client_enabled?: boolean
   backend_mode_enabled?: boolean
   custom_menu_items?: CustomMenuItem[]

@@ -136,6 +136,8 @@ const (
 // ChannelService 渠道管理服务
 type ChannelService struct {
 	repo                 ChannelRepository
+	groupRepo            GroupRepository
+	pricingService       *PricingService
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 
 	cache   atomic.Value // *channelCache

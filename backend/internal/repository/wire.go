@@ -86,6 +86,7 @@ var ProviderSet = wire.NewSet(
 	NewErrorPassthroughRepository,
 	NewTLSFingerprintProfileRepository,
 	NewChannelRepository,
+	NewAffiliateRepository,
 
 	// Cache implementations
 	NewGatewayCache,

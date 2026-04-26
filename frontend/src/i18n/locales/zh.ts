@@ -333,9 +333,11 @@ export default {
     announcements: '公告',
     apiKeys: 'API 密钥',
     modelHub: '模型广场',
+    availableChannels: '可用渠道',
     usage: '使用记录',
     redeem: '兑换',
     invite: '邀请',
+    affiliate: '邀请返利',
     inviteOps: '邀请运营',
     profile: '个人资料',
     users: '用户管理',
@@ -768,6 +770,87 @@ export default {
     noModelsInGroup: '这个分组当前没有可展示的模型。',
     loadFailedTitle: '模型列表加载失败',
     loadFailedDescription: '请稍后刷新重试。'
+  },
+
+  availableChannels: {
+    title: '可用渠道',
+    description: '查看您可访问的渠道及其支持模型和定价',
+    searchPlaceholder: '搜索渠道或模型...',
+    exclusive: '专属',
+    public: '公开',
+    exclusiveTooltip: '分配给当前账号的专属分组',
+    publicTooltip: '所有符合条件用户可用的公开分组',
+    noPricing: '暂无定价',
+    noModels: '暂无模型',
+    empty: '暂无可用渠道',
+    columns: {
+      name: '渠道',
+      description: '描述',
+      platform: '平台',
+      groups: '分组',
+      supportedModels: '支持模型'
+    },
+    pricing: {
+      billingMode: '计费方式',
+      billingModeToken: 'Token',
+      billingModePerRequest: '按次',
+      billingModeImage: '图片',
+      inputPrice: '输入',
+      outputPrice: '输出',
+      cacheWritePrice: '缓存写入',
+      cacheReadPrice: '缓存读取',
+      imageOutputPrice: '图片输出',
+      perRequestPrice: '按次价格',
+      intervals: '阶梯',
+      unitPerMillion: '/ 百万 Token',
+      unitPerRequest: '/ 次'
+    }
+  },
+
+  affiliate: {
+    title: '邀请返利',
+    description: '邀请新用户注册，并将返利额度转入账户余额',
+    yourCode: '我的返利码',
+    inviteLink: '邀请链接',
+    copyCode: '复制返利码',
+    copyLink: '复制链接',
+    codeCopied: '返利码已复制',
+    linkCopied: '邀请链接已复制',
+    loadFailed: '邀请返利数据加载失败',
+    transferFailed: '返利额度转入失败',
+    stats: {
+      rebateRate: '我的返利比例',
+      rebateRateHint: '被邀请用户充值后给你的返利比例',
+      invitedUsers: '已邀请用户',
+      availableQuota: '可转额度',
+      totalQuota: '累计返利',
+      frozenQuota: '冻结'
+    },
+    transfer: {
+      title: '转入余额',
+      description: '将可用返利额度转入账户余额。',
+      button: '转入余额',
+      transferring: '转入中...',
+      empty: '暂无可转入返利额度。',
+      success: '已转入 {amount}'
+    },
+    invitees: {
+      title: '被邀请用户',
+      empty: '暂时还没有被邀请用户',
+      columns: {
+        email: '邮箱',
+        username: '用户名',
+        rebate: '返利',
+        joinedAt: '注册时间'
+      }
+    },
+    tips: {
+      title: '规则说明',
+      line1: '分享返利码或邀请链接给新用户。',
+      line2: '被邀请用户充值后，你获得充值金额 {rate} 的返利额度。',
+      line3: '可用返利额度可以随时转入账户余额。',
+      line4: '新产生的返利可能有冻结期，解冻后才能转入。'
+    }
   },
 
   // Usage

@@ -333,9 +333,11 @@ export default {
     announcements: 'Announcements',
     apiKeys: 'API Keys',
     modelHub: 'Model Hub',
+    availableChannels: 'Available Channels',
     usage: 'Usage',
     redeem: 'Redeem',
     invite: 'Invite',
+    affiliate: 'Affiliate Rebates',
     inviteOps: 'Invite Ops',
     profile: 'Profile',
     users: 'Users',
@@ -763,6 +765,87 @@ export default {
     noModelsInGroup: 'No models are currently available for this group.',
     loadFailedTitle: 'Failed to load model list',
     loadFailedDescription: 'Refresh and try again in a moment.'
+  },
+
+  availableChannels: {
+    title: 'Available Channels',
+    description: 'Channels you can access, along with their supported models and pricing',
+    searchPlaceholder: 'Search channels or models...',
+    exclusive: 'Exclusive',
+    public: 'Public',
+    exclusiveTooltip: 'Exclusive groups assigned to your account',
+    publicTooltip: 'Public groups available to all eligible users',
+    noPricing: 'Pricing unavailable',
+    noModels: 'No models',
+    empty: 'No available channels',
+    columns: {
+      name: 'Channel',
+      description: 'Description',
+      platform: 'Platform',
+      groups: 'Groups',
+      supportedModels: 'Supported Models'
+    },
+    pricing: {
+      billingMode: 'Billing',
+      billingModeToken: 'Token',
+      billingModePerRequest: 'Per request',
+      billingModeImage: 'Image',
+      inputPrice: 'Input',
+      outputPrice: 'Output',
+      cacheWritePrice: 'Cache write',
+      cacheReadPrice: 'Cache read',
+      imageOutputPrice: 'Image output',
+      perRequestPrice: 'Per request',
+      intervals: 'Intervals',
+      unitPerMillion: '/ 1M tokens',
+      unitPerRequest: '/ request'
+    }
+  },
+
+  affiliate: {
+    title: 'Affiliate Rebates',
+    description: 'Invite new users and convert your rebate quota into account balance',
+    yourCode: 'Your Affiliate Code',
+    inviteLink: 'Invite Link',
+    copyCode: 'Copy Code',
+    copyLink: 'Copy Link',
+    codeCopied: 'Affiliate code copied',
+    linkCopied: 'Invite link copied',
+    loadFailed: 'Failed to load affiliate data',
+    transferFailed: 'Failed to transfer affiliate quota',
+    stats: {
+      rebateRate: 'My Rebate Rate',
+      rebateRateHint: 'What you earn each time an invitee recharges',
+      invitedUsers: 'Invited Users',
+      availableQuota: 'Available Quota',
+      totalQuota: 'Total Earned',
+      frozenQuota: 'Frozen'
+    },
+    transfer: {
+      title: 'Transfer to Balance',
+      description: 'Move available rebate quota into your account balance.',
+      button: 'Transfer',
+      transferring: 'Transferring...',
+      empty: 'No available rebate quota to transfer.',
+      success: 'Transferred {amount} to balance'
+    },
+    invitees: {
+      title: 'Invitees',
+      empty: 'No invitees yet',
+      columns: {
+        email: 'Email',
+        username: 'Username',
+        rebate: 'Rebate',
+        joinedAt: 'Joined At'
+      }
+    },
+    tips: {
+      title: 'How It Works',
+      line1: 'Share your affiliate code or invite link with new users.',
+      line2: 'When invitees recharge, you receive {rate} of the recharge as rebate quota.',
+      line3: 'Transfer rebate quota to balance at any time.',
+      line4: 'Newly earned rebates may have a waiting period before they can be transferred.'
+    }
   },
 
   // Usage

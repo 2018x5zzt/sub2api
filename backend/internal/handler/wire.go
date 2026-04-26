@@ -21,7 +21,7 @@ func ProvideAdminHandlers(
 	geminiOAuthHandler *admin.GeminiOAuthHandler,
 	antigravityOAuthHandler *admin.AntigravityOAuthHandler,
 	proxyHandler *admin.ProxyHandler,
-	inviteHandler *admin.InviteHandler,
+	affiliateHandler *admin.AffiliateHandler,
 	redeemHandler *admin.RedeemHandler,
 	promoHandler *admin.PromoHandler,
 	settingHandler *admin.SettingHandler,
@@ -50,7 +50,7 @@ func ProvideAdminHandlers(
 		GeminiOAuth:           geminiOAuthHandler,
 		AntigravityOAuth:      antigravityOAuthHandler,
 		Proxy:                 proxyHandler,
-		Invite:                inviteHandler,
+		Affiliate:             affiliateHandler,
 		Redeem:                redeemHandler,
 		Promo:                 promoHandler,
 		Setting:               settingHandler,
@@ -101,7 +101,6 @@ func ProvideSubscriptionProductHandler(subscriptionProductService *service.Subsc
 func ProvideHandlers(
 	authHandler *AuthHandler,
 	userHandler *UserHandler,
-	inviteHandler *InviteHandler,
 	apiKeyHandler *APIKeyHandler,
 	usageHandler *UsageHandler,
 	redeemHandler *RedeemHandler,
@@ -115,13 +114,13 @@ func ProvideHandlers(
 	soraClientHandler *SoraClientHandler,
 	settingHandler *SettingHandler,
 	totpHandler *TotpHandler,
+	availableChannelHandler *AvailableChannelHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
 	return &Handlers{
 		Auth:                authHandler,
 		User:                userHandler,
-		Invite:              inviteHandler,
 		APIKey:              apiKeyHandler,
 		Usage:               usageHandler,
 		Redeem:              redeemHandler,
@@ -135,6 +134,7 @@ func ProvideHandlers(
 		SoraClient:          soraClientHandler,
 		Setting:             settingHandler,
 		Totp:                totpHandler,
+		AvailableChannel:    availableChannelHandler,
 	}
 }
 
@@ -143,7 +143,6 @@ var ProviderSet = wire.NewSet(
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,
-	NewInviteHandler,
 	ProvideAPIKeyHandler,
 	NewUsageHandler,
 	NewRedeemHandler,
@@ -155,6 +154,7 @@ var ProviderSet = wire.NewSet(
 	NewSoraGatewayHandler,
 	NewSoraClientHandler,
 	NewTotpHandler,
+	NewAvailableChannelHandler,
 	ProvideSettingHandler,
 
 	// Admin handlers
@@ -170,7 +170,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewGeminiOAuthHandler,
 	admin.NewAntigravityOAuthHandler,
 	admin.NewProxyHandler,
-	admin.NewInviteHandler,
+	admin.NewAffiliateHandler,
 	admin.NewRedeemHandler,
 	admin.NewPromoHandler,
 	admin.NewSettingHandler,

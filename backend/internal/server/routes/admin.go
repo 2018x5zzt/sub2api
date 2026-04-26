@@ -46,8 +46,8 @@ func RegisterAdminRoutes(
 		// 代理管理
 		registerProxyRoutes(admin, h)
 
-		// 邀请管理
-		registerInviteRoutes(admin, h)
+		// 邀请返利管理
+		registerAffiliateRoutes(admin, h)
 
 		// 卡密管理
 		registerRedeemCodeRoutes(admin, h)
@@ -106,17 +106,17 @@ func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 }
 
-func registerInviteRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	invites := admin.Group("/invites")
+func registerAffiliateRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	affiliates := admin.Group("/affiliates")
 	{
-		invites.GET("/stats", h.Admin.Invite.GetStats)
-		invites.GET("/relationships", h.Admin.Invite.ListRelationships)
-		invites.GET("/rewards", h.Admin.Invite.ListRewards)
-		invites.GET("/actions", h.Admin.Invite.ListActions)
-		invites.POST("/rebind", h.Admin.Invite.Rebind)
-		invites.POST("/manual-grants", h.Admin.Invite.CreateManualGrant)
-		invites.POST("/recompute/preview", h.Admin.Invite.PreviewRecompute)
-		invites.POST("/recompute/execute", h.Admin.Invite.ExecuteRecompute)
+		users := affiliates.Group("/users")
+		{
+			users.GET("", h.Admin.Affiliate.ListUsers)
+			users.GET("/lookup", h.Admin.Affiliate.LookupUsers)
+			users.POST("/batch-rate", h.Admin.Affiliate.BatchSetRate)
+			users.PUT("/:user_id", h.Admin.Affiliate.UpdateUserSettings)
+			users.DELETE("/:user_id", h.Admin.Affiliate.ClearUserSettings)
+		}
 	}
 }
 

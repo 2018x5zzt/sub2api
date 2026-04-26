@@ -18,7 +18,7 @@ type AdminHandlers struct {
 	GeminiOAuth           *admin.GeminiOAuthHandler
 	AntigravityOAuth      *admin.AntigravityOAuthHandler
 	Proxy                 *admin.ProxyHandler
-	Invite                *admin.InviteHandler
+	Affiliate             *admin.AffiliateHandler
 	Redeem                *admin.RedeemHandler
 	Promo                 *admin.PromoHandler
 	Setting               *admin.SettingHandler
@@ -39,7 +39,6 @@ type AdminHandlers struct {
 type Handlers struct {
 	Auth                *AuthHandler
 	User                *UserHandler
-	Invite              *InviteHandler
 	APIKey              *APIKeyHandler
 	Usage               *UsageHandler
 	Redeem              *RedeemHandler
@@ -53,6 +52,7 @@ type Handlers struct {
 	SoraClient          *SoraClientHandler
 	Setting             *SettingHandler
 	Totp                *TotpHandler
+	AvailableChannel    *AvailableChannelHandler
 }
 
 // BuildInfo contains build-time information

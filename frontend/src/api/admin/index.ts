@@ -9,8 +9,8 @@ import groupsAPI from './groups'
 import accountsAPI from './accounts'
 import proxiesAPI from './proxies'
 import redeemAPI from './redeem'
-import invitesAPI from './invites'
 import promoAPI from './promo'
+import affiliatesAPI from './affiliates'
 import announcementsAPI from './announcements'
 import settingsAPI from './settings'
 import systemAPI from './system'
@@ -39,8 +39,8 @@ export const adminAPI = {
   accounts: accountsAPI,
   proxies: proxiesAPI,
   redeem: redeemAPI,
-  invites: invitesAPI,
   promo: promoAPI,
+  affiliates: affiliatesAPI,
   announcements: announcementsAPI,
   settings: settingsAPI,
   system: systemAPI,
@@ -67,8 +67,8 @@ export {
   accountsAPI,
   proxiesAPI,
   redeemAPI,
-  invitesAPI,
   promoAPI,
+  affiliatesAPI,
   announcementsAPI,
   settingsAPI,
   systemAPI,
