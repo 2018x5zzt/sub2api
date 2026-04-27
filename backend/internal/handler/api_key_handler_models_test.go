@@ -442,6 +442,48 @@ func TestSupportedModelPricingFromResolved_UsesEffectiveRateMultiplierForImagePr
 	require.InDelta(t, 0.06, *pricing.RequestTiers[0].PricePerRequest, 1e-12)
 }
 
+func TestSupportedModelPricingFromOpenAIImageGroup_UsesGroupImageTiers(t *testing.T) {
+	price1K := 0.8
+	price2K := 1.0
+	price4K := 1.2
+
+	pricing := supportedModelPricingFromOpenAIImageGroup(&service.Group{
+		ID:           30,
+		Platform:     service.PlatformOpenAI,
+		ImagePrice1K: &price1K,
+		ImagePrice2K: &price2K,
+		ImagePrice4K: &price4K,
+	}, "gpt-image-2", 0.5)
+
+	require.NotNil(t, pricing)
+	require.Equal(t, string(service.BillingModeImage), pricing.BillingMode)
+	require.Nil(t, pricing.InputPricePerMillionTokens)
+	require.Nil(t, pricing.OutputPricePerMillionTokens)
+	require.Nil(t, pricing.DefaultPricePerRequest)
+	require.Len(t, pricing.RequestTiers, 3)
+	require.Equal(t, "1K", pricing.RequestTiers[0].TierLabel)
+	require.NotNil(t, pricing.RequestTiers[0].PricePerRequest)
+	require.InDelta(t, 0.4, *pricing.RequestTiers[0].PricePerRequest, 1e-12)
+	require.Equal(t, "2K", pricing.RequestTiers[1].TierLabel)
+	require.NotNil(t, pricing.RequestTiers[1].PricePerRequest)
+	require.InDelta(t, 0.5, *pricing.RequestTiers[1].PricePerRequest, 1e-12)
+	require.Equal(t, "4K", pricing.RequestTiers[2].TierLabel)
+	require.NotNil(t, pricing.RequestTiers[2].PricePerRequest)
+	require.InDelta(t, 0.6, *pricing.RequestTiers[2].PricePerRequest, 1e-12)
+}
+
+func TestSupportedModelPricingFromOpenAIImageGroup_IgnoresNonImageModels(t *testing.T) {
+	price1K := 0.8
+
+	pricing := supportedModelPricingFromOpenAIImageGroup(&service.Group{
+		ID:           30,
+		Platform:     service.PlatformOpenAI,
+		ImagePrice1K: &price1K,
+	}, "gpt-5.4", 0.5)
+
+	require.Nil(t, pricing)
+}
+
 func TestSupportedModelPricingFromService_UsesEffectiveRateMultiplier(t *testing.T) {
 	h := NewAPIKeyHandler(nil, nil)
 	h.SetBillingService(service.NewBillingService(&config.Config{}, nil))

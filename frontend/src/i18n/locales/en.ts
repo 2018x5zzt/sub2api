@@ -750,6 +750,7 @@ export default {
     defaultPriceShort: 'Default',
     perMillionTokens: '/ 1M tokens',
     perRequest: '/ request',
+    perImage: '/ image',
     pricingUnavailable: 'Pricing unavailable',
     copyVisible: 'Copy visible results',
     copyGroup: 'Copy group models',

@@ -755,6 +755,7 @@ export default {
     defaultPriceShort: '默认',
     perMillionTokens: '/ 百万 Token',
     perRequest: '/ 次',
+    perImage: '/ 张图片',
     pricingUnavailable: '暂无可用定价',
     copyVisible: '复制当前结果',
     copyGroup: '复制本组模型',

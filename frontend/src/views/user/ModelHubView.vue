@@ -497,11 +497,12 @@ function formatPerMillionPrice(price?: number | null): string {
   return `${formatCurrency(price)} ${t('modelHub.perMillionTokens')}`
 }
 
-function formatPerRequestPrice(price?: number | null): string {
+function formatPerRequestPrice(price?: number | null, billingMode?: string | null): string {
   if (price === null || price === undefined) {
     return t('modelHub.pricingUnavailable')
   }
-  return `${formatCurrency(price)} ${t('modelHub.perRequest')}`
+  const unitKey = billingMode === 'image' ? 'modelHub.perImage' : 'modelHub.perRequest'
+  return `${formatCurrency(price)} ${t(unitKey)}`
 }
 
 function formatCompactTokenCount(tokens?: number | null): string {
@@ -577,7 +578,7 @@ function getPricingBadges(model: SupportedModel, rate: number): PricingBadge[] {
   if (pricing.default_price_per_request !== undefined) {
     badges.push({
       key: `request-default:${model.id}`,
-      text: `${t('modelHub.defaultPriceShort')} ${formatPerRequestPrice(pricing.default_price_per_request)}`,
+      text: `${t('modelHub.defaultPriceShort')} ${formatPerRequestPrice(pricing.default_price_per_request, pricing.billing_mode)}`,
       tone: 'request'
     })
   }
@@ -587,7 +588,7 @@ function getPricingBadges(model: SupportedModel, rate: number): PricingBadge[] {
     }
     badges.push({
       key: `request-tier:${model.id}:${index}`,
-      text: `${formatRequestTierLabel(tier)} ${formatPerRequestPrice(tier.price_per_request)}`,
+      text: `${formatRequestTierLabel(tier)} ${formatPerRequestPrice(tier.price_per_request, pricing.billing_mode)}`,
       tone: 'request'
     })
   }

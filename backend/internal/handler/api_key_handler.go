@@ -364,7 +364,7 @@ func (h *APIKeyHandler) GetAvailableGroupModels(c *gin.Context) {
 		effectiveRateMultiplier, userRateMultiplier := resolveGroupRateMultiplier(&groups[i], userRates)
 		out = append(out, dto.GroupModelCatalog{
 			Group:                   *dto.GroupFromService(&groups[i]),
-			Models:                  h.attachSupportedModelPricing(c.Request.Context(), groups[i].ID, models, effectiveRateMultiplier),
+			Models:                  h.attachSupportedModelPricing(c.Request.Context(), &groups[i], models, effectiveRateMultiplier),
 			Source:                  source,
 			EffectiveRateMultiplier: effectiveRateMultiplier,
 			UserRateMultiplier:      userRateMultiplier,
@@ -394,7 +394,7 @@ func resolveGroupRateMultiplier(group *service.Group, userRates map[int64]float6
 
 func (h *APIKeyHandler) attachSupportedModelPricing(
 	ctx context.Context,
-	groupID int64,
+	group *service.Group,
 	models []dto.SupportedModel,
 	effectiveRateMultiplier float64,
 ) []dto.SupportedModel {
@@ -405,7 +405,7 @@ func (h *APIKeyHandler) attachSupportedModelPricing(
 	out := make([]dto.SupportedModel, 0, len(models))
 	for _, model := range models {
 		modelCopy := model
-		modelCopy.Pricing = h.buildSupportedModelPricing(ctx, groupID, model.ID, effectiveRateMultiplier)
+		modelCopy.Pricing = h.buildSupportedModelPricingForGroup(ctx, group, model.ID, effectiveRateMultiplier)
 		out = append(out, modelCopy)
 	}
 	return out
@@ -417,18 +417,46 @@ func (h *APIKeyHandler) buildSupportedModelPricing(
 	modelID string,
 	effectiveRateMultiplier float64,
 ) *dto.SupportedModelPricing {
+	var group *service.Group
+	if groupID > 0 {
+		group = &service.Group{ID: groupID}
+	}
+	return h.buildSupportedModelPricingForGroup(ctx, group, modelID, effectiveRateMultiplier)
+}
+
+func (h *APIKeyHandler) buildSupportedModelPricingForGroup(
+	ctx context.Context,
+	group *service.Group,
+	modelID string,
+	effectiveRateMultiplier float64,
+) *dto.SupportedModelPricing {
 	if h == nil || modelID == "" {
 		return nil
 	}
+
+	groupID := int64(0)
+	if group != nil {
+		groupID = group.ID
+	}
+	isOpenAIImageModel := service.IsOpenAIImageGenerationModel(modelID)
 
 	if h.pricingResolver != nil && groupID > 0 {
 		resolved := h.pricingResolver.Resolve(ctx, service.PricingInput{
 			Model:   modelID,
 			GroupID: &groupID,
 		})
+		if isOpenAIImageModel && resolved != nil && resolved.Mode != service.BillingModeImage && resolved.Mode != service.BillingModePerRequest {
+			if pricing := supportedModelPricingFromOpenAIImageGroup(group, modelID, effectiveRateMultiplier); pricing != nil {
+				return pricing
+			}
+		}
 		if pricing := supportedModelPricingFromResolved(resolved, effectiveRateMultiplier); pricing != nil {
 			return pricing
 		}
+	}
+
+	if pricing := supportedModelPricingFromOpenAIImageGroup(group, modelID, effectiveRateMultiplier); pricing != nil {
+		return pricing
 	}
 
 	if h.billingService == nil {
@@ -439,6 +467,44 @@ func (h *APIKeyHandler) buildSupportedModelPricing(
 		return nil
 	}
 	return supportedModelPricingFromService(pricing, effectiveRateMultiplier)
+}
+
+func supportedModelPricingFromOpenAIImageGroup(
+	group *service.Group,
+	modelID string,
+	effectiveRateMultiplier float64,
+) *dto.SupportedModelPricing {
+	if group == nil || group.Platform != service.PlatformOpenAI || !service.IsOpenAIImageGenerationModel(modelID) {
+		return nil
+	}
+
+	tierPrices := []struct {
+		label string
+		price *float64
+	}{
+		{label: "1K", price: group.ImagePrice1K},
+		{label: "2K", price: group.ImagePrice2K},
+		{label: "4K", price: group.ImagePrice4K},
+	}
+
+	out := &dto.SupportedModelPricing{
+		Currency:    "USD",
+		BillingMode: string(service.BillingModeImage),
+	}
+	for _, tier := range tierPrices {
+		if tier.price == nil || *tier.price <= 0 {
+			continue
+		}
+		v := *tier.price * effectiveRateMultiplier
+		out.RequestTiers = append(out.RequestTiers, dto.SupportedModelRequestTier{
+			TierLabel:       tier.label,
+			PricePerRequest: &v,
+		})
+	}
+	if len(out.RequestTiers) == 0 {
+		return nil
+	}
+	return out
 }
 
 func supportedModelPricingFromService(
