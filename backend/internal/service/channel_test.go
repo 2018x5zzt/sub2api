@@ -253,6 +253,12 @@ func TestChannelIsActive(t *testing.T) {
 	}
 }
 
+func TestNormalizeBillingModelSource_DefaultsToChannelMapped(t *testing.T) {
+	ch := &Channel{}
+	ch.normalizeBillingModelSource()
+	require.Equal(t, BillingModelSourceChannelMapped, ch.BillingModelSource)
+}
+
 // --- ChannelModelPricing.Clone edge cases ---
 
 func TestChannelModelPricingClone_EdgeCases(t *testing.T) {

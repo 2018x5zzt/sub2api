@@ -25,8 +25,9 @@ func (m BillingMode) IsValid() bool {
 }
 
 const (
-	BillingModelSourceRequested = "requested"
-	BillingModelSourceUpstream  = "upstream"
+	BillingModelSourceRequested     = "requested"
+	BillingModelSourceUpstream      = "upstream"
+	BillingModelSourceChannelMapped = "channel_mapped"
 )
 
 // Channel 渠道实体
@@ -93,7 +94,7 @@ func (c *Channel) normalizeBillingModelSource() {
 		return
 	}
 	if c.BillingModelSource == "" {
-		c.BillingModelSource = BillingModelSourceRequested
+		c.BillingModelSource = BillingModelSourceChannelMapped
 	}
 }
 

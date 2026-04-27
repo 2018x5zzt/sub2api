@@ -376,7 +376,7 @@ func (s *ChannelService) ResolveChannelMapping(ctx context.Context, groupID int6
 		BillingModelSource: ch.BillingModelSource,
 	}
 	if result.BillingModelSource == "" {
-		result.BillingModelSource = BillingModelSourceRequested
+		result.BillingModelSource = BillingModelSourceChannelMapped
 	}
 
 	platform := cache.groupPlatform[groupID]
@@ -482,9 +482,7 @@ func (s *ChannelService) Create(ctx context.Context, input *CreateChannelInput) 
 		ModelPricing:       input.ModelPricing,
 		ModelMapping:       input.ModelMapping,
 	}
-	if channel.BillingModelSource == "" {
-		channel.BillingModelSource = BillingModelSourceRequested
-	}
+	channel.normalizeBillingModelSource()
 
 	if err := validateNoConflictingModels(channel.ModelPricing); err != nil {
 		return nil, err
