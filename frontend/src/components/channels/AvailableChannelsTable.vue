@@ -81,6 +81,7 @@
                   :subscription-type="(group.subscription_type || 'standard') as SubscriptionType"
                   :rate-multiplier="group.rate_multiplier"
                   :user-rate-multiplier="userGroupRates[group.id] ?? null"
+                  always-show-rate
                 />
               </div>
               <div v-if="publicGroups(section).length > 0" class="flex flex-wrap items-center gap-1.5">
@@ -99,6 +100,7 @@
                   :subscription-type="(group.subscription_type || 'standard') as SubscriptionType"
                   :rate-multiplier="group.rate_multiplier"
                   :user-rate-multiplier="userGroupRates[group.id] ?? null"
+                  always-show-rate
                 />
               </div>
               <span v-if="section.groups.length === 0" class="text-xs text-gray-400">-</span>
