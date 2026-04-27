@@ -20,9 +20,9 @@ Use user-facing language that avoids exposing internal redeem-code implementatio
 
 Preferred copy:
 
-- "Token 自由天梯"
-- "有充值记录的邀请人数"
 - "邀请返利"
+- "当上包工头，Token 不用愁"
+- "有充值记录的邀请人数"
 - "最高 20% 返利，以余额形式到账"
 - "不同商品类型返利系数有所不同：余额充值、日卡 100%，周卡 60%，月卡 30%；以实际到账金额为准。"
 - "普通邀请也能提升并发：邀请 1 人注册并发提升到 5，邀请 5 人注册并发提升到 10。"
@@ -38,12 +38,10 @@ Avoid user-facing wording such as:
 
 The invite center should make the affiliate system feel valuable and easy to understand, not like an internal rebate ledger.
 
-Recommended product name:
+Product naming:
 
-- Primary: "Token 自由天梯"
-- Secondary options if the primary name feels too promotional in UI tests:
-  - "邀请返利天梯"
-  - "余额返利天梯"
+- Product name and navigation label: "邀请返利"
+- Ladder-system slogan: "当上包工头，Token 不用愁"
 
 The first screen should communicate three ideas immediately:
 
@@ -55,7 +53,8 @@ The first screen should communicate three ideas immediately:
 
 Suggested frontend structure:
 
-- A compact hero/header area for "Token 自由天梯", showing current tier, current effective invitee count, and next tier progress.
+- Keep the page title/navigation as "邀请返利".
+- Add a compact tier-ladder hero/header with the slogan "当上包工头，Token 不用愁", showing current tier, current effective invitee count, and next tier progress.
 - A clear tier table showing Bronze through Diamond ranges and nominal rates.
 - A "返利怎么算" section with one simple formula:
 
@@ -242,7 +241,7 @@ Implementation should keep those boundaries and avoid introducing a second affil
 6. Keep settlement transactional and non-retroactive.
 7. Add registration-count concurrency reward handling after inviter binding or registration completion.
 8. Update user-facing copy and admin copy to match the approved language.
-9. Update the invite center UI around "Token 自由天梯", showing rebate ladder value, balance payout, SKU factors, and the separate concurrency unlock track.
+9. Update the invite center UI so the product remains "邀请返利", while the tier ladder uses the slogan "当上包工头，Token 不用愁" and shows rebate ladder value, balance payout, SKU factors, and the separate concurrency unlock track.
 
 ## Testing Strategy
 
@@ -262,7 +261,8 @@ Backend tests should cover:
 Frontend tests should cover:
 
 - tier table displays Bronze through Diamond with the approved ranges and rates
-- invite center presents the system as "Token 自由天梯" or the selected product name
+- invite center keeps the product name "邀请返利"
+- tier ladder section presents the slogan "当上包工头，Token 不用愁"
 - hero copy communicates "最高 20%" and "以余额形式到账"
 - rule copy says "有充值记录的邀请人数"
 - rule copy exposes product factors as balance/daily 100%, weekly 60%, monthly 30%
