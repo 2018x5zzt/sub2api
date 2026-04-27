@@ -26,7 +26,7 @@ func NewAvailableChannelHandler(channelService *service.ChannelService, apiKeySe
 
 func (h *AvailableChannelHandler) featureEnabled(c *gin.Context) bool {
 	if h.settingService == nil {
-		return true
+		return false
 	}
 	return h.settingService.GetAvailableChannelsRuntime(c.Request.Context()).Enabled
 }
