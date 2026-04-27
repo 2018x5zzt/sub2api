@@ -90,6 +90,7 @@ type AffiliateRepository interface {
 	BindInviter(ctx context.Context, userID, inviterID int64) (bool, error)
 	AccrueQuota(ctx context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int) (bool, error)
 	GetAccruedRebateFromInvitee(ctx context.Context, inviterID, inviteeUserID int64) (float64, error)
+	CountEffectiveInvitees(ctx context.Context, inviterID int64) (int64, error)
 	ThawFrozenQuota(ctx context.Context, userID int64) (float64, error)
 	TransferQuotaToBalance(ctx context.Context, userID int64) (float64, float64, error)
 	ListInvitees(ctx context.Context, inviterID int64, limit int) ([]AffiliateInvitee, error)
@@ -251,7 +252,10 @@ func (s *AffiliateService) AccrueInviteRebate(ctx context.Context, inviteeUserID
 		}
 	}
 
-	rebateRatePercent := s.resolveRebateRatePercent(ctx, inviterSummary)
+	rebateRatePercent, err := s.resolveAccrualRebateRatePercent(ctx, inviterSummary)
+	if err != nil {
+		return 0, err
+	}
 	rebate := roundTo(baseRechargeAmount*(rebateRatePercent/100), 8)
 	if rebate <= 0 {
 		return 0, nil
@@ -295,6 +299,45 @@ func (s *AffiliateService) resolveRebateRatePercent(ctx context.Context, inviter
 		return clampAffiliateRebateRate(v)
 	}
 	return s.globalRebateRatePercent(ctx)
+}
+
+func (s *AffiliateService) resolveAccrualRebateRatePercent(ctx context.Context, inviter *AffiliateSummary) (float64, error) {
+	if inviter != nil && inviter.AffRebateRatePercent != nil {
+		return s.resolveRebateRatePercent(ctx, inviter), nil
+	}
+	tierRate, matched, err := s.resolveTierRebateRatePercent(ctx, inviter)
+	if err != nil {
+		return 0, err
+	}
+	if matched {
+		return tierRate, nil
+	}
+	return s.globalRebateRatePercent(ctx), nil
+}
+
+func (s *AffiliateService) resolveTierRebateRatePercent(ctx context.Context, inviter *AffiliateSummary) (float64, bool, error) {
+	if s == nil || s.settingService == nil || s.repo == nil || inviter == nil || inviter.UserID <= 0 {
+		return 0, false, nil
+	}
+	tiers := s.settingService.GetAffiliateRebateTiers(ctx)
+	if len(tiers) == 0 {
+		return 0, false, nil
+	}
+	effectiveInvitees, err := s.repo.CountEffectiveInvitees(ctx, inviter.UserID)
+	if err != nil {
+		return 0, false, err
+	}
+	var (
+		matched bool
+		rate    float64
+	)
+	for _, tier := range tiers {
+		if effectiveInvitees >= int64(tier.MinEffectiveInvitees) {
+			matched = true
+			rate = tier.RebateRate
+		}
+	}
+	return clampAffiliateRebateRate(rate), matched, nil
 }
 
 func (s *AffiliateService) globalRebateRatePercent(ctx context.Context) float64 {

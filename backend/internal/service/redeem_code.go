@@ -65,3 +65,10 @@ func NormalizeRedeemSourceType(sourceType, fallback string) string {
 	}
 	return normalized
 }
+
+func IsCommercialRechargeRedeem(code *RedeemCode) bool {
+	if code == nil || NormalizeRedeemSourceType(code.SourceType, "") != RedeemSourceCommercial {
+		return false
+	}
+	return code.Type == RedeemTypeBalance || code.Type == RedeemTypeSubscription
+}

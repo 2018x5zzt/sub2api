@@ -150,6 +150,39 @@ func (r *affiliateRepository) GetAccruedRebateFromInvitee(ctx context.Context, i
 	return total, rows.Err()
 }
 
+func (r *affiliateRepository) CountEffectiveInvitees(ctx context.Context, inviterID int64) (int64, error) {
+	client := clientFromContext(ctx, r.client)
+	rows, err := client.QueryContext(ctx, `
+SELECT COUNT(DISTINCT ua.user_id)
+FROM user_affiliates ua
+WHERE ua.inviter_id = $1
+  AND EXISTS (
+      SELECT 1
+      FROM redeem_codes rc
+      WHERE rc.used_by = ua.user_id
+        AND rc.status = $2
+        AND rc.source_type = $3
+        AND rc.type IN ($4, $5)
+  )`,
+		inviterID,
+		service.StatusUsed,
+		service.RedeemSourceCommercial,
+		service.RedeemTypeBalance,
+		service.RedeemTypeSubscription,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("count effective invitees: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var total int64
+	if rows.Next() {
+		if err := rows.Scan(&total); err != nil {
+			return 0, err
+		}
+	}
+	return total, rows.Err()
+}
+
 func (r *affiliateRepository) ThawFrozenQuota(ctx context.Context, userID int64) (float64, error) {
 	var thawed float64
 	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {

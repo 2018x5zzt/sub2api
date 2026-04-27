@@ -102,6 +102,113 @@ func TestRedeemService_Redeem_ProductSubscriptionCodeCreatesUserProductSubscript
 	require.Equal(t, StatusUsed, redeemRepo.code.Status)
 }
 
+func TestRedeemService_Redeem_CommercialProductSubscriptionAccruesAffiliateRebate(t *testing.T) {
+	client := newSubscriptionProductAdminTestClient(t)
+	ctx := context.Background()
+	product := mustCreateSubscriptionProductAdminTestProduct(t, ctx, client, 30)
+	productID := product.ID
+	inviterID := int64(7)
+
+	redeemRepo := &productRedeemCodeRepoStub{
+		code: &RedeemCode{
+			ID:           1,
+			Code:         "PRODUCT-COMMERCIAL-30",
+			Type:         RedeemTypeSubscription,
+			Value:        200,
+			Status:       StatusUnused,
+			SourceType:   RedeemSourceCommercial,
+			ProductID:    &productID,
+			ValidityDays: 30,
+		},
+	}
+	affiliateRepo := &affiliateTierRepoStub{
+		summaries: map[int64]*AffiliateSummary{
+			7:  {UserID: 7, AffCode: "INVITER", CreatedAt: time.Now().Add(-24 * time.Hour)},
+			42: {UserID: 42, AffCode: "INVITEE", InviterID: &inviterID, CreatedAt: time.Now().Add(-24 * time.Hour)},
+		},
+	}
+	affiliateSettings := NewSettingService(&affiliateTierSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateEnabled:             "true",
+		SettingKeyAffiliateRebateRate:          "10",
+		SettingKeyAffiliateRebateFreezeHours:   "0",
+		SettingKeyAffiliateRebateDurationDays:  "0",
+		SettingKeyAffiliateRebatePerInviteeCap: "0",
+	}}, nil)
+	productAdmin := NewSubscriptionProductAdminService(client)
+	redeemSvc := NewRedeemService(
+		redeemRepo,
+		&userRepoStub{user: &User{ID: 42, Email: "product-redeem@test.com", Status: StatusActive}},
+		NewAffiliateService(affiliateRepo, affiliateSettings, nil, nil),
+		nil,
+		nil,
+		nil,
+		client,
+		nil,
+		productAdmin,
+	)
+
+	redeemed, err := redeemSvc.Redeem(ctx, 42, "PRODUCT-COMMERCIAL-30")
+
+	require.NoError(t, err)
+	require.NotNil(t, redeemed.ProductID)
+	require.Len(t, affiliateRepo.accrued, 1)
+	require.Equal(t, inviterID, affiliateRepo.accrued[0].inviterID)
+	require.Equal(t, int64(42), affiliateRepo.accrued[0].inviteeID)
+	require.InDelta(t, 20.0, affiliateRepo.accrued[0].amount, 1e-9)
+}
+
+func TestRedeemService_Redeem_SystemGrantProductSubscriptionSkipsAffiliateRebate(t *testing.T) {
+	client := newSubscriptionProductAdminTestClient(t)
+	ctx := context.Background()
+	product := mustCreateSubscriptionProductAdminTestProduct(t, ctx, client, 30)
+	productID := product.ID
+	inviterID := int64(7)
+
+	redeemRepo := &productRedeemCodeRepoStub{
+		code: &RedeemCode{
+			ID:           1,
+			Code:         "PRODUCT-GRANT-30",
+			Type:         RedeemTypeSubscription,
+			Value:        200,
+			Status:       StatusUnused,
+			SourceType:   RedeemSourceSystemGrant,
+			ProductID:    &productID,
+			ValidityDays: 30,
+		},
+	}
+	affiliateRepo := &affiliateTierRepoStub{
+		summaries: map[int64]*AffiliateSummary{
+			7:  {UserID: 7, AffCode: "INVITER", CreatedAt: time.Now().Add(-24 * time.Hour)},
+			42: {UserID: 42, AffCode: "INVITEE", InviterID: &inviterID, CreatedAt: time.Now().Add(-24 * time.Hour)},
+		},
+	}
+	affiliateSettings := NewSettingService(&affiliateTierSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateEnabled:             "true",
+		SettingKeyAffiliateRebateRate:          "10",
+		SettingKeyAffiliateRebateFreezeHours:   "0",
+		SettingKeyAffiliateRebateDurationDays:  "0",
+		SettingKeyAffiliateRebatePerInviteeCap: "0",
+	}}, nil)
+	productAdmin := NewSubscriptionProductAdminService(client)
+	redeemSvc := NewRedeemService(
+		redeemRepo,
+		&userRepoStub{user: &User{ID: 42, Email: "product-redeem@test.com", Status: StatusActive}},
+		NewAffiliateService(affiliateRepo, affiliateSettings, nil, nil),
+		nil,
+		nil,
+		nil,
+		client,
+		nil,
+		productAdmin,
+	)
+
+	redeemed, err := redeemSvc.Redeem(ctx, 42, "PRODUCT-GRANT-30")
+
+	require.NoError(t, err)
+	require.NotNil(t, redeemed.ProductID)
+	require.Empty(t, affiliateRepo.accrued)
+}
+
 func newSubscriptionProductAdminTestClient(t *testing.T) *dbent.Client {
 	t.Helper()
 

@@ -163,7 +163,11 @@ func (s *RedeemService) GenerateCodes(ctx context.Context, req GenerateCodesRequ
 	}
 
 	value := req.Value
-	sourceType := NormalizeRedeemSourceType(req.SourceType, RedeemSourceSystemGrant)
+	sourceFallback := RedeemSourceSystemGrant
+	if codeType == RedeemTypeBalance || codeType == RedeemTypeSubscription {
+		sourceFallback = RedeemSourceCommercial
+	}
+	sourceType := NormalizeRedeemSourceType(req.SourceType, sourceFallback)
 
 	codes := make([]RedeemCode, 0, req.Count)
 	for i := 0; i < req.Count; i++ {
@@ -343,7 +347,7 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		if err := s.userRepo.UpdateBalance(txCtx, userID, redeemCode.Value); err != nil {
 			return nil, fmt.Errorf("update user balance: %w", err)
 		}
-		if s.affiliateService != nil && NormalizeRedeemSourceType(redeemCode.SourceType, "") == RedeemSourceCommercial {
+		if s.affiliateService != nil && IsCommercialRechargeRedeem(redeemCode) {
 			if _, err := s.affiliateService.AccrueInviteRebate(txCtx, userID, redeemCode.Value); err != nil {
 				return nil, fmt.Errorf("apply affiliate rebate: %w", err)
 			}
@@ -381,6 +385,11 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 			})
 			if err != nil {
 				return nil, fmt.Errorf("assign or extend subscription: %w", err)
+			}
+		}
+		if s.affiliateService != nil && IsCommercialRechargeRedeem(redeemCode) {
+			if _, err := s.affiliateService.AccrueInviteRebate(txCtx, userID, redeemCode.Value); err != nil {
+				return nil, fmt.Errorf("apply affiliate rebate: %w", err)
 			}
 		}
 

@@ -71,6 +71,7 @@ type SystemSettings struct {
 	AffiliateRebateFreezeHours   int                                 `json:"affiliate_rebate_freeze_hours"`
 	AffiliateRebateDurationDays  int                                 `json:"affiliate_rebate_duration_days"`
 	AffiliateRebatePerInviteeCap float64                             `json:"affiliate_rebate_per_invitee_cap"`
+	AffiliateRebateTiers         []AffiliateRebateTier               `json:"affiliate_rebate_tiers"`
 	DefaultSubscriptions         []DefaultSubscriptionSetting        `json:"default_subscriptions"`
 	DefaultSubscriptionProducts  []DefaultSubscriptionProductSetting `json:"default_subscription_products"`
 	EnterpriseVisibleGroups      []EnterpriseVisibleGroupSetting     `json:"enterprise_visible_groups"`
@@ -120,6 +121,11 @@ type DefaultSubscriptionProductSetting struct {
 type EnterpriseVisibleGroupSetting struct {
 	EnterpriseName  string  `json:"enterprise_name"`
 	VisibleGroupIDs []int64 `json:"visible_group_ids"`
+}
+
+type AffiliateRebateTier struct {
+	MinEffectiveInvitees int     `json:"min_effective_invitees"`
+	RebateRate           float64 `json:"rebate_rate"`
 }
 
 type PublicSettings struct {

@@ -35,6 +35,28 @@ func generateMenuItemID() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+func affiliateRebateTiersToDTO(tiers []service.AffiliateRebateTier) []dto.AffiliateRebateTier {
+	out := make([]dto.AffiliateRebateTier, 0, len(tiers))
+	for _, tier := range tiers {
+		out = append(out, dto.AffiliateRebateTier{
+			MinEffectiveInvitees: tier.MinEffectiveInvitees,
+			RebateRate:           tier.RebateRate,
+		})
+	}
+	return out
+}
+
+func affiliateRebateTiersFromDTO(tiers []dto.AffiliateRebateTier) []service.AffiliateRebateTier {
+	out := make([]service.AffiliateRebateTier, 0, len(tiers))
+	for _, tier := range tiers {
+		out = append(out, service.AffiliateRebateTier{
+			MinEffectiveInvitees: tier.MinEffectiveInvitees,
+			RebateRate:           tier.RebateRate,
+		})
+	}
+	return out
+}
+
 // SettingHandler 系统设置处理器
 type SettingHandler struct {
 	settingService   *service.SettingService
@@ -87,6 +109,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 			VisibleGroupIDs: append([]int64(nil), rule.VisibleGroupIDs...),
 		})
 	}
+	affiliateRebateTiers := affiliateRebateTiersToDTO(settings.AffiliateRebateTiers)
 
 	response.Success(c, dto.SystemSettings{
 		RegistrationEnabled:                  settings.RegistrationEnabled,
@@ -131,6 +154,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		AffiliateRebateFreezeHours:           settings.AffiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:          settings.AffiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:         settings.AffiliateRebatePerInviteeCap,
+		AffiliateRebateTiers:                 affiliateRebateTiers,
 		AvailableChannelsEnabled:             settings.AvailableChannelsEnabled,
 		DefaultSubscriptions:                 defaultSubscriptions,
 		DefaultSubscriptionProducts:          defaultSubscriptionProducts,
@@ -209,6 +233,7 @@ type UpdateSettingsRequest struct {
 	AffiliateRebateFreezeHours   int                                     `json:"affiliate_rebate_freeze_hours"`
 	AffiliateRebateDurationDays  int                                     `json:"affiliate_rebate_duration_days"`
 	AffiliateRebatePerInviteeCap float64                                 `json:"affiliate_rebate_per_invitee_cap"`
+	AffiliateRebateTiers         []dto.AffiliateRebateTier               `json:"affiliate_rebate_tiers"`
 	AvailableChannelsEnabled     bool                                    `json:"available_channels_enabled"`
 	DefaultSubscriptions         []dto.DefaultSubscriptionSetting        `json:"default_subscriptions"`
 	DefaultSubscriptionProducts  []dto.DefaultSubscriptionProductSetting `json:"default_subscription_products"`
@@ -621,6 +646,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		AffiliateRebateFreezeHours:       req.AffiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:      req.AffiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:     req.AffiliateRebatePerInviteeCap,
+		AffiliateRebateTiers:             affiliateRebateTiersFromDTO(req.AffiliateRebateTiers),
 		AvailableChannelsEnabled:         req.AvailableChannelsEnabled,
 		DefaultSubscriptions:             defaultSubscriptions,
 		DefaultSubscriptionProducts:      defaultSubscriptionProducts,
@@ -708,6 +734,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			VisibleGroupIDs: append([]int64(nil), rule.VisibleGroupIDs...),
 		})
 	}
+	updatedAffiliateRebateTiers := affiliateRebateTiersToDTO(updatedSettings.AffiliateRebateTiers)
 
 	response.Success(c, dto.SystemSettings{
 		RegistrationEnabled:                  updatedSettings.RegistrationEnabled,
@@ -752,6 +779,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		AffiliateRebateFreezeHours:           updatedSettings.AffiliateRebateFreezeHours,
 		AffiliateRebateDurationDays:          updatedSettings.AffiliateRebateDurationDays,
 		AffiliateRebatePerInviteeCap:         updatedSettings.AffiliateRebatePerInviteeCap,
+		AffiliateRebateTiers:                 updatedAffiliateRebateTiers,
 		AvailableChannelsEnabled:             updatedSettings.AvailableChannelsEnabled,
 		DefaultSubscriptions:                 updatedDefaultSubscriptions,
 		DefaultSubscriptionProducts:          updatedDefaultSubscriptionProducts,

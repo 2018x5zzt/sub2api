@@ -51,6 +51,7 @@ type SystemSettings struct {
 	AffiliateRebateFreezeHours   int
 	AffiliateRebateDurationDays  int
 	AffiliateRebatePerInviteeCap float64
+	AffiliateRebateTiers         []AffiliateRebateTier
 	DefaultSubscriptions         []DefaultSubscriptionSetting
 	DefaultSubscriptionProducts  []DefaultSubscriptionProductSetting
 	EnterpriseVisibleGroups      []EnterpriseVisibleGroupSetting
@@ -86,6 +87,11 @@ type SystemSettings struct {
 	// Gateway forwarding behavior
 	EnableFingerprintUnification bool // 是否统一 OAuth 账号的指纹头（默认 true）
 	EnableMetadataPassthrough    bool // 是否透传客户端原始 metadata（默认 false）
+}
+
+type AffiliateRebateTier struct {
+	MinEffectiveInvitees int     `json:"min_effective_invitees"`
+	RebateRate           float64 `json:"rebate_rate"`
 }
 
 type DefaultSubscriptionSetting struct {

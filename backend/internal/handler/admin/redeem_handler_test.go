@@ -169,7 +169,7 @@ func TestCreateAndRedeem_RejectsLegacyInvitationType(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, code)
 }
 
-func TestGenerateRedeemCodes_DefaultsSourceTypeToSystemGrant(t *testing.T) {
+func TestGenerateRedeemCodes_DefaultsBalanceSourceTypeToCommercial(t *testing.T) {
 	h, adminSvc := newGenerateHandler()
 	w := postGenerate(t, h, map[string]any{
 		"count": 1,
@@ -179,7 +179,7 @@ func TestGenerateRedeemCodes_DefaultsSourceTypeToSystemGrant(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, w.Code)
 	require.NotNil(t, adminSvc.lastGenerateRedeem)
-	require.Equal(t, service.RedeemSourceSystemGrant, adminSvc.lastGenerateRedeem.SourceType)
+	require.Equal(t, service.RedeemSourceCommercial, adminSvc.lastGenerateRedeem.SourceType)
 }
 
 func TestGenerateRedeemCodes_PassesExplicitCommercialSourceType(t *testing.T) {

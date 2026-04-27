@@ -117,6 +117,9 @@ func (h *RedeemHandler) Generate(c *gin.Context) {
 		sourceType := req.SourceType
 		if sourceType == "" {
 			sourceType = service.RedeemSourceSystemGrant
+			if req.Type == service.RedeemTypeBalance || req.Type == service.RedeemTypeSubscription {
+				sourceType = service.RedeemSourceCommercial
+			}
 		}
 		codes, execErr := h.adminService.GenerateRedeemCodes(ctx, &service.GenerateRedeemCodesInput{
 			Count:        req.Count,
@@ -160,7 +163,7 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 	}
 	if req.SourceType == "" {
 		req.SourceType = service.RedeemSourceSystemGrant
-		if req.Type == service.RedeemTypeBalance {
+		if req.Type == service.RedeemTypeBalance || req.Type == service.RedeemTypeSubscription {
 			req.SourceType = service.RedeemSourceCommercial
 		}
 	}

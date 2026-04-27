@@ -4856,11 +4856,19 @@ export default {
         freezeHours: '返利冻结期（小时）',
         freezeHoursDesc: '新产生的返利在冻结期内不可转入余额。0 = 不冻结。',
         durationDays: '返利有效期（天）',
-        durationDaysDesc: '被邀请用户注册后多少天内的充值产生返利。0 = 永久有效。',
-        perInviteeCap: '单人返利上限',
-        perInviteeCapDesc: '每个被邀请用户最多产生的返利总额。0 = 无上限。',
-        loadFailed: '加载邀请返利配置失败',
-        customUsers: {
+	        durationDaysDesc: '被邀请用户注册后多少天内的充值产生返利。0 = 永久有效。',
+	        perInviteeCap: '单人返利上限',
+	        perInviteeCapDesc: '每个被邀请用户最多产生的返利总额。0 = 无上限。',
+	        loadFailed: '加载邀请返利配置失败',
+	        tiers: {
+	          title: '阶梯返利规则',
+	          description: '按邀请人名下已发生商业充值的有效邀请人数，自动提升返利比例；专属用户比例优先于阶梯规则。',
+	          addButton: '添加阶梯',
+	          empty: '未配置阶梯规则，将沿用全局返利比例。',
+	          minEffectiveInvitees: '最低有效邀请人数',
+	          rebateRate: '返利比例'
+	        },
+	        customUsers: {
           title: '专属用户配置',
           description: '为指定用户设置专属邀请码或专属返利比例。',
           addButton: '添加专属用户',

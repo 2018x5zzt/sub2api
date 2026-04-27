@@ -210,11 +210,11 @@
               <label class="input-label">{{ t('admin.redeem.codeType') }}</label>
               <Select v-model="generateForm.type" :options="typeOptions" />
             </div>
-            <!-- 余额/并发类型：显示数值输入 -->
-            <div v-if="generateForm.type !== 'subscription'">
+            <!-- 兑换码面值：余额和订阅作为商业充值返利基数，并发作为并发数量。 -->
+            <div>
               <label class="input-label">
                 {{
-                  generateForm.type === 'balance'
+                  generateForm.type === 'balance' || generateForm.type === 'subscription'
                     ? t('admin.redeem.amount')
                     : t('admin.redeem.columns.value')
                 }}
@@ -222,13 +222,13 @@
               <input
                 v-model.number="generateForm.value"
                 type="number"
-                :step="generateForm.type === 'balance' ? '0.01' : '1'"
-                :min="generateForm.type === 'balance' ? '0.01' : '1'"
+                :step="generateForm.type === 'balance' || generateForm.type === 'subscription' ? '0.01' : '1'"
+                :min="generateForm.type === 'balance' || generateForm.type === 'subscription' ? '0.01' : '1'"
                 required
                 class="input"
               />
             </div>
-            <div v-if="generateForm.type === 'balance'">
+            <div v-if="generateForm.type === 'balance' || generateForm.type === 'subscription'">
               <label class="input-label">{{ t('admin.redeem.sourceType') }}</label>
               <Select v-model="generateForm.source_type" :options="sourceTypeOptions" />
               <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
@@ -611,7 +611,9 @@ watch(
     } else if (newType !== 'subscription' && generateForm.value === 0) {
       generateForm.value = 10
     }
-    if (newType !== 'balance') {
+    if (newType === 'subscription') {
+      generateForm.source_type = 'commercial'
+    } else if (newType !== 'balance') {
       generateForm.source_type = 'system_grant'
     }
   }
@@ -706,7 +708,9 @@ const handleGenerateCodes = async () => {
       generateForm.count,
       generateForm.type,
       generateForm.value,
-      generateForm.type === 'balance' ? generateForm.source_type : 'system_grant',
+      generateForm.type === 'balance' || generateForm.type === 'subscription'
+        ? generateForm.source_type
+        : 'system_grant',
       generateForm.type === 'subscription' && generateForm.subscription_target === 'group'
         ? generateForm.group_id
         : undefined,

@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -127,6 +128,18 @@ func (s *SettingService) GetAffiliateRebatePerInviteeCap(ctx context.Context) fl
 	return capValue
 }
 
+// GetAffiliateRebateTiers returns normalized effective-invitee rebate tiers.
+func (s *SettingService) GetAffiliateRebateTiers(ctx context.Context) []AffiliateRebateTier {
+	if s == nil || s.settingRepo == nil {
+		return nil
+	}
+	raw, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateRebateTiers)
+	if err != nil {
+		return nil
+	}
+	return ParseAffiliateRebateTiers(raw)
+}
+
 type AvailableChannelsRuntime struct {
 	Enabled bool
 }
@@ -153,6 +166,43 @@ func clampAffiliateRebateRate(value float64) float64 {
 		return AffiliateRebateRateMax
 	}
 	return value
+}
+
+func ParseAffiliateRebateTiers(raw string) []AffiliateRebateTier {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var tiers []AffiliateRebateTier
+	if err := json.Unmarshal([]byte(raw), &tiers); err != nil {
+		return nil
+	}
+	return normalizeAffiliateRebateTiers(tiers)
+}
+
+func normalizeAffiliateRebateTiers(tiers []AffiliateRebateTier) []AffiliateRebateTier {
+	if len(tiers) == 0 {
+		return []AffiliateRebateTier{}
+	}
+	byMin := make(map[int]AffiliateRebateTier, len(tiers))
+	for _, tier := range tiers {
+		minInvitees := tier.MinEffectiveInvitees
+		if minInvitees < 0 {
+			minInvitees = 0
+		}
+		byMin[minInvitees] = AffiliateRebateTier{
+			MinEffectiveInvitees: minInvitees,
+			RebateRate:           clampAffiliateRebateRate(tier.RebateRate),
+		}
+	}
+	normalized := make([]AffiliateRebateTier, 0, len(byMin))
+	for _, tier := range byMin {
+		normalized = append(normalized, tier)
+	}
+	sort.Slice(normalized, func(i, j int) bool {
+		return normalized[i].MinEffectiveInvitees < normalized[j].MinEffectiveInvitees
+	})
+	return normalized
 }
 
 // cachedVersionBounds 缓存 Claude Code 版本号上下限（进程内缓存，60s TTL）
@@ -623,6 +673,12 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 		settings.AffiliateRebatePerInviteeCap = AffiliateRebatePerInviteeCapDefault
 	}
 	updates[SettingKeyAffiliateRebatePerInviteeCap] = strconv.FormatFloat(settings.AffiliateRebatePerInviteeCap, 'f', 8, 64)
+	affiliateRebateTiers := normalizeAffiliateRebateTiers(settings.AffiliateRebateTiers)
+	affiliateRebateTiersJSON, err := json.Marshal(affiliateRebateTiers)
+	if err != nil {
+		return fmt.Errorf("marshal affiliate rebate tiers: %w", err)
+	}
+	updates[SettingKeyAffiliateRebateTiers] = string(affiliateRebateTiersJSON)
 	defaultSubsJSON, err := json.Marshal(settings.DefaultSubscriptions)
 	if err != nil {
 		return fmt.Errorf("marshal default subscriptions: %w", err)
@@ -990,6 +1046,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyAffiliateRebateFreezeHours:       strconv.Itoa(AffiliateRebateFreezeHoursDefault),
 		SettingKeyAffiliateRebateDurationDays:      strconv.Itoa(AffiliateRebateDurationDaysDefault),
 		SettingKeyAffiliateRebatePerInviteeCap:     strconv.FormatFloat(AffiliateRebatePerInviteeCapDefault, 'f', 8, 64),
+		SettingKeyAffiliateRebateTiers:             AffiliateRebateTiersDefault,
 		SettingKeyAvailableChannelsEnabled:         "true",
 		SettingKeyDefaultSubscriptions:             "[]",
 		SettingKeyDefaultSubscriptionProducts:      "[]",
@@ -1099,6 +1156,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	if perInviteeCap, err := strconv.ParseFloat(settings[SettingKeyAffiliateRebatePerInviteeCap], 64); err == nil && perInviteeCap >= 0 {
 		result.AffiliateRebatePerInviteeCap = perInviteeCap
 	}
+	result.AffiliateRebateTiers = ParseAffiliateRebateTiers(settings[SettingKeyAffiliateRebateTiers])
 	result.DefaultSubscriptions = parseDefaultSubscriptions(settings[SettingKeyDefaultSubscriptions])
 	result.DefaultSubscriptionProducts = parseDefaultSubscriptionProducts(settings[SettingKeyDefaultSubscriptionProducts])
 	if enterpriseVisibleGroups, err := ParseEnterpriseVisibleGroupIDsByEnterprise(settings[SettingKeyEnterpriseVisibleGroupIDsByEnterprise]); err == nil {

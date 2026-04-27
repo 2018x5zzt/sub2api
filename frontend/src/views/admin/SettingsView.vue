@@ -1417,6 +1417,75 @@
                 <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                      {{ t('admin.settings.affiliate.tiers.title') }}
+                    </h3>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.affiliate.tiers.description') }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="addAffiliateRebateTier"
+                  >
+                    {{ t('admin.settings.affiliate.tiers.addButton') }}
+                  </button>
+                </div>
+
+                <div v-if="form.affiliate_rebate_tiers.length === 0" class="rounded border border-dashed border-gray-200 p-4 text-sm text-gray-500 dark:border-dark-700 dark:text-gray-400">
+                  {{ t('admin.settings.affiliate.tiers.empty') }}
+                </div>
+                <div v-else class="space-y-3">
+                  <div
+                    v-for="(tier, index) in form.affiliate_rebate_tiers"
+                    :key="index"
+                    class="grid gap-3 rounded border border-gray-200 p-3 dark:border-dark-700 md:grid-cols-[1fr_1fr_auto]"
+                  >
+                    <div>
+                      <label class="input-label">
+                        {{ t('admin.settings.affiliate.tiers.minEffectiveInvitees') }}
+                      </label>
+                      <input
+                        v-model.number="tier.min_effective_invitees"
+                        type="number"
+                        min="0"
+                        step="1"
+                        class="input"
+                      />
+                    </div>
+                    <div>
+                      <label class="input-label">
+                        {{ t('admin.settings.affiliate.tiers.rebateRate') }}
+                      </label>
+                      <div class="relative">
+                        <input
+                          v-model.number="tier.rebate_rate"
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          class="input pr-8"
+                        />
+                        <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                      </div>
+                    </div>
+                    <div class="flex items-end">
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm w-full md:w-auto"
+                        @click="removeAffiliateRebateTier(index)"
+                      >
+                        {{ t('common.delete') }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="border-t border-gray-100 pt-5 dark:border-dark-700">
+                <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
                       {{ t('admin.settings.affiliate.customUsers.title') }}
                     </h3>
                     <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
@@ -2559,7 +2628,8 @@ import type {
   SystemSettings,
   UpdateSettingsRequest,
   DefaultSubscriptionSetting,
-  DefaultSubscriptionProductSetting
+  DefaultSubscriptionProductSetting,
+  AffiliateRebateTier
 } from '@/api/admin/settings'
 import type {
   AffiliateAdminEntry,
@@ -2712,6 +2782,7 @@ const form = reactive<SettingsForm>({
   affiliate_rebate_freeze_hours: 0,
   affiliate_rebate_duration_days: 0,
   affiliate_rebate_per_invitee_cap: 0,
+  affiliate_rebate_tiers: [],
   sora_client_enabled: false,
   custom_menu_items: [] as Array<{id: string; label: string; icon_svg: string; url: string; visibility: 'user' | 'admin'; sort_order: number}>,
   custom_endpoints: [] as Array<{name: string; endpoint: string; description: string}>,
@@ -2934,6 +3005,9 @@ async function loadSettings() {
             : []
         }))
       : []
+    form.affiliate_rebate_tiers = normalizeAffiliateRebateTiers(
+      Array.isArray(settings.affiliate_rebate_tiers) ? settings.affiliate_rebate_tiers : []
+    )
     registrationEmailSuffixWhitelistTags.value = normalizeRegistrationEmailSuffixDomains(
       settings.registration_email_suffix_whitelist
     )
@@ -3055,6 +3129,38 @@ function normalizeEnterpriseVisibleGroupsForSave(
     }))
 }
 
+function normalizeAffiliateRebateTiers(tiers: AffiliateRebateTier[]) {
+  const merged = new Map<number, AffiliateRebateTier>()
+  for (const tier of Array.isArray(tiers) ? tiers : []) {
+    const minEffectiveInvitees = Number.isFinite(tier.min_effective_invitees)
+      ? Math.max(0, Math.floor(tier.min_effective_invitees))
+      : 0
+    const rawRate = Number.isFinite(tier.rebate_rate) ? tier.rebate_rate : form.affiliate_rebate_rate
+    const rebateRate = Math.min(100, Math.max(0, Number(rawRate.toFixed(8))))
+    merged.set(minEffectiveInvitees, {
+      min_effective_invitees: minEffectiveInvitees,
+      rebate_rate: rebateRate
+    })
+  }
+  return Array.from(merged.values()).sort(
+    (left, right) => left.min_effective_invitees - right.min_effective_invitees
+  )
+}
+
+function addAffiliateRebateTier() {
+  const nextMin = form.affiliate_rebate_tiers.length === 0
+    ? 100
+    : Math.max(...form.affiliate_rebate_tiers.map((tier) => tier.min_effective_invitees)) + 100
+  form.affiliate_rebate_tiers.push({
+    min_effective_invitees: nextMin,
+    rebate_rate: form.affiliate_rebate_rate
+  })
+}
+
+function removeAffiliateRebateTier(index: number) {
+  form.affiliate_rebate_tiers.splice(index, 1)
+}
+
 async function saveSettings() {
   saving.value = true
   try {
@@ -3098,6 +3204,7 @@ async function saveSettings() {
     const normalizedEnterpriseVisibleGroups = normalizeEnterpriseVisibleGroupsForSave(
       form.enterprise_visible_groups
     )
+    const normalizedAffiliateRebateTiers = normalizeAffiliateRebateTiers(form.affiliate_rebate_tiers)
 
     // Validate URL fields — novalidate disables browser-native checks, so we validate here
     const isValidHttpUrl = (url: string): boolean => {
@@ -3155,11 +3262,12 @@ async function saveSettings() {
       purchase_subscription_url: form.purchase_subscription_url,
       available_channels_enabled: form.available_channels_enabled,
       affiliate_enabled: form.affiliate_enabled,
-      affiliate_rebate_rate: form.affiliate_rebate_rate,
-      affiliate_rebate_freeze_hours: form.affiliate_rebate_freeze_hours,
-      affiliate_rebate_duration_days: form.affiliate_rebate_duration_days,
-      affiliate_rebate_per_invitee_cap: form.affiliate_rebate_per_invitee_cap,
-      sora_client_enabled: form.sora_client_enabled,
+	      affiliate_rebate_rate: form.affiliate_rebate_rate,
+	      affiliate_rebate_freeze_hours: form.affiliate_rebate_freeze_hours,
+	      affiliate_rebate_duration_days: form.affiliate_rebate_duration_days,
+	      affiliate_rebate_per_invitee_cap: form.affiliate_rebate_per_invitee_cap,
+	      affiliate_rebate_tiers: normalizedAffiliateRebateTiers,
+	      sora_client_enabled: form.sora_client_enabled,
       custom_menu_items: form.custom_menu_items,
       custom_endpoints: form.custom_endpoints,
       frontend_url: form.frontend_url,
@@ -3196,15 +3304,18 @@ async function saveSettings() {
       updated.registration_email_suffix_whitelist
     )
     registrationEmailSuffixWhitelistDraft.value = ''
-    form.enterprise_visible_groups = Array.isArray(updated.enterprise_visible_groups)
-      ? updated.enterprise_visible_groups.map((rule) => ({
-          enterprise_name: rule.enterprise_name,
-          visible_group_ids: Array.isArray(rule.visible_group_ids)
-            ? rule.visible_group_ids.filter((groupID) => groupID > 0)
-            : []
-        }))
-      : []
-    form.default_subscription_products = Array.isArray(updated.default_subscription_products)
+	    form.enterprise_visible_groups = Array.isArray(updated.enterprise_visible_groups)
+	      ? updated.enterprise_visible_groups.map((rule) => ({
+	          enterprise_name: rule.enterprise_name,
+	          visible_group_ids: Array.isArray(rule.visible_group_ids)
+	            ? rule.visible_group_ids.filter((groupID) => groupID > 0)
+	            : []
+	        }))
+	      : []
+	    form.affiliate_rebate_tiers = normalizeAffiliateRebateTiers(
+	      Array.isArray(updated.affiliate_rebate_tiers) ? updated.affiliate_rebate_tiers : []
+	    )
+	    form.default_subscription_products = Array.isArray(updated.default_subscription_products)
       ? updated.default_subscription_products
           .filter((item) => item.product_id > 0 && item.validity_days > 0)
           .map((item) => ({

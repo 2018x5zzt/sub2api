@@ -293,6 +293,10 @@ func (s *authAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int
 	panic("unexpected GetAccruedRebateFromInvitee call")
 }
 
+func (s *authAffiliateRepoStub) CountEffectiveInvitees(context.Context, int64) (int64, error) {
+	panic("unexpected CountEffectiveInvitees call")
+}
+
 func (s *authAffiliateRepoStub) ThawFrozenQuota(context.Context, int64) (float64, error) {
 	panic("unexpected ThawFrozenQuota call")
 }

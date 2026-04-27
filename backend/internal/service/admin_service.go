@@ -2295,7 +2295,11 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			}
 		}
 	}
-	sourceType := NormalizeRedeemSourceType(input.SourceType, RedeemSourceSystemGrant)
+	sourceFallback := RedeemSourceSystemGrant
+	if input.Type == RedeemTypeBalance || input.Type == RedeemTypeSubscription {
+		sourceFallback = RedeemSourceCommercial
+	}
+	sourceType := NormalizeRedeemSourceType(input.SourceType, sourceFallback)
 
 	codes := make([]RedeemCode, 0, input.Count)
 	for i := 0; i < input.Count; i++ {

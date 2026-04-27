@@ -21,6 +21,11 @@ export interface EnterpriseVisibleGroupSetting {
   visible_group_ids: number[]
 }
 
+export interface AffiliateRebateTier {
+  min_effective_invitees: number
+  rebate_rate: number
+}
+
 /**
  * System settings interface
  */
@@ -57,6 +62,7 @@ export interface SystemSettings {
   affiliate_rebate_freeze_hours: number
   affiliate_rebate_duration_days: number
   affiliate_rebate_per_invitee_cap: number
+  affiliate_rebate_tiers: AffiliateRebateTier[]
   sora_client_enabled: boolean
   backend_mode_enabled: boolean
   custom_menu_items: CustomMenuItem[]
@@ -138,6 +144,7 @@ export interface UpdateSettingsRequest {
   affiliate_rebate_freeze_hours?: number
   affiliate_rebate_duration_days?: number
   affiliate_rebate_per_invitee_cap?: number
+  affiliate_rebate_tiers?: AffiliateRebateTier[]
   sora_client_enabled?: boolean
   backend_mode_enabled?: boolean
   custom_menu_items?: CustomMenuItem[]

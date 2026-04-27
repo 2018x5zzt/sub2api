@@ -137,9 +137,16 @@ const createSystemSettings = () =>
     home_content: '',
     hide_ccs_import_button: false,
     purchase_subscription_enabled: false,
-    purchase_subscription_url: '',
-    sora_client_enabled: false,
-    backend_mode_enabled: false,
+	    purchase_subscription_url: '',
+	    available_channels_enabled: true,
+	    affiliate_enabled: true,
+	    affiliate_rebate_rate: 3,
+	    affiliate_rebate_freeze_hours: 0,
+	    affiliate_rebate_duration_days: 0,
+	    affiliate_rebate_per_invitee_cap: 0,
+	    affiliate_rebate_tiers: [],
+	    sora_client_enabled: false,
+	    backend_mode_enabled: false,
     custom_menu_items: [],
     custom_endpoints: [],
     smtp_host: '',
@@ -428,7 +435,7 @@ describe('admin SettingsView enterprise visible groups', () => {
     expect(wrapper.text()).toContain('vip@example.com')
   })
 
-  it('exposes affiliate rebates as a first-level settings tab', async () => {
+	  it('exposes affiliate rebates as a first-level settings tab', async () => {
     const wrapper = mount(SettingsView, {
       global: {
         stubs: {
@@ -450,7 +457,63 @@ describe('admin SettingsView enterprise visible groups', () => {
     await flushPromises()
 
     const setupState = (wrapper.vm as any).$?.setupState
-    expect(setupState.settingsTabs.map((tab: { key: string }) => tab.key)).toContain('affiliate')
-    expect(wrapper.text()).toContain('admin.settings.tabs.affiliate')
-  })
-})
+	    expect(setupState.settingsTabs.map((tab: { key: string }) => tab.key)).toContain('affiliate')
+	    expect(wrapper.text()).toContain('admin.settings.tabs.affiliate')
+	  })
+
+	  it('loads and saves normalized affiliate rebate tiers', async () => {
+	    getSettings.mockResolvedValue({
+	      ...createSystemSettings(),
+	      affiliate_rebate_tiers: [
+	        { min_effective_invitees: 0, rebate_rate: 3 },
+	        { min_effective_invitees: 100, rebate_rate: 8 }
+	      ]
+	    })
+
+	    const wrapper = mount(SettingsView, {
+	      global: {
+	        stubs: {
+	          AppLayout: { template: '<div><slot /></div>' },
+	          Icon: true,
+	          Select: true,
+	          GroupBadge: true,
+	          GroupOptionItem: true,
+	          Toggle: true,
+	          ImageUpload: true,
+	          BackupSettings: true,
+	          DataManagementSettings: true,
+	          GroupSelector: true,
+	          Teleport: true
+	        }
+	      }
+	    })
+
+	    await flushPromises()
+
+	    const setupState = (wrapper.vm as any).$?.setupState
+	    expect(setupState.form.affiliate_rebate_tiers).toEqual([
+	      { min_effective_invitees: 0, rebate_rate: 3 },
+	      { min_effective_invitees: 100, rebate_rate: 8 }
+	    ])
+
+	    setupState.form.affiliate_rebate_tiers = [
+	      { min_effective_invitees: 100, rebate_rate: 8 },
+	      { min_effective_invitees: 0, rebate_rate: 3 },
+	      { min_effective_invitees: 100, rebate_rate: 9 },
+	      { min_effective_invitees: -1, rebate_rate: 5 },
+	      { min_effective_invitees: 500, rebate_rate: 101 }
+	    ]
+
+	    await setupState.saveSettings()
+
+	    expect(updateSettings).toHaveBeenCalledWith(
+	      expect.objectContaining({
+	        affiliate_rebate_tiers: [
+	          { min_effective_invitees: 0, rebate_rate: 5 },
+	          { min_effective_invitees: 100, rebate_rate: 9 },
+	          { min_effective_invitees: 500, rebate_rate: 100 }
+	        ]
+	      })
+	    )
+	  })
+	})
