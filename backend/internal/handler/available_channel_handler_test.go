@@ -1,15 +1,42 @@
 package handler
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
-func TestAvailableChannelFeatureDisabledByDefaultWithoutSettingService(t *testing.T) {
-	h := &AvailableChannelHandler{settingService: nil}
-	require.False(t, h.featureEnabled(nil))
+func TestAvailableChannelList_FeatureDisabledByDefaultWithoutSettingServiceReturnsEmptyList(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/available-channels", nil)
+	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 42})
+
+	h := &AvailableChannelHandler{
+		channelService: nil,
+		apiKeyService:  nil,
+		settingService: nil,
+	}
+
+	h.List(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var envelope struct {
+		Code int                    `json:"code"`
+		Data []userAvailableChannel `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	require.Equal(t, 0, envelope.Code)
+	require.Empty(t, envelope.Data)
 }
 
 func TestBuildPlatformSections_OnlyReturnsModelsForVisiblePlatforms(t *testing.T) {
