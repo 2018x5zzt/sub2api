@@ -36,7 +36,7 @@ type Channel struct {
 	Name               string
 	Description        string
 	Status             string
-	BillingModelSource string // "requested" or "upstream"
+	BillingModelSource string // "requested", "upstream", or "channel_mapped"
 	RestrictModels     bool   // 是否限制模型（仅允许定价列表中的模型）
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
@@ -191,7 +191,7 @@ func (c *Channel) Clone() *Channel {
 type ChannelUsageFields struct {
 	ChannelID          int64  // 渠道 ID（0 = 无渠道）
 	OriginalModel      string // 用户原始请求模型（渠道映射前）
-	BillingModelSource string // 计费模型来源："requested" / "upstream"
+	BillingModelSource string // 计费模型来源："requested" / "upstream" / "channel_mapped"
 	ModelMappingChain  string // 映射链描述，如 "a→b→c"
 }
 
