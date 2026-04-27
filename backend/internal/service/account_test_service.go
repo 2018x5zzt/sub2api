@@ -1695,6 +1695,11 @@ func createOpenAITestPayload(modelID string, prompt string, isOAuth bool) map[st
 				"type": "image_generation",
 			},
 		}
+	} else if normalizedModel, _, hasReasoningAlias := splitOpenAICompatReasoningModel(modelID); hasReasoningAlias {
+		if normalizedModel != "" {
+			payload["model"] = normalizedModel
+		}
+		ensureOpenAIResponsesReasoning(payload, modelID)
 	}
 
 	return payload

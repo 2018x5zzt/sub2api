@@ -46,9 +46,36 @@ func RegisterGatewayRoutes(
 		}
 		h.OpenAIGateway.Images(c)
 	}
+	openAIImageJobCreateHandler := func(c *gin.Context) {
+		if getGroupPlatform(c) != service.PlatformOpenAI {
+			writeOpenAIImagesRouteNotFound(c, "Images API is not supported for this platform")
+			return
+		}
+		if !groupAllowsOpenAIImages(c) {
+			writeOpenAIImagesRouteNotFound(c, "Images API is not enabled for this group")
+			return
+		}
+		h.OpenAIGateway.ImageJobCreate(c)
+	}
+	openAIImageJobStatusHandler := func(c *gin.Context) {
+		if getGroupPlatform(c) != service.PlatformOpenAI {
+			writeOpenAIImagesRouteNotFound(c, "Images API is not supported for this platform")
+			return
+		}
+		if !groupAllowsOpenAIImages(c) {
+			writeOpenAIImagesRouteNotFound(c, "Images API is not enabled for this group")
+			return
+		}
+		h.OpenAIGateway.ImageJobStatus(c)
+	}
 	registerOpenAIImagesRoutes := func(group *gin.RouterGroup) {
 		group.POST("/images/generations", openAIImagesHandler)
 		group.POST("/images/edits", openAIImagesHandler)
+	}
+	registerOpenAIImageJobRoutes := func(group *gin.RouterGroup) {
+		group.POST("/images/jobs/generations", openAIImageJobCreateHandler)
+		group.POST("/images/jobs/edits", openAIImageJobCreateHandler)
+		group.GET("/images/jobs/:id", openAIImageJobStatusHandler)
 	}
 
 	// API网关（Claude API兼容）
@@ -109,6 +136,7 @@ func RegisterGatewayRoutes(
 			h.Gateway.ChatCompletions(c)
 		})
 		registerOpenAIImagesRoutes(gateway)
+		registerOpenAIImageJobRoutes(gateway)
 	}
 
 	// Gemini 原生 API 兼容层（Gemini SDK/CLI 直连）
@@ -147,6 +175,9 @@ func RegisterGatewayRoutes(
 	})
 	r.POST("/images/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, openAIImagesHandler)
 	r.POST("/images/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, openAIImagesHandler)
+	r.POST("/images/jobs/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, openAIImageJobCreateHandler)
+	r.POST("/images/jobs/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, openAIImageJobCreateHandler)
+	r.GET("/images/jobs/:id", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, openAIImageJobStatusHandler)
 
 	apiProxyV1 := r.Group("/api-proxy/v1")
 	apiProxyV1.Use(bodyLimit)
@@ -156,6 +187,7 @@ func RegisterGatewayRoutes(
 	apiProxyV1.Use(gin.HandlerFunc(apiKeyAuth))
 	apiProxyV1.Use(requireGroupAnthropic)
 	registerOpenAIImagesRoutes(apiProxyV1)
+	registerOpenAIImageJobRoutes(apiProxyV1)
 
 	openAIV1 := r.Group("/openai/v1")
 	openAIV1.Use(bodyLimit)
@@ -165,6 +197,7 @@ func RegisterGatewayRoutes(
 	openAIV1.Use(gin.HandlerFunc(apiKeyAuth))
 	openAIV1.Use(requireGroupAnthropic)
 	registerOpenAIImagesRoutes(openAIV1)
+	registerOpenAIImageJobRoutes(openAIV1)
 
 	// Antigravity 模型列表
 	r.GET("/antigravity/models", gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, h.Gateway.AntigravityModels)

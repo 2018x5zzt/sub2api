@@ -1929,7 +1929,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 	// 对所有请求执行模型映射（包含 Codex CLI）。
 	mappedModel := account.GetMappedModel(reqModel)
-	reasoningModel := mappedModel
+	reasoningModel := resolveOpenAIResponsesReasoningModel(originalModel, mappedModel)
 	if mappedModel != reqModel {
 		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Model mapping applied: %s -> %s (account: %s, isCodexCLI: %v)", reqModel, mappedModel, account.Name, isCodexCLI)
 		reqBody["model"] = mappedModel
@@ -5549,6 +5549,18 @@ func deriveOpenAIReasoningEffortFromModel(model string) string {
 	}
 
 	return normalizeOpenAIReasoningEffort(parts[len(parts)-1])
+}
+
+func resolveOpenAIResponsesReasoningModel(requestedModel, mappedModel string) string {
+	if _, _, ok := splitOpenAICompatReasoningModel(mappedModel); ok {
+		return mappedModel
+	}
+	if _, _, ok := splitOpenAICompatReasoningModel(requestedModel); ok {
+		if shouldDefaultOpenAIResponsesReasoning(mappedModel) {
+			return requestedModel
+		}
+	}
+	return mappedModel
 }
 
 func extractOpenAIRequestMetaFromBody(body []byte) (model string, stream bool, promptCacheKey string) {

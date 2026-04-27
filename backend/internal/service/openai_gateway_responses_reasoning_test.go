@@ -159,6 +159,103 @@ func TestForward_OpenAIResponsesAPIKeyPassthroughNormalizesReasoningAliasModel(t
 	require.Equal(t, "xhigh", *result.ReasoningEffort)
 }
 
+func TestForward_OpenAIResponsesAPIKeyNormalizesReasoningAliasModel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name        string
+		body        []byte
+		credentials map[string]any
+		wantModel   string
+		wantEffort  string
+	}{
+		{
+			name:       "direct alias strips model suffix",
+			body:       []byte(`{"model":"gpt-5.4-high","input":"Hi","stream":false}`),
+			wantModel:  "gpt-5.4",
+			wantEffort: "high",
+			credentials: map[string]any{
+				"api_key":  "sk-test",
+				"base_url": "https://relay.example.com",
+			},
+		},
+		{
+			name:       "canonical mapping keeps requested suffix effort",
+			body:       []byte(`{"model":"gpt-5.4-high","input":"Hi","stream":false}`),
+			wantModel:  "gpt-5.4",
+			wantEffort: "high",
+			credentials: map[string]any{
+				"api_key":  "sk-test",
+				"base_url": "https://relay.example.com",
+				"model_mapping": map[string]any{
+					"gpt-5.4": "gpt-5.4",
+				},
+			},
+		},
+		{
+			name:       "non reasoning mapping does not inherit suffix effort",
+			body:       []byte(`{"model":"gpt-5.4-high","input":"Hi","stream":false}`),
+			wantModel:  "gpt-4.1",
+			wantEffort: "",
+			credentials: map[string]any{
+				"api_key":  "sk-test",
+				"base_url": "https://relay.example.com",
+				"model_mapping": map[string]any{
+					"gpt-5.4": "gpt-4.1",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(rec)
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+
+			resp := &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}, "x-request-id": []string{"rid-apikey-responses"}},
+				Body: io.NopCloser(bytes.NewReader([]byte(
+					`{"id":"resp_reasoning","model":"gpt-5.4","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"final answer"}]}],"usage":{"input_tokens":1,"output_tokens":2,"total_tokens":3}}`,
+				))),
+			}
+			upstream := &httpUpstreamRecorder{resp: resp}
+
+			svc := &OpenAIGatewayService{
+				cfg:          &config.Config{Gateway: config.GatewayConfig{}},
+				httpUpstream: upstream,
+			}
+
+			account := &Account{
+				ID:             123,
+				Name:           "apikey-acc",
+				Platform:       PlatformOpenAI,
+				Type:           AccountTypeAPIKey,
+				Concurrency:    1,
+				Credentials:    tt.credentials,
+				Status:         StatusActive,
+				Schedulable:    true,
+				RateMultiplier: f64p(1),
+			}
+
+			result, err := svc.Forward(context.Background(), c, account, tt.body)
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			require.Equal(t, tt.wantModel, gjson.GetBytes(upstream.lastBody, "model").String())
+			require.Equal(t, tt.wantEffort, gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
+			if tt.wantEffort != "" {
+				require.Equal(t, "auto", gjson.GetBytes(upstream.lastBody, "reasoning.summary").String())
+				require.NotNil(t, result.ReasoningEffort)
+				require.Equal(t, tt.wantEffort, *result.ReasoningEffort)
+			} else {
+				require.False(t, gjson.GetBytes(upstream.lastBody, "reasoning.summary").Exists())
+			}
+		})
+	}
+}
+
 func TestForward_OpenAIResponsesOAuthRemapsLegacyModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

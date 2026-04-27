@@ -134,6 +134,7 @@ docs/*
 !docs/superpowers/plans/2026-04-25-subscription-daily-carryover-rollout.md
 .serena/
 .codex/
+.codex
 .worktrees/
 frontend/coverage/
 aicodex

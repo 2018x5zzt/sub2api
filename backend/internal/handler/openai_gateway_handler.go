@@ -33,6 +33,7 @@ type OpenAIGatewayHandler struct {
 	usageRecordWorkerPool   *service.UsageRecordWorkerPool
 	errorPassthroughService *service.ErrorPassthroughService
 	concurrencyHelper       *ConcurrencyHelper
+	imageJobStore           *openAIImageJobStore
 	maxAccountSwitches      int
 	cfg                     *config.Config
 }
@@ -78,6 +79,7 @@ func NewOpenAIGatewayHandler(
 		usageRecordWorkerPool:   usageRecordWorkerPool,
 		errorPassthroughService: errorPassthroughService,
 		concurrencyHelper:       concurrencyHelper,
+		imageJobStore:           newOpenAIImageJobStore(openAIImageJobStoreOptions{}),
 		maxAccountSwitches:      maxAccountSwitches,
 		cfg:                     cfg,
 	}

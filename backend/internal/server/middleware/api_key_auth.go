@@ -133,8 +133,10 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		// ── 5. 加载订阅（订阅模式时始终加载） ───────────────────────
 
-		// skipBilling: /v1/usage 只需鉴权，跳过所有计费执行
-		skipBilling := c.Request.URL.Path == "/v1/usage"
+		// skipBilling: 查询类端点只需鉴权，跳过所有计费执行。
+		// 图片 job 轮询必须可在成功扣费后继续读取结果。
+		skipBilling := c.Request.URL.Path == "/v1/usage" ||
+			isOpenAIImageJobPollRequest(c.Request.Method, c.Request.URL.Path)
 
 		var subscription *service.UserSubscription
 		var productCtx *service.ProductSettlementContext
@@ -273,6 +275,11 @@ func GetSubscriptionFromContext(c *gin.Context) (*service.UserSubscription, bool
 	}
 	subscription, ok := value.(*service.UserSubscription)
 	return subscription, ok
+}
+
+func isOpenAIImageJobPollRequest(method string, path string) bool {
+	return strings.EqualFold(strings.TrimSpace(method), "GET") &&
+		strings.Contains(strings.TrimSpace(path), "/images/jobs/")
 }
 
 func setGroupContext(c *gin.Context, group *service.Group) {
