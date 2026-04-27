@@ -427,4 +427,30 @@ describe('admin SettingsView enterprise visible groups', () => {
     expect(wrapper.text()).toContain('VIP2026')
     expect(wrapper.text()).toContain('vip@example.com')
   })
+
+  it('exposes affiliate rebates as a first-level settings tab', async () => {
+    const wrapper = mount(SettingsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+          Select: true,
+          GroupBadge: true,
+          GroupOptionItem: true,
+          Toggle: true,
+          ImageUpload: true,
+          BackupSettings: true,
+          DataManagementSettings: true,
+          GroupSelector: true,
+          Teleport: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const setupState = (wrapper.vm as any).$?.setupState
+    expect(setupState.settingsTabs.map((tab: { key: string }) => tab.key)).toContain('affiliate')
+    expect(wrapper.text()).toContain('admin.settings.tabs.affiliate')
+  })
 })

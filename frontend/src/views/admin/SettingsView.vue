@@ -1313,6 +1313,10 @@
           </div>
         </div>
 
+        </div><!-- /Tab: Users -->
+
+        <!-- Tab: Affiliate -->
+        <div v-show="activeTab === 'affiliate'" class="space-y-6">
         <!-- Affiliate Settings -->
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
@@ -1723,7 +1727,7 @@
             </div>
           </div>
         </div>
-        </div><!-- /Tab: Users -->
+        </div><!-- /Tab: Affiliate -->
 
         <!-- Tab: Gateway — Claude Code, Scheduling -->
         <div v-show="activeTab === 'gateway'" class="space-y-6">
@@ -2586,12 +2590,13 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const adminSettingsStore = useAdminSettingsStore()
 
-type SettingsTab = 'general' | 'security' | 'users' | 'gateway' | 'email' | 'backup' | 'data'
+type SettingsTab = 'general' | 'security' | 'users' | 'affiliate' | 'gateway' | 'email' | 'backup' | 'data'
 const activeTab = ref<SettingsTab>('general')
 const settingsTabs = [
   { key: 'general'  as SettingsTab, icon: 'home'   as const },
   { key: 'security' as SettingsTab, icon: 'shield' as const },
   { key: 'users'    as SettingsTab, icon: 'user'   as const },
+  { key: 'affiliate' as SettingsTab, icon: 'gift'   as const },
   { key: 'gateway'  as SettingsTab, icon: 'server' as const },
   { key: 'email'    as SettingsTab, icon: 'mail'   as const },
   { key: 'backup'   as SettingsTab, icon: 'database' as const },

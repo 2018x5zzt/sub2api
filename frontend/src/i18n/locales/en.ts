@@ -4594,6 +4594,7 @@ export default {
         general: 'General',
         security: 'Security',
         users: 'Users',
+        affiliate: 'Affiliate',
         gateway: 'Gateway',
         email: 'Email',
         backup: 'Backup',
