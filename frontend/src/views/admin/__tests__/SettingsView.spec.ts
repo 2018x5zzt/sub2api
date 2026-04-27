@@ -16,7 +16,12 @@ const {
   showError,
   showSuccess,
   fetchPublicSettings,
-  fetchAdminSettings
+  fetchAdminSettings,
+  listAffiliateUsers,
+  lookupAffiliateUsers,
+  updateAffiliateUserSettings,
+  clearAffiliateUserSettings,
+  batchSetAffiliateRate
 } = vi.hoisted(() => ({
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
@@ -30,7 +35,12 @@ const {
   showError: vi.fn(),
   showSuccess: vi.fn(),
   fetchPublicSettings: vi.fn(),
-  fetchAdminSettings: vi.fn()
+  fetchAdminSettings: vi.fn(),
+  listAffiliateUsers: vi.fn(),
+  lookupAffiliateUsers: vi.fn(),
+  updateAffiliateUserSettings: vi.fn(),
+  clearAffiliateUserSettings: vi.fn(),
+  batchSetAffiliateRate: vi.fn()
 }))
 
 vi.mock('@/api', () => ({
@@ -50,6 +60,16 @@ vi.mock('@/api', () => ({
     subscriptionProducts: {
       listProducts
     }
+  }
+}))
+
+vi.mock('@/api/admin/affiliates', () => ({
+  affiliatesAPI: {
+    listUsers: listAffiliateUsers,
+    lookupUsers: lookupAffiliateUsers,
+    updateUserSettings: updateAffiliateUserSettings,
+    clearUserSettings: clearAffiliateUserSettings,
+    batchSetRate: batchSetAffiliateRate
   }
 }))
 
@@ -169,6 +189,11 @@ describe('admin SettingsView enterprise visible groups', () => {
     showSuccess.mockReset()
     fetchPublicSettings.mockReset()
     fetchAdminSettings.mockReset()
+    listAffiliateUsers.mockReset()
+    lookupAffiliateUsers.mockReset()
+    updateAffiliateUserSettings.mockReset()
+    clearAffiliateUserSettings.mockReset()
+    batchSetAffiliateRate.mockReset()
 
     getSettings.mockResolvedValue(createSystemSettings())
     updateSettings.mockImplementation(async (payload: any) => ({
@@ -242,6 +267,26 @@ describe('admin SettingsView enterprise visible groups', () => {
     ])
     fetchPublicSettings.mockResolvedValue(undefined)
     fetchAdminSettings.mockResolvedValue(undefined)
+    listAffiliateUsers.mockResolvedValue({
+      items: [
+        {
+          user_id: 7,
+          email: 'vip@example.com',
+          username: 'vip',
+          aff_code: 'VIP2026',
+          aff_code_custom: true,
+          aff_rebate_rate_percent: 30,
+          aff_count: 2
+        }
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20
+    })
+    lookupAffiliateUsers.mockResolvedValue([])
+    updateAffiliateUserSettings.mockResolvedValue({ user_id: 7 })
+    clearAffiliateUserSettings.mockResolvedValue({ user_id: 7 })
+    batchSetAffiliateRate.mockResolvedValue({ affected: 1 })
   })
 
   it('loads and saves normalized enterprise visible group rules', async () => {
@@ -351,5 +396,35 @@ describe('admin SettingsView enterprise visible groups', () => {
         default_subscription_products: [{ product_id: 101, validity_days: 30 }]
       })
     )
+  })
+
+  it('loads affiliate custom user settings when affiliate rebates are enabled', async () => {
+    const wrapper = mount(SettingsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true,
+          Select: true,
+          GroupBadge: true,
+          GroupOptionItem: true,
+          Toggle: true,
+          ImageUpload: true,
+          BackupSettings: true,
+          DataManagementSettings: true,
+          GroupSelector: true,
+          Teleport: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(listAffiliateUsers).toHaveBeenCalledWith({
+      page: 1,
+      page_size: 20,
+      search: ''
+    })
+    expect(wrapper.text()).toContain('VIP2026')
+    expect(wrapper.text()).toContain('vip@example.com')
   })
 })

@@ -4845,6 +4845,62 @@ export default {
         subscriptionProduct: '订阅产品',
         subscriptionValidityDays: '有效期（天）'
       },
+      affiliate: {
+        title: '邀请返利',
+        description: '用户分享邀请码建立邀请关系；被邀请用户充值后，邀请人获得返利额度。',
+        enabled: '启用邀请返利',
+        enabledHint: '关闭后用户入口隐藏，新充值不再产生返利；注册不需要邀请码，邀请码只用于绑定邀请关系。',
+        rebateRate: '全局返利比例',
+        rebateRateHint: '充值后返给邀请人的默认比例（0-100%，例如填写 10 表示返利 10%）。',
+        freezeHours: '返利冻结期（小时）',
+        freezeHoursDesc: '新产生的返利在冻结期内不可转入余额。0 = 不冻结。',
+        durationDays: '返利有效期（天）',
+        durationDaysDesc: '被邀请用户注册后多少天内的充值产生返利。0 = 永久有效。',
+        perInviteeCap: '单人返利上限',
+        perInviteeCapDesc: '每个被邀请用户最多产生的返利总额。0 = 无上限。',
+        loadFailed: '加载邀请返利配置失败',
+        customUsers: {
+          title: '专属用户配置',
+          description: '为指定用户设置专属邀请码或专属返利比例。',
+          addButton: '添加专属用户',
+          searchPlaceholder: '搜索邮箱或用户名',
+          batchButton: '批量设置比例（已选 {count}）',
+          empty: '暂无专属配置用户',
+          customBadge: '自定义',
+          useGlobal: '沿用全局',
+          resetMessage:
+            '确认将 {email} 的专属配置全部重置为默认？\n专属返利比例将清除，邀请码将重新生成为系统随机码。',
+          totalLabel: '共 {total} 条',
+          col: {
+            email: '邮箱',
+            username: '用户名',
+            code: '邀请码',
+            rate: '专属比例',
+            actions: '操作'
+          }
+        },
+        modal: {
+          addTitle: '添加专属用户',
+          editTitle: '编辑专属配置',
+          userLabel: '用户',
+          userPlaceholder: '搜索邮箱或用户名',
+          changeUser: '更换用户',
+          codeLabel: '专属邀请码（可选）',
+          codePlaceholder: '例如 VIP2026',
+          codeHint: '4-32 位，仅支持大写字母、数字、下划线、连字符；输入将自动转大写。',
+          rateLabel: '专属返利比例（可选）',
+          ratePlaceholder: '例如 30',
+          rateHint: '0-100%；编辑时留空可清除专属比例并沿用全局。',
+          errorBadRate: '请输入 0-100 之间的比例',
+          errorEmpty: '至少填写一项：专属邀请码或专属返利比例'
+        },
+        batchModal: {
+          title: '批量设置专属比例（已选 {count} 个用户）',
+          hint: '为所选用户统一设置专属返利比例。',
+          placeholder: '例如 30',
+          clearHint: '留空提交将清除所选用户的专属比例。'
+        }
+      },
       enterpriseVisibleGroups: {
         title: '企业可见号池',
         description: '配置每个企业在企业控制台里可以看到哪些启用中的分组。',

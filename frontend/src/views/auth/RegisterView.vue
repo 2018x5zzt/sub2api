@@ -687,26 +687,6 @@ async function handleRegister(): Promise<void> {
     }
   }
 
-  // Check invitation code validation status when the user explicitly supplied one.
-  if (formData.invitation_code.trim()) {
-    if (invitationValidating.value) {
-      errorMessage.value = t('auth.invitationCodeValidating')
-      return
-    }
-    if (invitationValidation.invalid) {
-      errorMessage.value = t('auth.invitationCodeInvalidCannotRegister')
-      return
-    }
-    if (!invitationValidation.valid) {
-      errorMessage.value = t('auth.invitationCodeValidating')
-      await validateInvitationCodeDebounced(formData.invitation_code.trim())
-      if (!invitationValidation.valid) {
-        errorMessage.value = t('auth.invitationCodeInvalidCannotRegister')
-        return
-      }
-    }
-  }
-
   isLoading.value = true
 
   try {

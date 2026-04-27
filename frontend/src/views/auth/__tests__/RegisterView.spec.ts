@@ -168,4 +168,41 @@ describe('RegisterView', () => {
     await inviteInput.setValue('FREECODE')
     expect((inviteInput.element as HTMLInputElement).value).toBe('FREECODE')
   })
+
+  it('does not treat an invalid invite code as a registration gate', async () => {
+    routeMock.query = {}
+    authApiMocks.validateInvitationCodeMock.mockResolvedValue({
+      valid: false,
+      error_code: 'INVITATION_CODE_NOT_FOUND'
+    })
+    registerMock.mockResolvedValue(undefined)
+
+    const wrapper = mount(RegisterView, {
+      global: {
+        stubs: {
+          AuthLayout: { template: '<div><slot /></div>' },
+          LinuxDoOAuthSection: { template: '<div />' },
+          TurnstileWidget: { template: '<div />' },
+          Icon: { template: '<span />' },
+          RouterLink: { template: '<a><slot /></a>' }
+        }
+      }
+    })
+
+    await flushPromises()
+
+    await wrapper.find('#email').setValue('user@example.com')
+    await wrapper.find('#password').setValue('secret123')
+    await wrapper.find('#invitation_code').setValue('BADCODE')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(registerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aff_code: 'BADCODE',
+        invitation_code: 'BADCODE'
+      })
+    )
+    expect(wrapper.text()).not.toContain('auth.invitationCodeInvalidCannotRegister')
+  })
 })
