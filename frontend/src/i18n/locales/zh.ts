@@ -856,7 +856,7 @@ export default {
       rangeAbove: '{count} 人以上'
     },
     concurrency: {
-      title: '普通邀请提升并发',
+      title: '并发不够？邀请来凑！',
       description: '只要对方完成注册就计入普通邀请，和返利资格分开计算。',
       defaultLabel: '默认',
       defaultValue: '默认 3 并发',

@@ -851,7 +851,7 @@ export default {
       rangeAbove: '{count}+ people'
     },
     concurrency: {
-      title: 'Registered Invites Unlock Concurrency',
+      title: 'Need more concurrency? Invite for it',
       description: 'Registration invites are counted separately from rebate eligibility.',
       defaultLabel: 'Default',
       defaultValue: 'Default 3 concurrency',

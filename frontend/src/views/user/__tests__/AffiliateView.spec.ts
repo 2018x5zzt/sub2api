@@ -96,7 +96,7 @@ describe('AffiliateView', () => {
     expect(text).toContain('60%')
     expect(text).toContain('月卡')
     expect(text).toContain('30%')
-    expect(text).toContain('普通邀请提升并发')
+    expect(text).toContain('并发不够？邀请来凑！')
     expect(text).toContain('默认 3')
     expect(text).toContain('邀请小号注册')
   })
