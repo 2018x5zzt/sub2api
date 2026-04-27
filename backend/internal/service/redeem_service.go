@@ -26,6 +26,11 @@ const (
 	redeemMaxErrorsPerHour  = 20
 	redeemRateLimitDuration = time.Hour
 	redeemLockDuration      = 10 * time.Second // 锁超时时间，防止死锁
+
+	affiliateRebateFactorBalance = 1.0
+	affiliateRebateFactorDaily   = 1.0
+	affiliateRebateFactorWeekly  = 0.6
+	affiliateRebateFactorMonthly = 0.3
 )
 
 // RedeemCache defines cache operations for redeem service
@@ -348,7 +353,7 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 			return nil, fmt.Errorf("update user balance: %w", err)
 		}
 		if s.affiliateService != nil && IsCommercialRechargeRedeem(redeemCode) {
-			if _, err := s.affiliateService.AccrueInviteRebate(txCtx, userID, redeemCode.Value); err != nil {
+			if _, err := s.affiliateService.AccrueInviteRebateWithFactor(txCtx, userID, redeemCode.Value, affiliateRebateFactorBalance); err != nil {
 				return nil, fmt.Errorf("apply affiliate rebate: %w", err)
 			}
 		}
@@ -388,8 +393,14 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 			}
 		}
 		if s.affiliateService != nil && IsCommercialRechargeRedeem(redeemCode) {
-			if _, err := s.affiliateService.AccrueInviteRebate(txCtx, userID, redeemCode.Value); err != nil {
-				return nil, fmt.Errorf("apply affiliate rebate: %w", err)
+			baseQuota, skuFactor, ok, err := s.subscriptionAffiliateRebateTerms(txCtx, redeemCode, validityDays)
+			if err != nil {
+				return nil, fmt.Errorf("resolve subscription affiliate rebate terms: %w", err)
+			}
+			if ok {
+				if _, err := s.affiliateService.AccrueInviteRebateWithFactor(txCtx, userID, baseQuota, skuFactor); err != nil {
+					return nil, fmt.Errorf("apply affiliate rebate: %w", err)
+				}
 			}
 		}
 
@@ -412,6 +423,54 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	}
 
 	return redeemCode, nil
+}
+
+func (s *RedeemService) subscriptionAffiliateRebateTerms(ctx context.Context, code *RedeemCode, validityDays int) (float64, float64, bool, error) {
+	if s == nil || code == nil || s.entClient == nil {
+		return 0, 0, false, nil
+	}
+	client := productAdminClientFromContext(ctx, s.entClient)
+	if code.ProductID != nil {
+		product, err := client.SubscriptionProduct.Get(ctx, *code.ProductID)
+		if err != nil {
+			return 0, 0, false, err
+		}
+		baseQuota, skuFactor, ok := resolveSubscriptionAffiliateRebateTerms(validityDays, product.DailyLimitUsd, product.WeeklyLimitUsd, product.MonthlyLimitUsd)
+		return baseQuota, skuFactor, ok, nil
+	}
+	if code.GroupID != nil {
+		group, err := client.Group.Get(ctx, *code.GroupID)
+		if err != nil {
+			return 0, 0, false, err
+		}
+		baseQuota, skuFactor, ok := resolveSubscriptionAffiliateRebateTerms(validityDays, float64PtrValue(group.DailyLimitUsd), float64PtrValue(group.WeeklyLimitUsd), float64PtrValue(group.MonthlyLimitUsd))
+		return baseQuota, skuFactor, ok, nil
+	}
+	return 0, 0, false, nil
+}
+
+func resolveSubscriptionAffiliateRebateTerms(validityDays int, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD float64) (float64, float64, bool) {
+	switch {
+	case validityDays >= 28 && monthlyLimitUSD > 0:
+		return monthlyLimitUSD, affiliateRebateFactorMonthly, true
+	case validityDays >= 7 && weeklyLimitUSD > 0:
+		return weeklyLimitUSD, affiliateRebateFactorWeekly, true
+	case dailyLimitUSD > 0:
+		return dailyLimitUSD, affiliateRebateFactorDaily, true
+	case monthlyLimitUSD > 0:
+		return monthlyLimitUSD, affiliateRebateFactorMonthly, true
+	case weeklyLimitUSD > 0:
+		return weeklyLimitUSD, affiliateRebateFactorWeekly, true
+	default:
+		return 0, 0, false
+	}
+}
+
+func float64PtrValue(v *float64) float64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }
 
 // invalidateRedeemCaches 失效兑换相关的缓存

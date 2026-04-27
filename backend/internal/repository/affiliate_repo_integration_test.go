@@ -74,6 +74,46 @@ VALUES ($1, $2, 'affiliate_compat_test')`, u.ID, "oldAlias")
 	require.Equal(t, u.ID, got.UserID)
 }
 
+func TestAffiliateRepository_BindInviterAppliesRegistrationConcurrencyFloor(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(ctx, tx)
+	client := tx.Client()
+
+	repo := NewAffiliateRepository(client, integrationDB)
+
+	inviter := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("affiliate-concurrency-inviter-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		Concurrency:  3,
+	})
+	_, err := repo.EnsureUserAffiliate(txCtx, inviter.ID)
+	require.NoError(t, err)
+
+	for i := 1; i <= 5; i++ {
+		invitee := mustCreateUser(t, client, &service.User{
+			Email:        fmt.Sprintf("affiliate-concurrency-invitee-%d-%d@example.com", i, time.Now().UnixNano()),
+			PasswordHash: "hash",
+			Role:         service.RoleUser,
+			Status:       service.StatusActive,
+			Concurrency:  3,
+		})
+
+		bound, err := repo.BindInviter(txCtx, invitee.ID, inviter.ID)
+		require.NoError(t, err)
+		require.True(t, bound)
+
+		wantConcurrency := 5
+		if i >= 5 {
+			wantConcurrency = 10
+		}
+		require.Equal(t, wantConcurrency, queryAffiliateInt(t, txCtx, client,
+			"SELECT concurrency FROM users WHERE id = $1", inviter.ID))
+	}
+}
+
 func queryAffiliateFloat(t *testing.T, ctx context.Context, client *dbent.Client, query string, args ...any) float64 {
 	t.Helper()
 	rows, err := client.QueryContext(ctx, query, args...)

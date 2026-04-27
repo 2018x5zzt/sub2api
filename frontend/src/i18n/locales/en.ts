@@ -817,10 +817,49 @@ export default {
     stats: {
       rebateRate: 'My Rebate Rate',
       rebateRateHint: 'What you earn each time an invitee recharges',
-      invitedUsers: 'Invited Users',
+      effectiveInvitees: 'Invitees With Recharge Records',
+      effectiveInviteesHint: 'Counts invitees who redeemed commercial recharge or subscription codes',
+      invitedUsers: 'Registered Invites',
       availableQuota: 'Available Quota',
       totalQuota: 'Total Earned',
       frozenQuota: 'Frozen'
+    },
+    ladder: {
+      slogan: 'Lead the crew, keep tokens flowing',
+      description: 'Invite users who recharge to earn rebates up to 20%. Rebates arrive as balance and can be used directly for API spend.',
+      maxRate: 'Up to 20%',
+      balancePayout: 'Paid as balance',
+      currentTier: 'Current tier: {tier}',
+      nextTier: 'Next tier at {count} invitees',
+      topTier: 'Top tier reached',
+      tierTitle: 'Rebate Ladder',
+      effectiveInviteeLabel: 'Based on invitees with recharge records',
+      factorTitle: 'Product Factors',
+      balanceDaily: 'Balance / Daily card',
+      weekly: 'Weekly card',
+      monthly: 'Monthly card',
+      factorHint: 'Balance and daily cards use a 100% factor; weekly cards use 60%; monthly cards use 30%. Subscription rebates are based on total card quota.'
+    },
+    tiers: {
+      base: 'Base',
+      bronze: 'Bronze',
+      silver: 'Silver',
+      gold: 'Gold',
+      platinum: 'Platinum',
+      diamond: 'Diamond',
+      range: '{range} people',
+      rangeAbove: '{count}+ people'
+    },
+    concurrency: {
+      title: 'Registered Invites Unlock Concurrency',
+      description: 'Registration invites are counted separately from rebate eligibility.',
+      defaultLabel: 'Default',
+      defaultValue: 'Default 3 concurrency',
+      oneInviteLabel: 'Invite 1 signup',
+      oneInviteValue: 'Unlock 5 concurrency',
+      fiveInvitesLabel: 'Invite 5 signups',
+      fiveInvitesValue: 'Unlock 10 concurrency',
+      smallAccountHint: 'If you do not have API-using friends, you can invite a small account to register first and unlock higher concurrency.'
     },
     transfer: {
       title: 'Transfer to Balance',

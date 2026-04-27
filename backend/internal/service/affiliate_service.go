@@ -23,6 +23,11 @@ const (
 	affiliateInviteesLimit = 100
 	AffiliateCodeMinLength = 4
 	AffiliateCodeMaxLength = 32
+
+	registrationInviteConcurrencyBronzeMin  = 1
+	registrationInviteConcurrencyBronze     = 5
+	registrationInviteConcurrencyDiamondMin = 5
+	registrationInviteConcurrencyDiamond    = 10
 )
 
 var affiliateCodeValidChar = func() [256]bool {
@@ -48,6 +53,17 @@ func isValidAffiliateCodeFormat(code string) bool {
 		}
 	}
 	return true
+}
+
+func RegistrationInviteConcurrencyFloor(inviteCount int) int {
+	switch {
+	case inviteCount >= registrationInviteConcurrencyDiamondMin:
+		return registrationInviteConcurrencyDiamond
+	case inviteCount >= registrationInviteConcurrencyBronzeMin:
+		return registrationInviteConcurrencyBronze
+	default:
+		return 0
+	}
 }
 
 type AffiliateSummary struct {
@@ -77,6 +93,7 @@ type AffiliateDetail struct {
 	AffCode                    string             `json:"aff_code"`
 	InviterID                  *int64             `json:"inviter_id,omitempty"`
 	AffCount                   int                `json:"aff_count"`
+	EffectiveInviteeCount      int                `json:"effective_invitee_count"`
 	AffQuota                   float64            `json:"aff_quota"`
 	AffFrozenQuota             float64            `json:"aff_frozen_quota"`
 	AffHistoryQuota            float64            `json:"aff_history_quota"`
@@ -164,15 +181,20 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 	if err != nil {
 		return nil, err
 	}
+	effectiveInvitees, err := s.repo.CountEffectiveInvitees(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 	return &AffiliateDetail{
 		UserID:                     summary.UserID,
 		AffCode:                    summary.AffCode,
 		InviterID:                  summary.InviterID,
 		AffCount:                   summary.AffCount,
+		EffectiveInviteeCount:      int(effectiveInvitees),
 		AffQuota:                   summary.AffQuota,
 		AffFrozenQuota:             summary.AffFrozenQuota,
 		AffHistoryQuota:            summary.AffHistoryQuota,
-		EffectiveRebateRatePercent: s.resolveRebateRatePercent(ctx, summary),
+		EffectiveRebateRatePercent: s.resolveDetailRebateRatePercent(ctx, summary, effectiveInvitees),
 		Invitees:                   invitees,
 	}, nil
 }
@@ -218,14 +240,21 @@ func (s *AffiliateService) BindInviterByCode(ctx context.Context, userID int64, 
 	if !bound {
 		return ErrAffiliateAlreadyBound
 	}
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, inviterSummary.UserID)
+	}
 	return nil
 }
 
 func (s *AffiliateService) AccrueInviteRebate(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64) (float64, error) {
+	return s.AccrueInviteRebateWithFactor(ctx, inviteeUserID, baseRechargeAmount, 1)
+}
+
+func (s *AffiliateService) AccrueInviteRebateWithFactor(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64, skuFactor float64) (float64, error) {
 	if s == nil || s.repo == nil {
 		return 0, nil
 	}
-	if inviteeUserID <= 0 || baseRechargeAmount <= 0 || math.IsNaN(baseRechargeAmount) || math.IsInf(baseRechargeAmount, 0) {
+	if inviteeUserID <= 0 || baseRechargeAmount <= 0 || skuFactor <= 0 || math.IsNaN(baseRechargeAmount) || math.IsInf(baseRechargeAmount, 0) || math.IsNaN(skuFactor) || math.IsInf(skuFactor, 0) {
 		return 0, nil
 	}
 	if !s.IsEnabled(ctx) {
@@ -256,7 +285,7 @@ func (s *AffiliateService) AccrueInviteRebate(ctx context.Context, inviteeUserID
 	if err != nil {
 		return 0, err
 	}
-	rebate := roundTo(baseRechargeAmount*(rebateRatePercent/100), 8)
+	rebate := roundTo(baseRechargeAmount*(rebateRatePercent/100)*skuFactor, 8)
 	if rebate <= 0 {
 		return 0, nil
 	}
@@ -315,17 +344,35 @@ func (s *AffiliateService) resolveAccrualRebateRatePercent(ctx context.Context, 
 	return s.globalRebateRatePercent(ctx), nil
 }
 
+func (s *AffiliateService) resolveDetailRebateRatePercent(ctx context.Context, inviter *AffiliateSummary, effectiveInvitees int64) float64 {
+	if inviter != nil && inviter.AffRebateRatePercent != nil {
+		return s.resolveRebateRatePercent(ctx, inviter)
+	}
+	if rate, matched := s.resolveTierRebateRatePercentForCount(ctx, effectiveInvitees); matched {
+		return rate
+	}
+	return s.globalRebateRatePercent(ctx)
+}
+
 func (s *AffiliateService) resolveTierRebateRatePercent(ctx context.Context, inviter *AffiliateSummary) (float64, bool, error) {
 	if s == nil || s.settingService == nil || s.repo == nil || inviter == nil || inviter.UserID <= 0 {
-		return 0, false, nil
-	}
-	tiers := s.settingService.GetAffiliateRebateTiers(ctx)
-	if len(tiers) == 0 {
 		return 0, false, nil
 	}
 	effectiveInvitees, err := s.repo.CountEffectiveInvitees(ctx, inviter.UserID)
 	if err != nil {
 		return 0, false, err
+	}
+	rate, matched := s.resolveTierRebateRatePercentForCount(ctx, effectiveInvitees)
+	return rate, matched, nil
+}
+
+func (s *AffiliateService) resolveTierRebateRatePercentForCount(ctx context.Context, effectiveInvitees int64) (float64, bool) {
+	if s == nil || s.settingService == nil {
+		return 0, false
+	}
+	tiers := s.settingService.GetAffiliateRebateTiers(ctx)
+	if len(tiers) == 0 {
+		return 0, false
 	}
 	var (
 		matched bool
@@ -337,7 +384,7 @@ func (s *AffiliateService) resolveTierRebateRatePercent(ctx context.Context, inv
 			rate = tier.RebateRate
 		}
 	}
-	return clampAffiliateRebateRate(rate), matched, nil
+	return clampAffiliateRebateRate(rate), matched
 }
 
 func (s *AffiliateService) globalRebateRatePercent(ctx context.Context) float64 {

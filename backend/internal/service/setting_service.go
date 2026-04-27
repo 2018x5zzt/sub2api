@@ -131,13 +131,17 @@ func (s *SettingService) GetAffiliateRebatePerInviteeCap(ctx context.Context) fl
 // GetAffiliateRebateTiers returns normalized effective-invitee rebate tiers.
 func (s *SettingService) GetAffiliateRebateTiers(ctx context.Context) []AffiliateRebateTier {
 	if s == nil || s.settingRepo == nil {
-		return nil
+		return ParseAffiliateRebateTiers(AffiliateRebateTiersDefault)
 	}
 	raw, err := s.settingRepo.GetValue(ctx, SettingKeyAffiliateRebateTiers)
-	if err != nil {
-		return nil
+	if err != nil || strings.TrimSpace(raw) == "" {
+		return ParseAffiliateRebateTiers(AffiliateRebateTiersDefault)
 	}
-	return ParseAffiliateRebateTiers(raw)
+	tiers := ParseAffiliateRebateTiers(raw)
+	if len(tiers) == 0 {
+		return ParseAffiliateRebateTiers(AffiliateRebateTiersDefault)
+	}
+	return tiers
 }
 
 type AvailableChannelsRuntime struct {
@@ -1157,6 +1161,9 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.AffiliateRebatePerInviteeCap = perInviteeCap
 	}
 	result.AffiliateRebateTiers = ParseAffiliateRebateTiers(settings[SettingKeyAffiliateRebateTiers])
+	if len(result.AffiliateRebateTiers) == 0 {
+		result.AffiliateRebateTiers = ParseAffiliateRebateTiers(AffiliateRebateTiersDefault)
+	}
 	result.DefaultSubscriptions = parseDefaultSubscriptions(settings[SettingKeyDefaultSubscriptions])
 	result.DefaultSubscriptionProducts = parseDefaultSubscriptionProducts(settings[SettingKeyDefaultSubscriptionProducts])
 	if enterpriseVisibleGroups, err := ParseEnterpriseVisibleGroupIDsByEnterprise(settings[SettingKeyEnterpriseVisibleGroupIDsByEnterprise]); err == nil {

@@ -26,7 +26,7 @@ import (
 const (
 	ConfigFileName             = "config.yaml"
 	InstallLockFile            = ".installed"
-	defaultUserConcurrency     = 5
+	defaultUserConcurrency     = 3
 	simpleModeAdminConcurrency = 30
 )
 

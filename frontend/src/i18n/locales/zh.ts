@@ -822,10 +822,49 @@ export default {
     stats: {
       rebateRate: '我的返利比例',
       rebateRateHint: '被邀请用户充值后给你的返利比例',
-      invitedUsers: '已邀请用户',
+      effectiveInvitees: '有充值记录的邀请人数',
+      effectiveInviteesHint: '按已兑换商业充值/订阅的被邀请人计算',
+      invitedUsers: '普通邀请人数',
       availableQuota: '可转额度',
       totalQuota: '累计返利',
       frozenQuota: '冻结'
+    },
+    ladder: {
+      slogan: '当上包工头，Token 不用愁',
+      description: '邀请好友充值即可获得返利，最高 20%，返利以余额形式到账，可直接用于 API 消费。',
+      maxRate: '最高 20%',
+      balancePayout: '以余额形式到账',
+      currentTier: '当前等级：{tier}',
+      nextTier: '距离下一等级：{count} 人',
+      topTier: '已达到最高等级',
+      tierTitle: '返利阶梯',
+      effectiveInviteeLabel: '按有充值记录的邀请人数计算',
+      factorTitle: '商品返利系数',
+      balanceDaily: '余额 / 日卡',
+      weekly: '周卡',
+      monthly: '月卡',
+      factorHint: '余额和日卡按 100% 系数计算；周卡按 60%；月卡按 30%。订阅卡按卡内总额度计算返利。'
+    },
+    tiers: {
+      base: '基础',
+      bronze: '青铜',
+      silver: '白银',
+      gold: '黄金',
+      platinum: '铂金',
+      diamond: '钻石',
+      range: '{range} 人',
+      rangeAbove: '{count} 人以上'
+    },
+    concurrency: {
+      title: '普通邀请提升并发',
+      description: '只要对方完成注册就计入普通邀请，和返利资格分开计算。',
+      defaultLabel: '默认',
+      defaultValue: '默认 3 并发',
+      oneInviteLabel: '邀请 1 人注册',
+      oneInviteValue: '提升到 5 并发',
+      fiveInvitesLabel: '邀请 5 人注册',
+      fiveInvitesValue: '提升到 10 并发',
+      smallAccountHint: '如果你没有用 API 的朋友，也可以邀请小号注册，先解锁更高并发。'
     },
     transfer: {
       title: '转入余额',

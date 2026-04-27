@@ -70,11 +70,39 @@ func (r *affiliateRepository) BindInviter(ctx context.Context, userID, inviterID
 			return nil
 		}
 
-		if _, err = txClient.ExecContext(txCtx,
-			"UPDATE user_affiliates SET aff_count = aff_count + 1, updated_at = NOW() WHERE user_id = $1",
+		rows, err := txClient.QueryContext(txCtx,
+			"UPDATE user_affiliates SET aff_count = aff_count + 1, updated_at = NOW() WHERE user_id = $1 RETURNING aff_count",
 			inviterID,
-		); err != nil {
+		)
+		if err != nil {
 			return fmt.Errorf("increment inviter aff_count: %w", err)
+		}
+
+		var inviteCount int
+		if rows.Next() {
+			if err := rows.Scan(&inviteCount); err != nil {
+				_ = rows.Close()
+				return fmt.Errorf("scan inviter aff_count: %w", err)
+			}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("read inviter aff_count: %w", err)
+		}
+		if err := rows.Close(); err != nil {
+			return fmt.Errorf("close inviter aff_count rows: %w", err)
+		}
+		if inviteCount <= 0 {
+			return fmt.Errorf("increment inviter aff_count: no row returned")
+		}
+
+		if concurrencyFloor := service.RegistrationInviteConcurrencyFloor(inviteCount); concurrencyFloor > 0 {
+			if _, err = txClient.ExecContext(txCtx,
+				"UPDATE users SET concurrency = GREATEST(concurrency, $2), updated_at = NOW() WHERE id = $1 AND concurrency < $2",
+				inviterID, concurrencyFloor,
+			); err != nil {
+				return fmt.Errorf("apply inviter concurrency reward: %w", err)
+			}
 		}
 		bound = true
 		return nil

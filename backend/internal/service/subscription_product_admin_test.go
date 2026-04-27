@@ -105,7 +105,7 @@ func TestRedeemService_Redeem_ProductSubscriptionCodeCreatesUserProductSubscript
 func TestRedeemService_Redeem_CommercialProductSubscriptionAccruesAffiliateRebate(t *testing.T) {
 	client := newSubscriptionProductAdminTestClient(t)
 	ctx := context.Background()
-	product := mustCreateSubscriptionProductAdminTestProduct(t, ctx, client, 30)
+	product := mustCreateSubscriptionProductAdminTestProductWithLimits(t, ctx, client, 30, 225, 1575, 6750)
 	productID := product.ID
 	inviterID := int64(7)
 
@@ -114,7 +114,7 @@ func TestRedeemService_Redeem_CommercialProductSubscriptionAccruesAffiliateRebat
 			ID:           1,
 			Code:         "PRODUCT-COMMERCIAL-30",
 			Type:         RedeemTypeSubscription,
-			Value:        200,
+			Value:        225,
 			Status:       StatusUnused,
 			SourceType:   RedeemSourceCommercial,
 			ProductID:    &productID,
@@ -126,10 +126,11 @@ func TestRedeemService_Redeem_CommercialProductSubscriptionAccruesAffiliateRebat
 			7:  {UserID: 7, AffCode: "INVITER", CreatedAt: time.Now().Add(-24 * time.Hour)},
 			42: {UserID: 42, AffCode: "INVITEE", InviterID: &inviterID, CreatedAt: time.Now().Add(-24 * time.Hour)},
 		},
+		effectiveInvitees: map[int64]int64{7: 3},
 	}
 	affiliateSettings := NewSettingService(&affiliateTierSettingRepoStub{values: map[string]string{
 		SettingKeyAffiliateEnabled:             "true",
-		SettingKeyAffiliateRebateRate:          "10",
+		SettingKeyAffiliateRebateRate:          "3",
 		SettingKeyAffiliateRebateFreezeHours:   "0",
 		SettingKeyAffiliateRebateDurationDays:  "0",
 		SettingKeyAffiliateRebatePerInviteeCap: "0",
@@ -154,7 +155,43 @@ func TestRedeemService_Redeem_CommercialProductSubscriptionAccruesAffiliateRebat
 	require.Len(t, affiliateRepo.accrued, 1)
 	require.Equal(t, inviterID, affiliateRepo.accrued[0].inviterID)
 	require.Equal(t, int64(42), affiliateRepo.accrued[0].inviteeID)
-	require.InDelta(t, 20.0, affiliateRepo.accrued[0].amount, 1e-9)
+	require.InDelta(t, 162.0, affiliateRepo.accrued[0].amount, 1e-9)
+}
+
+func TestResolveSubscriptionAffiliateRebateTerms_UsesTotalQuotaAndSkuFactor(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name         string
+		validityDays int
+		daily        float64
+		weekly       float64
+		monthly      float64
+		wantBase     float64
+		wantFactor   float64
+		wantOK       bool
+	}{
+		{name: "daily card uses daily total quota and full factor", validityDays: 1, daily: 225, weekly: 1575, monthly: 6750, wantBase: 225, wantFactor: 1, wantOK: true},
+		{name: "weekly card uses weekly total quota and 60 percent factor", validityDays: 7, daily: 225, weekly: 1575, monthly: 6750, wantBase: 1575, wantFactor: 0.6, wantOK: true},
+		{name: "monthly card uses monthly total quota and 30 percent factor", validityDays: 30, daily: 225, weekly: 1575, monthly: 6750, wantBase: 6750, wantFactor: 0.3, wantOK: true},
+		{name: "unknown subscription shape is not rebated", validityDays: 3, daily: 0, weekly: 0, monthly: 0, wantOK: false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			base, factor, ok := resolveSubscriptionAffiliateRebateTerms(tc.validityDays, tc.daily, tc.weekly, tc.monthly)
+
+			require.Equal(t, tc.wantOK, ok)
+			if !tc.wantOK {
+				return
+			}
+			require.InDelta(t, tc.wantBase, base, 1e-9)
+			require.InDelta(t, tc.wantFactor, factor, 1e-9)
+		})
+	}
 }
 
 func TestRedeemService_Redeem_SystemGrantProductSubscriptionSkipsAffiliateRebate(t *testing.T) {
@@ -228,11 +265,20 @@ func newSubscriptionProductAdminTestClient(t *testing.T) *dbent.Client {
 func mustCreateSubscriptionProductAdminTestProduct(t *testing.T, ctx context.Context, client *dbent.Client, defaultValidityDays int) *dbent.SubscriptionProduct {
 	t.Helper()
 
+	return mustCreateSubscriptionProductAdminTestProductWithLimits(t, ctx, client, defaultValidityDays, 0, 0, 0)
+}
+
+func mustCreateSubscriptionProductAdminTestProductWithLimits(t *testing.T, ctx context.Context, client *dbent.Client, defaultValidityDays int, dailyLimit, weeklyLimit, monthlyLimit float64) *dbent.SubscriptionProduct {
+	t.Helper()
+
 	product, err := client.SubscriptionProduct.Create().
 		SetCode("product-admin-test").
 		SetName("Product Admin Test").
 		SetStatus(SubscriptionProductStatusActive).
 		SetDefaultValidityDays(defaultValidityDays).
+		SetDailyLimitUsd(dailyLimit).
+		SetWeeklyLimitUsd(weeklyLimit).
+		SetMonthlyLimitUsd(monthlyLimit).
 		Save(ctx)
 	require.NoError(t, err)
 	return product

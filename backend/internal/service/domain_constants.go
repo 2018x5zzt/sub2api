@@ -29,7 +29,7 @@ const (
 	AffiliateRebateDurationDaysDefault  = 0
 	AffiliateRebateDurationDaysMax      = 3650
 	AffiliateRebatePerInviteeCapDefault = 0.0
-	AffiliateRebateTiersDefault         = "[]"
+	AffiliateRebateTiersDefault         = `[{"min_effective_invitees":1,"rebate_rate":5},{"min_effective_invitees":3,"rebate_rate":8},{"min_effective_invitees":10,"rebate_rate":12},{"min_effective_invitees":30,"rebate_rate":15},{"min_effective_invitees":50,"rebate_rate":20}]`
 )
 
 // Platform constants

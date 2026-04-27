@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -147,6 +148,104 @@ func TestAffiliateService_AccrueInviteRebate_PerUserRateOverridesTierRate(t *tes
 	require.InDelta(t, 12.0, rebate, 1e-9)
 	require.Len(t, repo.accrued, 1)
 	require.InDelta(t, 12.0, repo.accrued[0].amount, 1e-9)
+}
+
+func TestAffiliateService_AccrueInviteRebate_UsesFinalDefaultTierThresholds(t *testing.T) {
+	ctx := context.Background()
+	inviterID := int64(7)
+
+	cases := []struct {
+		name              string
+		effectiveInvitees int64
+		wantRebate        float64
+	}{
+		{name: "zero effective invitees falls back to global rate", effectiveInvitees: 0, wantRebate: 3},
+		{name: "first effective invitee uses bronze", effectiveInvitees: 1, wantRebate: 5},
+		{name: "second effective invitee still uses bronze", effectiveInvitees: 2, wantRebate: 5},
+		{name: "third effective invitee uses silver", effectiveInvitees: 3, wantRebate: 8},
+		{name: "ninth effective invitee still uses silver", effectiveInvitees: 9, wantRebate: 8},
+		{name: "tenth effective invitee uses gold", effectiveInvitees: 10, wantRebate: 12},
+		{name: "twenty ninth effective invitee still uses gold", effectiveInvitees: 29, wantRebate: 12},
+		{name: "thirtieth effective invitee uses platinum", effectiveInvitees: 30, wantRebate: 15},
+		{name: "forty ninth effective invitee still uses platinum", effectiveInvitees: 49, wantRebate: 15},
+		{name: "fiftieth effective invitee uses diamond", effectiveInvitees: 50, wantRebate: 20},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			repo := &affiliateTierRepoStub{
+				summaries: map[int64]*AffiliateSummary{
+					7: {UserID: 7, AffCode: "INVITER", CreatedAt: time.Now().Add(-24 * time.Hour)},
+					8: {UserID: 8, AffCode: "INVITEE", InviterID: &inviterID, CreatedAt: time.Now().Add(-24 * time.Hour)},
+				},
+				effectiveInvitees: map[int64]int64{7: tc.effectiveInvitees},
+			}
+			settings := NewSettingService(&affiliateTierSettingRepoStub{values: map[string]string{
+				SettingKeyAffiliateEnabled:             "true",
+				SettingKeyAffiliateRebateRate:          "3",
+				SettingKeyAffiliateRebateFreezeHours:   "0",
+				SettingKeyAffiliateRebateDurationDays:  "0",
+				SettingKeyAffiliateRebatePerInviteeCap: "0",
+				SettingKeyAffiliateRebateTiers:         "[]",
+			}}, nil)
+			svc := NewAffiliateService(repo, settings, nil, nil)
+
+			rebate, err := svc.AccrueInviteRebate(ctx, 8, 100)
+
+			require.NoError(t, err)
+			require.InDelta(t, tc.wantRebate, rebate, 1e-9)
+			require.Len(t, repo.accrued, 1)
+			require.InDelta(t, tc.wantRebate, repo.accrued[0].amount, 1e-9)
+		})
+	}
+}
+
+func TestAffiliateService_GetAffiliateDetail_ReturnsEffectiveInviteeTier(t *testing.T) {
+	ctx := context.Background()
+	repo := &affiliateTierRepoStub{
+		summaries: map[int64]*AffiliateSummary{
+			7: {UserID: 7, AffCode: "INVITER", AffCount: 12, CreatedAt: time.Now().Add(-24 * time.Hour)},
+		},
+		effectiveInvitees: map[int64]int64{7: 10},
+	}
+	settings := NewSettingService(&affiliateTierSettingRepoStub{values: map[string]string{
+		SettingKeyAffiliateEnabled:             "true",
+		SettingKeyAffiliateRebateRate:          "3",
+		SettingKeyAffiliateRebateFreezeHours:   "0",
+		SettingKeyAffiliateRebateDurationDays:  "0",
+		SettingKeyAffiliateRebatePerInviteeCap: "0",
+	}}, nil)
+	svc := NewAffiliateService(repo, settings, nil, nil)
+
+	detail, err := svc.GetAffiliateDetail(ctx, 7)
+
+	require.NoError(t, err)
+	require.Equal(t, 10, detail.EffectiveInviteeCount)
+	require.InDelta(t, 12.0, detail.EffectiveRebateRatePercent, 1e-9)
+}
+
+func TestRegistrationInviteConcurrencyFloor(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		inviteCount int
+		want        int
+	}{
+		{inviteCount: 0, want: 0},
+		{inviteCount: 1, want: 5},
+		{inviteCount: 4, want: 5},
+		{inviteCount: 5, want: 10},
+		{inviteCount: 10, want: 10},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(fmt.Sprintf("%d_invites", tc.inviteCount), func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tc.want, RegistrationInviteConcurrencyFloor(tc.inviteCount))
+		})
+	}
 }
 
 type affiliateTierRepoStub struct {
