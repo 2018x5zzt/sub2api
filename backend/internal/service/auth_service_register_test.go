@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -161,13 +162,6 @@ func newAuthService(repo *userRepoStub, settings map[string]string, emailCache E
 		emailService = NewEmailService(&settingRepoStub{values: settings}, emailCache)
 	}
 
-	inviteService := NewInviteService(repo, &inviteRewardRepoStub{
-		totalBase: 0,
-	})
-	inviteService.codeGenerator = func() (string, error) {
-		return "DEFAULT01", nil
-	}
-
 	return NewAuthService(
 		nil, // entClient
 		repo,
@@ -180,7 +174,7 @@ func newAuthService(repo *userRepoStub, settings map[string]string, emailCache E
 		nil,
 		nil, // promoService
 		nil, // defaultSubAssigner
-		inviteService,
+		nil, // affiliateService
 	)
 }
 
@@ -232,7 +226,106 @@ func (s *inviteAuthUserRepoStub) CountInviteesByInviter(_ context.Context, _ int
 	return 0, nil
 }
 
-func newAuthServiceWithInvite(repo *inviteAuthUserRepoStub, inviteSvc *InviteService, settings map[string]string, emailCache EmailCache) *AuthService {
+type authAffiliateRepoStub struct {
+	summariesByUserID map[int64]*AffiliateSummary
+	summariesByCode   map[string]*AffiliateSummary
+	nextCode          string
+}
+
+func newAuthAffiliateRepoStub(nextCode string, summaries ...*AffiliateSummary) *authAffiliateRepoStub {
+	repo := &authAffiliateRepoStub{
+		summariesByUserID: map[int64]*AffiliateSummary{},
+		summariesByCode:   map[string]*AffiliateSummary{},
+		nextCode:          nextCode,
+	}
+	for _, summary := range summaries {
+		cp := *summary
+		repo.summariesByUserID[cp.UserID] = &cp
+		if cp.AffCode != "" {
+			repo.summariesByCode[strings.ToUpper(cp.AffCode)] = &cp
+		}
+	}
+	return repo
+}
+
+func (s *authAffiliateRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
+	if summary, ok := s.summariesByUserID[userID]; ok {
+		return summary, nil
+	}
+	code := s.nextCode
+	if code == "" {
+		code = "DEFAULTAFF01"
+	}
+	summary := &AffiliateSummary{UserID: userID, AffCode: code}
+	s.summariesByUserID[userID] = summary
+	s.summariesByCode[strings.ToUpper(code)] = summary
+	return summary, nil
+}
+
+func (s *authAffiliateRepoStub) GetAffiliateByCode(_ context.Context, code string) (*AffiliateSummary, error) {
+	summary, ok := s.summariesByCode[strings.ToUpper(strings.TrimSpace(code))]
+	if !ok {
+		return nil, ErrAffiliateProfileNotFound
+	}
+	return summary, nil
+}
+
+func (s *authAffiliateRepoStub) BindInviter(_ context.Context, userID, inviterID int64) (bool, error) {
+	self, ok := s.summariesByUserID[userID]
+	if !ok {
+		return false, ErrAffiliateProfileNotFound
+	}
+	if self.InviterID != nil {
+		return false, nil
+	}
+	self.InviterID = &inviterID
+	if inviter, ok := s.summariesByUserID[inviterID]; ok {
+		inviter.AffCount++
+	}
+	return true, nil
+}
+
+func (s *authAffiliateRepoStub) AccrueQuota(context.Context, int64, int64, float64, int) (bool, error) {
+	panic("unexpected AccrueQuota call")
+}
+
+func (s *authAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
+	panic("unexpected GetAccruedRebateFromInvitee call")
+}
+
+func (s *authAffiliateRepoStub) ThawFrozenQuota(context.Context, int64) (float64, error) {
+	panic("unexpected ThawFrozenQuota call")
+}
+
+func (s *authAffiliateRepoStub) TransferQuotaToBalance(context.Context, int64) (float64, float64, error) {
+	panic("unexpected TransferQuotaToBalance call")
+}
+
+func (s *authAffiliateRepoStub) ListInvitees(context.Context, int64, int) ([]AffiliateInvitee, error) {
+	panic("unexpected ListInvitees call")
+}
+
+func (s *authAffiliateRepoStub) UpdateUserAffCode(context.Context, int64, string) error {
+	panic("unexpected UpdateUserAffCode call")
+}
+
+func (s *authAffiliateRepoStub) ResetUserAffCode(context.Context, int64) (string, error) {
+	panic("unexpected ResetUserAffCode call")
+}
+
+func (s *authAffiliateRepoStub) SetUserRebateRate(context.Context, int64, *float64) error {
+	panic("unexpected SetUserRebateRate call")
+}
+
+func (s *authAffiliateRepoStub) BatchSetUserRebateRate(context.Context, []int64, *float64) error {
+	panic("unexpected BatchSetUserRebateRate call")
+}
+
+func (s *authAffiliateRepoStub) ListUsersWithCustomSettings(context.Context, AffiliateAdminFilter) ([]AffiliateAdminEntry, int64, error) {
+	panic("unexpected ListUsersWithCustomSettings call")
+}
+
+func newAuthServiceWithAffiliate(repo *inviteAuthUserRepoStub, affiliateRepo *authAffiliateRepoStub, settings map[string]string, emailCache EmailCache) *AuthService {
 	cfg := &config.Config{
 		JWT: config.JWTConfig{
 			Secret:     "test-secret",
@@ -254,6 +347,11 @@ func newAuthServiceWithInvite(repo *inviteAuthUserRepoStub, inviteSvc *InviteSer
 		emailService = NewEmailService(&settingRepoStub{values: settings}, emailCache)
 	}
 
+	var affiliateService *AffiliateService
+	if affiliateRepo != nil {
+		affiliateService = NewAffiliateService(affiliateRepo, settingService, nil, nil)
+	}
+
 	return NewAuthService(
 		nil,
 		repo,
@@ -266,7 +364,7 @@ func newAuthServiceWithInvite(repo *inviteAuthUserRepoStub, inviteSvc *InviteSer
 		nil,
 		nil,
 		nil,
-		inviteSvc,
+		affiliateService,
 	)
 }
 
@@ -611,115 +709,87 @@ func TestRegisterUser_AppliesDefaultProductSubscriptions(t *testing.T) {
 	require.Equal(t, 7, assigner.calls[1].ValidityDays)
 }
 
-func TestAuthService_RegisterWithVerification_AssignsInviteCodeAndBindsInviter(t *testing.T) {
+func TestAuthService_RegisterWithVerification_BindsAffiliateInviterCode(t *testing.T) {
 	repo := &inviteAuthUserRepoStub{
 		userRepoStub: userRepoStub{nextID: 8},
-		usersByInviteCode: map[string]*User{
-			"INVITER07": {ID: 7, Email: "inviter@test.com", Status: StatusActive, InviteCode: "INVITER07"},
-		},
 	}
-	inviteSvc := &InviteService{
-		userRepo: repo,
-		codeGenerator: func() (string, error) {
-			return "NEWCODE08", nil
-		},
-	}
-	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
+	affiliateRepo := newAuthAffiliateRepoStub("NEWCODE08", &AffiliateSummary{
+		UserID:  7,
+		AffCode: "INVITER07",
+	})
+	service := newAuthServiceWithAffiliate(repo, affiliateRepo, map[string]string{
 		SettingKeyRegistrationEnabled: "true",
 	}, nil)
 
 	_, user, err := service.RegisterWithVerification(context.Background(), "user@test.com", "password", "", "", "INVITER07")
 	require.NoError(t, err)
-	require.Equal(t, "NEWCODE08", user.InviteCode)
-	require.NotNil(t, user.InvitedByUserID)
-	require.EqualValues(t, 7, *user.InvitedByUserID)
-	require.NotNil(t, user.InviteBoundAt)
+	require.Equal(t, int64(8), user.ID)
+	require.Equal(t, "NEWCODE08", affiliateRepo.summariesByUserID[8].AffCode)
+	require.NotNil(t, affiliateRepo.summariesByUserID[8].InviterID)
+	require.EqualValues(t, 7, *affiliateRepo.summariesByUserID[8].InviterID)
+	require.Equal(t, 1, affiliateRepo.summariesByUserID[7].AffCount)
 }
 
 func TestAuthService_RegisterWithVerification_BindsMixedCaseInviterCode(t *testing.T) {
 	repo := &inviteAuthUserRepoStub{
 		userRepoStub: userRepoStub{nextID: 18},
-		usersByInviteCode: map[string]*User{
-			"AbCdEfGh": {ID: 17, Email: "inviter-mixed@test.com", Status: StatusActive, InviteCode: "AbCdEfGh"},
-		},
 	}
-	inviteSvc := &InviteService{
-		userRepo: repo,
-		codeGenerator: func() (string, error) {
-			return "QwErTyUi", nil
-		},
-	}
-	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
+	affiliateRepo := newAuthAffiliateRepoStub("QWERTYUI", &AffiliateSummary{
+		UserID:  17,
+		AffCode: "AbCdEfGh",
+	})
+	service := newAuthServiceWithAffiliate(repo, affiliateRepo, map[string]string{
 		SettingKeyRegistrationEnabled: "true",
 	}, nil)
 
 	_, user, err := service.RegisterWithVerification(context.Background(), "mixed-user@test.com", "password", "", "", " AbCdEfGh ")
 	require.NoError(t, err)
-	require.Equal(t, "QwErTyUi", user.InviteCode)
-	require.NotNil(t, user.InvitedByUserID)
-	require.EqualValues(t, 17, *user.InvitedByUserID)
+	require.Equal(t, int64(18), user.ID)
+	require.NotNil(t, affiliateRepo.summariesByUserID[18].InviterID)
+	require.EqualValues(t, 17, *affiliateRepo.summariesByUserID[18].InviterID)
 }
 
-func TestAuthService_RegisterWithVerification_RejectsUnknownPermanentInviteCode(t *testing.T) {
+func TestAuthService_ValidateInvitationCode_RejectsUnknownAffiliateCode(t *testing.T) {
 	repo := &inviteAuthUserRepoStub{userRepoStub: userRepoStub{nextID: 9}}
-	inviteSvc := &InviteService{
-		userRepo: repo,
-		codeGenerator: func() (string, error) {
-			return "NEWCODE09", nil
-		},
-	}
-	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
+	affiliateRepo := newAuthAffiliateRepoStub("NEWCODE09")
+	service := newAuthServiceWithAffiliate(repo, affiliateRepo, map[string]string{
 		SettingKeyRegistrationEnabled: "true",
 	}, nil)
 
-	_, _, err := service.RegisterWithVerification(context.Background(), "user@test.com", "password", "", "", "MISSING")
+	err := service.ValidateInvitationCode(context.Background(), "MISSING")
 	require.ErrorIs(t, err, ErrInvitationCodeInvalid)
 }
 
-func TestAuthService_RegisterWithVerification_RejectsInactivePermanentInviteCode(t *testing.T) {
-	repo := &inviteAuthUserRepoStub{
-		userRepoStub: userRepoStub{nextID: 10},
-		usersByInviteCode: map[string]*User{
-			"INVITER10": {ID: 10, Email: "disabled-inviter@test.com", Status: StatusDisabled, InviteCode: "INVITER10"},
-		},
-	}
-	inviteSvc := &InviteService{
-		userRepo: repo,
-		codeGenerator: func() (string, error) {
-			return "NEWCODE10", nil
-		},
-	}
-	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
-		SettingKeyRegistrationEnabled: "true",
-	}, nil)
-
-	_, _, err := service.RegisterWithVerification(context.Background(), "user@test.com", "password", "", "", "INVITER10")
-	require.ErrorIs(t, err, ErrInvitationCodeInvalid)
-}
-
-func TestAuthService_RegisterWithVerification_ReturnsRemovedErrorForLegacyInvitationRedeemCode(t *testing.T) {
+func TestAuthService_RegisterWithVerification_IgnoresUnknownAffiliateCode(t *testing.T) {
 	repo := &inviteAuthUserRepoStub{userRepoStub: userRepoStub{nextID: 10}}
-	inviteSvc := &InviteService{
-		userRepo: repo,
-		codeGenerator: func() (string, error) {
-			return "NEWCODE10", nil
-		},
-	}
+	affiliateRepo := newAuthAffiliateRepoStub("NEWCODE10")
+	service := newAuthServiceWithAffiliate(repo, affiliateRepo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+	}, nil)
+
+	_, user, err := service.RegisterWithVerification(context.Background(), "user@test.com", "password", "", "", "MISSING")
+	require.NoError(t, err)
+	require.Equal(t, int64(10), user.ID)
+	require.Nil(t, affiliateRepo.summariesByUserID[10].InviterID)
+}
+
+func TestAuthService_ValidateInvitationCode_ReturnsRemovedErrorForLegacyInvitationRedeemCode(t *testing.T) {
+	repo := &inviteAuthUserRepoStub{userRepoStub: userRepoStub{nextID: 10}}
+	affiliateRepo := newAuthAffiliateRepoStub("NEWCODE10")
 	legacyRepo := &legacyInvitationLookupStub{
 		code: &RedeemCode{
 			Code: "LEGACY-A1B2",
 			Type: RedeemTypeInvitation,
 		},
 	}
-	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
+	service := newAuthServiceWithAffiliate(repo, affiliateRepo, map[string]string{
 		SettingKeyRegistrationEnabled: "true",
 	}, nil)
 	service.redeemRepo = legacyRepo
 
-	_, user, err := service.RegisterWithVerification(context.Background(), "legacy-invite@test.com", "password", "", "", " legacy-a1b2 ")
+	err := service.ValidateInvitationCode(context.Background(), " legacy-a1b2 ")
 	require.ErrorIs(t, err, ErrInvitationCodeRemoved)
 	require.Equal(t, "LEGACY-A1B2", legacyRepo.lastCode)
-	require.Nil(t, user)
 }
 
 type refreshTokenCacheStub struct{}
@@ -766,13 +836,8 @@ func (s *refreshTokenCacheStub) IsTokenInFamily(ctx context.Context, familyID st
 
 func TestAuthService_LoginOrRegisterOAuthWithTokenPair_IgnoresRetiredInvitationToggle(t *testing.T) {
 	repo := &inviteAuthUserRepoStub{userRepoStub: userRepoStub{nextID: 11}}
-	inviteSvc := &InviteService{
-		userRepo: repo,
-		codeGenerator: func() (string, error) {
-			return "NEWCODE11", nil
-		},
-	}
-	service := newAuthServiceWithInvite(repo, inviteSvc, map[string]string{
+	affiliateRepo := newAuthAffiliateRepoStub("NEWCODE11")
+	service := newAuthServiceWithAffiliate(repo, affiliateRepo, map[string]string{
 		SettingKeyRegistrationEnabled: "true",
 	}, nil)
 	service.refreshTokenCache = &refreshTokenCacheStub{}
