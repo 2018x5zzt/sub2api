@@ -10,42 +10,81 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
-type inviteValidationUserRepoStub struct {
-	usersByInviteCode map[string]*service.User
+type inviteValidationAffiliateRepoStub struct {
+	summariesByCode map[string]*service.AffiliateSummary
 }
 
-func (s *inviteValidationUserRepoStub) GetByID(ctx context.Context, id int64) (*service.User, error) {
-	return nil, service.ErrUserNotFound
-}
-
-func (s *inviteValidationUserRepoStub) GetByInviteCode(ctx context.Context, code string) (*service.User, error) {
-	u, ok := s.usersByInviteCode[code]
-	if !ok {
-		return nil, service.ErrUserNotFound
+func newInviteValidationAffiliateRepoStub(summaries ...*service.AffiliateSummary) *inviteValidationAffiliateRepoStub {
+	repo := &inviteValidationAffiliateRepoStub{
+		summariesByCode: map[string]*service.AffiliateSummary{},
 	}
-	return u, nil
+	for _, summary := range summaries {
+		cp := *summary
+		repo.summariesByCode[strings.ToUpper(cp.AffCode)] = &cp
+	}
+	return repo
 }
 
-func (s *inviteValidationUserRepoStub) ExistsByInviteCode(ctx context.Context, code string) (bool, error) {
-	_, ok := s.usersByInviteCode[code]
-	return ok, nil
+func (s *inviteValidationAffiliateRepoStub) EnsureUserAffiliate(context.Context, int64) (*service.AffiliateSummary, error) {
+	panic("unexpected EnsureUserAffiliate call")
 }
 
-func (s *inviteValidationUserRepoStub) CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error) {
-	return 0, nil
+func (s *inviteValidationAffiliateRepoStub) GetAffiliateByCode(_ context.Context, code string) (*service.AffiliateSummary, error) {
+	summary, ok := s.summariesByCode[strings.ToUpper(strings.TrimSpace(code))]
+	if !ok {
+		return nil, service.ErrAffiliateProfileNotFound
+	}
+	return summary, nil
 }
 
-func (s *inviteValidationUserRepoStub) UpdateBalance(ctx context.Context, id int64, amount float64) error {
-	return nil
+func (s *inviteValidationAffiliateRepoStub) BindInviter(context.Context, int64, int64) (bool, error) {
+	panic("unexpected BindInviter call")
 }
 
-type inviteValidationRewardRepoStub struct{}
+func (s *inviteValidationAffiliateRepoStub) AccrueQuota(context.Context, int64, int64, float64, int) (bool, error) {
+	panic("unexpected AccrueQuota call")
+}
+
+func (s *inviteValidationAffiliateRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
+	panic("unexpected GetAccruedRebateFromInvitee call")
+}
+
+func (s *inviteValidationAffiliateRepoStub) ThawFrozenQuota(context.Context, int64) (float64, error) {
+	panic("unexpected ThawFrozenQuota call")
+}
+
+func (s *inviteValidationAffiliateRepoStub) TransferQuotaToBalance(context.Context, int64) (float64, float64, error) {
+	panic("unexpected TransferQuotaToBalance call")
+}
+
+func (s *inviteValidationAffiliateRepoStub) ListInvitees(context.Context, int64, int) ([]service.AffiliateInvitee, error) {
+	panic("unexpected ListInvitees call")
+}
+
+func (s *inviteValidationAffiliateRepoStub) UpdateUserAffCode(context.Context, int64, string) error {
+	panic("unexpected UpdateUserAffCode call")
+}
+
+func (s *inviteValidationAffiliateRepoStub) ResetUserAffCode(context.Context, int64) (string, error) {
+	panic("unexpected ResetUserAffCode call")
+}
+
+func (s *inviteValidationAffiliateRepoStub) SetUserRebateRate(context.Context, int64, *float64) error {
+	panic("unexpected SetUserRebateRate call")
+}
+
+func (s *inviteValidationAffiliateRepoStub) BatchSetUserRebateRate(context.Context, []int64, *float64) error {
+	panic("unexpected BatchSetUserRebateRate call")
+}
+
+func (s *inviteValidationAffiliateRepoStub) ListUsersWithCustomSettings(context.Context, service.AffiliateAdminFilter) ([]service.AffiliateAdminEntry, int64, error) {
+	panic("unexpected ListUsersWithCustomSettings call")
+}
 
 type inviteValidationRedeemRepoStub struct {
 	code *service.RedeemCode
@@ -62,22 +101,6 @@ func (s *inviteValidationRedeemRepoStub) GetByCode(ctx context.Context, code str
 	return s.code, nil
 }
 
-func (s *inviteValidationRewardRepoStub) CreateBatch(ctx context.Context, records []service.InviteRewardRecord) error {
-	return nil
-}
-
-func (s *inviteValidationRewardRepoStub) ListByRewardTarget(ctx context.Context, userID int64, params pagination.PaginationParams) ([]service.InviteRewardRecord, *pagination.PaginationResult, error) {
-	return nil, &pagination.PaginationResult{Total: 0}, nil
-}
-
-func (s *inviteValidationRewardRepoStub) ListByAdminActionID(ctx context.Context, adminActionID int64) ([]service.InviteRewardRecord, error) {
-	return nil, nil
-}
-
-func (s *inviteValidationRewardRepoStub) SumBaseRewardsByTargetAndRole(ctx context.Context, userID int64, rewardRole string) (float64, error) {
-	return 0, nil
-}
-
 func TestValidateInvitationCode_UsesPermanentInviteCodes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
@@ -85,11 +108,10 @@ func TestValidateInvitationCode_UsesPermanentInviteCodes(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/auth/validate-invitation-code", strings.NewReader(`{"code":"INVITER07"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	inviteSvc := service.NewInviteService(&inviteValidationUserRepoStub{
-		usersByInviteCode: map[string]*service.User{
-			"INVITER07": {ID: 7, InviteCode: "INVITER07", Status: service.StatusActive},
-		},
-	}, &inviteValidationRewardRepoStub{})
+	affiliateService := service.NewAffiliateService(newInviteValidationAffiliateRepoStub(&service.AffiliateSummary{
+		UserID:  7,
+		AffCode: "INVITER07",
+	}), nil, nil, nil)
 	authService := service.NewAuthService(
 		nil,
 		nil,
@@ -102,7 +124,7 @@ func TestValidateInvitationCode_UsesPermanentInviteCodes(t *testing.T) {
 		nil,
 		nil,
 		nil,
-		inviteSvc,
+		affiliateService,
 	)
 	handler := &AuthHandler{
 		authService: authService,
@@ -120,11 +142,10 @@ func TestValidateInvitationCode_IgnoresLegacyToggleWhenPermanentInviteCodeExists
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/auth/validate-invitation-code", strings.NewReader(`{"code":"INVITER07"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	inviteSvc := service.NewInviteService(&inviteValidationUserRepoStub{
-		usersByInviteCode: map[string]*service.User{
-			"INVITER07": {ID: 7, InviteCode: "INVITER07", Status: service.StatusActive},
-		},
-	}, &inviteValidationRewardRepoStub{})
+	affiliateService := service.NewAffiliateService(newInviteValidationAffiliateRepoStub(&service.AffiliateSummary{
+		UserID:  7,
+		AffCode: "INVITER07",
+	}), nil, nil, nil)
 	authService := service.NewAuthService(
 		nil,
 		nil,
@@ -137,7 +158,7 @@ func TestValidateInvitationCode_IgnoresLegacyToggleWhenPermanentInviteCodeExists
 		nil,
 		nil,
 		nil,
-		inviteSvc,
+		affiliateService,
 	)
 	handler := &AuthHandler{
 		authService: authService,
@@ -156,9 +177,7 @@ func TestValidateInvitationCode_ReturnsRemovedErrorForLegacyInvitationRedeemCode
 	c.Request = httptest.NewRequest(http.MethodPost, "/api/v1/auth/validate-invitation-code", strings.NewReader(`{"code":"legacy-123"}`))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	inviteSvc := service.NewInviteService(&inviteValidationUserRepoStub{
-		usersByInviteCode: map[string]*service.User{},
-	}, &inviteValidationRewardRepoStub{})
+	affiliateService := service.NewAffiliateService(newInviteValidationAffiliateRepoStub(), nil, nil, nil)
 	authService := service.NewAuthService(
 		nil,
 		nil,
@@ -176,7 +195,7 @@ func TestValidateInvitationCode_ReturnsRemovedErrorForLegacyInvitationRedeemCode
 		nil,
 		nil,
 		nil,
-		inviteSvc,
+		affiliateService,
 	)
 	handler := &AuthHandler{
 		authService: authService,
