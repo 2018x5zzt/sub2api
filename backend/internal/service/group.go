@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const openAIImageOnlyGroupName = "gpt-image"
+const openAIImageGenerationGroupID int64 = 30
 
 type Group struct {
 	ID             int64
@@ -102,7 +102,7 @@ func (g *Group) AllowsOpenAIImageGeneration() bool {
 	if g == nil {
 		return false
 	}
-	return g.Platform == PlatformOpenAI && strings.EqualFold(strings.TrimSpace(g.Name), openAIImageOnlyGroupName)
+	return g.Platform == PlatformOpenAI && g.ID == openAIImageGenerationGroupID
 }
 
 func (g *Group) HasDailyLimit() bool {

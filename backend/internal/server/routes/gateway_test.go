@@ -16,10 +16,14 @@ import (
 )
 
 func newGatewayRoutesTestRouter() *gin.Engine {
-	return newGatewayRoutesTestRouterWithGroup(service.PlatformOpenAI, "gpt-image")
+	return newGatewayRoutesTestRouterWithGroupID(service.PlatformOpenAI, "【限时半价】gpt-image", 30)
 }
 
 func newGatewayRoutesTestRouterWithGroup(platform, groupName string) *gin.Engine {
+	return newGatewayRoutesTestRouterWithGroupID(platform, groupName, 1)
+}
+
+func newGatewayRoutesTestRouterWithGroupID(platform, groupName string, groupID int64) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 
@@ -31,7 +35,6 @@ func newGatewayRoutesTestRouterWithGroup(platform, groupName string) *gin.Engine
 			SoraGateway:   &handler.SoraGatewayHandler{},
 		},
 		servermiddleware.APIKeyAuthMiddleware(func(c *gin.Context) {
-			groupID := int64(1)
 			c.Set(string(servermiddleware.ContextKeyAPIKey), &service.APIKey{
 				GroupID: &groupID,
 				Group: &service.Group{
