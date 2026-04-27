@@ -180,9 +180,6 @@ const siteName = computed(() => appStore.siteName)
 const siteLogo = computed(() => appStore.siteLogo)
 const siteVersion = computed(() => appStore.siteVersion)
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)
-const availableChannelsEnabled = computed(
-  () => appStore.cachedPublicSettings?.available_channels_enabled !== false
-)
 const affiliateEnabled = computed(
   () => appStore.cachedPublicSettings?.affiliate_enabled !== false
 )
@@ -508,9 +505,7 @@ const userNavItems = computed((): NavItem[] => {
   const items: NavItem[] = [
     { path: '/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
-    ...(availableChannelsEnabled.value
-      ? [{ path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon }]
-      : []),
+    { path: '/models', label: t('nav.modelHub'), icon: ChannelIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     ...(appStore.cachedPublicSettings?.sora_client_enabled
@@ -545,9 +540,7 @@ const userNavItems = computed((): NavItem[] => {
 const personalNavItems = computed((): NavItem[] => {
   const items: NavItem[] = [
     { path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon },
-    ...(availableChannelsEnabled.value
-      ? [{ path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon }]
-      : []),
+    { path: '/models', label: t('nav.modelHub'), icon: ChannelIcon },
     { path: '/usage', label: t('nav.usage'), icon: ChartIcon, hideInSimpleMode: true },
     { path: '/subscriptions', label: t('nav.mySubscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     ...(appStore.cachedPublicSettings?.sora_client_enabled
@@ -617,9 +610,7 @@ const adminNavItems = computed((): NavItem[] => {
   if (authStore.isSimpleMode) {
     const filtered = baseItems.filter(item => !item.hideInSimpleMode)
     filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon })
-    if (availableChannelsEnabled.value) {
-      filtered.push({ path: '/available-channels', label: t('nav.availableChannels'), icon: ChannelIcon })
-    }
+    filtered.push({ path: '/models', label: t('nav.modelHub'), icon: ChannelIcon })
     filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
     // Add admin custom menu items after settings
     for (const cm of customMenuItemsForAdmin.value) {

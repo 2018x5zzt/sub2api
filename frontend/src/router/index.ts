@@ -143,7 +143,15 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/models',
-    redirect: '/available-channels'
+    name: 'ModelHub',
+    component: () => import('@/views/user/ModelHubView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Model Hub',
+      titleKey: 'modelHub.title',
+      descriptionKey: 'modelHub.description'
+    }
   },
   {
     path: '/available-channels',
