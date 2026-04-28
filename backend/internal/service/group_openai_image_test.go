@@ -13,15 +13,21 @@ func TestGroup_AllowsOpenAIImageGeneration_UsesDedicatedGroupID(t *testing.T) {
 		Platform: PlatformOpenAI,
 	}).AllowsOpenAIImageGeneration())
 
+	require.True(t, (&Group{
+		ID:       35,
+		Name:     "【订阅】gpt-image",
+		Platform: PlatformOpenAI,
+	}).AllowsOpenAIImageGeneration())
+
 	require.False(t, (&Group{
-		ID:       30,
-		Name:     "【限时半价】gpt-image",
+		ID:       35,
+		Name:     "【订阅】gpt-image",
 		Platform: PlatformAnthropic,
 	}).AllowsOpenAIImageGeneration())
 
 	require.False(t, (&Group{
 		ID:       1,
-		Name:     "gpt-image",
+		Name:     "pro号池",
 		Platform: PlatformOpenAI,
 	}).AllowsOpenAIImageGeneration())
 }

@@ -128,6 +128,42 @@ func TestGatewayHandlerModels_HidesImageModelsForNonGPTImageGroup_MappedCatalog(
 	require.NotContains(t, modelIDs, "gpt-image-2")
 }
 
+func TestGatewayHandlerModels_OpenAIPassthroughIgnoresStaleMappings(t *testing.T) {
+	groupID := int64(29)
+	group := &service.Group{ID: groupID, Name: "pro号池", Platform: service.PlatformOpenAI}
+	gatewayService := service.NewGatewayService(
+		&gatewayModelsAccountRepoStub{
+			byGroup: map[int64][]service.Account{
+				groupID: {
+					{
+						Platform: service.PlatformOpenAI,
+						Type:     service.AccountTypeOAuth,
+						Credentials: map[string]any{
+							"model_mapping": map[string]any{
+								"legacy-alias": "gpt-5.4",
+							},
+						},
+						Extra: map[string]any{
+							"openai_passthrough": true,
+						},
+					},
+				},
+			},
+		},
+		nil, nil, nil, nil, nil, nil, nil, &config.Config{}, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+	)
+	handler := &GatewayHandler{gatewayService: gatewayService}
+	c, recorder := newGatewayModelsTestContext(t, group)
+
+	handler.Models(c)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	modelIDs := decodeOpenAIModelIDs(t, recorder.Body.Bytes())
+	require.Contains(t, modelIDs, "gpt-5.5")
+	require.NotContains(t, modelIDs, "legacy-alias")
+	require.NotContains(t, modelIDs, "gpt-image-2")
+}
+
 func TestGatewayHandlerModels_KeepsImageModelsForGPTImageGroup(t *testing.T) {
 	groupID := int64(30)
 	group := &service.Group{ID: groupID, Name: "gpt-image", Platform: service.PlatformOpenAI}

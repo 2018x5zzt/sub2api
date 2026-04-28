@@ -6,6 +6,7 @@ import (
 )
 
 const openAIImageGenerationGroupID int64 = 30
+const openAIImageGenerationSubscriptionGroupName = "【订阅】gpt-image"
 
 type Group struct {
 	ID             int64
@@ -102,7 +103,13 @@ func (g *Group) AllowsOpenAIImageGeneration() bool {
 	if g == nil {
 		return false
 	}
-	return g.Platform == PlatformOpenAI && g.ID == openAIImageGenerationGroupID
+	if g.Platform != PlatformOpenAI {
+		return false
+	}
+	if g.ID == openAIImageGenerationGroupID {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(g.Name), openAIImageGenerationSubscriptionGroupName)
 }
 
 func (g *Group) HasDailyLimit() bool {

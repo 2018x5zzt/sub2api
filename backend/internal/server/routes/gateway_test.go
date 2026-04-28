@@ -159,6 +159,17 @@ func TestGatewayRoutesOpenAIImagesPathsAreRegistered(t *testing.T) {
 	}
 }
 
+func TestGatewayRoutesOpenAIImagesAllowSubscriptionImageGroup(t *testing.T) {
+	router := newGatewayRoutesTestRouterWithGroupID(service.PlatformOpenAI, "【订阅】gpt-image", 35)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", strings.NewReader(`{"model":"gpt-image-2","prompt":"draw a cat"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	require.NotEqual(t, http.StatusNotFound, w.Code)
+}
+
 func TestGatewayRoutesOpenAIImagesRejectNonOpenAIPlatforms(t *testing.T) {
 	router := newGatewayRoutesTestRouterWithGroupPlatform(service.PlatformAnthropic)
 
