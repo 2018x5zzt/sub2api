@@ -373,63 +373,63 @@ const operator = (value: string) => wrapToken('text-slate-400', value)
 const string = (value: string) => wrapToken('text-amber-200', value)
 const comment = (value: string) => wrapToken('text-slate-500', value)
 
+function stripApiVersionSuffix(value: string): string {
+  return value.replace(/\/(?:v1|v1beta)\/?$/, '').replace(/\/+$/, '')
+}
+
+function ensurePathSuffix(value: string, suffix: string): string {
+  const trimmed = value.replace(/\/+$/, '')
+  return trimmed.endsWith(suffix) ? trimmed : `${trimmed}${suffix}`
+}
+
 // Syntax highlighting helpers
 // Generate file configs based on platform and active tab
 const currentFiles = computed((): FileConfig[] => {
-  const baseUrl = props.baseUrl || window.location.origin
+  const configuredBaseUrl = props.baseUrl || window.location.origin
   const apiKey = props.apiKey
-  const baseRoot = baseUrl.replace(/\/v1\/?$/, '').replace(/\/+$/, '')
-  const ensureV1 = (value: string) => {
-    const trimmed = value.replace(/\/+$/, '')
-    return trimmed.endsWith('/v1') ? trimmed : `${trimmed}/v1`
-  }
-  const apiBase = ensureV1(baseRoot)
-  const antigravityBase = ensureV1(`${baseRoot}/antigravity`)
-  const antigravityGeminiBase = (() => {
-    const trimmed = `${baseRoot}/antigravity`.replace(/\/+$/, '')
-    return trimmed.endsWith('/v1beta') ? trimmed : `${trimmed}/v1beta`
-  })()
-  const geminiBase = (() => {
-    const trimmed = baseRoot.replace(/\/+$/, '')
-    return trimmed.endsWith('/v1beta') ? trimmed : `${trimmed}/v1beta`
-  })()
+  const baseRoot = stripApiVersionSuffix(configuredBaseUrl)
+  const openAIBase = ensurePathSuffix(baseRoot, '/v1')
+  const anthropicBase = baseRoot
+  const geminiBase = ensurePathSuffix(baseRoot, '/v1beta')
+  const antigravityAnthropicBase = ensurePathSuffix(baseRoot, '/antigravity')
+  const antigravityGeminiBase = ensurePathSuffix(antigravityAnthropicBase, '/v1beta')
 
   if (activeClientTab.value === 'opencode') {
     switch (props.platform) {
       case 'anthropic':
-        return [generateOpenCodeConfig('anthropic', apiBase, apiKey)]
+        return [generateOpenCodeConfig('anthropic', anthropicBase, apiKey)]
       case 'openai':
-        return [generateOpenCodeConfig('openai', apiBase, apiKey)]
+        return [generateOpenCodeConfig('openai', openAIBase, apiKey)]
       case 'gemini':
         return [generateOpenCodeConfig('gemini', geminiBase, apiKey)]
       case 'antigravity':
         return [
-          generateOpenCodeConfig('antigravity-claude', antigravityBase, apiKey, 'opencode.json (Claude)'),
+          generateOpenCodeConfig('antigravity-claude', antigravityAnthropicBase, apiKey, 'opencode.json (Claude)'),
           generateOpenCodeConfig('antigravity-gemini', antigravityGeminiBase, apiKey, 'opencode.json (Gemini)')
         ]
       default:
-        return [generateOpenCodeConfig('openai', apiBase, apiKey)]
+        return [generateOpenCodeConfig('openai', openAIBase, apiKey)]
     }
   }
 
   switch (props.platform) {
     case 'openai':
       if (activeClientTab.value === 'claude') {
-        return generateAnthropicFiles(baseUrl, apiKey)
+        return generateAnthropicFiles(anthropicBase, apiKey)
       }
       if (activeClientTab.value === 'codex-ws') {
-        return generateOpenAIWsFiles(baseUrl, apiKey)
+        return generateOpenAIWsFiles(openAIBase, apiKey)
       }
-      return generateOpenAIFiles(baseUrl, apiKey)
+      return generateOpenAIFiles(openAIBase, apiKey)
     case 'gemini':
-      return [generateGeminiCliContent(baseUrl, apiKey)]
+      return [generateGeminiCliContent(geminiBase, apiKey)]
     case 'antigravity':
       if (activeClientTab.value === 'gemini') {
-        return [generateGeminiCliContent(`${baseUrl}/antigravity`, apiKey)]
+        return [generateGeminiCliContent(antigravityGeminiBase, apiKey)]
       }
-      return generateAnthropicFiles(`${baseUrl}/antigravity`, apiKey)
+      return generateAnthropicFiles(antigravityAnthropicBase, apiKey)
     default:
-      return generateAnthropicFiles(baseUrl, apiKey)
+      return generateAnthropicFiles(anthropicBase, apiKey)
   }
 })
 

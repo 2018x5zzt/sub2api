@@ -6,6 +6,10 @@
         <StatCard :title="t('profile.concurrencyLimit')" :value="user?.concurrency || 0" :icon="BoltIcon" icon-variant="warning" />
         <StatCard :title="t('profile.memberSince')" :value="formatDate(user?.created_at || '', { year: 'numeric', month: 'long' })" :icon="CalendarIcon" icon-variant="primary" />
       </div>
+      <div class="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800/70 dark:bg-amber-900/20 dark:text-amber-200">
+        <Icon name="lightbulb" size="sm" class="mt-0.5 flex-shrink-0" />
+        <span>{{ t('profile.concurrencyInviteHint') }}</span>
+      </div>
       <ProfileInfoCard :user="user" />
       <div v-if="contactInfo" class="card border-primary-200 bg-primary-50 dark:bg-primary-900/20 p-6">
         <div class="flex items-center gap-4">

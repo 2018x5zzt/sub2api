@@ -15,14 +15,36 @@ const copiedEndpoint = ref<string | null>(null)
 
 let copiedResetTimer: number | undefined
 
+function baseRoot(apiBaseUrl: string): string {
+  return apiBaseUrl.trim().replace(/\/(?:v1|v1beta)\/?$/, '').replace(/\/+$/, '')
+}
+
+function withPath(root: string, path: string): string {
+  const trimmedRoot = root.replace(/\/+$/, '')
+  return `${trimmedRoot}${path}`
+}
+
 const allEndpoints = computed(() => {
   const items: Array<{ name: string; endpoint: string; description: string; isDefault: boolean }> = []
   if (props.apiBaseUrl) {
+    const root = baseRoot(props.apiBaseUrl)
     items.push({
-      name: t('keys.endpoints.title'),
-      endpoint: props.apiBaseUrl,
-      description: '',
+      name: t('keys.endpoints.openaiModels'),
+      endpoint: withPath(root, '/v1'),
+      description: t('keys.endpoints.openaiModelsDescription'),
       isDefault: true,
+    })
+    items.push({
+      name: t('keys.endpoints.anthropicModels'),
+      endpoint: root,
+      description: t('keys.endpoints.anthropicModelsDescription'),
+      isDefault: false,
+    })
+    items.push({
+      name: t('keys.endpoints.openaiImages'),
+      endpoint: withPath(root, '/v1'),
+      description: t('keys.endpoints.openaiImagesDescription'),
+      isDefault: false,
     })
   }
   for (const ep of props.customEndpoints) {

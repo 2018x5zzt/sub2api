@@ -5,6 +5,9 @@ const copyToClipboard = vi.fn().mockResolvedValue(true)
 
 const messages: Record<string, string> = {
   'keys.endpoints.title': 'API 端点',
+  'keys.endpoints.openaiModels': 'OpenAI 系列模型',
+  'keys.endpoints.anthropicModels': 'Anthropic 系列模型',
+  'keys.endpoints.openaiImages': 'OpenAI 图片',
   'keys.endpoints.default': '默认',
   'keys.endpoints.copied': '已复制',
   'keys.endpoints.copiedHint': '已复制到剪贴板',
@@ -29,6 +32,21 @@ import EndpointPopover from '../EndpointPopover.vue'
 describe('EndpointPopover', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('将默认端点拆分为 OpenAI、Anthropic 和 OpenAI 图片三类地址', () => {
+    const wrapper = mount(EndpointPopover, {
+      props: {
+        apiBaseUrl: 'https://default.example.com/v1',
+        customEndpoints: [],
+      },
+    })
+
+    expect(wrapper.text()).toContain('OpenAI 系列模型')
+    expect(wrapper.text()).toContain('Anthropic 系列模型')
+    expect(wrapper.text()).toContain('OpenAI 图片')
+    expect(wrapper.text()).toContain('https://default.example.com/v1')
+    expect(wrapper.text()).toContain('https://default.example.com')
   })
 
   it('将说明提示渲染到 URL 上方而不是旧的 title 图标上', () => {
