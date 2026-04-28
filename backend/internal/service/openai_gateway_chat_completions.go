@@ -109,6 +109,17 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		}
 	}
 
+	var reqBody map[string]any
+	if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
+		return nil, fmt.Errorf("unmarshal for instructions normalization: %w", err)
+	}
+	if ensureOpenAIResponsesInstructionsMap(reqBody) {
+		responsesBody, err = json.Marshal(reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("remarshal after instructions normalization: %w", err)
+		}
+	}
+
 	logFields := []zap.Field{
 		zap.Int64("account_id", account.ID),
 		zap.String("original_model", originalModel),
@@ -125,7 +136,6 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	logger.L().Debug("openai chat_completions: model mapping applied", logFields...)
 
 	if account.Type == AccountTypeOAuth {
-		var reqBody map[string]any
 		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
 			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
 		}

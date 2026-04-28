@@ -701,6 +701,15 @@ func applyInstructions(reqBody map[string]any, isCodexCLI bool) bool {
 	return true
 }
 
+func ensureOpenAIResponsesInstructionsMap(reqBody map[string]any) bool {
+	modified := extractSystemMessagesFromInput(reqBody)
+	if isInstructionsEmpty(reqBody) {
+		reqBody["instructions"] = openAIResponsesDefaultInstructions
+		modified = true
+	}
+	return modified
+}
+
 // isInstructionsEmpty 检查 instructions 字段是否为空
 // 处理以下情况：字段不存在、nil、空字符串、纯空白字符串
 func isInstructionsEmpty(reqBody map[string]any) bool {
