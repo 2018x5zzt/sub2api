@@ -26,17 +26,7 @@ func previewDailyWindowAdvance(sub *UserSubscription, group *Group, newWindowSta
 	}
 
 	preview.ElapsedDays = elapsedDailyWindows(*sub.DailyWindowStart, newWindowStart)
-
-	carryoverConsumed := maxFloat64(sub.DailyCarryoverInUSD-sub.DailyCarryoverRemainingUSD, 0)
-	freshUsed := maxFloat64(sub.DailyUsageUSD-carryoverConsumed, 0)
-	freshRemaining := maxFloat64(*group.DailyLimitUSD-freshUsed, 0)
-
-	if preview.ElapsedDays == 1 && sub.Status == SubscriptionStatusActive && sub.ExpiresAt.After(newWindowStart) {
-		preview.CarryoverInUSD = freshRemaining
-		preview.CarryoverRemainingUSD = freshRemaining
-	}
-
-	preview.EffectiveLimitUSD = *group.DailyLimitUSD + preview.CarryoverInUSD
+	preview.EffectiveLimitUSD = *group.DailyLimitUSD
 	preview.RemainingTotalUSD = preview.EffectiveLimitUSD
 	return preview
 }

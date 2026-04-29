@@ -16,27 +16,14 @@ func advanceAndIncrementSubscriptionUsage(ctx context.Context, exec subscription
 		WITH prepared AS (
 			SELECT
 				us.id,
-				us.status,
-				us.expires_at,
 				us.daily_window_start,
 				us.daily_usage_usd,
-				us.daily_carryover_in_usd,
-				us.daily_carryover_remaining_usd,
-				COALESCE(g.daily_limit_usd, 0) AS daily_limit_usd,
 				date_trunc('day', NOW()) AS today_start,
 				CASE
 					WHEN us.daily_window_start IS NULL THEN true
 					WHEN us.daily_window_start + INTERVAL '24 hours' <= NOW() THEN true
 					ELSE false
-				END AS should_advance,
-				CASE
-					WHEN us.daily_window_start IS NULL THEN 0
-					WHEN us.daily_window_start + INTERVAL '24 hours' <= NOW()
-						THEN GREATEST(CAST(EXTRACT(EPOCH FROM (date_trunc('day', NOW()) - us.daily_window_start)) / 86400 AS bigint), 0)
-					ELSE 0
-				END AS elapsed_days,
-				GREATEST(us.daily_carryover_in_usd - us.daily_carryover_remaining_usd, 0) AS carryover_consumed,
-				GREATEST(us.daily_usage_usd - GREATEST(us.daily_carryover_in_usd - us.daily_carryover_remaining_usd, 0), 0) AS fresh_used
+				END AS should_advance
 			FROM user_subscriptions us
 			JOIN groups g ON g.id = us.group_id AND g.deleted_at IS NULL
 			WHERE us.id = $2
@@ -53,24 +40,8 @@ func advanceAndIncrementSubscriptionUsage(ctx context.Context, exec subscription
 					WHEN should_advance THEN 0
 					ELSE daily_usage_usd
 				END AS base_daily_usage,
-				CASE
-					WHEN should_advance
-						AND elapsed_days = 1
-						AND status = $3
-						AND expires_at > today_start
-						THEN GREATEST(daily_limit_usd - fresh_used, 0)
-					WHEN should_advance THEN 0
-					ELSE daily_carryover_in_usd
-				END AS next_carryover_in,
-				CASE
-					WHEN should_advance
-						AND elapsed_days = 1
-						AND status = $3
-						AND expires_at > today_start
-						THEN GREATEST(daily_limit_usd - fresh_used, 0)
-					WHEN should_advance THEN 0
-					ELSE daily_carryover_remaining_usd
-				END AS next_carryover_remaining
+				0 AS next_carryover_in,
+				0 AS next_carryover_remaining
 			FROM prepared
 		)
 		UPDATE user_subscriptions us
@@ -89,7 +60,7 @@ func advanceAndIncrementSubscriptionUsage(ctx context.Context, exec subscription
 		WHERE us.id = next_state.id
 	`
 
-	res, err := exec.ExecContext(ctx, updateSQL, costUSD, subscriptionID, service.SubscriptionStatusActive)
+	res, err := exec.ExecContext(ctx, updateSQL, costUSD, subscriptionID)
 	if err != nil {
 		return err
 	}

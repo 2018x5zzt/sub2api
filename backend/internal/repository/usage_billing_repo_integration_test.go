@@ -128,7 +128,7 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 	require.InDelta(t, 2.5, dailyUsage, 0.000001)
 }
 
-func TestUsageBillingRepositoryApply_SubscriptionCostAdvancesDailyWindowAndConsumesCarryover(t *testing.T) {
+func TestUsageBillingRepositoryApply_SubscriptionCostAdvancesDailyWindowWithoutCarryover(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
 	repo := NewUsageBillingRepository(client, integrationDB)
@@ -196,8 +196,8 @@ func TestUsageBillingRepositoryApply_SubscriptionCostAdvancesDailyWindowAndConsu
 	require.InDelta(t, 5.0, dailyUsage, 0.000001)
 	require.InDelta(t, 25.0, weeklyUsage, 0.000001)
 	require.InDelta(t, 35.0, monthlyUsage, 0.000001)
-	require.InDelta(t, 25.0, carryoverIn, 0.000001)
-	require.InDelta(t, 20.0, carryoverRemaining, 0.000001)
+	require.InDelta(t, 0.0, carryoverIn, 0.000001)
+	require.InDelta(t, 0.0, carryoverRemaining, 0.000001)
 }
 
 func TestUsageBillingRepositoryApply_ProductSubscriptionCostAdvancesProductWindows(t *testing.T) {

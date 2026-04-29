@@ -163,7 +163,7 @@ func (s billingEligibilitySubRepoStub) GetActiveByUserIDAndGroupID(ctx context.C
 	return &cp, nil
 }
 
-func TestBillingCacheServiceCheckSubscriptionEligibilityFromSnapshot_UsesCarryoverAwareLimit(t *testing.T) {
+func TestBillingCacheServiceCheckSubscriptionEligibilityFromSnapshot_IgnoresLegacyCarryover(t *testing.T) {
 	cache := &billingEligibilityCacheStub{
 		subscriptionErr: errors.New("subscription cache should not be read"),
 	}
@@ -186,7 +186,7 @@ func TestBillingCacheServiceCheckSubscriptionEligibilityFromSnapshot_UsesCarryov
 
 	err := svc.CheckBillingEligibility(context.Background(), &User{ID: 1}, nil, group, sub)
 
-	require.NoError(t, err)
+	require.ErrorIs(t, err, ErrDailyLimitExceeded)
 	require.Equal(t, 0, cache.subscriptionGets)
 	require.Equal(t, 0, cache.userBalanceGets)
 }

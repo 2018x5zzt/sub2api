@@ -454,7 +454,7 @@ RETURNING id
 `, legacy.UserID, opts.ProductID, legacy.StartsAt, legacy.ExpiresAt, legacy.Status,
 			legacy.DailyWindowStart, legacy.WeeklyWindowStart, legacy.MonthlyWindowStart,
 			legacy.DailyUsageUSD, legacy.WeeklyUsageUSD, legacy.MonthlyUsageUSD,
-			legacy.DailyCarryoverInUSD, legacy.DailyCarryoverRemainingUSD,
+			0, 0,
 			legacy.AssignedBy, legacy.AssignedAt, "shared product backfill: "+opts.MigrationBatch,
 		).Scan(&productSubscriptionID)
 		if err != nil {

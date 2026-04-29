@@ -127,7 +127,7 @@ func (s *UserSubscriptionRepoSuite) TestSchemaIncludesDailyCarryoverColumns() {
 	s.Require().True(columns["daily_carryover_remaining_usd"], "expected daily_carryover_remaining_usd column")
 }
 
-func (s *UserSubscriptionRepoSuite) TestCreate_PersistsDailyCarryoverFields() {
+func (s *UserSubscriptionRepoSuite) TestCreate_IgnoresDailyCarryoverFields() {
 	user := s.mustCreateUser("sub-carryover@test.com", service.RoleUser)
 	group := s.mustCreateGroup("g-carryover")
 
@@ -146,8 +146,8 @@ func (s *UserSubscriptionRepoSuite) TestCreate_PersistsDailyCarryoverFields() {
 
 	got, err := s.repo.GetByID(s.ctx, sub.ID)
 	s.Require().NoError(err, "GetByID")
-	s.Require().InDelta(12.5, got.DailyCarryoverInUSD, 1e-6)
-	s.Require().InDelta(3.25, got.DailyCarryoverRemainingUSD, 1e-6)
+	s.Require().InDelta(0.0, got.DailyCarryoverInUSD, 1e-6)
+	s.Require().InDelta(0.0, got.DailyCarryoverRemainingUSD, 1e-6)
 }
 
 func (s *UserSubscriptionRepoSuite) TestGetByID_WithPreloads() {
@@ -289,6 +289,53 @@ func (s *UserSubscriptionRepoSuite) TestListActiveByUserID() {
 	s.Require().Equal(service.SubscriptionStatusActive, subs[0].Status)
 }
 
+func (s *UserSubscriptionRepoSuite) TestListMigratedLegacySubscriptionIDs() {
+	user := s.mustCreateUser("migrated-legacy@test.com", service.RoleUser)
+	group := s.mustCreateGroup("g-migrated-legacy")
+	visibleGroup := s.mustCreateGroup("g-visible-legacy")
+	migratedLegacy := s.mustCreateSubscription(user.ID, group.ID, nil)
+	visibleLegacy := s.mustCreateSubscription(user.ID, visibleGroup.ID, func(c *dbent.UserSubscriptionCreate) {
+		c.SetNotes("not migrated")
+	})
+	now := time.Now()
+	product, err := s.client.SubscriptionProduct.Create().
+		SetCode(fmt.Sprintf("migrated_legacy_%d", now.UnixNano())).
+		SetName("Migrated Product").
+		SetStatus(service.SubscriptionStatusActive).
+		SetDefaultValidityDays(30).
+		SetDailyLimitUsd(10).
+		SetWeeklyLimitUsd(50).
+		SetMonthlyLimitUsd(100).
+		SetSortOrder(10).
+		Save(s.ctx)
+	s.Require().NoError(err)
+	productSub, err := s.client.UserProductSubscription.Create().
+		SetUserID(user.ID).
+		SetProductID(product.ID).
+		SetStartsAt(now.Add(-time.Hour)).
+		SetExpiresAt(now.Add(24 * time.Hour)).
+		SetStatus(service.SubscriptionStatusActive).
+		SetAssignedAt(now).
+		Save(s.ctx)
+	s.Require().NoError(err)
+	_, err = s.client.ProductSubscriptionMigrationSource.Create().
+		SetProductSubscriptionID(productSub.ID).
+		SetLegacyUserSubscriptionID(migratedLegacy.ID).
+		SetMigrationBatch("test-migrated-legacy").
+		SetLegacyGroupID(group.ID).
+		SetLegacyStatus(service.SubscriptionStatusActive).
+		SetLegacyStartsAt(migratedLegacy.StartsAt).
+		SetLegacyExpiresAt(migratedLegacy.ExpiresAt).
+		Save(s.ctx)
+	s.Require().NoError(err)
+
+	ids, err := s.repo.ListMigratedLegacySubscriptionIDs(s.ctx, user.ID)
+
+	s.Require().NoError(err)
+	s.Require().Contains(ids, migratedLegacy.ID)
+	s.Require().NotContains(ids, visibleLegacy.ID)
+}
+
 // --- ListByGroupID ---
 
 func (s *UserSubscriptionRepoSuite) TestListByGroupID() {
@@ -401,7 +448,7 @@ func (s *UserSubscriptionRepoSuite) TestIncrementUsage_Accumulates() {
 	s.Require().InDelta(3.5, got.DailyUsageUSD, 1e-6)
 }
 
-func (s *UserSubscriptionRepoSuite) TestIncrementUsage_ConsumesCarryoverBeforeFreshQuota() {
+func (s *UserSubscriptionRepoSuite) TestIncrementUsage_ClearsLegacyCarryover() {
 	user := s.mustCreateUser("usage-carry@test.com", service.RoleUser)
 	group := s.mustCreateGroup("g-usage-carry")
 	windowStart := time.Now().UTC().Truncate(24 * time.Hour)
@@ -422,8 +469,8 @@ func (s *UserSubscriptionRepoSuite) TestIncrementUsage_ConsumesCarryoverBeforeFr
 	s.Require().InDelta(15.0, got.DailyUsageUSD, 1e-6)
 	s.Require().InDelta(25.0, got.WeeklyUsageUSD, 1e-6)
 	s.Require().InDelta(35.0, got.MonthlyUsageUSD, 1e-6)
-	s.Require().InDelta(8.0, got.DailyCarryoverInUSD, 1e-6)
-	s.Require().InDelta(1.0, got.DailyCarryoverRemainingUSD, 1e-6)
+	s.Require().InDelta(0.0, got.DailyCarryoverInUSD, 1e-6)
+	s.Require().InDelta(0.0, got.DailyCarryoverRemainingUSD, 1e-6)
 }
 
 func (s *UserSubscriptionRepoSuite) TestActivateWindows() {
@@ -503,8 +550,8 @@ func (s *UserSubscriptionRepoSuite) TestAdvanceDailyWindow() {
 	s.Require().InDelta(0.0, got.DailyUsageUSD, 1e-6)
 	s.Require().InDelta(20.0, got.WeeklyUsageUSD, 1e-6)
 	s.Require().InDelta(30.0, got.MonthlyUsageUSD, 1e-6)
-	s.Require().InDelta(8.5, got.DailyCarryoverInUSD, 1e-6)
-	s.Require().InDelta(8.5, got.DailyCarryoverRemainingUSD, 1e-6)
+	s.Require().InDelta(0.0, got.DailyCarryoverInUSD, 1e-6)
+	s.Require().InDelta(0.0, got.DailyCarryoverRemainingUSD, 1e-6)
 	s.Require().NotNil(got.DailyWindowStart)
 	s.Require().WithinDuration(advanceAt, *got.DailyWindowStart, time.Microsecond)
 }

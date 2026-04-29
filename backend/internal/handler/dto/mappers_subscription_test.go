@@ -8,16 +8,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUserSubscriptionFromService_IncludesCarryoverFields(t *testing.T) {
+func TestUserSubscriptionFromService_LegacySubscriptionDoesNotExposeCarryover(t *testing.T) {
 	dailyLimit := 45.0
 	sub := &service.UserSubscription{
-		ID:                        1,
-		UserID:                    2,
-		GroupID:                   3,
-		Status:                    service.SubscriptionStatusActive,
-		ExpiresAt:                 time.Now().Add(24 * time.Hour),
-		DailyUsageUSD:             20,
-		DailyCarryoverInUSD:       15,
+		ID:                         1,
+		UserID:                     2,
+		GroupID:                    3,
+		Status:                     service.SubscriptionStatusActive,
+		ExpiresAt:                  time.Now().Add(24 * time.Hour),
+		DailyUsageUSD:              20,
+		DailyCarryoverInUSD:        15,
 		DailyCarryoverRemainingUSD: 10,
 		Group: &service.Group{
 			DailyLimitUSD: &dailyLimit,
@@ -27,8 +27,8 @@ func TestUserSubscriptionFromService_IncludesCarryoverFields(t *testing.T) {
 	out := UserSubscriptionFromService(sub)
 
 	require.NotNil(t, out)
-	require.InDelta(t, 15, out.DailyCarryoverInUSD, 1e-6)
-	require.InDelta(t, 60, out.DailyEffectiveLimitUSD, 1e-6)
-	require.InDelta(t, 40, out.DailyRemainingTotalUSD, 1e-6)
-	require.InDelta(t, 10, out.DailyRemainingCarryoverUSD, 1e-6)
+	require.InDelta(t, 0, out.DailyCarryoverInUSD, 1e-6)
+	require.InDelta(t, 45, out.DailyEffectiveLimitUSD, 1e-6)
+	require.InDelta(t, 25, out.DailyRemainingTotalUSD, 1e-6)
+	require.InDelta(t, 0, out.DailyRemainingCarryoverUSD, 1e-6)
 }

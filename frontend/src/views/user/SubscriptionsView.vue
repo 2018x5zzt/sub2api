@@ -267,12 +267,6 @@
                 ></div>
               </div>
               <p
-                v-if="hasSubscriptionDailyCarryover(subscription)"
-                class="text-xs text-amber-600 dark:text-amber-400"
-              >
-                {{ formatSubscriptionDailyQuotaBreakdown(subscription) }}
-              </p>
-              <p
                 v-if="subscription.daily_window_start"
                 class="text-xs text-gray-500 dark:text-dark-400"
               >
@@ -465,22 +459,7 @@ function formatProductDailyQuotaBreakdown(product: ActiveSubscriptionProduct): s
 }
 
 function getSubscriptionDailyDisplayLimit(subscription: UserSubscription): number | null | undefined {
-  if (subscription.daily_effective_limit_usd && subscription.daily_effective_limit_usd > 0) {
-    return subscription.daily_effective_limit_usd
-  }
-  if (!subscription.group?.daily_limit_usd) return subscription.group?.daily_limit_usd
-  return subscription.group.daily_limit_usd + (subscription.daily_carryover_in_usd || 0)
-}
-
-function hasSubscriptionDailyCarryover(subscription: UserSubscription): boolean {
-  return (subscription.daily_carryover_in_usd || 0) > 0
-}
-
-function formatSubscriptionDailyQuotaBreakdown(subscription: UserSubscription): string {
-  const carryover = (subscription.daily_carryover_in_usd || 0).toFixed(2)
-  const today = (subscription.group?.daily_limit_usd || 0).toFixed(2)
-  const total = (getSubscriptionDailyDisplayLimit(subscription) || 0).toFixed(2)
-  return t('userSubscriptions.dailyQuotaBreakdown', { carryover, today, total })
+  return subscription.group?.daily_limit_usd
 }
 
 function hasPositiveLimit(limit: number | null | undefined): boolean {

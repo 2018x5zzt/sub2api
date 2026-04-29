@@ -171,6 +171,50 @@ describe('SubscriptionProgressMini', () => {
     expect(text).toContain('$56.78/∞')
   })
 
+  it('does not show carryover for legacy group subscriptions', async () => {
+    mockStore.activeSubscriptions = [
+      {
+        id: 12,
+        user_id: 791,
+        group_id: 31,
+        status: 'active',
+        daily_usage_usd: 20,
+        weekly_usage_usd: 20,
+        monthly_usage_usd: 20,
+        daily_carryover_in_usd: 15,
+        daily_effective_limit_usd: 60,
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        group: {
+          id: 31,
+          name: 'Legacy Daily',
+          description: 'Old group subscription',
+          type: 'subscription',
+          daily_limit_usd: 45,
+          weekly_limit_usd: 0,
+          monthly_limit_usd: 0
+        }
+      }
+    ]
+    mockStore.hasActiveSubscriptions = true
+
+    const wrapper = mount(SubscriptionProgressMini, {
+      global: {
+        stubs: {
+          Icon: true,
+          RouterLink: { template: '<a><slot /></a>' }
+        }
+      }
+    })
+
+    await wrapper.find('button').trigger('click')
+
+    const text = wrapper.text()
+    expect(text).toContain('Legacy Daily')
+    expect(text).toContain('$20.00/$45.00')
+    expect(text).not.toContain('Today available')
+    expect(text).not.toContain('$20.00/$60.00')
+  })
+
   it('keeps fractional remaining days rounded up for product subscriptions', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-04-26T00:30:00Z'))

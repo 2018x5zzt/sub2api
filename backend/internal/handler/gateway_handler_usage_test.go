@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUsageUnrestrictedReportsLegacySubscriptionCarryover(t *testing.T) {
+func TestUsageUnrestrictedReportsLegacySubscriptionWithoutCarryover(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	dailyLimit := 45.0
@@ -34,14 +34,14 @@ func TestUsageUnrestrictedReportsLegacySubscriptionCarryover(t *testing.T) {
 
 	resp := runUsageUnrestricted(t, &service.APIKey{Group: group}, nil, subscription)
 
-	require.InDelta(t, 51.81, resp["remaining"], 1e-6)
+	require.InDelta(t, 11.46, resp["remaining"], 1e-6)
 	payload := requireMap(t, resp["subscription"])
 	require.InDelta(t, 33.54, payload["daily_usage_usd"], 1e-6)
 	require.InDelta(t, 45.0, payload["daily_limit_usd"], 1e-6)
-	require.InDelta(t, 40.35, payload["daily_carryover_in_usd"], 1e-6)
-	require.InDelta(t, 85.35, payload["daily_effective_limit_usd"], 1e-6)
-	require.InDelta(t, 51.81, payload["daily_remaining_total_usd"], 1e-6)
-	require.InDelta(t, 6.81, payload["daily_remaining_carryover_usd"], 1e-6)
+	require.InDelta(t, 0.0, payload["daily_carryover_in_usd"], 1e-6)
+	require.InDelta(t, 45.0, payload["daily_effective_limit_usd"], 1e-6)
+	require.InDelta(t, 11.46, payload["daily_remaining_total_usd"], 1e-6)
+	require.InDelta(t, 0.0, payload["daily_remaining_carryover_usd"], 1e-6)
 }
 
 func TestUsageUnrestrictedReportsProductSubscriptionCarryover(t *testing.T) {

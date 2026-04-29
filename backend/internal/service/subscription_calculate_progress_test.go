@@ -230,17 +230,17 @@ func TestCalculateProgress_ResetsInSeconds_NotNegative(t *testing.T) {
 		"ResetsInSeconds 不应为负数")
 }
 
-func TestCalculateProgress_DailyUsesEffectiveLimit(t *testing.T) {
+func TestCalculateProgress_DailyIgnoresLegacyCarryover(t *testing.T) {
 	svc := newTestSubscriptionService()
 	now := time.Now()
 
 	sub := &UserSubscription{
-		ID:                        1,
-		ExpiresAt:                 now.Add(10 * 24 * time.Hour),
-		DailyUsageUSD:             50,
-		DailyCarryoverInUSD:       15,
+		ID:                         1,
+		ExpiresAt:                  now.Add(10 * 24 * time.Hour),
+		DailyUsageUSD:              50,
+		DailyCarryoverInUSD:        15,
 		DailyCarryoverRemainingUSD: 10,
-		DailyWindowStart:          ptrTime(now.Add(-6 * time.Hour)),
+		DailyWindowStart:           ptrTime(now.Add(-6 * time.Hour)),
 	}
 	group := &Group{
 		Name:          "Carryover",
@@ -250,8 +250,8 @@ func TestCalculateProgress_DailyUsesEffectiveLimit(t *testing.T) {
 	progress := svc.calculateProgress(sub, group)
 
 	require.NotNil(t, progress.Daily)
-	assert.InDelta(t, 60, progress.Daily.LimitUSD, 1e-6)
+	assert.InDelta(t, 45, progress.Daily.LimitUSD, 1e-6)
 	assert.InDelta(t, 50, progress.Daily.UsedUSD, 1e-6)
-	assert.InDelta(t, 10, progress.Daily.RemainingUSD, 1e-6)
-	assert.InDelta(t, (50.0/60.0)*100.0, progress.Daily.Percentage, 1e-6)
+	assert.InDelta(t, 0, progress.Daily.RemainingUSD, 1e-6)
+	assert.InDelta(t, 100, progress.Daily.Percentage, 1e-6)
 }

@@ -223,14 +223,6 @@
                     }}
                   </span>
                 </div>
-                <div
-                  v-if="hasDailyCarryover(subscription)"
-                  class="ml-10 rounded-md bg-amber-50 px-2 py-1 text-[10px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
-                >
-                  <div>{{ formatDailyCarryoverMessage(subscription) }}</div>
-                  <div>{{ t('subscriptionProgress.carryoverRule') }}</div>
-                </div>
-
                 <div v-if="subscription.group?.weekly_limit_usd" class="flex items-center gap-2">
                   <span class="w-8 flex-shrink-0 text-[10px] text-gray-500">{{
                     t('subscriptionProgress.weekly')
@@ -407,20 +399,7 @@ function getMaxProductUsagePercentage(product: ActiveSubscriptionProduct): numbe
 }
 
 function getDailyDisplayLimit(sub: UserSubscription): number | null | undefined {
-  if (sub.daily_effective_limit_usd && sub.daily_effective_limit_usd > 0) {
-    return sub.daily_effective_limit_usd
-  }
   return sub.group?.daily_limit_usd
-}
-
-function hasDailyCarryover(sub: UserSubscription): boolean {
-  return (sub.daily_carryover_in_usd || 0) > 0
-}
-
-function formatDailyCarryoverMessage(sub: UserSubscription): string {
-  const total = (getDailyDisplayLimit(sub) || 0).toFixed(2)
-  const carryover = (sub.daily_carryover_in_usd || 0).toFixed(2)
-  return t('subscriptionProgress.todayAvailable', { total, carryover })
 }
 
 function getProductDailyDisplayLimit(product: ActiveSubscriptionProduct): number | null {

@@ -37,7 +37,7 @@ func newMaintenanceSvc(stub *maintenanceUserSubRepoStub) *SubscriptionService {
 	return NewSubscriptionService(groupRepoNoop{}, stub, nil, nil, nil)
 }
 
-func TestCheckAndResetWindows_SkipsDailyResetPersistence(t *testing.T) {
+func TestCheckAndResetWindows_ClearsLegacyCarryoverInMemory(t *testing.T) {
 	stub := &maintenanceUserSubRepoStub{}
 	svc := newMaintenanceSvc(stub)
 	windowStart := startOfDay(time.Now()).Add(-24 * time.Hour)
@@ -58,8 +58,8 @@ func TestCheckAndResetWindows_SkipsDailyResetPersistence(t *testing.T) {
 	require.False(t, stub.resetWeeklyCalled)
 	require.False(t, stub.resetMonthlyCalled)
 	require.InDelta(t, 18, sub.DailyUsageUSD, 1e-6)
-	require.InDelta(t, 9, sub.DailyCarryoverInUSD, 1e-6)
-	require.InDelta(t, 4, sub.DailyCarryoverRemainingUSD, 1e-6)
+	require.InDelta(t, 0, sub.DailyCarryoverInUSD, 1e-6)
+	require.InDelta(t, 0, sub.DailyCarryoverRemainingUSD, 1e-6)
 }
 
 func TestCheckAndResetWindows_StillResetsWeeklyAndMonthly(t *testing.T) {
@@ -67,14 +67,14 @@ func TestCheckAndResetWindows_StillResetsWeeklyAndMonthly(t *testing.T) {
 	svc := newMaintenanceSvc(stub)
 	windowStart := startOfDay(time.Now()).Add(-31 * 24 * time.Hour)
 	sub := &UserSubscription{
-		ID:                2,
-		UserID:            10,
-		GroupID:           20,
-		DailyWindowStart:  &windowStart,
-		WeeklyWindowStart: &windowStart,
+		ID:                 2,
+		UserID:             10,
+		GroupID:            20,
+		DailyWindowStart:   &windowStart,
+		WeeklyWindowStart:  &windowStart,
 		MonthlyWindowStart: &windowStart,
-		WeeklyUsageUSD:    16,
-		MonthlyUsageUSD:   42,
+		WeeklyUsageUSD:     16,
+		MonthlyUsageUSD:    42,
 	}
 
 	err := svc.CheckAndResetWindows(context.Background(), sub)

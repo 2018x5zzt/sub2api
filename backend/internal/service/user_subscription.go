@@ -102,7 +102,7 @@ func (s *UserSubscription) DailyEffectiveLimit(group *Group) float64 {
 	if group == nil || !group.HasDailyLimit() {
 		return 0
 	}
-	return *group.DailyLimitUSD + maxFloat64(s.DailyCarryoverInUSD, 0)
+	return *group.DailyLimitUSD
 }
 
 func (s *UserSubscription) DailyRemainingTotal(group *Group) float64 {

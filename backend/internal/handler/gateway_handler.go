@@ -1294,11 +1294,6 @@ func (h *GatewayHandler) calculateProductSubscriptionRemaining(product *service.
 }
 
 func (h *GatewayHandler) subscriptionUsagePayload(group *service.Group, subscription *service.UserSubscription) gin.H {
-	dailyRemainingCarryover := subscription.DailyCarryoverRemainingUSD
-	if dailyRemainingCarryover < 0 {
-		dailyRemainingCarryover = 0
-	}
-
 	return gin.H{
 		"daily_usage_usd":               subscription.DailyUsageUSD,
 		"weekly_usage_usd":              subscription.WeeklyUsageUSD,
@@ -1306,10 +1301,10 @@ func (h *GatewayHandler) subscriptionUsagePayload(group *service.Group, subscrip
 		"daily_limit_usd":               group.DailyLimitUSD,
 		"weekly_limit_usd":              group.WeeklyLimitUSD,
 		"monthly_limit_usd":             group.MonthlyLimitUSD,
-		"daily_carryover_in_usd":        subscription.DailyCarryoverInUSD,
+		"daily_carryover_in_usd":        0,
 		"daily_effective_limit_usd":     subscription.DailyEffectiveLimit(group),
 		"daily_remaining_total_usd":     subscription.DailyRemainingTotal(group),
-		"daily_remaining_carryover_usd": dailyRemainingCarryover,
+		"daily_remaining_carryover_usd": 0,
 		"expires_at":                    subscription.ExpiresAt,
 	}
 }
