@@ -1040,6 +1040,23 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
           type: 'enabled'
         }
       }
+    },
+    'claude-sonnet-4-6-thinking': {
+      name: 'Claude 4.6 Sonnet (Thinking)',
+      limit: {
+        context: 200000,
+        output: 64000
+      },
+      modalities: {
+        input: ['text', 'image', 'pdf'],
+        output: ['text']
+      },
+      options: {
+        thinking: {
+          budgetTokens: 24576,
+          type: 'enabled'
+        }
+      }
     }
   }
 
