@@ -30,3 +30,7 @@
 ## Verification Gate
 
 This branch cannot replace xlabapi until all child plans complete their targeted tests and final verification passes.
+
+## Tracking Note
+
+`upstream/main` ignores `docs/*` in `.gitignore`. Superpowers specs, plans, and context ledgers under `docs/superpowers` are intentional tracked integration artifacts, so future tasks must stage new files in this tree with `git add -f`.
