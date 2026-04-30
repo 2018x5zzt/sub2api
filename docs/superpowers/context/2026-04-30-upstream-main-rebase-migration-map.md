@@ -63,3 +63,9 @@ Populate this table during the schema child plan before writing SQL:
 | 108_auth_identity_foundation_core.sql | none confirmed | classify in schema child plan | migration test |
 | 125_add_channel_monitors.sql | none confirmed | classify in schema child plan | migration test |
 | 130_add_user_affiliates.sql | 134_xlabapi_invite_to_affiliate_compat.sql partial | classify in schema child plan | migration test |
+
+## Schema Child Plan Notes
+
+- The schema child plan owns final migration numbering after `137_clear_legacy_subscription_carryover.sql`.
+- New SQL must be idempotent where it can be run on databases that already received xlabapi local migrations.
+- `docs/superpowers` is ignored by upstream `.gitignore`; stage context updates with `git add -f`.
