@@ -57,12 +57,15 @@ Populate this table during the schema child plan before writing SQL:
 
 | Upstream migration | xlabapi equivalent | Final action | Verification |
 | --- | --- | --- | --- |
-| 101_add_balance_notify_fields.sql | none confirmed | classify in schema child plan | migration test |
-| 104_migrate_notify_emails_to_struct.sql | none confirmed | classify in schema child plan | migration test |
-| 105_migrate_websearch_emulation_to_tristate.sql | none confirmed | classify in schema child plan | migration test |
-| 108_auth_identity_foundation_core.sql | none confirmed | classify in schema child plan | migration test |
-| 125_add_channel_monitors.sql | none confirmed | classify in schema child plan | migration test |
-| 130_add_user_affiliates.sql | 134_xlabapi_invite_to_affiliate_compat.sql partial | classify in schema child plan | migration test |
+| 101_add_balance_notify_fields.sql | none confirmed | upstream baseline; runtime handled in WebSearch/notifications plan | migration test |
+| 104_migrate_notify_emails_to_struct.sql | none confirmed | upstream baseline; runtime handled in WebSearch/notifications plan | migration test |
+| 105_migrate_websearch_emulation_to_tristate.sql | none confirmed | upstream baseline; runtime handled in WebSearch/notifications plan | migration test |
+| 108_auth_identity_foundation_core.sql | none confirmed | upstream baseline | migration test |
+| 125_add_channel_monitors.sql | none confirmed | upstream baseline; runtime handled in channels/runtime plans | migration test |
+| 130_add_user_affiliates.sql | 134_xlabapi_invite_to_affiliate_compat.sql partial | covered by 139_xlabapi_upstream_main_channel_affiliate_compat.sql | migration test |
+| 109_add_subscription_daily_carryover.sql | none in upstream baseline | covered by 138_xlabapi_upstream_main_subscription_compat.sql | migration test |
+| 110_add_shared_subscription_products.sql | none in upstream baseline | covered by 138_xlabapi_upstream_main_subscription_compat.sql | migration test |
+| 135_add_channel_model_pricing_platform.sql | 086_channel_platform_pricing.sql partial | covered by 139_xlabapi_upstream_main_channel_affiliate_compat.sql | migration test |
 
 ## Schema Child Plan Notes
 
