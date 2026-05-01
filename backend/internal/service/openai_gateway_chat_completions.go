@@ -114,10 +114,20 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
 		return nil, fmt.Errorf("unmarshal for instructions normalization: %w", err)
 	}
+	needsRemarshal := false
+	if account.Type == AccountTypeAPIKey {
+		if _, ok := reqBody["max_output_tokens"]; ok {
+			delete(reqBody, "max_output_tokens")
+			needsRemarshal = true
+		}
+	}
 	if ensureOpenAIResponsesInstructionsMap(reqBody) {
+		needsRemarshal = true
+	}
+	if needsRemarshal {
 		responsesBody, err = json.Marshal(reqBody)
 		if err != nil {
-			return nil, fmt.Errorf("remarshal after instructions normalization: %w", err)
+			return nil, fmt.Errorf("remarshal after API key request normalization: %w", err)
 		}
 	}
 
