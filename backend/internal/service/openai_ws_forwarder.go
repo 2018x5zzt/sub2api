@@ -1191,6 +1191,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSCreatePayload(reqBody map[string]any
 	}
 
 	delete(payload, "background")
+	applyInstructions(payload, false)
 	if _, exists := payload["stream"]; !exists {
 		payload["stream"] = true
 	}
@@ -2543,6 +2544,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 			normalized = next
 		}
+		withInstructions, _, ensureErr := ensureOpenAIRequestInstructions(normalized)
+		if ensureErr != nil {
+			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", ensureErr)
+		}
+		normalized = withInstructions
 
 		// Apply OpenAI Fast Policy on the response.create frame using the same
 		// evaluator/normalize/scope rules as the HTTP entrypoints. This is the

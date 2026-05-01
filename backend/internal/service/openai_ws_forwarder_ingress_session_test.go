@@ -164,6 +164,23 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_KeepLeaseAcrossT
 	require.Len(t, captureConn.writes, 2, "应向同一上游连接发送两轮 response.create")
 }
 
+func TestOpenAIGatewayService_BuildOpenAIWSCreatePayloadAddsDefaultInstructions(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	payload := svc.buildOpenAIWSCreatePayload(map[string]any{
+		"model": "gpt-5.2",
+		"input": []any{map[string]any{"type": "text", "text": "hi"}},
+	}, &Account{Type: AccountTypeAPIKey})
+
+	require.Equal(t, "response.create", payload["type"])
+	require.Equal(t, openAIResponsesDefaultInstructions, payload["instructions"])
+
+	payload = svc.buildOpenAIWSCreatePayload(map[string]any{
+		"model":        "gpt-5.2",
+		"instructions": "keep me",
+	}, &Account{Type: AccountTypeAPIKey})
+	require.Equal(t, "keep me", payload["instructions"])
+}
+
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_DedicatedModeDoesNotReuseConnAcrossSessions(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

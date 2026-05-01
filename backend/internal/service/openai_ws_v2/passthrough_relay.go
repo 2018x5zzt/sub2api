@@ -12,7 +12,10 @@ import (
 
 	coderws "github.com/coder/websocket"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
+
+const defaultResponseCreateInstructions = "You are a helpful coding assistant."
 
 type FrameConn interface {
 	ReadFrame(ctx context.Context) (coderws.MessageType, []byte, error)
@@ -112,6 +115,7 @@ func Relay(
 	firstClientMessage []byte,
 	options RelayOptions,
 ) (RelayResult, *RelayExit) {
+	firstClientMessage = injectResponseCreateInstructions(firstClientMessage)
 	result := RelayResult{RequestModel: strings.TrimSpace(gjson.GetBytes(firstClientMessage, "model").String())}
 	if clientConn == nil || upstreamConn == nil {
 		return result, &RelayExit{Stage: "relay_init", Err: errors.New("relay connection is nil")}
@@ -339,6 +343,7 @@ func runClientToUpstream(
 			exitCh <- relayExitSignal{stage: "read_client", err: err, graceful: isDisconnectError(err)}
 			return
 		}
+		payload = injectResponseCreateInstructions(payload)
 		markActivity()
 		if err := writeUpstream(msgType, payload); err != nil {
 			emitRelayTrace(onTrace, RelayTraceEvent{
@@ -356,6 +361,28 @@ func runClientToUpstream(
 		}
 		markActivity()
 	}
+}
+
+func injectResponseCreateInstructions(payload []byte) []byte {
+	if len(payload) == 0 || !gjson.ValidBytes(payload) {
+		return payload
+	}
+
+	eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
+	if eventType != "" && eventType != "response.create" {
+		return payload
+	}
+
+	instructions := gjson.GetBytes(payload, "instructions")
+	if instructions.Exists() && instructions.Type == gjson.String && strings.TrimSpace(instructions.String()) != "" {
+		return payload
+	}
+
+	updated, err := sjson.SetBytes(payload, "instructions", defaultResponseCreateInstructions)
+	if err != nil {
+		return payload
+	}
+	return updated
 }
 
 func runUpstreamToClient(

@@ -11,6 +11,7 @@ import (
 
 	coderws "github.com/coder/websocket"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 type passthroughTestFrame struct {
@@ -191,12 +192,25 @@ func TestRelay_BasicRelayAndUsage(t *testing.T) {
 	upstreamWrites := upstreamConn.Writes()
 	require.Len(t, upstreamWrites, 1)
 	require.Equal(t, coderws.MessageText, upstreamWrites[0].msgType)
-	require.JSONEq(t, string(firstPayload), string(upstreamWrites[0].payload))
+	require.Equal(t, "gpt-5.3-codex", gjson.GetBytes(upstreamWrites[0].payload, "model").String())
+	require.Equal(t, defaultResponseCreateInstructions, gjson.GetBytes(upstreamWrites[0].payload, "instructions").String())
+	require.JSONEq(t, `[{"type":"input_text","text":"hello"}]`, gjson.GetBytes(upstreamWrites[0].payload, "input").Raw)
 
 	clientWrites := clientConn.Writes()
 	require.Len(t, clientWrites, 1)
 	require.Equal(t, coderws.MessageText, clientWrites[0].msgType)
 	require.JSONEq(t, `{"type":"response.completed","response":{"id":"resp_123","usage":{"input_tokens":7,"output_tokens":3,"input_tokens_details":{"cached_tokens":2}}}}`, string(clientWrites[0].payload))
+}
+
+func TestInjectResponseCreateInstructions(t *testing.T) {
+	payload := injectResponseCreateInstructions([]byte(`{"type":"response.create","model":"gpt-5.2"}`))
+	require.Equal(t, defaultResponseCreateInstructions, gjson.GetBytes(payload, "instructions").String())
+
+	payload = injectResponseCreateInstructions([]byte(`{"type":"response.delta","model":"gpt-5.2"}`))
+	require.False(t, gjson.GetBytes(payload, "instructions").Exists())
+
+	payload = injectResponseCreateInstructions([]byte(`{"type":"response.create","model":"gpt-5.2","instructions":"keep me"}`))
+	require.Equal(t, "keep me", gjson.GetBytes(payload, "instructions").String())
 }
 
 func TestRelay_FunctionCallOutputBytesPreserved(t *testing.T) {
@@ -220,7 +234,8 @@ func TestRelay_FunctionCallOutputBytesPreserved(t *testing.T) {
 	upstreamWrites := upstreamConn.Writes()
 	require.Len(t, upstreamWrites, 1)
 	require.Equal(t, coderws.MessageText, upstreamWrites[0].msgType)
-	require.Equal(t, firstPayload, upstreamWrites[0].payload)
+	require.Equal(t, defaultResponseCreateInstructions, gjson.GetBytes(upstreamWrites[0].payload, "instructions").String())
+	require.Equal(t, `{"ok":true}`, gjson.GetBytes(upstreamWrites[0].payload, "input.0.output").String())
 }
 
 func TestRelay_UpstreamDisconnect(t *testing.T) {
@@ -593,7 +608,8 @@ func TestRelay_PreservesFirstMessageType(t *testing.T) {
 	upstreamWrites := upstreamConn.Writes()
 	require.Len(t, upstreamWrites, 1)
 	require.Equal(t, coderws.MessageBinary, upstreamWrites[0].msgType)
-	require.Equal(t, firstPayload, upstreamWrites[0].payload)
+	require.Equal(t, defaultResponseCreateInstructions, gjson.GetBytes(upstreamWrites[0].payload, "instructions").String())
+	require.Equal(t, "gpt-4o", gjson.GetBytes(upstreamWrites[0].payload, "model").String())
 }
 
 func TestRelay_UsageParseFailureDoesNotBlockRelay(t *testing.T) {

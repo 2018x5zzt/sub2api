@@ -876,8 +876,17 @@ func applyInstructions(reqBody map[string]any, isCodexCLI bool) bool {
 	if !isInstructionsEmpty(reqBody) {
 		return false
 	}
-	reqBody["instructions"] = "You are a helpful coding assistant."
+	reqBody["instructions"] = openAIResponsesDefaultInstructions
 	return true
+}
+
+func ensureOpenAIResponsesInstructionsMap(reqBody map[string]any) bool {
+	modified := extractSystemMessagesFromInput(reqBody)
+	if isInstructionsEmpty(reqBody) {
+		reqBody["instructions"] = openAIResponsesDefaultInstructions
+		modified = true
+	}
+	return modified
 }
 
 // isInstructionsEmpty 检查 instructions 字段是否为空

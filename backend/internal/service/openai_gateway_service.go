@@ -55,6 +55,7 @@ const (
 	openAIWSRetryJitterRatioDefault    = 0.2
 	openAICompactSessionSeedKey        = "openai_compact_session_seed"
 	codexCLIVersion                    = "0.125.0"
+	openAIResponsesDefaultInstructions = "You are a helpful coding assistant."
 	// Codex 限额快照仅用于后台展示/诊断，不需要每个成功请求都立即落库。
 	openAICodexSnapshotPersistMinInterval = 30 * time.Second
 )
@@ -2103,9 +2104,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 	// 非透传模式下，instructions 为空时注入默认指令。
 	if isInstructionsEmpty(reqBody) {
-		reqBody["instructions"] = "You are a helpful coding assistant."
+		reqBody["instructions"] = openAIResponsesDefaultInstructions
 		bodyModified = true
-		markPatchSet("instructions", "You are a helpful coding assistant.")
+		markPatchSet("instructions", openAIResponsesDefaultInstructions)
 	}
 
 	if isCodexCLI && ensureOpenAIResponsesImageGenerationTool(reqBody) {
@@ -2793,6 +2794,14 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			body = normalizedBody
 		}
 		reqStream = gjson.GetBytes(body, "stream").Bool()
+	}
+
+	bodyWithInstructions, instructionsChanged, err := ensureOpenAIRequestInstructions(body)
+	if err != nil {
+		return nil, err
+	}
+	if instructionsChanged {
+		body = bodyWithInstructions
 	}
 
 	sanitizedBody, sanitized, err := sanitizeEmptyBase64InputImagesInOpenAIBody(body)
@@ -5550,6 +5559,28 @@ func extractOpenAIRequestMetaFromBody(body []byte) (model string, stream bool, p
 	stream = gjson.GetBytes(body, "stream").Bool()
 	promptCacheKey = strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())
 	return model, stream, promptCacheKey
+}
+
+func ensureOpenAIRequestInstructions(body []byte) ([]byte, bool, error) {
+	if len(body) == 0 {
+		return body, false, nil
+	}
+
+	eventType := strings.TrimSpace(gjson.GetBytes(body, "type").String())
+	if eventType != "" && eventType != "response.create" {
+		return body, false, nil
+	}
+
+	instructions := gjson.GetBytes(body, "instructions")
+	if instructions.Exists() && instructions.Type == gjson.String && strings.TrimSpace(instructions.String()) != "" {
+		return body, false, nil
+	}
+
+	updated, err := sjson.SetBytes(body, "instructions", openAIResponsesDefaultInstructions)
+	if err != nil {
+		return body, false, fmt.Errorf("normalize body instructions: %w", err)
+	}
+	return updated, true, nil
 }
 
 // normalizeOpenAIPassthroughOAuthBody 将透传 OAuth 请求体收敛为旧链路关键行为：

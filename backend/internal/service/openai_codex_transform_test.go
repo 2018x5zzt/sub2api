@@ -1156,6 +1156,33 @@ func TestIsInstructionsEmpty(t *testing.T) {
 	}
 }
 
+func TestEnsureOpenAIResponsesInstructionsMap(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.2",
+		"input": []any{
+			map[string]any{"type": "message", "role": "system", "content": "System rule."},
+			map[string]any{"type": "message", "role": "user", "content": "Hello"},
+		},
+	}
+
+	modified := ensureOpenAIResponsesInstructionsMap(reqBody)
+
+	require.True(t, modified)
+	require.Equal(t, "System rule.", reqBody["instructions"])
+	input, ok := reqBody["input"].([]any)
+	require.True(t, ok)
+	require.Len(t, input, 1)
+	require.Equal(t, "user", input[0].(map[string]any)["role"])
+
+	reqBody = map[string]any{
+		"model": "gpt-5.2",
+		"input": []any{map[string]any{"type": "message", "role": "user", "content": "Hello"}},
+	}
+	modified = ensureOpenAIResponsesInstructionsMap(reqBody)
+	require.True(t, modified)
+	require.Equal(t, openAIResponsesDefaultInstructions, reqBody["instructions"])
+}
+
 func TestFilterCodexInput_DropsReasoningItemsRegardlessOfPreserveReferences(t *testing.T) {
 	// Reasoning items in input[] reference rs_* IDs that were emitted by
 	// chatgpt.com under store=false (forced by applyCodexOAuthTransform).

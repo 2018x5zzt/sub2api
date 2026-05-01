@@ -253,6 +253,26 @@ func TestOpenAIGatewayService_OAuthPassthrough_StreamKeepsToolNameAndBodyNormali
 	require.NotContains(t, body, "\"name\":\"edit\"")
 }
 
+func TestEnsureOpenAIRequestInstructions(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.2","input":[{"type":"text","text":"hi"}]}`)
+	updated, changed, err := ensureOpenAIRequestInstructions(body)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, openAIResponsesDefaultInstructions, gjson.GetBytes(updated, "instructions").String())
+
+	body = []byte(`{"type":"response.delta","model":"gpt-5.2"}`)
+	updated, changed, err = ensureOpenAIRequestInstructions(body)
+	require.NoError(t, err)
+	require.False(t, changed)
+	require.JSONEq(t, string(body), string(updated))
+
+	body = []byte(`{"type":"response.create","model":"gpt-5.2","instructions":"keep me"}`)
+	updated, changed, err = ensureOpenAIRequestInstructions(body)
+	require.NoError(t, err)
+	require.False(t, changed)
+	require.Equal(t, "keep me", gjson.GetBytes(updated, "instructions").String())
+}
+
 func TestOpenAIGatewayService_OAuthPassthrough_CompactUsesJSONAndKeepsNonStreaming(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -976,7 +996,12 @@ func TestOpenAIGatewayService_APIKeyPassthrough_PreservesBodyAndUsesResponsesEnd
 	require.NotNil(t, result.ServiceTier)
 	require.Equal(t, "flex", *result.ServiceTier)
 	require.NotNil(t, upstream.lastReq)
-	require.Equal(t, originalBody, upstream.lastBody)
+	require.Equal(t, "gpt-5.2", gjson.GetBytes(upstream.lastBody, "model").String())
+	require.Equal(t, false, gjson.GetBytes(upstream.lastBody, "stream").Bool())
+	require.Equal(t, "flex", gjson.GetBytes(upstream.lastBody, "service_tier").String())
+	require.Equal(t, int64(128), gjson.GetBytes(upstream.lastBody, "max_output_tokens").Int())
+	require.Equal(t, "hi", gjson.GetBytes(upstream.lastBody, "input.0.text").String())
+	require.Equal(t, openAIResponsesDefaultInstructions, gjson.GetBytes(upstream.lastBody, "instructions").String())
 	require.Equal(t, "https://api.openai.com/v1/responses", upstream.lastReq.URL.String())
 	require.Equal(t, "Bearer sk-api-key", upstream.lastReq.Header.Get("Authorization"))
 	require.Equal(t, "curl/8.0", upstream.lastReq.Header.Get("User-Agent"))

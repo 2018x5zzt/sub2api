@@ -80,8 +80,18 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		return nil, fmt.Errorf("marshal responses request: %w", err)
 	}
 
+	var reqBody map[string]any
+	if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
+		return nil, fmt.Errorf("unmarshal for instructions normalization: %w", err)
+	}
+	if ensureOpenAIResponsesInstructionsMap(reqBody) {
+		responsesBody, err = json.Marshal(reqBody)
+		if err != nil {
+			return nil, fmt.Errorf("remarshal after instructions normalization: %w", err)
+		}
+	}
+
 	if account.Type == AccountTypeOAuth {
-		var reqBody map[string]any
 		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
 			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
 		}
