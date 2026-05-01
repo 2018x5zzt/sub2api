@@ -73,6 +73,18 @@ var migrationChecksumCompatibilityRules = map[string]migrationChecksumCompatibil
 			"222b4a09c797c22e5922b6b172327c824f5463aaa8760e4f621bc5c22e2be0f3": {},
 		},
 	},
+	"047_add_sora_pricing_and_media_type.sql": {
+		fileChecksum: "0039b5824ed248c24b9bf6a55e94decaa9423178cc9c068774f851542086c292",
+		acceptedDBChecksum: map[string]struct{}{
+			"d806f44a7dd70b8a2f7abadcb5cc8bf75679db242dacab9c8a69886bc17ed10a": {},
+		},
+	},
+	"063_add_sora_client_tables.sql": {
+		fileChecksum: "ed8ae697b9b21672506f9c752f9671bc7c6e4d1d62e85aee510c48a8192cae7f",
+		acceptedDBChecksum: map[string]struct{}{
+			"23a5777e8c38f269f8777e959af33db063891a8ba19eae0a96ee9c22e6b10103": {},
+		},
+	},
 }
 
 // ApplyMigrations 将嵌入的 SQL 迁移文件应用到指定的数据库。
