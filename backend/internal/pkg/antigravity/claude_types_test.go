@@ -13,6 +13,7 @@ func TestDefaultModels_ContainsNewAndLegacyImageModels(t *testing.T) {
 
 	requiredIDs := []string{
 		"claude-opus-4-6-thinking",
+		"claude-sonnet-4-6-thinking",
 		"gemini-2.5-flash-image",
 		"gemini-2.5-flash-image-preview",
 		"gemini-3.1-flash-image",

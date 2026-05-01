@@ -8,6 +8,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestBuildModelIdentityText_DistinguishesSonnet46Thinking(t *testing.T) {
+	text := buildModelIdentityText("claude-sonnet-4-6-thinking")
+
+	require.Contains(t, text, "Claude Sonnet 4.6 Thinking")
+	require.Contains(t, text, "ModelId is claude-sonnet-4-6-thinking")
+}
+
 // TestBuildParts_ThinkingBlockWithoutSignature 测试thinking block无signature时的处理
 func TestBuildParts_ThinkingBlockWithoutSignature(t *testing.T) {
 	tests := []struct {

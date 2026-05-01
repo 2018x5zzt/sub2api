@@ -204,11 +204,12 @@ type modelInfo struct {
 // 只有在此映射表中的模型才会注入身份提示词
 // 注意：模型映射逻辑在网关层完成；这里仅用于按模型前缀判断是否注入身份提示词。
 var modelInfoMap = map[string]modelInfo{
-	"claude-opus-4-5":   {DisplayName: "Claude Opus 4.5", CanonicalID: "claude-opus-4-5-20250929"},
-	"claude-opus-4-6":   {DisplayName: "Claude Opus 4.6", CanonicalID: "claude-opus-4-6"},
-	"claude-sonnet-4-6": {DisplayName: "Claude Sonnet 4.6", CanonicalID: "claude-sonnet-4-6"},
-	"claude-sonnet-4-5": {DisplayName: "Claude Sonnet 4.5", CanonicalID: "claude-sonnet-4-5-20250929"},
-	"claude-haiku-4-5":  {DisplayName: "Claude Haiku 4.5", CanonicalID: "claude-haiku-4-5-20251001"},
+	"claude-opus-4-5":            {DisplayName: "Claude Opus 4.5", CanonicalID: "claude-opus-4-5-20250929"},
+	"claude-opus-4-6":            {DisplayName: "Claude Opus 4.6", CanonicalID: "claude-opus-4-6"},
+	"claude-sonnet-4-6-thinking": {DisplayName: "Claude Sonnet 4.6 Thinking", CanonicalID: "claude-sonnet-4-6-thinking"},
+	"claude-sonnet-4-6":          {DisplayName: "Claude Sonnet 4.6", CanonicalID: "claude-sonnet-4-6"},
+	"claude-sonnet-4-5":          {DisplayName: "Claude Sonnet 4.5", CanonicalID: "claude-sonnet-4-5-20250929"},
+	"claude-haiku-4-5":           {DisplayName: "Claude Haiku 4.5", CanonicalID: "claude-haiku-4-5-20251001"},
 }
 
 // getModelInfo 根据模型 ID 获取模型信息（前缀匹配）
