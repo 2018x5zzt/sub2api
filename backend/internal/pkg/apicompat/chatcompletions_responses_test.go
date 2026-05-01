@@ -113,6 +113,47 @@ func TestChatCompletionsToResponses_ToolCalls(t *testing.T) {
 	assert.Equal(t, "ping", resp.Tools[0].Name)
 }
 
+func TestChatCompletionsToResponses_FunctionNameToolsArePreserved(t *testing.T) {
+	raw := []byte(`{
+		"model":"gpt-5.5",
+		"tools":[{"type":"function","function_name":"Agent"}],
+		"messages":[{"role":"user","content":"continue"}]
+	}`)
+
+	var req ChatCompletionsRequest
+	require.NoError(t, json.Unmarshal(raw, &req))
+
+	resp, err := ChatCompletionsToResponses(&req)
+	require.NoError(t, err)
+	require.Len(t, resp.Tools, 1)
+	assert.Equal(t, "function", resp.Tools[0].Type)
+	assert.Equal(t, "Agent", resp.Tools[0].Name)
+	assert.JSONEq(t, `{"type":"object","properties":{}}`, string(resp.Tools[0].Parameters))
+}
+
+func TestChatCompletionsToResponses_FunctionToolsDefaultParameters(t *testing.T) {
+	req := &ChatCompletionsRequest{
+		Model: "gpt-5.5",
+		Messages: []ChatMessage{
+			{Role: "user", Content: json.RawMessage(`"Run a command"`)},
+		},
+		Tools: []ChatTool{
+			{
+				Type: "function",
+				Function: &ChatFunction{
+					Name: "Bash",
+				},
+			},
+		},
+	}
+
+	resp, err := ChatCompletionsToResponses(req)
+	require.NoError(t, err)
+	require.Len(t, resp.Tools, 1)
+	assert.Equal(t, "Bash", resp.Tools[0].Name)
+	assert.JSONEq(t, `{"type":"object","properties":{}}`, string(resp.Tools[0].Parameters))
+}
+
 func TestChatCompletionsToResponses_MaxTokens(t *testing.T) {
 	t.Run("max_tokens", func(t *testing.T) {
 		maxTokens := 100

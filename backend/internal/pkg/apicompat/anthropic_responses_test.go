@@ -1243,6 +1243,11 @@ func TestNormalizeToolParameters(t *testing.T) {
 			expected: `{"type":"object","properties":{}}`,
 		},
 		{
+			name:     "schema without type",
+			input:    json.RawMessage(`{"properties":{"cmd":{"type":"string"}}}`),
+			expected: `{"type":"object","properties":{"cmd":{"type":"string"}}}`,
+		},
+		{
 			name:     "object with properties",
 			input:    json.RawMessage(`{"type":"object","properties":{"city":{"type":"string"}}}`),
 			expected: `{"type":"object","properties":{"city":{"type":"string"}}}`,
