@@ -105,51 +105,6 @@ func (s *UserSubscriptionRepoSuite) TestCreate() {
 	s.Require().Equal(sub.GroupID, got.GroupID)
 }
 
-func (s *UserSubscriptionRepoSuite) TestSchemaIncludesDailyCarryoverColumns() {
-	rows, err := integrationDB.QueryContext(s.ctx, `
-		SELECT column_name
-		FROM information_schema.columns
-		WHERE table_schema = 'public'
-			AND table_name = 'user_subscriptions'
-			AND column_name IN ('daily_carryover_in_usd', 'daily_carryover_remaining_usd')
-	`)
-	s.Require().NoError(err)
-	defer func() { _ = rows.Close() }()
-
-	columns := make(map[string]bool, 2)
-	for rows.Next() {
-		var column string
-		s.Require().NoError(rows.Scan(&column))
-		columns[column] = true
-	}
-	s.Require().NoError(rows.Err())
-	s.Require().True(columns["daily_carryover_in_usd"], "expected daily_carryover_in_usd column")
-	s.Require().True(columns["daily_carryover_remaining_usd"], "expected daily_carryover_remaining_usd column")
-}
-
-func (s *UserSubscriptionRepoSuite) TestCreate_IgnoresDailyCarryoverFields() {
-	user := s.mustCreateUser("sub-carryover@test.com", service.RoleUser)
-	group := s.mustCreateGroup("g-carryover")
-
-	sub := &service.UserSubscription{
-		UserID:                     user.ID,
-		GroupID:                    group.ID,
-		Status:                     service.SubscriptionStatusActive,
-		ExpiresAt:                  time.Now().Add(24 * time.Hour),
-		DailyCarryoverInUSD:        12.5,
-		DailyCarryoverRemainingUSD: 3.25,
-	}
-
-	err := s.repo.Create(s.ctx, sub)
-	s.Require().NoError(err, "Create")
-	s.Require().NotZero(sub.ID, "expected ID to be set")
-
-	got, err := s.repo.GetByID(s.ctx, sub.ID)
-	s.Require().NoError(err, "GetByID")
-	s.Require().InDelta(0.0, got.DailyCarryoverInUSD, 1e-6)
-	s.Require().InDelta(0.0, got.DailyCarryoverRemainingUSD, 1e-6)
-}
-
 func (s *UserSubscriptionRepoSuite) TestGetByID_WithPreloads() {
 	user := s.mustCreateUser("preload@test.com", service.RoleUser)
 	group := s.mustCreateGroup("g-preload")
@@ -289,53 +244,6 @@ func (s *UserSubscriptionRepoSuite) TestListActiveByUserID() {
 	s.Require().Equal(service.SubscriptionStatusActive, subs[0].Status)
 }
 
-func (s *UserSubscriptionRepoSuite) TestListMigratedLegacySubscriptionIDs() {
-	user := s.mustCreateUser("migrated-legacy@test.com", service.RoleUser)
-	group := s.mustCreateGroup("g-migrated-legacy")
-	visibleGroup := s.mustCreateGroup("g-visible-legacy")
-	migratedLegacy := s.mustCreateSubscription(user.ID, group.ID, nil)
-	visibleLegacy := s.mustCreateSubscription(user.ID, visibleGroup.ID, func(c *dbent.UserSubscriptionCreate) {
-		c.SetNotes("not migrated")
-	})
-	now := time.Now()
-	product, err := s.client.SubscriptionProduct.Create().
-		SetCode(fmt.Sprintf("migrated_legacy_%d", now.UnixNano())).
-		SetName("Migrated Product").
-		SetStatus(service.SubscriptionStatusActive).
-		SetDefaultValidityDays(30).
-		SetDailyLimitUsd(10).
-		SetWeeklyLimitUsd(50).
-		SetMonthlyLimitUsd(100).
-		SetSortOrder(10).
-		Save(s.ctx)
-	s.Require().NoError(err)
-	productSub, err := s.client.UserProductSubscription.Create().
-		SetUserID(user.ID).
-		SetProductID(product.ID).
-		SetStartsAt(now.Add(-time.Hour)).
-		SetExpiresAt(now.Add(24 * time.Hour)).
-		SetStatus(service.SubscriptionStatusActive).
-		SetAssignedAt(now).
-		Save(s.ctx)
-	s.Require().NoError(err)
-	_, err = s.client.ProductSubscriptionMigrationSource.Create().
-		SetProductSubscriptionID(productSub.ID).
-		SetLegacyUserSubscriptionID(migratedLegacy.ID).
-		SetMigrationBatch("test-migrated-legacy").
-		SetLegacyGroupID(group.ID).
-		SetLegacyStatus(service.SubscriptionStatusActive).
-		SetLegacyStartsAt(migratedLegacy.StartsAt).
-		SetLegacyExpiresAt(migratedLegacy.ExpiresAt).
-		Save(s.ctx)
-	s.Require().NoError(err)
-
-	ids, err := s.repo.ListMigratedLegacySubscriptionIDs(s.ctx, user.ID)
-
-	s.Require().NoError(err)
-	s.Require().Contains(ids, migratedLegacy.ID)
-	s.Require().NotContains(ids, visibleLegacy.ID)
-}
-
 // --- ListByGroupID ---
 
 func (s *UserSubscriptionRepoSuite) TestListByGroupID() {
@@ -448,31 +356,6 @@ func (s *UserSubscriptionRepoSuite) TestIncrementUsage_Accumulates() {
 	s.Require().InDelta(3.5, got.DailyUsageUSD, 1e-6)
 }
 
-func (s *UserSubscriptionRepoSuite) TestIncrementUsage_ClearsLegacyCarryover() {
-	user := s.mustCreateUser("usage-carry@test.com", service.RoleUser)
-	group := s.mustCreateGroup("g-usage-carry")
-	windowStart := time.Now().UTC().Truncate(24 * time.Hour)
-	sub := s.mustCreateSubscription(user.ID, group.ID, func(c *dbent.UserSubscriptionCreate) {
-		c.SetDailyWindowStart(windowStart)
-		c.SetDailyUsageUsd(10.0)
-		c.SetWeeklyUsageUsd(20.0)
-		c.SetMonthlyUsageUsd(30.0)
-		c.SetDailyCarryoverInUsd(8.0)
-		c.SetDailyCarryoverRemainingUsd(6.0)
-	})
-
-	err := s.repo.IncrementUsage(s.ctx, sub.ID, 5.0)
-	s.Require().NoError(err, "IncrementUsage")
-
-	got, err := s.repo.GetByID(s.ctx, sub.ID)
-	s.Require().NoError(err)
-	s.Require().InDelta(15.0, got.DailyUsageUSD, 1e-6)
-	s.Require().InDelta(25.0, got.WeeklyUsageUSD, 1e-6)
-	s.Require().InDelta(35.0, got.MonthlyUsageUSD, 1e-6)
-	s.Require().InDelta(0.0, got.DailyCarryoverInUSD, 1e-6)
-	s.Require().InDelta(0.0, got.DailyCarryoverRemainingUSD, 1e-6)
-}
-
 func (s *UserSubscriptionRepoSuite) TestActivateWindows() {
 	user := s.mustCreateUser("activate@test.com", service.RoleUser)
 	group := s.mustCreateGroup("g-activate")
@@ -508,52 +391,6 @@ func (s *UserSubscriptionRepoSuite) TestResetDailyUsage() {
 	s.Require().InDelta(20.0, got.WeeklyUsageUSD, 1e-6)
 	s.Require().NotNil(got.DailyWindowStart)
 	s.Require().WithinDuration(resetAt, *got.DailyWindowStart, time.Microsecond)
-}
-
-func (s *UserSubscriptionRepoSuite) TestResetDailyUsage_ClearsCarryoverFields() {
-	user := s.mustCreateUser("resetd-carry@test.com", service.RoleUser)
-	group := s.mustCreateGroup("g-resetd-carry")
-	sub := s.mustCreateSubscription(user.ID, group.ID, func(c *dbent.UserSubscriptionCreate) {
-		c.SetDailyUsageUsd(10.0)
-		c.SetDailyCarryoverInUsd(8.0)
-		c.SetDailyCarryoverRemainingUsd(2.5)
-	})
-
-	resetAt := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
-	err := s.repo.ResetDailyUsage(s.ctx, sub.ID, resetAt)
-	s.Require().NoError(err, "ResetDailyUsage")
-
-	got, err := s.repo.GetByID(s.ctx, sub.ID)
-	s.Require().NoError(err)
-	s.Require().InDelta(0.0, got.DailyUsageUSD, 1e-6)
-	s.Require().InDelta(0.0, got.DailyCarryoverInUSD, 1e-6)
-	s.Require().InDelta(0.0, got.DailyCarryoverRemainingUSD, 1e-6)
-}
-
-func (s *UserSubscriptionRepoSuite) TestAdvanceDailyWindow() {
-	user := s.mustCreateUser("advance-daily@test.com", service.RoleUser)
-	group := s.mustCreateGroup("g-advance-daily")
-	sub := s.mustCreateSubscription(user.ID, group.ID, func(c *dbent.UserSubscriptionCreate) {
-		c.SetDailyUsageUsd(10.0)
-		c.SetWeeklyUsageUsd(20.0)
-		c.SetMonthlyUsageUsd(30.0)
-		c.SetDailyCarryoverInUsd(4.0)
-		c.SetDailyCarryoverRemainingUsd(1.0)
-	})
-
-	advanceAt := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
-	err := s.repo.AdvanceDailyWindow(s.ctx, sub.ID, advanceAt, 8.5, 8.5)
-	s.Require().NoError(err, "AdvanceDailyWindow")
-
-	got, err := s.repo.GetByID(s.ctx, sub.ID)
-	s.Require().NoError(err)
-	s.Require().InDelta(0.0, got.DailyUsageUSD, 1e-6)
-	s.Require().InDelta(20.0, got.WeeklyUsageUSD, 1e-6)
-	s.Require().InDelta(30.0, got.MonthlyUsageUSD, 1e-6)
-	s.Require().InDelta(0.0, got.DailyCarryoverInUSD, 1e-6)
-	s.Require().InDelta(0.0, got.DailyCarryoverRemainingUSD, 1e-6)
-	s.Require().NotNil(got.DailyWindowStart)
-	s.Require().WithinDuration(advanceAt, *got.DailyWindowStart, time.Microsecond)
 }
 
 func (s *UserSubscriptionRepoSuite) TestResetWeeklyUsage() {

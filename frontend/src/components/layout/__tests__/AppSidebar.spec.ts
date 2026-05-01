@@ -1,118 +1,32 @@
-import { describe, expect, it, vi } from 'vitest'
-import { mount, RouterLinkStub } from '@vue/test-utils'
-import AppSidebar from '../AppSidebar.vue'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const mocks = vi.hoisted(() => ({
-  route: { path: '/dashboard' },
-  authStore: {
-    isAuthenticated: true,
-    isAdmin: false,
-    isSimpleMode: false
-  },
-  appStore: {
-    sidebarCollapsed: false,
-    mobileOpen: false,
-    siteName: 'Sub2API',
-    siteLogo: '',
-    siteVersion: 'test',
-    publicSettingsLoaded: true,
-    cachedPublicSettings: {
-      available_channels_enabled: true,
-      affiliate_enabled: false,
-      sora_client_enabled: false,
-      purchase_subscription_enabled: false,
-      custom_menu_items: []
-    },
-    backendModeEnabled: false,
-    toggleSidebar: vi.fn(),
-    setMobileOpen: vi.fn()
-  },
-  adminSettingsStore: {
-    opsMonitoringEnabled: false,
-    customMenuItems: [],
-    fetch: vi.fn()
-  },
-  onboardingStore: {
-    isCurrentStep: vi.fn(() => false),
-    nextStep: vi.fn()
-  }
-}))
+import { describe, expect, it } from 'vitest'
 
-vi.mock('vue-router', () => ({
-  useRoute: () => mocks.route
-}))
+const componentPath = resolve(dirname(fileURLToPath(import.meta.url)), '../AppSidebar.vue')
+const componentSource = readFileSync(componentPath, 'utf8')
+const stylePath = resolve(dirname(fileURLToPath(import.meta.url)), '../../../style.css')
+const styleSource = readFileSync(stylePath, 'utf8')
 
-vi.mock('vue-i18n', () => ({
-  createI18n: () => ({
-    global: {
-      locale: { value: 'en' },
-      setLocaleMessage: vi.fn()
-    }
-  }),
-  useI18n: () => ({
-    t: (key: string, fallback?: string) => {
-      const labels: Record<string, string> = {
-        'nav.dashboard': 'Dashboard',
-        'nav.apiKeys': 'API Keys',
-        'nav.modelHub': 'Model Hub',
-        'nav.availableChannels': 'Available Channels',
-        'nav.usage': 'Usage',
-        'nav.mySubscriptions': 'My Subscriptions',
-        'nav.redeem': 'Redeem',
-        'nav.profile': 'Profile',
-        'nav.lightMode': 'Light Mode',
-        'nav.darkMode': 'Dark Mode',
-        'nav.collapse': 'Collapse',
-        'nav.expand': 'Expand'
-      }
-      return labels[key] ?? fallback ?? key
-    }
+describe('AppSidebar custom SVG styles', () => {
+  it('does not override uploaded SVG fill or stroke colors', () => {
+    expect(componentSource).toContain('.sidebar-svg-icon {')
+    expect(componentSource).toContain('color: currentColor;')
+    expect(componentSource).toContain('display: block;')
+    expect(componentSource).not.toContain('stroke: currentColor;')
+    expect(componentSource).not.toContain('fill: none;')
   })
-}))
-
-vi.mock('@/stores', () => ({
-  useAuthStore: () => mocks.authStore,
-  useAppStore: () => mocks.appStore,
-  useAdminSettingsStore: () => mocks.adminSettingsStore,
-  useOnboardingStore: () => mocks.onboardingStore
-}))
-
-vi.mock('@/utils/sanitize', () => ({
-  sanitizeSvg: (svg: string) => svg
-}))
-
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation(() => ({
-    matches: false,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn()
-  }))
 })
 
-describe('AppSidebar', () => {
-  it('shows Model Hub as the user model entry and hides Available Channels from navigation', () => {
-    const wrapper = mount(AppSidebar, {
-      global: {
-        stubs: {
-          RouterLink: RouterLinkStub,
-          VersionBadge: true
-        }
-      }
-    })
+describe('AppSidebar header styles', () => {
+  it('does not clip the version badge dropdown', () => {
+    const sidebarHeaderBlockMatch = styleSource.match(/\.sidebar-header\s*\{[\s\S]*?\n {2}\}/)
+    const sidebarBrandBlockMatch = componentSource.match(/\.sidebar-brand\s*\{[\s\S]*?\n\}/)
 
-    expect(wrapper.text()).toContain('Model Hub')
-    expect(wrapper.text()).not.toContain('Available Channels')
-    expect(wrapper.findComponent(RouterLinkStub).exists()).toBe(true)
-    expect(
-      wrapper
-        .findAllComponents(RouterLinkStub)
-        .some((link) => link.props('to') === '/models')
-    ).toBe(true)
-    expect(
-      wrapper
-        .findAllComponents(RouterLinkStub)
-        .some((link) => link.props('to') === '/available-channels')
-    ).toBe(false)
+    expect(sidebarHeaderBlockMatch).not.toBeNull()
+    expect(sidebarBrandBlockMatch).not.toBeNull()
+    expect(sidebarHeaderBlockMatch?.[0]).not.toContain('@apply overflow-hidden;')
+    expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
   })
 })

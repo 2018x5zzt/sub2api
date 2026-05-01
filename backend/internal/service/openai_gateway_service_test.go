@@ -14,9 +14,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -94,6 +92,13 @@ type cancelReadCloser struct{}
 
 func (c cancelReadCloser) Read(p []byte) (int, error) { return 0, context.Canceled }
 func (c cancelReadCloser) Close() error               { return nil }
+
+type errReadCloser struct {
+	err error
+}
+
+func (r errReadCloser) Read([]byte) (int, error) { return 0, r.err }
+func (r errReadCloser) Close() error             { return nil }
 
 type failingGinWriter struct {
 	gin.ResponseWriter
@@ -222,6 +227,41 @@ func TestOpenAIGatewayService_GenerateSessionHash_AttachesLegacyHashToContext(t 
 	require.NotEmpty(t, openAILegacySessionHashFromContext(c.Request.Context()))
 }
 
+func TestOpenAIGatewayService_GenerateExplicitSessionHash_SkipsContentFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	svc := &OpenAIGatewayService{}
+	body := []byte(`{"model":"gpt-image-2","prompt":"draw a cat"}`)
+
+	t.Run("stateless image body stays unstuck", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
+
+		require.Empty(t, svc.GenerateExplicitSessionHash(c, body))
+		require.Empty(t, openAILegacySessionHashFromContext(c.Request.Context()))
+	})
+
+	t.Run("prompt_cache_key is explicit", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
+
+		got := svc.GenerateExplicitSessionHash(c, []byte(`{"model":"gpt-image-2","prompt_cache_key":"image-session"}`))
+		require.Equal(t, fmt.Sprintf("%016x", xxhash.Sum64String("image-session")), got)
+		require.NotEmpty(t, openAILegacySessionHashFromContext(c.Request.Context()))
+	})
+
+	t.Run("header overrides body", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", nil)
+		c.Request.Header.Set("session_id", "header-session")
+
+		got := svc.GenerateExplicitSessionHash(c, []byte(`{"prompt_cache_key":"body-session"}`))
+		require.Equal(t, fmt.Sprintf("%016x", xxhash.Sum64String("header-session")), got)
+	})
+}
+
 func TestOpenAIGatewayService_GenerateSessionHashWithFallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
@@ -339,25 +379,6 @@ func (c *stubGatewayCache) DeleteSessionAccountID(ctx context.Context, groupID i
 	return nil
 }
 
-type openAIDynamicPricingUsageLogRepoStub struct {
-	UsageLogRepository
-	stats       *usagestats.UsageStats
-	err         error
-	lastFilters usagestats.UsageLogFilters
-}
-
-func (s *openAIDynamicPricingUsageLogRepoStub) GetStatsWithFilters(_ context.Context, filters usagestats.UsageLogFilters) (*usagestats.UsageStats, error) {
-	s.lastFilters = filters
-	if s.err != nil {
-		return nil, s.err
-	}
-	if s.stats == nil {
-		return &usagestats.UsageStats{}, nil
-	}
-	clone := *s.stats
-	return &clone, nil
-}
-
 func TestOpenAISelectAccountWithLoadAwareness_FiltersUnschedulable(t *testing.T) {
 	now := time.Now()
 	resetAt := now.Add(10 * time.Minute)
@@ -446,318 +467,6 @@ func TestOpenAISelectAccountWithLoadAwareness_FiltersUnschedulableWhenNoConcurre
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}
-}
-
-func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingSkipsAccountsAboveBudget(t *testing.T) {
-	groupID := int64(7)
-	defaultBudget := 5.0
-	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
-		ID:                      groupID,
-		Platform:                PlatformOpenAI,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	})
-
-	svc := &OpenAIGatewayService{
-		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformOpenAI,
-				Type:        AccountTypeAPIKey,
-				Status:      StatusActive,
-				Schedulable: true,
-				Concurrency: 1,
-				Priority:    0,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 7.0},
-				},
-			},
-			{
-				ID:          2,
-				Platform:    PlatformOpenAI,
-				Type:        AccountTypeAPIKey,
-				Status:      StatusActive,
-				Schedulable: true,
-				Concurrency: 1,
-				Priority:    1,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 4.0},
-				},
-			},
-		}},
-	}
-
-	selected, err := svc.selectAccountForModelWithExclusions(ctx, &groupID, "", "", nil, 0)
-	require.NoError(t, err)
-	require.NotNil(t, selected)
-	require.Equal(t, int64(2), selected.ID)
-}
-
-func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingReturnsNoAvailableAccountsWhenBudgetExhausted(t *testing.T) {
-	groupID := int64(7)
-	defaultBudget := 3.0
-	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
-		ID:                      groupID,
-		Platform:                PlatformOpenAI,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	})
-
-	svc := &OpenAIGatewayService{
-		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformOpenAI,
-				Type:        AccountTypeAPIKey,
-				Status:      StatusActive,
-				Schedulable: true,
-				Concurrency: 1,
-				Priority:    0,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 7.0},
-				},
-			},
-		}},
-	}
-
-	selected, err := svc.selectAccountForModelWithExclusions(ctx, &groupID, "", "", nil, 0)
-	require.EqualError(t, err, "no available OpenAI accounts")
-	require.Nil(t, selected)
-}
-
-func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingPrefersClosestLowerOrEqualMultiplier(t *testing.T) {
-	groupID := int64(7)
-	defaultBudget := 8.0
-	group := &Group{
-		ID:                      groupID,
-		Platform:                PlatformOpenAI,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	}
-	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
-	ctx = context.WithValue(ctx, ctxkey.APIKey, &APIKey{
-		ID:               99,
-		UserID:           7,
-		GroupID:          &groupID,
-		Group:            group,
-		BudgetMultiplier: &defaultBudget,
-	})
-
-	svc := &OpenAIGatewayService{
-		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformOpenAI,
-				Type:        AccountTypeAPIKey,
-				Status:      StatusActive,
-				Schedulable: true,
-				Concurrency: 1,
-				Priority:    0,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 4.0},
-				},
-			},
-			{
-				ID:          2,
-				Platform:    PlatformOpenAI,
-				Type:        AccountTypeAPIKey,
-				Status:      StatusActive,
-				Schedulable: true,
-				Concurrency: 1,
-				Priority:    99,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 7.0},
-				},
-			},
-		}},
-	}
-
-	selected, err := svc.selectAccountForModelWithExclusions(ctx, &groupID, "", "", nil, 0)
-	require.NoError(t, err)
-	require.NotNil(t, selected)
-	require.Equal(t, int64(2), selected.ID)
-}
-
-func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingPrefersLowerMultiplierBeforeCompatibleHigherBy7dAverage(t *testing.T) {
-	groupID := int64(7)
-	defaultBudget := 8.0
-	group := &Group{
-		ID:                      groupID,
-		Platform:                PlatformOpenAI,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	}
-	now := time.Now()
-	apiKey := &APIKey{
-		ID:               99,
-		UserID:           7,
-		GroupID:          &groupID,
-		Group:            group,
-		BudgetMultiplier: &defaultBudget,
-		CreatedAt:        now.Add(-48 * time.Hour),
-	}
-	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
-	ctx = context.WithValue(ctx, ctxkey.APIKey, apiKey)
-
-	svc := &OpenAIGatewayService{
-		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformOpenAI,
-				Type:        AccountTypeAPIKey,
-				Status:      StatusActive,
-				Schedulable: true,
-				Concurrency: 1,
-				Priority:    0,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 9.0},
-				},
-			},
-			{
-				ID:          2,
-				Platform:    PlatformOpenAI,
-				Type:        AccountTypeAPIKey,
-				Status:      StatusActive,
-				Schedulable: true,
-				Concurrency: 1,
-				Priority:    99,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 4.0},
-				},
-			},
-		}},
-		usageLogRepo: &openAIDynamicPricingUsageLogRepoStub{
-			stats: &usagestats.UsageStats{
-				TotalRequests:   10,
-				TotalCost:       100,
-				TotalActualCost: 500,
-			},
-		},
-	}
-
-	selected, err := svc.selectAccountForModelWithExclusions(ctx, &groupID, "", "", nil, 0)
-	require.NoError(t, err)
-	require.NotNil(t, selected)
-	require.Equal(t, int64(2), selected.ID)
-}
-
-func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingFallsBackToCompatibleHigherMultiplierBy7dAverage(t *testing.T) {
-	groupID := int64(7)
-	defaultBudget := 8.0
-	group := &Group{
-		ID:                      groupID,
-		Platform:                PlatformOpenAI,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	}
-	now := time.Now()
-	apiKey := &APIKey{
-		ID:               99,
-		UserID:           7,
-		GroupID:          &groupID,
-		Group:            group,
-		BudgetMultiplier: &defaultBudget,
-		CreatedAt:        now.Add(-48 * time.Hour),
-	}
-	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
-	ctx = context.WithValue(ctx, ctxkey.APIKey, apiKey)
-
-	svc := &OpenAIGatewayService{
-		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformOpenAI,
-				Type:        AccountTypeAPIKey,
-				Status:      StatusActive,
-				Schedulable: true,
-				Concurrency: 1,
-				Priority:    99,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 9.0},
-				},
-			},
-		}},
-		usageLogRepo: &openAIDynamicPricingUsageLogRepoStub{
-			stats: &usagestats.UsageStats{
-				TotalRequests:   10,
-				TotalCost:       100,
-				TotalActualCost: 500,
-			},
-		},
-	}
-
-	selected, err := svc.selectAccountForModelWithExclusions(ctx, &groupID, "", "", nil, 0)
-	require.NoError(t, err)
-	require.NotNil(t, selected)
-	require.Equal(t, int64(1), selected.ID)
-}
-
-func TestOpenAISelectAccountForModelWithExclusions_DynamicPricingReturnsBudgetExceededWhen7dAverageAlreadyOverTarget(t *testing.T) {
-	groupID := int64(7)
-	defaultBudget := 5.0
-	group := &Group{
-		ID:                      groupID,
-		Platform:                PlatformOpenAI,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	}
-	now := time.Now()
-	apiKey := &APIKey{
-		ID:               99,
-		UserID:           7,
-		GroupID:          &groupID,
-		Group:            group,
-		BudgetMultiplier: &defaultBudget,
-		CreatedAt:        now.Add(-48 * time.Hour),
-	}
-	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
-	ctx = context.WithValue(ctx, ctxkey.APIKey, apiKey)
-
-	svc := &OpenAIGatewayService{
-		accountRepo: stubOpenAIAccountRepo{accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformOpenAI,
-				Type:        AccountTypeAPIKey,
-				Status:      StatusActive,
-				Schedulable: true,
-				Concurrency: 1,
-				Priority:    0,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 4.0},
-				},
-			},
-		}},
-		usageLogRepo: &openAIDynamicPricingUsageLogRepoStub{
-			stats: &usagestats.UsageStats{
-				TotalRequests:   10,
-				TotalCost:       100,
-				TotalActualCost: 600,
-			},
-		},
-	}
-
-	selected, err := svc.selectAccountForModelWithExclusions(ctx, &groupID, "", "", nil, 0)
-	require.ErrorIs(t, err, ErrDynamicPricingBudgetExceeded)
-	require.Nil(t, selected)
 }
 
 func TestOpenAISelectAccountForModelWithExclusions_StickyUnschedulableClearsSession(t *testing.T) {
@@ -1336,6 +1045,190 @@ func TestOpenAIStreamingContextCanceledReturnsIncompleteErrorWithoutInjectingErr
 	}
 }
 
+func TestOpenAIStreamingReadErrorBeforeOutputReturnsFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			StreamDataIntervalTimeout: 0,
+			StreamKeepaliveInterval:   0,
+			MaxLineSize:               defaultMaxLineSize,
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       errReadCloser{err: io.ErrUnexpectedEOF},
+		Header:     http.Header{"X-Request-Id": []string{"rid-disconnect"}},
+	}
+
+	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "model", "model")
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.False(t, c.Writer.Written())
+	require.Empty(t, rec.Body.String())
+}
+
+func TestOpenAIStreamingResponseFailedBeforeOutputReturnsFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			StreamDataIntervalTimeout: 0,
+			StreamKeepaliveInterval:   0,
+			MaxLineSize:               defaultMaxLineSize,
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			"event: response.created",
+			`data: {"type":"response.created","response":{"id":"resp_1"}}`,
+			"",
+			"event: response.in_progress",
+			`data: {"type":"response.in_progress","response":{"id":"resp_1"}}`,
+			"",
+			"event: response.failed",
+			`data: {"type":"response.failed","error":{"message":"An error occurred while processing your request."}}`,
+			"",
+		}, "\n"))),
+		Header: http.Header{"X-Request-Id": []string{"rid-failed"}},
+	}
+
+	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "model", "model")
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.Contains(t, string(failoverErr.ResponseBody), "An error occurred while processing your request")
+	require.False(t, c.Writer.Written())
+	require.Empty(t, rec.Body.String())
+}
+
+func TestOpenAIStreamingPreambleOnlyMissingTerminalReturnsFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			StreamDataIntervalTimeout: 0,
+			StreamKeepaliveInterval:   0,
+			MaxLineSize:               defaultMaxLineSize,
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			"event: response.created",
+			`data: {"type":"response.created","response":{"id":"resp_1"}}`,
+			"",
+			"event: response.in_progress",
+			`data: {"type":"response.in_progress","response":{"id":"resp_1"}}`,
+			"",
+		}, "\n"))),
+		Header: http.Header{"X-Request-Id": []string{"rid-missing-terminal"}},
+	}
+
+	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "model", "model")
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.False(t, c.Writer.Written())
+	require.Empty(t, rec.Body.String())
+}
+
+func TestOpenAIStreamingPreambleKeepaliveUsesDownstreamIdle(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			StreamDataIntervalTimeout: 0,
+			StreamKeepaliveInterval:   1,
+			MaxLineSize:               defaultMaxLineSize,
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	pr, pw := io.Pipe()
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       pr,
+		Header:     http.Header{},
+	}
+
+	go func() {
+		defer func() { _ = pw.Close() }()
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\n"))
+		for i := 0; i < 6; i++ {
+			time.Sleep(250 * time.Millisecond)
+			_, _ = pw.Write([]byte("data: {\"type\":\"response.in_progress\",\"response\":{\"id\":\"resp_1\"}}\n\n"))
+		}
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":2}}}\n\n"))
+	}()
+
+	result, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "model", "model")
+	_ = pr.Close()
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Contains(t, rec.Body.String(), ":\n\n")
+	require.Contains(t, rec.Body.String(), "response.completed")
+}
+
+func TestOpenAIStreamingPolicyResponseFailedBeforeOutputPassesThrough(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			StreamDataIntervalTimeout: 0,
+			StreamKeepaliveInterval:   0,
+			MaxLineSize:               defaultMaxLineSize,
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			"event: response.created",
+			`data: {"type":"response.created","response":{"id":"resp_1"}}`,
+			"",
+			"event: response.failed",
+			`data: {"type":"response.failed","error":{"type":"safety_error","message":"This request has been flagged for potentially high-risk cyber activity."}}`,
+			"",
+		}, "\n"))),
+		Header: http.Header{"X-Request-Id": []string{"rid-policy-failed"}},
+	}
+
+	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "model", "model")
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.False(t, errors.As(err, &failoverErr))
+	require.True(t, c.Writer.Written())
+	require.Contains(t, rec.Body.String(), "response.failed")
+	require.Contains(t, rec.Body.String(), "high-risk cyber activity")
+}
+
 func TestOpenAIStreamingClientDisconnectDrainsUpstreamUsage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{
@@ -1381,127 +1274,6 @@ func TestOpenAIStreamingClientDisconnectDrainsUpstreamUsage(t *testing.T) {
 	}
 }
 
-func TestOpenAIStreamingResponseCompletedBackfillsAggregatedOutput(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfg := &config.Config{
-		Gateway: config.GatewayConfig{
-			StreamDataIntervalTimeout: 0,
-			StreamKeepaliveInterval:   0,
-			MaxLineSize:               defaultMaxLineSize,
-		},
-	}
-	svc := &OpenAIGatewayService{cfg: cfg}
-
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
-
-	pr, pw := io.Pipe()
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       pr,
-		Header:     http.Header{},
-	}
-
-	go func() {
-		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("event: response.created\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_stream\",\"object\":\"response\",\"model\":\"gpt-5.5\",\"status\":\"in_progress\",\"output\":[]}}\n\n"))
-		_, _ = pw.Write([]byte("event: response.output_item.added\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"id\":\"rs_1\",\"type\":\"reasoning\",\"summary\":[]}}\n\n"))
-		_, _ = pw.Write([]byte("event: response.output_item.done\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"id\":\"rs_1\",\"type\":\"reasoning\",\"summary\":[]}}\n\n"))
-		_, _ = pw.Write([]byte("event: response.output_item.added\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"output_index\":1,\"item\":{\"id\":\"msg_1\",\"type\":\"message\",\"status\":\"in_progress\",\"role\":\"assistant\",\"content\":[]}}\n\n"))
-		_, _ = pw.Write([]byte("event: response.output_text.delta\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"output_index\":1,\"content_index\":0,\"item_id\":\"msg_1\",\"delta\":\"ok\"}\n\n"))
-		_, _ = pw.Write([]byte("event: response.output_text.done\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_text.done\",\"output_index\":1,\"content_index\":0,\"item_id\":\"msg_1\",\"text\":\"ok\"}\n\n"))
-		_, _ = pw.Write([]byte("event: response.output_item.done\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.done\",\"output_index\":1,\"item\":{\"id\":\"msg_1\",\"type\":\"message\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"ok\"}]}}\n\n"))
-		_, _ = pw.Write([]byte("event: response.completed\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_stream\",\"object\":\"response\",\"model\":\"gpt-5.5\",\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":3,\"output_tokens\":4,\"total_tokens\":7}},\"sequence_number\":10}\n\n"))
-	}()
-
-	result, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "gpt-5.5", "gpt-5.5")
-	_ = pr.Close()
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.NotNil(t, result.usage)
-	require.Equal(t, 3, result.usage.InputTokens)
-	require.Equal(t, 4, result.usage.OutputTokens)
-
-	var terminalData string
-	for _, line := range strings.Split(rec.Body.String(), "\n") {
-		data, ok := extractOpenAISSEDataLine(line)
-		if !ok || data == "" || data == "[DONE]" {
-			continue
-		}
-		if gjson.Get(data, "type").String() == "response.completed" {
-			terminalData = data
-			break
-		}
-	}
-	require.NotEmpty(t, terminalData)
-	require.Equal(t, "reasoning", gjson.Get(terminalData, "response.output.0.type").String())
-	require.Equal(t, "message", gjson.Get(terminalData, "response.output.1.type").String())
-	require.Equal(t, "completed", gjson.Get(terminalData, "response.output.1.status").String())
-	require.Equal(t, "output_text", gjson.Get(terminalData, "response.output.1.content.0.type").String())
-	require.Equal(t, "ok", gjson.Get(terminalData, "response.output.1.content.0.text").String())
-}
-
-func TestOpenAIStreamingResponseCompletedBackfillsExistingMessageContent(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfg := &config.Config{
-		Gateway: config.GatewayConfig{
-			StreamDataIntervalTimeout: 0,
-			StreamKeepaliveInterval:   0,
-			MaxLineSize:               defaultMaxLineSize,
-		},
-	}
-	svc := &OpenAIGatewayService{cfg: cfg}
-
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
-
-	pr, pw := io.Pipe()
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       pr,
-		Header:     http.Header{},
-	}
-
-	go func() {
-		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_stream\",\"object\":\"response\",\"model\":\"gpt-5.5\",\"status\":\"in_progress\"}}\n\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"id\":\"msg_1\",\"type\":\"message\",\"status\":\"in_progress\",\"role\":\"assistant\",\"content\":[]}}\n\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"content_index\":0,\"item_id\":\"msg_1\",\"delta\":\"ok\"}\n\n"))
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_stream\",\"object\":\"response\",\"model\":\"gpt-5.5\",\"status\":\"completed\",\"output\":[{\"id\":\"msg_1\",\"type\":\"message\",\"status\":\"completed\",\"role\":\"assistant\",\"content\":[]}],\"usage\":{\"input_tokens\":3,\"output_tokens\":4,\"total_tokens\":7}}}\n\n"))
-	}()
-
-	result, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "gpt-5.5", "gpt-5.5")
-	_ = pr.Close()
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	var terminalData string
-	for _, line := range strings.Split(rec.Body.String(), "\n") {
-		data, ok := extractOpenAISSEDataLine(line)
-		if !ok || data == "" || data == "[DONE]" {
-			continue
-		}
-		if gjson.Get(data, "type").String() == "response.completed" {
-			terminalData = data
-			break
-		}
-	}
-	require.NotEmpty(t, terminalData)
-	require.Equal(t, "message", gjson.Get(terminalData, "response.output.0.type").String())
-	require.Equal(t, "output_text", gjson.Get(terminalData, "response.output.0.content.0.type").String())
-	require.Equal(t, "ok", gjson.Get(terminalData, "response.output.0.content.0.text").String())
-}
-
 func TestOpenAIStreamingMissingTerminalEventReturnsIncompleteError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{
@@ -1526,16 +1298,13 @@ func TestOpenAIStreamingMissingTerminalEventReturnsIncompleteError(t *testing.T)
 
 	go func() {
 		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.in_progress\",\"response\":{}}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\"},\"output_index\":0}\n\n"))
 	}()
 
 	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "model", "model")
 	_ = pr.Close()
 	if err == nil || !strings.Contains(err.Error(), "missing terminal event") {
 		t.Fatalf("expected missing terminal event error, got %v", err)
-	}
-	if !strings.Contains(rec.Body.String(), "\"type\":\"error\"") || !strings.Contains(rec.Body.String(), "missing_terminal_event") {
-		t.Fatalf("expected OpenAI-compatible error SSE event, got %q", rec.Body.String())
 	}
 }
 
@@ -1561,17 +1330,50 @@ func TestOpenAIStreamingPassthroughMissingTerminalEventReturnsIncompleteError(t 
 
 	go func() {
 		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.in_progress\",\"response\":{}}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\"},\"output_index\":0}\n\n"))
 	}()
 
-	_, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now())
+	_, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "", "")
 	_ = pr.Close()
 	if err == nil || !strings.Contains(err.Error(), "missing terminal event") {
 		t.Fatalf("expected missing terminal event error, got %v", err)
 	}
-	if !strings.Contains(rec.Body.String(), "\"type\":\"error\"") || !strings.Contains(rec.Body.String(), "missing_terminal_event") {
-		t.Fatalf("expected OpenAI-compatible passthrough error SSE event, got %q", rec.Body.String())
+}
+
+func TestOpenAIStreamingPassthroughResponseFailedBeforeOutputReturnsFailover(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			MaxLineSize: defaultMaxLineSize,
+		},
 	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
+			"event: response.created",
+			`data: {"type":"response.created","response":{"id":"resp_1"}}`,
+			"",
+			"event: response.failed",
+			`data: {"type":"response.failed","error":{"message":"upstream processing failed"}}`,
+			"",
+		}, "\n"))),
+		Header: http.Header{"X-Request-Id": []string{"rid-passthrough-failed"}},
+	}
+
+	_, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "", "")
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.Contains(t, string(failoverErr.ResponseBody), "upstream processing failed")
+	require.False(t, c.Writer.Written())
+	require.Empty(t, rec.Body.String())
 }
 
 func TestOpenAIStreamingPassthroughResponseDoneWithoutDoneMarkerStillSucceeds(t *testing.T) {
@@ -1599,7 +1401,7 @@ func TestOpenAIStreamingPassthroughResponseDoneWithoutDoneMarkerStillSucceeds(t 
 		_, _ = pw.Write([]byte("data: {\"type\":\"response.done\",\"response\":{\"usage\":{\"input_tokens\":2,\"output_tokens\":3,\"input_tokens_details\":{\"cached_tokens\":1}}}}\n\n"))
 	}()
 
-	result, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now())
+	result, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "", "")
 	_ = pr.Close()
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -1609,7 +1411,7 @@ func TestOpenAIStreamingPassthroughResponseDoneWithoutDoneMarkerStillSucceeds(t 
 	require.Equal(t, 1, result.usage.CacheReadInputTokens)
 }
 
-func TestOpenAIStreamingPassthroughResponseIncompleteIsTerminal(t *testing.T) {
+func TestOpenAIStreamingPassthroughResponseIncompleteWithoutDoneMarkerStillSucceeds(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{
 		Gateway: config.GatewayConfig{
@@ -1631,13 +1433,17 @@ func TestOpenAIStreamingPassthroughResponseIncompleteIsTerminal(t *testing.T) {
 
 	go func() {
 		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.incomplete\",\"response\":{\"id\":\"resp_incomplete\"}}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.incomplete\",\"response\":{\"usage\":{\"input_tokens\":2,\"output_tokens\":3,\"input_tokens_details\":{\"cached_tokens\":1}}}}\n\n"))
 	}()
 
-	result, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now())
+	result, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "", "")
 	_ = pr.Close()
 	require.NoError(t, err)
 	require.NotNil(t, result)
+	require.NotNil(t, result.usage)
+	require.Equal(t, 2, result.usage.InputTokens)
+	require.Equal(t, 3, result.usage.OutputTokens)
+	require.Equal(t, 1, result.usage.CacheReadInputTokens)
 }
 
 func TestOpenAIStreamingTooLong(t *testing.T) {
@@ -1959,6 +1765,24 @@ func TestOpenAIResponsesRequestPathSuffix(t *testing.T) {
 			require.Equal(t, tt.want, openAIResponsesRequestPathSuffix(c))
 		})
 	}
+}
+
+func TestNormalizeOpenAICompactRequestBodyPreservesCurrentCodexPayloadFields(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.5","input":[{"type":"message","role":"user","content":"compact me"}],"instructions":"compact-test","tools":[{"type":"function","name":"shell"}],"parallel_tool_calls":true,"reasoning":{"effort":"high"},"text":{"verbosity":"low"},"previous_response_id":"resp_123","store":true,"stream":true,"prompt_cache_key":"cache_123"}`)
+
+	normalized, changed, err := normalizeOpenAICompactRequestBody(body)
+
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, "gpt-5.5", gjson.GetBytes(normalized, "model").String())
+	require.True(t, gjson.GetBytes(normalized, "tools").Exists())
+	require.True(t, gjson.GetBytes(normalized, "parallel_tool_calls").Bool())
+	require.Equal(t, "high", gjson.GetBytes(normalized, "reasoning.effort").String())
+	require.Equal(t, "low", gjson.GetBytes(normalized, "text.verbosity").String())
+	require.Equal(t, "resp_123", gjson.GetBytes(normalized, "previous_response_id").String())
+	require.False(t, gjson.GetBytes(normalized, "store").Exists())
+	require.False(t, gjson.GetBytes(normalized, "stream").Exists())
+	require.False(t, gjson.GetBytes(normalized, "prompt_cache_key").Exists())
 }
 
 func TestOpenAIBuildUpstreamRequestOpenAIPassthroughPreservesCompactPath(t *testing.T) {
@@ -2308,69 +2132,25 @@ func TestExtractOpenAISSEDataLine(t *testing.T) {
 
 func TestParseSSEUsage_SelectiveParsing(t *testing.T) {
 	svc := &OpenAIGatewayService{}
-	usage := &OpenAIUsage{InputTokens: 9, OutputTokens: 8, CacheCreationInputTokens: 6, CacheReadInputTokens: 7}
+	usage := &OpenAIUsage{InputTokens: 9, OutputTokens: 8, CacheReadInputTokens: 7}
 
 	// 非 completed 事件，不应覆盖 usage
 	svc.parseSSEUsage(`{"type":"response.in_progress","response":{"usage":{"input_tokens":1,"output_tokens":2}}}`, usage)
 	require.Equal(t, 9, usage.InputTokens)
 	require.Equal(t, 8, usage.OutputTokens)
-	require.Equal(t, 6, usage.CacheCreationInputTokens)
 	require.Equal(t, 7, usage.CacheReadInputTokens)
 
 	// completed 事件，应提取 usage
-	svc.parseSSEUsage(`{"type":"response.completed","response":{"usage":{"input_tokens":3,"output_tokens":5,"cache_creation_input_tokens":4,"input_tokens_details":{"cached_tokens":2}}}}`, usage)
+	svc.parseSSEUsage(`{"type":"response.completed","response":{"usage":{"input_tokens":3,"output_tokens":5,"input_tokens_details":{"cached_tokens":2}}}}`, usage)
 	require.Equal(t, 3, usage.InputTokens)
 	require.Equal(t, 5, usage.OutputTokens)
-	require.Equal(t, 4, usage.CacheCreationInputTokens)
 	require.Equal(t, 2, usage.CacheReadInputTokens)
 
 	// done 事件同样可能携带最终 usage
-	svc.parseSSEUsage(`{"type":"response.done","response":{"usage":{"input_tokens":13,"output_tokens":15,"cache_creation_input_tokens":9,"input_tokens_details":{"cached_tokens":4}}}}`, usage)
+	svc.parseSSEUsage(`{"type":"response.done","response":{"usage":{"input_tokens":13,"output_tokens":15,"input_tokens_details":{"cached_tokens":4}}}}`, usage)
 	require.Equal(t, 13, usage.InputTokens)
 	require.Equal(t, 15, usage.OutputTokens)
-	require.Equal(t, 9, usage.CacheCreationInputTokens)
 	require.Equal(t, 4, usage.CacheReadInputTokens)
-
-	// incomplete 事件也应提取 usage，避免非流式 fallback 和记费记录丢失
-	svc.parseSSEUsage(`{"type":"response.incomplete","response":{"usage":{"input_tokens":21,"output_tokens":34,"cache_creation_input_tokens":10,"input_tokens_details":{"cached_tokens":5}}}}`, usage)
-	require.Equal(t, 21, usage.InputTokens)
-	require.Equal(t, 34, usage.OutputTokens)
-	require.Equal(t, 10, usage.CacheCreationInputTokens)
-	require.Equal(t, 5, usage.CacheReadInputTokens)
-}
-
-func TestExtractOpenAIUsageFromJSONBytes_ParsesOptionalCacheCreationInputTokens(t *testing.T) {
-	body := []byte(`{"usage":{"input_tokens":12,"output_tokens":6,"cache_creation_input_tokens":8,"input_tokens_details":{"cached_tokens":3}}}`)
-
-	usage, ok := extractOpenAIUsageFromJSONBytes(body)
-	require.True(t, ok)
-	require.Equal(t, 12, usage.InputTokens)
-	require.Equal(t, 6, usage.OutputTokens)
-	require.Equal(t, 8, usage.CacheCreationInputTokens)
-	require.Equal(t, 3, usage.CacheReadInputTokens)
-}
-
-func TestExtractOpenAIUsageFromJSONBytes_FallsBackToNestedCacheCreationBreakdown(t *testing.T) {
-	body := []byte(`{"usage":{"input_tokens":12,"output_tokens":6,"input_tokens_details":{"cached_tokens":3},"cache_creation":{"ephemeral_5m_input_tokens":2,"ephemeral_1h_input_tokens":5}}}`)
-
-	usage, ok := extractOpenAIUsageFromJSONBytes(body)
-	require.True(t, ok)
-	require.Equal(t, 12, usage.InputTokens)
-	require.Equal(t, 6, usage.OutputTokens)
-	require.Equal(t, 7, usage.CacheCreationInputTokens)
-	require.Equal(t, 3, usage.CacheReadInputTokens)
-}
-
-func TestParseSSEUsage_FallsBackToNestedCacheCreationBreakdown(t *testing.T) {
-	svc := &OpenAIGatewayService{}
-	usage := &OpenAIUsage{}
-
-	svc.parseSSEUsage(`{"type":"response.completed","response":{"usage":{"input_tokens":9,"output_tokens":4,"input_tokens_details":{"cached_tokens":2},"cache_creation":{"ephemeral_5m_input_tokens":3,"ephemeral_1h_input_tokens":8}}}}`, usage)
-
-	require.Equal(t, 9, usage.InputTokens)
-	require.Equal(t, 4, usage.OutputTokens)
-	require.Equal(t, 11, usage.CacheCreationInputTokens)
-	require.Equal(t, 2, usage.CacheReadInputTokens)
 }
 
 func TestExtractCodexFinalResponse_SampleReplay(t *testing.T) {
@@ -2387,62 +2167,7 @@ func TestExtractCodexFinalResponse_SampleReplay(t *testing.T) {
 	require.Contains(t, string(finalResp), `"input_tokens":11`)
 }
 
-func TestExtractCodexFinalResponse_AggregatesDeltaOnlyTerminalResponse(t *testing.T) {
-	body := strings.Join([]string{
-		`data: {"type":"response.created","response":{"id":"resp_agg","model":"gpt-4o","status":"in_progress"}}`,
-		`data: {"type":"response.reasoning_summary_text.delta","output_index":0,"summary_index":0,"delta":"plan first"}`,
-		`data: {"type":"response.output_text.delta","output_index":1,"content_index":0,"delta":"final answer"}`,
-		`data: {"type":"response.completed","response":{"id":"resp_agg","model":"gpt-4o","usage":{"input_tokens":11,"output_tokens":22,"input_tokens_details":{"cached_tokens":3}}}}`,
-		`data: [DONE]`,
-	}, "\n")
-
-	finalResp, ok := extractCodexFinalResponse(body)
-	require.True(t, ok)
-	require.Equal(t, "resp_agg", gjson.GetBytes(finalResp, "id").String())
-	require.Equal(t, "completed", gjson.GetBytes(finalResp, "status").String())
-	require.Equal(t, "plan first", gjson.GetBytes(finalResp, "output.0.summary.0.text").String())
-	require.Equal(t, "final answer", gjson.GetBytes(finalResp, "output.1.content.0.text").String())
-	require.Equal(t, int64(11), gjson.GetBytes(finalResp, "usage.input_tokens").Int())
-	require.Equal(t, int64(22), gjson.GetBytes(finalResp, "usage.output_tokens").Int())
-	require.Equal(t, int64(3), gjson.GetBytes(finalResp, "usage.input_tokens_details.cached_tokens").Int())
-}
-
-func TestExtractCodexFinalResponse_AggregatesToolCallArguments(t *testing.T) {
-	body := strings.Join([]string{
-		`data: {"type":"response.created","response":{"id":"resp_tool_agg","model":"gpt-4o","status":"in_progress"}}`,
-		`data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","call_id":"call_1","name":"get_weather"}}`,
-		`data: {"type":"response.function_call_arguments.delta","output_index":0,"delta":"{\"city\":\"Ber"}`,
-		`data: {"type":"response.function_call_arguments.delta","output_index":0,"delta":"lin\"}"}`,
-		`data: {"type":"response.completed","response":{"id":"resp_tool_agg","model":"gpt-4o","usage":{"input_tokens":5,"output_tokens":3}}}`,
-		`data: [DONE]`,
-	}, "\n")
-
-	finalResp, ok := extractCodexFinalResponse(body)
-	require.True(t, ok)
-	require.Equal(t, "function_call", gjson.GetBytes(finalResp, "output.0.type").String())
-	require.Equal(t, "call_1", gjson.GetBytes(finalResp, "output.0.call_id").String())
-	require.Equal(t, "get_weather", gjson.GetBytes(finalResp, "output.0.name").String())
-	require.Equal(t, `{"city":"Berlin"}`, gjson.GetBytes(finalResp, "output.0.arguments").String())
-}
-
-func TestExtractCodexFinalResponse_AggregatesIncompleteTerminalResponse(t *testing.T) {
-	body := strings.Join([]string{
-		`data: {"type":"response.created","response":{"id":"resp_incomplete","model":"gpt-4o","status":"in_progress"}}`,
-		`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"partial answer"}`,
-		`data: {"type":"response.incomplete","response":{"id":"resp_incomplete","model":"gpt-4o","usage":{"input_tokens":8,"output_tokens":5},"incomplete_details":{"reason":"max_output_tokens"}}}`,
-		`data: [DONE]`,
-	}, "\n")
-
-	finalResp, ok := extractCodexFinalResponse(body)
-	require.True(t, ok)
-	require.Equal(t, "incomplete", gjson.GetBytes(finalResp, "status").String())
-	require.Equal(t, "partial answer", gjson.GetBytes(finalResp, "output.0.content.0.text").String())
-	require.Equal(t, "max_output_tokens", gjson.GetBytes(finalResp, "incomplete_details.reason").String())
-	require.Equal(t, int64(8), gjson.GetBytes(finalResp, "usage.input_tokens").Int())
-	require.Equal(t, int64(5), gjson.GetBytes(finalResp, "usage.output_tokens").Int())
-}
-
-func TestHandleOAuthSSEToJSON_CompletedEventReturnsJSON(t *testing.T) {
+func TestHandleSSEToJSON_CompletedEventReturnsJSON(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -2459,19 +2184,19 @@ func TestHandleOAuthSSEToJSON_CompletedEventReturnsJSON(t *testing.T) {
 		`data: [DONE]`,
 	}, "\n"))
 
-	usage, err := svc.handleOAuthSSEToJSON(resp, c, body, "gpt-4o", "gpt-4o")
+	usage, err := svc.handleSSEToJSON(resp, c, body, "gpt-4o", "gpt-4o")
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 	require.Equal(t, 7, usage.InputTokens)
 	require.Equal(t, 9, usage.OutputTokens)
 	require.Equal(t, 1, usage.CacheReadInputTokens)
-	require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+	// Header 可能由上游 Content-Type 透传；关键是 body 已转换为最终 JSON 响应。
 	require.NotContains(t, rec.Body.String(), "event:")
 	require.Contains(t, rec.Body.String(), `"id":"resp_2"`)
 	require.NotContains(t, rec.Body.String(), "data:")
 }
 
-func TestHandleOAuthSSEToJSON_CompletedEventAggregatesDeltaOnlyTerminalResponse(t *testing.T) {
+func TestHandleSSEToJSON_ReconstructsImageGenerationOutputItemDone(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -2483,54 +2208,22 @@ func TestHandleOAuthSSEToJSON_CompletedEventAggregatesDeltaOnlyTerminalResponse(
 		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
 	}
 	body := []byte(strings.Join([]string{
-		`data: {"type":"response.created","response":{"id":"resp_agg_json","model":"gpt-4o","status":"in_progress"}}`,
-		`data: {"type":"response.reasoning_summary_text.delta","output_index":0,"summary_index":0,"delta":"plan first"}`,
-		`data: {"type":"response.output_text.delta","output_index":1,"content_index":0,"delta":"final answer"}`,
-		`data: {"type":"response.completed","response":{"id":"resp_agg_json","model":"gpt-4o","usage":{"input_tokens":7,"output_tokens":9,"input_tokens_details":{"cached_tokens":1}}}}`,
+		`data: {"type":"response.output_item.done","item":{"id":"ig_123","type":"image_generation_call","result":"aGVsbG8=","revised_prompt":"draw a cat","output_format":"png"}}`,
+		`data: {"type":"response.completed","response":{"id":"resp_img","model":"gpt-5.4","output":[],"usage":{"input_tokens":7,"output_tokens":9,"output_tokens_details":{"image_tokens":4}}}}`,
 		`data: [DONE]`,
 	}, "\n"))
 
-	usage, err := svc.handleOAuthSSEToJSON(resp, c, body, "gpt-4o", "gpt-4o")
+	usage, err := svc.handleSSEToJSON(resp, c, body, "gpt-5.4", "gpt-5.4")
 	require.NoError(t, err)
 	require.NotNil(t, usage)
-	require.Equal(t, 7, usage.InputTokens)
-	require.Equal(t, 9, usage.OutputTokens)
-	require.Equal(t, 1, usage.CacheReadInputTokens)
+	require.Equal(t, 4, usage.ImageOutputTokens)
 	require.NotContains(t, rec.Body.String(), "data:")
-	require.Equal(t, "plan first", gjson.GetBytes(rec.Body.Bytes(), "output.0.summary.0.text").String())
-	require.Equal(t, "final answer", gjson.GetBytes(rec.Body.Bytes(), "output.1.content.0.text").String())
+	require.Equal(t, "image_generation_call", gjson.Get(rec.Body.String(), "output.0.type").String())
+	require.Equal(t, "aGVsbG8=", gjson.Get(rec.Body.String(), "output.0.result").String())
+	require.Equal(t, "draw a cat", gjson.Get(rec.Body.String(), "output.0.revised_prompt").String())
 }
 
-func TestHandleOAuthSSEToJSON_IncompleteEventAggregatesDeltaOnlyTerminalResponse(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
-
-	svc := &OpenAIGatewayService{cfg: &config.Config{}}
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
-	}
-	body := []byte(strings.Join([]string{
-		`data: {"type":"response.created","response":{"id":"resp_incomplete_json","model":"gpt-4o","status":"in_progress"}}`,
-		`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"partial answer"}`,
-		`data: {"type":"response.incomplete","response":{"id":"resp_incomplete_json","model":"gpt-4o","usage":{"input_tokens":7,"output_tokens":4},"incomplete_details":{"reason":"max_output_tokens"}}}`,
-		`data: [DONE]`,
-	}, "\n"))
-
-	usage, err := svc.handleOAuthSSEToJSON(resp, c, body, "gpt-4o", "gpt-4o")
-	require.NoError(t, err)
-	require.NotNil(t, usage)
-	require.Equal(t, 7, usage.InputTokens)
-	require.Equal(t, 4, usage.OutputTokens)
-	require.NotContains(t, rec.Body.String(), "data:")
-	require.Equal(t, "incomplete", gjson.GetBytes(rec.Body.Bytes(), "status").String())
-	require.Equal(t, "partial answer", gjson.GetBytes(rec.Body.Bytes(), "output.0.content.0.text").String())
-	require.Equal(t, "max_output_tokens", gjson.GetBytes(rec.Body.Bytes(), "incomplete_details.reason").String())
-}
-
-func TestHandleOAuthSSEToJSON_NoFinalResponseKeepsSSEBody(t *testing.T) {
+func TestHandleSSEToJSON_NoFinalResponseKeepsSSEBody(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -2546,7 +2239,7 @@ func TestHandleOAuthSSEToJSON_NoFinalResponseKeepsSSEBody(t *testing.T) {
 		`data: [DONE]`,
 	}, "\n"))
 
-	usage, err := svc.handleOAuthSSEToJSON(resp, c, body, "gpt-4o", "gpt-4o")
+	usage, err := svc.handleSSEToJSON(resp, c, body, "gpt-4o", "gpt-4o")
 	require.NoError(t, err)
 	require.NotNil(t, usage)
 	require.Equal(t, 0, usage.InputTokens)
@@ -2554,7 +2247,7 @@ func TestHandleOAuthSSEToJSON_NoFinalResponseKeepsSSEBody(t *testing.T) {
 	require.Contains(t, rec.Body.String(), `data: {"type":"response.in_progress"`)
 }
 
-func TestHandleOAuthSSEToJSON_ResponseFailedReturnsProtocolError(t *testing.T) {
+func TestHandleSSEToJSON_ResponseFailedReturnsProtocolError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -2570,40 +2263,10 @@ func TestHandleOAuthSSEToJSON_ResponseFailedReturnsProtocolError(t *testing.T) {
 		`data: [DONE]`,
 	}, "\n"))
 
-	usage, err := svc.handleOAuthSSEToJSON(resp, c, body, "gpt-4o", "gpt-4o")
+	usage, err := svc.handleSSEToJSON(resp, c, body, "gpt-4o", "gpt-4o")
 	require.Nil(t, usage)
 	require.Error(t, err)
 	require.Equal(t, http.StatusBadGateway, rec.Code)
 	require.Contains(t, rec.Body.String(), "upstream rejected request")
 	require.Contains(t, rec.Header().Get("Content-Type"), "application/json")
-}
-
-func TestHandleNonStreamingResponse_APIKeySSEConvertsToJSON(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
-
-	svc := &OpenAIGatewayService{cfg: &config.Config{}}
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
-		Body: io.NopCloser(strings.NewReader(strings.Join([]string{
-			`data: {"type":"response.created","response":{"id":"resp_apikey_sse","model":"gpt-4o","status":"in_progress"}}`,
-			`data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"final answer"}`,
-			`data: {"type":"response.completed","response":{"id":"resp_apikey_sse","model":"gpt-4o","usage":{"input_tokens":7,"output_tokens":9,"input_tokens_details":{"cached_tokens":1}}}}`,
-			`data: [DONE]`,
-		}, "\n"))),
-	}
-	account := &Account{Type: AccountTypeAPIKey}
-
-	usage, err := svc.handleNonStreamingResponse(context.Background(), resp, c, account, "gpt-4o", "gpt-4o")
-	require.NoError(t, err)
-	require.NotNil(t, usage)
-	require.Equal(t, 7, usage.InputTokens)
-	require.Equal(t, 9, usage.OutputTokens)
-	require.Equal(t, 1, usage.CacheReadInputTokens)
-	require.Contains(t, rec.Body.String(), `"id":"resp_apikey_sse"`)
-	require.Contains(t, rec.Body.String(), `"text":"final answer"`)
-	require.NotContains(t, rec.Body.String(), `data: {"type":"response.completed"}`)
 }

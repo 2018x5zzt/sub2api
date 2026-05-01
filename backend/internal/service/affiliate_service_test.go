@@ -1,52 +1,74 @@
+//go:build unit
+
 package service
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestAffiliateService_XlabapiDefaults(t *testing.T) {
+// TestResolveRebateRatePercent_PerUserOverride verifies that per-inviter
+// AffRebateRatePercent overrides the global rate, that NULL falls back to the
+// global rate, and that out-of-range exclusive rates are clamped silently.
+//
+// SettingService is left nil here so globalRebateRatePercent returns the
+// documented default (AffiliateRebateRateDefault = 20%) — this exercises the
+// fallback path without spinning up a settings stub.
+func TestResolveRebateRatePercent_PerUserOverride(t *testing.T) {
 	t.Parallel()
-
 	svc := &AffiliateService{}
 
-	require.True(t, svc.IsEnabled(context.Background()))
-	require.Equal(t, AffiliateEnabledDefault, svc.IsEnabled(context.Background()))
-	require.InDelta(t, 3.0, AffiliateRebateRateDefault, 1e-9)
-	require.InDelta(t, 3.0, svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{}), 1e-9)
-}
+	// nil exclusive rate → falls back to global default (20%)
+	require.InDelta(t, AffiliateRebateRateDefault,
+		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{}), 1e-9)
 
-func TestAffiliateService_ResolveRebateRatePercent_PerUserOverride(t *testing.T) {
-	t.Parallel()
-
-	svc := &AffiliateService{}
-
+	// exclusive rate set → overrides global
 	rate := 50.0
-	require.InDelta(t, 50.0, svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &rate}), 1e-9)
+	require.InDelta(t, 50.0,
+		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &rate}), 1e-9)
 
+	// exclusive rate 0 → returns 0 (no rebate, intentional)
 	zero := 0.0
-	require.InDelta(t, 0.0, svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &zero}), 1e-9)
+	require.InDelta(t, 0.0,
+		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &zero}), 1e-9)
 
+	// exclusive rate above max → clamped to Max
 	tooHigh := 250.0
-	require.InDelta(t, AffiliateRebateRateMax, svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooHigh}), 1e-9)
+	require.InDelta(t, AffiliateRebateRateMax,
+		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooHigh}), 1e-9)
 
+	// exclusive rate below min → clamped to Min
 	tooLow := -5.0
-	require.InDelta(t, AffiliateRebateRateMin, svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooLow}), 1e-9)
+	require.InDelta(t, AffiliateRebateRateMin,
+		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooLow}), 1e-9)
 }
 
-func TestAffiliateService_ValidateExclusiveRate(t *testing.T) {
+// TestIsEnabled_NilSettingServiceReturnsDefault verifies that IsEnabled
+// safely handles a nil settingService dependency by returning the default
+// (off). This protects callers from nil-pointer crashes in misconfigured
+// environments.
+func TestIsEnabled_NilSettingServiceReturnsDefault(t *testing.T) {
 	t.Parallel()
+	svc := &AffiliateService{}
+	require.False(t, svc.IsEnabled(context.Background()))
+	require.Equal(t, AffiliateEnabledDefault, svc.IsEnabled(context.Background()))
+}
 
+// TestValidateExclusiveRate_BoundaryAndInvalid covers the validator used by
+// admin-facing rate setters: nil is always valid (clear), in-range values
+// are accepted, NaN/Inf and out-of-range values produce a typed BadRequest.
+func TestValidateExclusiveRate_BoundaryAndInvalid(t *testing.T) {
+	t.Parallel()
 	require.NoError(t, validateExclusiveRate(nil))
+
 	for _, v := range []float64{0, 0.01, 50, 99.99, 100} {
 		v := v
 		require.NoError(t, validateExclusiveRate(&v), "value %v should be valid", v)
 	}
+
 	for _, v := range []float64{-0.01, 100.01, -100, 200} {
 		v := v
 		require.Error(t, validateExclusiveRate(&v), "value %v should be rejected", v)
@@ -60,26 +82,43 @@ func TestAffiliateService_ValidateExclusiveRate(t *testing.T) {
 	require.Error(t, validateExclusiveRate(&negInf))
 }
 
-func TestAffiliateService_IsValidAffiliateCodeFormat(t *testing.T) {
+func TestMaskEmail(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, "a***@g***.com", maskEmail("alice@gmail.com"))
+	require.Equal(t, "x***@d***", maskEmail("x@domain"))
+	require.Equal(t, "", maskEmail(""))
+}
+
+func TestIsValidAffiliateCodeFormat(t *testing.T) {
 	t.Parallel()
 
+	// 邀请码格式校验同时服务于：
+	// 1) 系统自动生成的 12 位随机码（A-Z 去 I/O，2-9 去 0/1）
+	// 2) 管理员设置的自定义专属码（如 "VIP2026"、"NEW_USER-1"）
+	// 因此校验放宽到 [A-Z0-9_-]{4,32}（要求调用方先 ToUpper）。
 	cases := []struct {
 		name string
 		in   string
 		want bool
 	}{
 		{"valid canonical 12-char", "ABCDEFGHJKLM", true},
-		{"valid all digits", "012345678901", true},
+		{"valid all digits 2-9", "234567892345", true},
+		{"valid mixed", "A2B3C4D5E6F7", true},
 		{"valid admin custom short", "VIP1", true},
 		{"valid admin custom with hyphen", "NEW-USER", true},
 		{"valid admin custom with underscore", "VIP_2026", true},
 		{"valid 32-char max", "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345", true},
-		{"too short", "ABC", false},
-		{"too long", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456", false},
-		{"lowercase rejected before caller normalization", "abcdefghjklm", false},
+		// Previously-excluded chars (I/O/0/1) are now allowed since admins may use them.
+		{"letter I now allowed", "IBCDEFGHJKLM", true},
+		{"letter O now allowed", "OBCDEFGHJKLM", true},
+		{"digit 0 now allowed", "0BCDEFGHJKLM", true},
+		{"digit 1 now allowed", "1BCDEFGHJKLM", true},
+		{"too short (3 chars)", "ABC", false},
+		{"too long (33 chars)", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456", false},
+		{"lowercase rejected (caller must ToUpper first)", "abcdefghjklm", false},
 		{"empty", "", false},
-		{"non-ascii", "ÄÄÄÄÄÄ", false},
-		{"punctuation", "ABCDEFGHJK.M", false},
+		{"utf8 non-ascii", "ÄÄÄÄÄÄ", false}, // bytes out of charset
+		{"ascii punctuation .", "ABCDEFGHJK.M", false},
 		{"whitespace", "ABCDEFGHJK M", false},
 	}
 	for _, tc := range cases {
@@ -89,280 +128,4 @@ func TestAffiliateService_IsValidAffiliateCodeFormat(t *testing.T) {
 			require.Equal(t, tc.want, isValidAffiliateCodeFormat(tc.in))
 		})
 	}
-}
-
-func TestAffiliateService_AccrueInviteRebate_UsesTierRateFromEffectiveCommercialInvitees(t *testing.T) {
-	ctx := context.Background()
-	inviterID := int64(7)
-	repo := &affiliateTierRepoStub{
-		summaries: map[int64]*AffiliateSummary{
-			7: {UserID: 7, AffCode: "INVITER", CreatedAt: time.Now().Add(-24 * time.Hour)},
-			8: {UserID: 8, AffCode: "INVITEE", InviterID: &inviterID, CreatedAt: time.Now().Add(-24 * time.Hour)},
-		},
-		effectiveInvitees: map[int64]int64{7: 100},
-	}
-	settings := NewSettingService(&affiliateTierSettingRepoStub{values: map[string]string{
-		SettingKeyAffiliateEnabled:             "true",
-		SettingKeyAffiliateRebateRate:          "3",
-		SettingKeyAffiliateRebateFreezeHours:   "0",
-		SettingKeyAffiliateRebateDurationDays:  "0",
-		SettingKeyAffiliateRebatePerInviteeCap: "0",
-		SettingKeyAffiliateRebateTiers:         `[{"min_effective_invitees":0,"rebate_rate":3},{"min_effective_invitees":100,"rebate_rate":8}]`,
-	}}, nil)
-	svc := NewAffiliateService(repo, settings, nil, nil)
-
-	rebate, err := svc.AccrueInviteRebate(ctx, 8, 100)
-
-	require.NoError(t, err)
-	require.InDelta(t, 8.0, rebate, 1e-9)
-	require.Len(t, repo.accrued, 1)
-	require.Equal(t, inviterID, repo.accrued[0].inviterID)
-	require.Equal(t, int64(8), repo.accrued[0].inviteeID)
-	require.InDelta(t, 8.0, repo.accrued[0].amount, 1e-9)
-}
-
-func TestAffiliateService_AccrueInviteRebate_PerUserRateOverridesTierRate(t *testing.T) {
-	ctx := context.Background()
-	inviterID := int64(7)
-	overrideRate := 12.0
-	repo := &affiliateTierRepoStub{
-		summaries: map[int64]*AffiliateSummary{
-			7: {UserID: 7, AffCode: "INVITER", AffRebateRatePercent: &overrideRate, CreatedAt: time.Now().Add(-24 * time.Hour)},
-			8: {UserID: 8, AffCode: "INVITEE", InviterID: &inviterID, CreatedAt: time.Now().Add(-24 * time.Hour)},
-		},
-		effectiveInvitees: map[int64]int64{7: 500},
-	}
-	settings := NewSettingService(&affiliateTierSettingRepoStub{values: map[string]string{
-		SettingKeyAffiliateEnabled:             "true",
-		SettingKeyAffiliateRebateRate:          "3",
-		SettingKeyAffiliateRebateFreezeHours:   "0",
-		SettingKeyAffiliateRebateDurationDays:  "0",
-		SettingKeyAffiliateRebatePerInviteeCap: "0",
-		SettingKeyAffiliateRebateTiers:         `[{"min_effective_invitees":100,"rebate_rate":8},{"min_effective_invitees":500,"rebate_rate":15}]`,
-	}}, nil)
-	svc := NewAffiliateService(repo, settings, nil, nil)
-
-	rebate, err := svc.AccrueInviteRebate(ctx, 8, 100)
-
-	require.NoError(t, err)
-	require.InDelta(t, 12.0, rebate, 1e-9)
-	require.Len(t, repo.accrued, 1)
-	require.InDelta(t, 12.0, repo.accrued[0].amount, 1e-9)
-}
-
-func TestAffiliateService_AccrueInviteRebate_UsesFinalDefaultTierThresholds(t *testing.T) {
-	ctx := context.Background()
-	inviterID := int64(7)
-
-	cases := []struct {
-		name              string
-		effectiveInvitees int64
-		wantRebate        float64
-	}{
-		{name: "zero effective invitees falls back to global rate", effectiveInvitees: 0, wantRebate: 3},
-		{name: "first effective invitee uses bronze", effectiveInvitees: 1, wantRebate: 5},
-		{name: "second effective invitee still uses bronze", effectiveInvitees: 2, wantRebate: 5},
-		{name: "third effective invitee uses silver", effectiveInvitees: 3, wantRebate: 8},
-		{name: "ninth effective invitee still uses silver", effectiveInvitees: 9, wantRebate: 8},
-		{name: "tenth effective invitee uses gold", effectiveInvitees: 10, wantRebate: 12},
-		{name: "twenty ninth effective invitee still uses gold", effectiveInvitees: 29, wantRebate: 12},
-		{name: "thirtieth effective invitee uses platinum", effectiveInvitees: 30, wantRebate: 15},
-		{name: "forty ninth effective invitee still uses platinum", effectiveInvitees: 49, wantRebate: 15},
-		{name: "fiftieth effective invitee uses diamond", effectiveInvitees: 50, wantRebate: 20},
-	}
-
-	for _, tc := range cases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			repo := &affiliateTierRepoStub{
-				summaries: map[int64]*AffiliateSummary{
-					7: {UserID: 7, AffCode: "INVITER", CreatedAt: time.Now().Add(-24 * time.Hour)},
-					8: {UserID: 8, AffCode: "INVITEE", InviterID: &inviterID, CreatedAt: time.Now().Add(-24 * time.Hour)},
-				},
-				effectiveInvitees: map[int64]int64{7: tc.effectiveInvitees},
-			}
-			settings := NewSettingService(&affiliateTierSettingRepoStub{values: map[string]string{
-				SettingKeyAffiliateEnabled:             "true",
-				SettingKeyAffiliateRebateRate:          "3",
-				SettingKeyAffiliateRebateFreezeHours:   "0",
-				SettingKeyAffiliateRebateDurationDays:  "0",
-				SettingKeyAffiliateRebatePerInviteeCap: "0",
-				SettingKeyAffiliateRebateTiers:         "[]",
-			}}, nil)
-			svc := NewAffiliateService(repo, settings, nil, nil)
-
-			rebate, err := svc.AccrueInviteRebate(ctx, 8, 100)
-
-			require.NoError(t, err)
-			require.InDelta(t, tc.wantRebate, rebate, 1e-9)
-			require.Len(t, repo.accrued, 1)
-			require.InDelta(t, tc.wantRebate, repo.accrued[0].amount, 1e-9)
-		})
-	}
-}
-
-func TestAffiliateService_GetAffiliateDetail_ReturnsEffectiveInviteeTier(t *testing.T) {
-	ctx := context.Background()
-	repo := &affiliateTierRepoStub{
-		summaries: map[int64]*AffiliateSummary{
-			7: {UserID: 7, AffCode: "INVITER", AffCount: 12, CreatedAt: time.Now().Add(-24 * time.Hour)},
-		},
-		effectiveInvitees: map[int64]int64{7: 10},
-	}
-	settings := NewSettingService(&affiliateTierSettingRepoStub{values: map[string]string{
-		SettingKeyAffiliateEnabled:             "true",
-		SettingKeyAffiliateRebateRate:          "3",
-		SettingKeyAffiliateRebateFreezeHours:   "0",
-		SettingKeyAffiliateRebateDurationDays:  "0",
-		SettingKeyAffiliateRebatePerInviteeCap: "0",
-	}}, nil)
-	svc := NewAffiliateService(repo, settings, nil, nil)
-
-	detail, err := svc.GetAffiliateDetail(ctx, 7)
-
-	require.NoError(t, err)
-	require.Equal(t, 10, detail.EffectiveInviteeCount)
-	require.InDelta(t, 12.0, detail.EffectiveRebateRatePercent, 1e-9)
-}
-
-func TestRegistrationInviteConcurrencyFloor(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		inviteCount int
-		want        int
-	}{
-		{inviteCount: 0, want: 0},
-		{inviteCount: 1, want: 5},
-		{inviteCount: 4, want: 5},
-		{inviteCount: 5, want: 10},
-		{inviteCount: 10, want: 10},
-	}
-
-	for _, tc := range cases {
-		tc := tc
-		t.Run(fmt.Sprintf("%d_invites", tc.inviteCount), func(t *testing.T) {
-			t.Parallel()
-			require.Equal(t, tc.want, RegistrationInviteConcurrencyFloor(tc.inviteCount))
-		})
-	}
-}
-
-type affiliateTierRepoStub struct {
-	summaries         map[int64]*AffiliateSummary
-	accruedByPair     map[[2]int64]float64
-	effectiveInvitees map[int64]int64
-	accrued           []affiliateTierAccrual
-}
-
-type affiliateTierAccrual struct {
-	inviterID int64
-	inviteeID int64
-	amount    float64
-}
-
-func (s *affiliateTierRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
-	if summary, ok := s.summaries[userID]; ok {
-		clone := *summary
-		return &clone, nil
-	}
-	return nil, ErrAffiliateProfileNotFound
-}
-
-func (s *affiliateTierRepoStub) GetAffiliateByCode(context.Context, string) (*AffiliateSummary, error) {
-	return nil, ErrAffiliateProfileNotFound
-}
-
-func (s *affiliateTierRepoStub) BindInviter(context.Context, int64, int64) (bool, error) {
-	return false, nil
-}
-
-func (s *affiliateTierRepoStub) AccrueQuota(_ context.Context, inviterID, inviteeUserID int64, amount float64, freezeHours int) (bool, error) {
-	s.accrued = append(s.accrued, affiliateTierAccrual{inviterID: inviterID, inviteeID: inviteeUserID, amount: amount})
-	return true, nil
-}
-
-func (s *affiliateTierRepoStub) GetAccruedRebateFromInvitee(_ context.Context, inviterID, inviteeUserID int64) (float64, error) {
-	if s.accruedByPair == nil {
-		return 0, nil
-	}
-	return s.accruedByPair[[2]int64{inviterID, inviteeUserID}], nil
-}
-
-func (s *affiliateTierRepoStub) CountEffectiveInvitees(_ context.Context, inviterID int64) (int64, error) {
-	if s.effectiveInvitees == nil {
-		return 0, nil
-	}
-	return s.effectiveInvitees[inviterID], nil
-}
-
-func (s *affiliateTierRepoStub) ThawFrozenQuota(context.Context, int64) (float64, error) {
-	return 0, nil
-}
-
-func (s *affiliateTierRepoStub) TransferQuotaToBalance(context.Context, int64) (float64, float64, error) {
-	return 0, 0, ErrAffiliateQuotaEmpty
-}
-
-func (s *affiliateTierRepoStub) ListInvitees(context.Context, int64, int) ([]AffiliateInvitee, error) {
-	return nil, nil
-}
-
-func (s *affiliateTierRepoStub) UpdateUserAffCode(context.Context, int64, string) error {
-	return nil
-}
-
-func (s *affiliateTierRepoStub) ResetUserAffCode(context.Context, int64) (string, error) {
-	return "", nil
-}
-
-func (s *affiliateTierRepoStub) SetUserRebateRate(context.Context, int64, *float64) error {
-	return nil
-}
-
-func (s *affiliateTierRepoStub) BatchSetUserRebateRate(context.Context, []int64, *float64) error {
-	return nil
-}
-
-func (s *affiliateTierRepoStub) ListUsersWithCustomSettings(context.Context, AffiliateAdminFilter) ([]AffiliateAdminEntry, int64, error) {
-	return nil, 0, nil
-}
-
-type affiliateTierSettingRepoStub struct {
-	values map[string]string
-}
-
-func (s *affiliateTierSettingRepoStub) Get(context.Context, string) (*Setting, error) {
-	return nil, ErrSettingNotFound
-}
-
-func (s *affiliateTierSettingRepoStub) GetValue(_ context.Context, key string) (string, error) {
-	if value, ok := s.values[key]; ok {
-		return value, nil
-	}
-	return "", ErrSettingNotFound
-}
-
-func (s *affiliateTierSettingRepoStub) Set(context.Context, string, string) error {
-	return nil
-}
-
-func (s *affiliateTierSettingRepoStub) GetMultiple(_ context.Context, keys []string) (map[string]string, error) {
-	result := make(map[string]string, len(keys))
-	for _, key := range keys {
-		result[key] = s.values[key]
-	}
-	return result, nil
-}
-
-func (s *affiliateTierSettingRepoStub) SetMultiple(context.Context, map[string]string) error {
-	return nil
-}
-
-func (s *affiliateTierSettingRepoStub) GetAll(context.Context) (map[string]string, error) {
-	return s.values, nil
-}
-
-func (s *affiliateTierSettingRepoStub) Delete(context.Context, string) error {
-	return nil
 }

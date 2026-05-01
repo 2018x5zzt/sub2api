@@ -147,6 +147,7 @@ func TestUsageLogFromService_FallsBackToLegacyModelWhenRequestedModelMissing(t *
 	require.Equal(t, "claude-3", userDTO.Model)
 	require.Equal(t, "claude-3", adminDTO.Model)
 }
+
 func f64Ptr(value float64) *float64 {
 	return &value
 }

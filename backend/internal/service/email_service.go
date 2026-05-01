@@ -5,10 +5,9 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/hex"
 	"fmt"
-	"log"
+	"log/slog"
 	"math/big"
 	"net"
 	"net/smtp"
@@ -28,10 +27,6 @@ var (
 
 	// Password reset errors
 	ErrInvalidResetToken = infraerrors.BadRequest("INVALID_RESET_TOKEN", "invalid or expired password reset token")
-
-	// Tests can override the SMTP root pool to trust local self-signed servers.
-	smtpTLSRootCAs  *x509.CertPool
-	smtpDialTimeout = 15 * time.Second
 )
 
 // EmailCache defines cache operations for email service
@@ -39,6 +34,11 @@ type EmailCache interface {
 	GetVerificationCode(ctx context.Context, email string) (*VerificationCodeData, error)
 	SetVerificationCode(ctx context.Context, email string, data *VerificationCodeData, ttl time.Duration) error
 	DeleteVerificationCode(ctx context.Context, email string) error
+
+	// Notify email verification code methods
+	GetNotifyVerifyCode(ctx context.Context, email string) (*VerificationCodeData, error)
+	SetNotifyVerifyCode(ctx context.Context, email string, data *VerificationCodeData, ttl time.Duration) error
+	DeleteNotifyVerifyCode(ctx context.Context, email string) error
 
 	// Password reset token methods
 	GetPasswordResetToken(ctx context.Context, email string) (*PasswordResetTokenData, error)
@@ -49,6 +49,10 @@ type EmailCache interface {
 	// Returns true if in cooldown period (email was sent recently)
 	IsPasswordResetEmailInCooldown(ctx context.Context, email string) bool
 	SetPasswordResetEmailCooldown(ctx context.Context, email string, ttl time.Duration) error
+
+	// Notify code rate limiting per user
+	IncrNotifyCodeUserRate(ctx context.Context, userID int64, window time.Duration) (int64, error)
+	GetNotifyCodeUserRate(ctx context.Context, userID int64) (int64, error)
 }
 
 // VerificationCodeData represents verification code data
@@ -56,6 +60,7 @@ type VerificationCodeData struct {
 	Code      string
 	Attempts  int
 	CreatedAt time.Time
+	ExpiresAt time.Time // absolute expiry; used to preserve remaining TTL when updating attempts
 }
 
 // PasswordResetTokenData represents password reset token data
@@ -152,23 +157,107 @@ func (s *EmailService) SendEmail(ctx context.Context, to, subject, body string) 
 	return s.SendEmailWithConfig(config, to, subject, body)
 }
 
+const smtpDialTimeout = 10 * time.Second
+const smtpIOTimeout = 20 * time.Second
+
 // SendEmailWithConfig 使用指定配置发送邮件
 func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body string) error {
-	from := config.From
+	// Sanitize all SMTP header fields to prevent header injection (CR/LF removal).
+	to = sanitizeEmailHeader(to)
+	subject = sanitizeEmailHeader(subject)
+
+	from := sanitizeEmailHeader(config.From)
 	if config.FromName != "" {
-		from = fmt.Sprintf("%s <%s>", config.FromName, config.From)
+		from = fmt.Sprintf("%s <%s>", sanitizeEmailHeader(config.FromName), sanitizeEmailHeader(config.From))
 	}
 
 	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s",
 		from, to, subject, body)
 
-	client, err := s.openSMTPClient(config)
+	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
+
+	if config.UseTLS {
+		return s.sendMailTLS(addr, auth, config.From, to, []byte(msg), config.Host)
+	}
+
+	return s.sendMailPlain(addr, auth, config.From, to, []byte(msg), config.Host)
+}
+
+// sendMailPlain sends mail without TLS using a dialer with timeout.
+func (s *EmailService) sendMailPlain(addr string, auth smtp.Auth, from, to string, msg []byte, host string) error {
+	dialer := &net.Dialer{Timeout: smtpDialTimeout}
+	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {
-		return err
+		return fmt.Errorf("smtp dial: %w", err)
+	}
+	_ = conn.SetDeadline(time.Now().Add(smtpIOTimeout))
+	defer func() { _ = conn.Close() }()
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("new smtp client: %w", err)
 	}
 	defer func() { _ = client.Close() }()
 
-	if err = client.Mail(config.From); err != nil {
+	// Opportunistic STARTTLS: upgrade to encrypted connection if the server supports it.
+	// This mirrors the behavior of smtp.SendMail which we replaced for timeout support.
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err = client.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+			return fmt.Errorf("starttls: %w", err)
+		}
+	}
+
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+	if err = client.Mail(from); err != nil {
+		return fmt.Errorf("smtp mail: %w", err)
+	}
+	if err = client.Rcpt(to); err != nil {
+		return fmt.Errorf("smtp rcpt: %w", err)
+	}
+	w, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("smtp data: %w", err)
+	}
+	if _, err = w.Write(msg); err != nil {
+		return fmt.Errorf("write msg: %w", err)
+	}
+	if err = w.Close(); err != nil {
+		return fmt.Errorf("close writer: %w", err)
+	}
+	_ = client.Quit()
+	return nil
+}
+
+// sendMailTLS 使用TLS发送邮件
+func (s *EmailService) sendMailTLS(addr string, auth smtp.Auth, from, to string, msg []byte, host string) error {
+	tlsConfig := &tls.Config{
+		ServerName: host,
+		// 强制 TLS 1.2+，避免协议降级导致的弱加密风险。
+		MinVersion: tls.VersionTLS12,
+	}
+
+	dialer := &net.Dialer{Timeout: smtpDialTimeout}
+	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
+	if err != nil {
+		return fmt.Errorf("tls dial: %w", err)
+	}
+	_ = conn.SetDeadline(time.Now().Add(smtpIOTimeout))
+	defer func() { _ = conn.Close() }()
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("new smtp client: %w", err)
+	}
+	defer func() { _ = client.Close() }()
+
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+
+	if err = client.Mail(from); err != nil {
 		return fmt.Errorf("smtp mail: %w", err)
 	}
 
@@ -181,7 +270,7 @@ func (s *EmailService) SendEmailWithConfig(config *SMTPConfig, to, subject, body
 		return fmt.Errorf("smtp data: %w", err)
 	}
 
-	_, err = w.Write([]byte(msg))
+	_, err = w.Write(msg)
 	if err != nil {
 		return fmt.Errorf("write msg: %w", err)
 	}
@@ -232,6 +321,7 @@ func (s *EmailService) SendVerifyCode(ctx context.Context, email, siteName strin
 		Code:      code,
 		Attempts:  0,
 		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(verifyCodeTTL),
 	}
 	if err := s.cache.SetVerificationCode(ctx, email, data, verifyCodeTTL); err != nil {
 		return fmt.Errorf("save verify code: %w", err)
@@ -264,8 +354,12 @@ func (s *EmailService) VerifyCode(ctx context.Context, email, code string) error
 	// 验证码不匹配 (constant-time comparison to prevent timing attacks)
 	if subtle.ConstantTimeCompare([]byte(data.Code), []byte(code)) != 1 {
 		data.Attempts++
-		if err := s.cache.SetVerificationCode(ctx, email, data, verifyCodeTTL); err != nil {
-			log.Printf("[Email] Failed to update verification attempt count: %v", err)
+		remaining := time.Until(data.ExpiresAt)
+		if remaining <= 0 {
+			return ErrInvalidVerifyCode
+		}
+		if err := s.cache.SetVerificationCode(ctx, email, data, remaining); err != nil {
+			slog.Error("failed to update verification attempt count", "email", email, "error", err)
 		}
 		if data.Attempts >= maxVerifyCodeAttempts {
 			return ErrVerifyCodeMaxAttempts
@@ -275,7 +369,7 @@ func (s *EmailService) VerifyCode(ctx context.Context, email, code string) error
 
 	// 验证成功，删除验证码
 	if err := s.cache.DeleteVerificationCode(ctx, email); err != nil {
-		log.Printf("[Email] Failed to delete verification code after success: %v", err)
+		slog.Error("failed to delete verification code after success", "email", email, "error", err)
 	}
 	return nil
 }
@@ -322,108 +416,47 @@ func (s *EmailService) buildVerifyCodeEmailBody(code, siteName string) string {
 
 // TestSMTPConnectionWithConfig 使用指定配置测试SMTP连接
 func (s *EmailService) TestSMTPConnectionWithConfig(config *SMTPConfig) error {
-	client, err := s.openSMTPClient(config)
+	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
+
+	if config.UseTLS {
+		tlsConfig := &tls.Config{
+			ServerName: config.Host,
+			// 与发送逻辑一致，显式要求 TLS 1.2+。
+			MinVersion: tls.VersionTLS12,
+		}
+		conn, err := tls.Dial("tcp", addr, tlsConfig)
+		if err != nil {
+			return fmt.Errorf("tls connection failed: %w", err)
+		}
+		defer func() { _ = conn.Close() }()
+
+		client, err := smtp.NewClient(conn, config.Host)
+		if err != nil {
+			return fmt.Errorf("smtp client creation failed: %w", err)
+		}
+		defer func() { _ = client.Close() }()
+
+		auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
+		if err = client.Auth(auth); err != nil {
+			return fmt.Errorf("smtp authentication failed: %w", err)
+		}
+
+		return client.Quit()
+	}
+
+	// 非TLS连接测试
+	client, err := smtp.Dial(addr)
 	if err != nil {
-		return err
+		return fmt.Errorf("smtp connection failed: %w", err)
 	}
 	defer func() { _ = client.Close() }()
 
-	return client.Quit()
-}
-
-func (s *EmailService) openSMTPClient(config *SMTPConfig) (*smtp.Client, error) {
-	addr := fmt.Sprintf("%s:%d", config.Host, config.Port)
-	if shouldUseImplicitSMTPTLS(config) {
-		return openImplicitTLSSMTPClient(addr, config)
-	}
-	return openSubmissionSMTPClient(addr, config)
-}
-
-func shouldUseImplicitSMTPTLS(config *SMTPConfig) bool {
-	return config.UseTLS && config.Port == 465
-}
-
-func openImplicitTLSSMTPClient(addr string, config *SMTPConfig) (*smtp.Client, error) {
-	dialer := &net.Dialer{Timeout: smtpDialTimeout}
-	conn, err := tls.DialWithDialer(dialer, "tcp", addr, buildSMTPTLSConfig(config.Host))
-	if err != nil {
-		return nil, fmt.Errorf("tls connection failed: %w", err)
-	}
-	if err := conn.SetDeadline(time.Now().Add(smtpDialTimeout)); err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("set smtp deadline failed: %w", err)
-	}
-
-	client, err := smtp.NewClient(conn, config.Host)
-	if err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("smtp client creation failed: %w", err)
-	}
-
-	if err := authenticateSMTPClient(client, config); err != nil {
-		_ = client.Close()
-		return nil, err
-	}
-
-	return client, nil
-}
-
-func openSubmissionSMTPClient(addr string, config *SMTPConfig) (*smtp.Client, error) {
-	dialer := &net.Dialer{Timeout: smtpDialTimeout}
-	conn, err := dialer.Dial("tcp", addr)
-	if err != nil {
-		return nil, fmt.Errorf("smtp connection failed: %w", err)
-	}
-	if err := conn.SetDeadline(time.Now().Add(smtpDialTimeout)); err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("set smtp deadline failed: %w", err)
-	}
-
-	client, err := smtp.NewClient(conn, config.Host)
-	if err != nil {
-		_ = conn.Close()
-		return nil, fmt.Errorf("smtp client creation failed: %w", err)
-	}
-
-	if config.UseTLS {
-		if ok, _ := client.Extension("STARTTLS"); !ok {
-			_ = client.Close()
-			return nil, fmt.Errorf("smtp server does not support STARTTLS")
-		}
-		if err := client.StartTLS(buildSMTPTLSConfig(config.Host)); err != nil {
-			_ = client.Close()
-			return nil, fmt.Errorf("starttls failed: %w", err)
-		}
-	}
-
-	if err := authenticateSMTPClient(client, config); err != nil {
-		_ = client.Close()
-		return nil, err
-	}
-
-	return client, nil
-}
-
-func authenticateSMTPClient(client *smtp.Client, config *SMTPConfig) error {
-	if config.Username == "" && config.Password == "" {
-		return nil
-	}
-
 	auth := smtp.PlainAuth("", config.Username, config.Password, config.Host)
-	if err := client.Auth(auth); err != nil {
+	if err = client.Auth(auth); err != nil {
 		return fmt.Errorf("smtp authentication failed: %w", err)
 	}
 
-	return nil
-}
-
-func buildSMTPTLSConfig(host string) *tls.Config {
-	return &tls.Config{
-		ServerName: host,
-		// 强制 TLS 1.2+，避免协议降级导致的弱加密风险。
-		MinVersion: tls.VersionTLS12,
-		RootCAs:    smtpTLSRootCAs,
-	}
+	return client.Quit()
 }
 
 // GeneratePasswordResetToken generates a secure 32-byte random token (64 hex characters)
@@ -486,7 +519,7 @@ func (s *EmailService) SendPasswordResetEmail(ctx context.Context, email, siteNa
 func (s *EmailService) SendPasswordResetEmailWithCooldown(ctx context.Context, email, siteName, resetURL string) error {
 	// Check email cooldown to prevent email bombing
 	if s.cache.IsPasswordResetEmailInCooldown(ctx, email) {
-		log.Printf("[Email] Password reset email skipped (cooldown): %s", email)
+		slog.Info("password reset email skipped due to cooldown", "email", email)
 		return nil // Silent success to prevent revealing cooldown to attackers
 	}
 
@@ -497,7 +530,7 @@ func (s *EmailService) SendPasswordResetEmailWithCooldown(ctx context.Context, e
 
 	// Set cooldown marker (Redis TTL handles expiration)
 	if err := s.cache.SetPasswordResetEmailCooldown(ctx, email, passwordResetEmailCooldown); err != nil {
-		log.Printf("[Email] Failed to set password reset cooldown for %s: %v", email, err)
+		slog.Error("failed to set password reset cooldown", "email", email, "error", err)
 	}
 
 	return nil
@@ -527,7 +560,7 @@ func (s *EmailService) ConsumePasswordResetToken(ctx context.Context, email, tok
 
 	// Delete after verification (one-time use)
 	if err := s.cache.DeletePasswordResetToken(ctx, email); err != nil {
-		log.Printf("[Email] Failed to delete password reset token after consumption: %v", err)
+		slog.Error("failed to delete password reset token after consumption", "email", email, "error", err)
 	}
 	return nil
 }

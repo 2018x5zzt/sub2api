@@ -8,7 +8,6 @@ import type {
   RedeemCode,
   GenerateRedeemCodesRequest,
   RedeemCodeType,
-  RedeemCodeSourceType,
   PaginatedResponse
 } from '@/types'
 
@@ -26,6 +25,8 @@ export async function list(
     type?: RedeemCodeType
     status?: 'active' | 'used' | 'expired' | 'unused'
     search?: string
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
   },
   options?: {
     signal?: AbortSignal
@@ -59,29 +60,24 @@ export async function getById(id: number): Promise<RedeemCode> {
  * @param value - Value of the code
  * @param groupId - Group ID (required for subscription type)
  * @param validityDays - Validity days (for subscription type)
- * @param productId - Product ID (alternative target for subscription type)
  * @returns Array of generated redeem codes
  */
 export async function generate(
   count: number,
   type: RedeemCodeType,
   value: number,
-  sourceType?: RedeemCodeSourceType,
   groupId?: number | null,
-  validityDays?: number,
-  productId?: number | null
+  validityDays?: number
 ): Promise<RedeemCode[]> {
   const payload: GenerateRedeemCodesRequest = {
     count,
     type,
-    value,
-    source_type: sourceType
+    value
   }
 
   // 订阅类型专用字段
   if (type === 'subscription') {
     payload.group_id = groupId
-    payload.product_id = productId
     if (validityDays && validityDays > 0) {
       payload.validity_days = validityDays
     }
@@ -157,7 +153,10 @@ export async function getStats(): Promise<{
  */
 export async function exportCodes(filters?: {
   type?: RedeemCodeType
-  status?: 'active' | 'used' | 'expired'
+  status?: 'used' | 'expired' | 'unused'
+  search?: string
+  sort_by?: string
+  sort_order?: 'asc' | 'desc'
 }): Promise<Blob> {
   const response = await apiClient.get('/admin/redeem-codes/export', {
     params: filters,

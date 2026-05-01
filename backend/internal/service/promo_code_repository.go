@@ -18,12 +18,11 @@ type PromoCodeRepository interface {
 
 	// 列表查询
 	List(ctx context.Context, params pagination.PaginationParams) ([]PromoCode, *pagination.PaginationResult, error)
-	ListWithFilters(ctx context.Context, params pagination.PaginationParams, scene, status, search string) ([]PromoCode, *pagination.PaginationResult, error)
+	ListWithFilters(ctx context.Context, params pagination.PaginationParams, status, search string) ([]PromoCode, *pagination.PaginationResult, error)
 
 	// 使用记录
 	CreateUsage(ctx context.Context, usage *PromoCodeUsage) error
 	GetUsageByPromoCodeAndUser(ctx context.Context, promoCodeID, userID int64) (*PromoCodeUsage, error)
-	ListAllUsagesByPromoCode(ctx context.Context, promoCodeID int64) ([]PromoCodeUsage, error)
 	ListUsagesByPromoCode(ctx context.Context, promoCodeID int64, params pagination.PaginationParams) ([]PromoCodeUsage, *pagination.PaginationResult, error)
 
 	// 计数操作

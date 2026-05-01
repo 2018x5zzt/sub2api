@@ -3,16 +3,11 @@ package handler
 
 import (
 	"context"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -23,44 +18,25 @@ import (
 
 // APIKeyHandler handles API key-related requests
 type APIKeyHandler struct {
-	apiKeyService   *service.APIKeyService
-	accountRepo     service.AccountRepository
-	billingService  *service.BillingService
-	pricingResolver *service.ModelPricingResolver
+	apiKeyService *service.APIKeyService
 }
 
 // NewAPIKeyHandler creates a new APIKeyHandler
-func NewAPIKeyHandler(apiKeyService *service.APIKeyService, accountRepo service.AccountRepository) *APIKeyHandler {
+func NewAPIKeyHandler(apiKeyService *service.APIKeyService) *APIKeyHandler {
 	return &APIKeyHandler{
 		apiKeyService: apiKeyService,
-		accountRepo:   accountRepo,
 	}
-}
-
-func (h *APIKeyHandler) SetBillingService(billingService *service.BillingService) {
-	if h == nil {
-		return
-	}
-	h.billingService = billingService
-}
-
-func (h *APIKeyHandler) SetPricingResolver(pricingResolver *service.ModelPricingResolver) {
-	if h == nil {
-		return
-	}
-	h.pricingResolver = pricingResolver
 }
 
 // CreateAPIKeyRequest represents the create API key request payload
 type CreateAPIKeyRequest struct {
-	Name             string   `json:"name" binding:"required"`
-	GroupID          *int64   `json:"group_id"` // nullable
-	BudgetMultiplier *float64 `json:"budget_multiplier"`
-	CustomKey        *string  `json:"custom_key"`      // 可选的自定义key
-	IPWhitelist      []string `json:"ip_whitelist"`    // IP 白名单
-	IPBlacklist      []string `json:"ip_blacklist"`    // IP 黑名单
-	Quota            *float64 `json:"quota"`           // 配额限制 (USD)
-	ExpiresInDays    *int     `json:"expires_in_days"` // 过期天数
+	Name          string   `json:"name" binding:"required"`
+	GroupID       *int64   `json:"group_id"`        // nullable
+	CustomKey     *string  `json:"custom_key"`      // 可选的自定义key
+	IPWhitelist   []string `json:"ip_whitelist"`    // IP 白名单
+	IPBlacklist   []string `json:"ip_blacklist"`    // IP 黑名单
+	Quota         *float64 `json:"quota"`           // 配额限制 (USD)
+	ExpiresInDays *int     `json:"expires_in_days"` // 过期天数
 
 	// Rate limit fields (0 = unlimited)
 	RateLimit5h *float64 `json:"rate_limit_5h"`
@@ -70,39 +46,20 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest represents the update API key request payload
 type UpdateAPIKeyRequest struct {
-	Name             string   `json:"name"`
-	GroupID          *int64   `json:"group_id"`
-	BudgetMultiplier *float64 `json:"budget_multiplier"`
-	Status           string   `json:"status" binding:"omitempty,oneof=active inactive"`
-	IPWhitelist      []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist      []string `json:"ip_blacklist"` // IP 黑名单
-	Quota            *float64 `json:"quota"`        // 配额限制 (USD), 0=无限制
-	ExpiresAt        *string  `json:"expires_at"`   // 过期时间 (ISO 8601)
-	ResetQuota       *bool    `json:"reset_quota"`  // 重置已用配额
+	Name        string   `json:"name"`
+	GroupID     *int64   `json:"group_id"`
+	Status      string   `json:"status" binding:"omitempty,oneof=active inactive"`
+	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
+	Quota       *float64 `json:"quota"`        // 配额限制 (USD), 0=无限制
+	ExpiresAt   *string  `json:"expires_at"`   // 过期时间 (ISO 8601)
+	ResetQuota  *bool    `json:"reset_quota"`  // 重置已用配额
 
 	// Rate limit fields (nil = no change, 0 = unlimited)
 	RateLimit5h         *float64 `json:"rate_limit_5h"`
 	RateLimit1d         *float64 `json:"rate_limit_1d"`
 	RateLimit7d         *float64 `json:"rate_limit_7d"`
 	ResetRateLimitUsage *bool    `json:"reset_rate_limit_usage"` // 重置限速用量
-}
-
-// UserVisibleGroupPoolStatus represents realtime pool availability for a visible group.
-type UserVisibleGroupPoolStatus struct {
-	GroupID                 int64   `json:"group_id"`
-	GroupName               string  `json:"group_name"`
-	Platform                string  `json:"platform"`
-	TotalAccounts           int64   `json:"total_accounts"`
-	ActiveAccountCount      int64   `json:"active_account_count"`
-	RateLimitedAccountCount int64   `json:"rate_limited_account_count"`
-	AvailableAccountCount   int64   `json:"available_account_count"`
-	AvailabilityRatio       float64 `json:"availability_ratio"`
-	Status                  string  `json:"status"`
-}
-
-type UserVisibleGroupPoolStatusResponse struct {
-	CheckedAt string                       `json:"checked_at"`
-	Groups    []UserVisibleGroupPoolStatus `json:"groups"`
 }
 
 // List handles listing user's API keys with pagination
@@ -115,7 +72,12 @@ func (h *APIKeyHandler) List(c *gin.Context) {
 	}
 
 	page, pageSize := response.ParsePagination(c)
-	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
+	params := pagination.PaginationParams{
+		Page:      page,
+		PageSize:  pageSize,
+		SortBy:    c.DefaultQuery("sort_by", "created_at"),
+		SortOrder: c.DefaultQuery("sort_order", "desc"),
+	}
 
 	// Parse filter parameters
 	var filters service.APIKeyListFilters
@@ -192,13 +154,12 @@ func (h *APIKeyHandler) Create(c *gin.Context) {
 	}
 
 	svcReq := service.CreateAPIKeyRequest{
-		Name:             req.Name,
-		GroupID:          req.GroupID,
-		BudgetMultiplier: req.BudgetMultiplier,
-		CustomKey:        req.CustomKey,
-		IPWhitelist:      req.IPWhitelist,
-		IPBlacklist:      req.IPBlacklist,
-		ExpiresInDays:    req.ExpiresInDays,
+		Name:          req.Name,
+		GroupID:       req.GroupID,
+		CustomKey:     req.CustomKey,
+		IPWhitelist:   req.IPWhitelist,
+		IPBlacklist:   req.IPBlacklist,
+		ExpiresInDays: req.ExpiresInDays,
 	}
 	if req.Quota != nil {
 		svcReq.Quota = *req.Quota
@@ -244,7 +205,6 @@ func (h *APIKeyHandler) Update(c *gin.Context) {
 	}
 
 	svcReq := service.UpdateAPIKeyRequest{
-		BudgetMultiplier:    req.BudgetMultiplier,
 		IPWhitelist:         req.IPWhitelist,
 		IPBlacklist:         req.IPBlacklist,
 		Quota:               req.Quota,
@@ -332,295 +292,6 @@ func (h *APIKeyHandler) GetAvailableGroups(c *gin.Context) {
 	response.Success(c, out)
 }
 
-// GetAvailableGroupModels 获取当前用户可用分组的模型列表
-// GET /api/v1/groups/models
-func (h *APIKeyHandler) GetAvailableGroupModels(c *gin.Context) {
-	subject, ok := middleware2.GetAuthSubjectFromContext(c)
-	if !ok {
-		response.Unauthorized(c, "User not authenticated")
-		return
-	}
-
-	groups, err := h.apiKeyService.GetAvailableGroups(c.Request.Context(), subject.UserID)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	userRates, err := h.apiKeyService.GetUserGroupRates(c.Request.Context(), subject.UserID)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	out := make([]dto.GroupModelCatalog, 0, len(groups))
-	for i := range groups {
-		models, source, err := h.getGroupSupportedModels(c.Request.Context(), &groups[i])
-		if err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
-
-		effectiveRateMultiplier, userRateMultiplier := resolveGroupRateMultiplier(&groups[i], userRates)
-		out = append(out, dto.GroupModelCatalog{
-			Group:                   *dto.GroupFromService(&groups[i]),
-			Models:                  h.attachSupportedModelPricing(c.Request.Context(), &groups[i], models, effectiveRateMultiplier),
-			Source:                  source,
-			EffectiveRateMultiplier: effectiveRateMultiplier,
-			UserRateMultiplier:      userRateMultiplier,
-		})
-	}
-	response.Success(c, out)
-}
-
-func resolveGroupRateMultiplier(group *service.Group, userRates map[int64]float64) (float64, *float64) {
-	if group == nil {
-		return 1, nil
-	}
-
-	effective := group.RateMultiplier
-	if len(userRates) == 0 {
-		return effective, nil
-	}
-
-	userRate, ok := userRates[group.ID]
-	if !ok {
-		return effective, nil
-	}
-
-	rateCopy := userRate
-	return userRate, &rateCopy
-}
-
-func (h *APIKeyHandler) attachSupportedModelPricing(
-	ctx context.Context,
-	group *service.Group,
-	models []dto.SupportedModel,
-	effectiveRateMultiplier float64,
-) []dto.SupportedModel {
-	if len(models) == 0 {
-		return models
-	}
-
-	out := make([]dto.SupportedModel, 0, len(models))
-	for _, model := range models {
-		modelCopy := model
-		modelCopy.Pricing = h.buildSupportedModelPricingForGroup(ctx, group, model.ID, effectiveRateMultiplier)
-		out = append(out, modelCopy)
-	}
-	return out
-}
-
-func (h *APIKeyHandler) buildSupportedModelPricing(
-	ctx context.Context,
-	groupID int64,
-	modelID string,
-	effectiveRateMultiplier float64,
-) *dto.SupportedModelPricing {
-	var group *service.Group
-	if groupID > 0 {
-		group = &service.Group{ID: groupID}
-	}
-	return h.buildSupportedModelPricingForGroup(ctx, group, modelID, effectiveRateMultiplier)
-}
-
-func (h *APIKeyHandler) buildSupportedModelPricingForGroup(
-	ctx context.Context,
-	group *service.Group,
-	modelID string,
-	effectiveRateMultiplier float64,
-) *dto.SupportedModelPricing {
-	if h == nil || modelID == "" {
-		return nil
-	}
-
-	groupID := int64(0)
-	if group != nil {
-		groupID = group.ID
-	}
-	isOpenAIImageModel := service.IsOpenAIImageGenerationModel(modelID)
-
-	if h.pricingResolver != nil && groupID > 0 {
-		resolved := h.pricingResolver.Resolve(ctx, service.PricingInput{
-			Model:   modelID,
-			GroupID: &groupID,
-		})
-		if isOpenAIImageModel && resolved != nil && resolved.Mode != service.BillingModeImage && resolved.Mode != service.BillingModePerRequest {
-			if pricing := supportedModelPricingFromOpenAIImageGroup(group, modelID, effectiveRateMultiplier); pricing != nil {
-				return pricing
-			}
-		}
-		if pricing := supportedModelPricingFromResolved(resolved, effectiveRateMultiplier); pricing != nil {
-			return pricing
-		}
-	}
-
-	if pricing := supportedModelPricingFromOpenAIImageGroup(group, modelID, effectiveRateMultiplier); pricing != nil {
-		return pricing
-	}
-
-	if h.billingService == nil {
-		return nil
-	}
-	pricing, err := h.billingService.GetModelPricing(modelID)
-	if err != nil {
-		return nil
-	}
-	return supportedModelPricingFromService(pricing, effectiveRateMultiplier)
-}
-
-func supportedModelPricingFromOpenAIImageGroup(
-	group *service.Group,
-	modelID string,
-	effectiveRateMultiplier float64,
-) *dto.SupportedModelPricing {
-	if group == nil || group.Platform != service.PlatformOpenAI || !service.IsOpenAIImageGenerationModel(modelID) {
-		return nil
-	}
-
-	tierPrices := []struct {
-		label string
-		price *float64
-	}{
-		{label: "1K", price: group.ImagePrice1K},
-		{label: "2K", price: group.ImagePrice2K},
-		{label: "4K", price: group.ImagePrice4K},
-	}
-
-	out := &dto.SupportedModelPricing{
-		Currency:    "USD",
-		BillingMode: string(service.BillingModeImage),
-	}
-	for _, tier := range tierPrices {
-		if tier.price == nil || *tier.price <= 0 {
-			continue
-		}
-		v := *tier.price * effectiveRateMultiplier
-		out.RequestTiers = append(out.RequestTiers, dto.SupportedModelRequestTier{
-			TierLabel:       tier.label,
-			PricePerRequest: &v,
-		})
-	}
-	if len(out.RequestTiers) == 0 {
-		return nil
-	}
-	return out
-}
-
-func supportedModelPricingFromService(
-	pricing *service.ModelPricing,
-	effectiveRateMultiplier float64,
-) *dto.SupportedModelPricing {
-	if pricing == nil {
-		return nil
-	}
-
-	hasInput := pricing.InputPricePerToken > 0
-	hasOutput := pricing.OutputPricePerToken > 0
-	if !hasInput && !hasOutput {
-		return nil
-	}
-
-	const tokensPerMillion = 1_000_000.0
-
-	out := &dto.SupportedModelPricing{
-		Currency:    "USD",
-		BillingMode: string(service.BillingModeToken),
-	}
-	if hasInput {
-		v := pricing.InputPricePerToken * effectiveRateMultiplier * tokensPerMillion
-		out.InputPricePerMillionTokens = &v
-	}
-	if hasOutput {
-		v := pricing.OutputPricePerToken * effectiveRateMultiplier * tokensPerMillion
-		out.OutputPricePerMillionTokens = &v
-	}
-	return out
-}
-
-func supportedModelPricingFromResolved(
-	resolved *service.ResolvedPricing,
-	effectiveRateMultiplier float64,
-) *dto.SupportedModelPricing {
-	if resolved == nil {
-		return nil
-	}
-
-	mode := resolved.Mode
-	if mode == "" {
-		mode = service.BillingModeToken
-	}
-
-	out := &dto.SupportedModelPricing{
-		Currency:    "USD",
-		BillingMode: string(mode),
-	}
-
-	const tokensPerMillion = 1_000_000.0
-	hasValue := false
-
-	switch mode {
-	case service.BillingModePerRequest, service.BillingModeImage:
-		if resolved.DefaultPerRequestPrice > 0 {
-			v := resolved.DefaultPerRequestPrice * effectiveRateMultiplier
-			out.DefaultPricePerRequest = &v
-			hasValue = true
-		}
-		for _, tier := range resolved.RequestTiers {
-			if tier.PerRequestPrice == nil || *tier.PerRequestPrice <= 0 {
-				continue
-			}
-			v := *tier.PerRequestPrice * effectiveRateMultiplier
-			out.RequestTiers = append(out.RequestTiers, dto.SupportedModelRequestTier{
-				TierLabel:       tier.TierLabel,
-				MinTokens:       tier.MinTokens,
-				MaxTokens:       tier.MaxTokens,
-				PricePerRequest: &v,
-			})
-			hasValue = true
-		}
-	default:
-		if resolved.BasePricing != nil {
-			if resolved.BasePricing.InputPricePerToken > 0 {
-				v := resolved.BasePricing.InputPricePerToken * effectiveRateMultiplier * tokensPerMillion
-				out.InputPricePerMillionTokens = &v
-				hasValue = true
-			}
-			if resolved.BasePricing.OutputPricePerToken > 0 {
-				v := resolved.BasePricing.OutputPricePerToken * effectiveRateMultiplier * tokensPerMillion
-				out.OutputPricePerMillionTokens = &v
-				hasValue = true
-			}
-		}
-		for _, interval := range resolved.Intervals {
-			if interval.InputPrice == nil && interval.OutputPrice == nil {
-				continue
-			}
-			dtoInterval := dto.SupportedModelTokenInterval{
-				MinTokens: interval.MinTokens,
-				MaxTokens: interval.MaxTokens,
-			}
-			if interval.InputPrice != nil && *interval.InputPrice > 0 {
-				v := *interval.InputPrice * effectiveRateMultiplier * tokensPerMillion
-				dtoInterval.InputPricePerMillionTokens = &v
-			}
-			if interval.OutputPrice != nil && *interval.OutputPrice > 0 {
-				v := *interval.OutputPrice * effectiveRateMultiplier * tokensPerMillion
-				dtoInterval.OutputPricePerMillionTokens = &v
-			}
-			if dtoInterval.InputPricePerMillionTokens != nil || dtoInterval.OutputPricePerMillionTokens != nil {
-				out.TokenIntervals = append(out.TokenIntervals, dtoInterval)
-				hasValue = true
-			}
-		}
-	}
-
-	if !hasValue {
-		return nil
-	}
-	return out
-}
-
 // GetUserGroupRates 获取当前用户的专属分组倍率配置
 // GET /api/v1/groups/rates
 func (h *APIKeyHandler) GetUserGroupRates(c *gin.Context) {
@@ -637,411 +308,4 @@ func (h *APIKeyHandler) GetUserGroupRates(c *gin.Context) {
 	}
 
 	response.Success(c, rates)
-}
-
-// GetVisibleGroupPoolStatus 获取当前用户可见分组的实时号池状态。
-// GET /api/v1/groups/pool-status
-func (h *APIKeyHandler) GetVisibleGroupPoolStatus(c *gin.Context) {
-	subject, ok := middleware2.GetAuthSubjectFromContext(c)
-	if !ok {
-		response.Unauthorized(c, "User not authenticated")
-		return
-	}
-
-	groups, err := h.apiKeyService.GetAvailableGroups(c.Request.Context(), subject.UserID)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	out := make([]UserVisibleGroupPoolStatus, 0, len(groups))
-	for i := range groups {
-		out = append(out, buildUserVisibleGroupPoolStatus(&groups[i]))
-	}
-
-	response.Success(c, UserVisibleGroupPoolStatusResponse{
-		CheckedAt: time.Now().UTC().Format(time.RFC3339),
-		Groups:    out,
-	})
-}
-
-func buildUserVisibleGroupPoolStatus(group *service.Group) UserVisibleGroupPoolStatus {
-	if group == nil {
-		return UserVisibleGroupPoolStatus{}
-	}
-
-	health := service.ComputeGroupPoolHealth(group)
-	active := group.ActiveAccountCount
-	if active < 0 {
-		active = 0
-	}
-
-	return UserVisibleGroupPoolStatus{
-		GroupID:                 group.ID,
-		GroupName:               group.Name,
-		Platform:                group.Platform,
-		TotalAccounts:           group.AccountCount,
-		ActiveAccountCount:      active,
-		RateLimitedAccountCount: health.RateLimitedAccountCount,
-		AvailableAccountCount:   health.AvailableAccountCount,
-		AvailabilityRatio:       float64(health.HealthPercent) / 100,
-		Status:                  health.HealthState,
-	}
-}
-
-func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *service.Group) ([]dto.SupportedModel, string, error) {
-	if group == nil {
-		return nil, "default", nil
-	}
-
-	defaultModels := filterSupportedModelsForGroup(group, staticCatalogModelsForGroup(group))
-	if h == nil || h.accountRepo == nil || group.ID <= 0 {
-		return defaultModels, "default", nil
-	}
-
-	accounts, err := h.accountRepo.ListByGroup(ctx, group.ID)
-	if err != nil {
-		return nil, "", err
-	}
-
-	mappedModelIDs := filterMappedModelIDsByCatalog(group.Platform, collectGroupModelIDs(group.Platform, accounts))
-	mappedModels := filterSupportedModelsForGroup(group, buildMappedModels(mappedModelIDs, defaultModels))
-
-	switch {
-	case len(defaultModels) == 0 && len(mappedModels) == 0:
-		return nil, "default", nil
-	case len(defaultModels) == 0:
-		return mappedModels, "mapping", nil
-	case len(mappedModels) == 0:
-		return defaultModels, "default", nil
-	default:
-		return mergeSupportedModels(defaultModels, mappedModels), "mixed", nil
-	}
-}
-
-func staticCatalogModelsForGroup(group *service.Group) []dto.SupportedModel {
-	if group == nil {
-		return nil
-	}
-
-	switch group.Platform {
-	case service.PlatformOpenAI:
-		return supportedModelsFromOpenAI(openai.DefaultModels)
-	case service.PlatformAnthropic:
-		return supportedModelsFromClaude(claude.DefaultModels)
-	case service.PlatformGemini:
-		return supportedModelsFromGemini(geminicli.DefaultModels)
-	case service.PlatformAntigravity:
-		return filterAntigravityModelsByScopes(
-			supportedModelsFromAntigravity(antigravity.DefaultModels()),
-			group.SupportedModelScopes,
-		)
-	case service.PlatformSora:
-		return supportedModelsFromOpenAI(service.DefaultSoraModels(nil))
-	default:
-		return nil
-	}
-}
-
-func filterMappedModelIDsByCatalog(platform string, modelIDs []string) []string {
-	if len(modelIDs) == 0 {
-		return nil
-	}
-
-	switch platform {
-	case service.PlatformOpenAI:
-		filtered := make([]string, 0, len(modelIDs))
-		for _, modelID := range modelIDs {
-			if openai.IsDefaultModel(modelID) {
-				filtered = append(filtered, modelID)
-			}
-		}
-		if len(filtered) == 0 {
-			return nil
-		}
-		return filtered
-	default:
-		return modelIDs
-	}
-}
-
-func collectGroupModelIDs(platform string, accounts []service.Account) []string {
-	modelSet := make(map[string]struct{})
-
-	for i := range accounts {
-		account := &accounts[i]
-		mapping := configuredModelMapping(account)
-		if accountUsesImplicitModelCatalog(platform, account, mapping) {
-			continue
-		}
-		addConcreteMappedModelIDs(modelSet, mapping)
-	}
-
-	if len(modelSet) == 0 {
-		return nil
-	}
-
-	models := make([]string, 0, len(modelSet))
-	for modelID := range modelSet {
-		models = append(models, modelID)
-	}
-	sort.Strings(models)
-	return models
-}
-
-func configuredModelMapping(account *service.Account) map[string]string {
-	if account == nil || account.Credentials == nil {
-		return nil
-	}
-
-	rawMapping, _ := account.Credentials["model_mapping"].(map[string]any)
-	if len(rawMapping) == 0 {
-		return nil
-	}
-
-	mapping := make(map[string]string, len(rawMapping))
-	for selector, target := range rawMapping {
-		targetModel, ok := target.(string)
-		if !ok {
-			continue
-		}
-		mapping[selector] = targetModel
-	}
-	if len(mapping) == 0 {
-		return nil
-	}
-	return mapping
-}
-
-func accountUsesImplicitModelCatalog(platform string, account *service.Account, mapping map[string]string) bool {
-	if account == nil {
-		return false
-	}
-	if len(mapping) == 0 {
-		return true
-	}
-
-	switch platform {
-	case service.PlatformOpenAI:
-		return account.IsOpenAIPassthroughEnabled()
-	case service.PlatformGemini:
-		return account.IsOAuth()
-	default:
-		return account.IsOAuth()
-	}
-}
-
-func addConcreteMappedModelIDs(modelSet map[string]struct{}, mapping map[string]string) {
-	for selector := range mapping {
-		modelID := strings.TrimSpace(selector)
-		if modelID == "" || strings.Contains(modelID, "*") {
-			continue
-		}
-		modelSet[modelID] = struct{}{}
-	}
-}
-
-func buildMappedModels(mappedModelIDs []string, defaults []dto.SupportedModel) []dto.SupportedModel {
-	if len(mappedModelIDs) == 0 {
-		return nil
-	}
-
-	defaultMap := make(map[string]dto.SupportedModel, len(defaults))
-	for _, model := range defaults {
-		defaultMap[model.ID] = model
-	}
-
-	models := make([]dto.SupportedModel, 0, len(mappedModelIDs))
-	remaining := make(map[string]struct{}, len(mappedModelIDs))
-	for _, modelID := range mappedModelIDs {
-		remaining[modelID] = struct{}{}
-	}
-
-	for _, model := range defaults {
-		if _, ok := remaining[model.ID]; ok {
-			models = append(models, model)
-			delete(remaining, model.ID)
-		}
-	}
-
-	if len(remaining) == 0 {
-		return models
-	}
-
-	extraIDs := make([]string, 0, len(remaining))
-	for modelID := range remaining {
-		extraIDs = append(extraIDs, modelID)
-	}
-	sort.Strings(extraIDs)
-	for _, modelID := range extraIDs {
-		model, ok := defaultMap[modelID]
-		if ok {
-			models = append(models, model)
-			continue
-		}
-		models = append(models, dto.SupportedModel{
-			ID:          modelID,
-			DisplayName: modelID,
-		})
-	}
-	return models
-}
-
-func mergeDefaultAndMappedModels(defaults []dto.SupportedModel, mappedModelIDs []string) []dto.SupportedModel {
-	models := make([]dto.SupportedModel, 0, len(defaults)+len(mappedModelIDs))
-	models = append(models, defaults...)
-
-	seen := make(map[string]struct{}, len(defaults))
-	for _, model := range defaults {
-		seen[model.ID] = struct{}{}
-	}
-
-	extraIDs := make([]string, 0, len(mappedModelIDs))
-	for _, modelID := range mappedModelIDs {
-		if _, ok := seen[modelID]; ok {
-			continue
-		}
-		seen[modelID] = struct{}{}
-		extraIDs = append(extraIDs, modelID)
-	}
-	sort.Strings(extraIDs)
-	for _, modelID := range extraIDs {
-		models = append(models, dto.SupportedModel{
-			ID:          modelID,
-			DisplayName: modelID,
-		})
-	}
-	return models
-}
-
-func mergeSupportedModels(primary []dto.SupportedModel, secondary []dto.SupportedModel) []dto.SupportedModel {
-	if len(primary) == 0 {
-		return append([]dto.SupportedModel(nil), secondary...)
-	}
-	if len(secondary) == 0 {
-		return append([]dto.SupportedModel(nil), primary...)
-	}
-
-	merged := make([]dto.SupportedModel, 0, len(primary)+len(secondary))
-	seen := make(map[string]struct{}, len(primary)+len(secondary))
-
-	for _, model := range primary {
-		if _, ok := seen[model.ID]; ok {
-			continue
-		}
-		seen[model.ID] = struct{}{}
-		merged = append(merged, model)
-	}
-
-	for _, model := range secondary {
-		if _, ok := seen[model.ID]; ok {
-			continue
-		}
-		seen[model.ID] = struct{}{}
-		merged = append(merged, model)
-	}
-
-	return merged
-}
-
-func supportedModelsFromOpenAI(models []openai.Model) []dto.SupportedModel {
-	out := make([]dto.SupportedModel, 0, len(models))
-	for _, model := range models {
-		displayName := model.DisplayName
-		if displayName == "" {
-			displayName = model.ID
-		}
-		out = append(out, dto.SupportedModel{
-			ID:          model.ID,
-			DisplayName: displayName,
-		})
-	}
-	return out
-}
-
-func supportedModelsFromClaude(models []claude.Model) []dto.SupportedModel {
-	out := make([]dto.SupportedModel, 0, len(models))
-	for _, model := range models {
-		displayName := model.DisplayName
-		if displayName == "" {
-			displayName = model.ID
-		}
-		out = append(out, dto.SupportedModel{
-			ID:          model.ID,
-			DisplayName: displayName,
-		})
-	}
-	return out
-}
-
-func supportedModelsFromGemini(models []geminicli.Model) []dto.SupportedModel {
-	out := make([]dto.SupportedModel, 0, len(models))
-	for _, model := range models {
-		displayName := model.DisplayName
-		if displayName == "" {
-			displayName = model.ID
-		}
-		out = append(out, dto.SupportedModel{
-			ID:          model.ID,
-			DisplayName: displayName,
-		})
-	}
-	return out
-}
-
-func supportedModelsFromAntigravity(models []antigravity.ClaudeModel) []dto.SupportedModel {
-	out := make([]dto.SupportedModel, 0, len(models))
-	for _, model := range models {
-		displayName := model.DisplayName
-		if displayName == "" {
-			displayName = model.ID
-		}
-		out = append(out, dto.SupportedModel{
-			ID:          model.ID,
-			DisplayName: displayName,
-		})
-	}
-	return out
-}
-
-func filterAntigravityModelsByScopes(models []dto.SupportedModel, scopes []string) []dto.SupportedModel {
-	if len(scopes) == 0 {
-		return models
-	}
-
-	allowedScopes := make(map[string]struct{}, len(scopes))
-	for _, scope := range scopes {
-		allowedScopes[strings.TrimSpace(scope)] = struct{}{}
-	}
-
-	filtered := make([]dto.SupportedModel, 0, len(models))
-	for _, model := range models {
-		if antigravityScopeAllowsModel(model.ID, allowedScopes) {
-			filtered = append(filtered, model)
-		}
-	}
-	return filtered
-}
-
-func antigravityScopeAllowsModel(modelID string, allowedScopes map[string]struct{}) bool {
-	if len(allowedScopes) == 0 {
-		return true
-	}
-
-	modelLower := strings.ToLower(modelID)
-	if strings.Contains(modelLower, "claude") {
-		_, ok := allowedScopes["claude"]
-		return ok
-	}
-
-	if strings.Contains(modelLower, "gemini") {
-		if strings.Contains(modelLower, "image") {
-			_, ok := allowedScopes["gemini_image"]
-			return ok
-		}
-		_, ok := allowedScopes["gemini_text"]
-		return ok
-	}
-
-	return true
 }

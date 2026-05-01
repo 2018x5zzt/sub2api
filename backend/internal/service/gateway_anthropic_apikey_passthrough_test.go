@@ -761,7 +761,22 @@ func TestGatewayService_AnthropicOAuth_ForwardPreservesBillingHeaderSystemBlock(
 
 			system := gjson.GetBytes(upstream.lastBody, "system")
 			require.True(t, system.Exists())
-			require.Contains(t, system.Raw, "x-anthropic-billing-header keep")
+			require.True(t, system.IsArray(), "system should be an array")
+			arr := system.Array()
+			require.Len(t, arr, 2, "system array should have billing block + cc prompt block")
+
+			require.Contains(t, arr[0].Get("text").String(), "x-anthropic-billing-header:")
+			require.Contains(t, arr[0].Get("text").String(), "cc_version=")
+
+			require.Equal(t, claudeCodeSystemPrompt, arr[1].Get("text").String())
+			require.Equal(t, "ephemeral", arr[1].Get("cache_control.type").String())
+
+			// 原始 system prompt 应迁移至 messages 中
+			messages := gjson.GetBytes(upstream.lastBody, "messages")
+			require.True(t, messages.IsArray())
+			firstMsg := messages.Array()[0]
+			require.Equal(t, "user", firstMsg.Get("role").String())
+			require.Contains(t, firstMsg.Get("content.0.text").String(), "x-anthropic-billing-header keep")
 		})
 	}
 }
@@ -955,43 +970,6 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_ForwardDirect_EmptyResponseBo
 	require.Nil(t, result)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "empty response")
-}
-
-func TestGatewayService_AnthropicAPIKeyPassthrough_ForwardDirect_EmptyContentBodyTriggersFailover(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-
-	upstream := &anthropicHTTPUpstreamRecorder{
-		resp: &http.Response{
-			StatusCode: http.StatusOK,
-			Header:     http.Header{"Content-Type": []string{"application/json"}, "x-request-id": []string{"rid-empty-content"}},
-			Body: io.NopCloser(strings.NewReader(
-				`{"id":"msg_empty","type":"message","role":"assistant","model":"claude-sonnet-4-6","content":[],"usage":{"input_tokens":12,"output_tokens":0}}`,
-			)),
-		},
-	}
-	svc := &GatewayService{
-		cfg: &config.Config{
-			Security: config.SecurityConfig{
-				URLAllowlist: config.URLAllowlistConfig{Enabled: false},
-			},
-		},
-		httpUpstream: upstream,
-	}
-
-	account := newAnthropicAPIKeyAccountForTest()
-	account.Credentials["pool_mode"] = true
-
-	result, err := svc.forwardAnthropicAPIKeyPassthrough(context.Background(), c, account, []byte(`{"model":"claude-sonnet-4-6"}`), "claude-sonnet-4-6", "claude-sonnet-4-6", false, time.Now())
-	require.Nil(t, result)
-
-	var failoverErr *UpstreamFailoverError
-	require.ErrorAs(t, err, &failoverErr)
-	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
-	require.Contains(t, string(failoverErr.ResponseBody), "Upstream returned empty content")
-	require.True(t, failoverErr.RetryableOnSameAccount)
 }
 
 func TestExtractAnthropicSSEDataLine(t *testing.T) {

@@ -23,11 +23,6 @@ func RegisterGatewayRoutes(
 	cfg *config.Config,
 ) {
 	bodyLimit := middleware.RequestBodyLimit(cfg.Gateway.MaxBodySize)
-	soraMaxBodySize := cfg.Gateway.SoraMaxBodySize
-	if soraMaxBodySize <= 0 {
-		soraMaxBodySize = cfg.Gateway.MaxBodySize
-	}
-	soraBodyLimit := middleware.RequestBodyLimit(soraMaxBodySize)
 	clientRequestID := middleware.ClientRequestID()
 	opsErrorLogger := handler.OpsErrorLoggerMiddleware(opsService)
 	endpointNorm := handler.InboundEndpointMiddleware()
@@ -35,48 +30,6 @@ func RegisterGatewayRoutes(
 	// 未分组 Key 拦截中间件（按协议格式区分错误响应）
 	requireGroupAnthropic := middleware.RequireGroupAssignment(settingService, middleware.AnthropicErrorWriter)
 	requireGroupGoogle := middleware.RequireGroupAssignment(settingService, middleware.GoogleErrorWriter)
-	openAIImagesHandler := func(c *gin.Context) {
-		if getGroupPlatform(c) != service.PlatformOpenAI {
-			writeOpenAIImagesRouteNotFound(c, "Images API is not supported for this platform")
-			return
-		}
-		if !groupAllowsOpenAIImages(c) {
-			writeOpenAIImagesRouteNotFound(c, "Images API is not enabled for this group")
-			return
-		}
-		h.OpenAIGateway.Images(c)
-	}
-	openAIImageJobCreateHandler := func(c *gin.Context) {
-		if getGroupPlatform(c) != service.PlatformOpenAI {
-			writeOpenAIImagesRouteNotFound(c, "Images API is not supported for this platform")
-			return
-		}
-		if !groupAllowsOpenAIImages(c) {
-			writeOpenAIImagesRouteNotFound(c, "Images API is not enabled for this group")
-			return
-		}
-		h.OpenAIGateway.ImageJobCreate(c)
-	}
-	openAIImageJobStatusHandler := func(c *gin.Context) {
-		if getGroupPlatform(c) != service.PlatformOpenAI {
-			writeOpenAIImagesRouteNotFound(c, "Images API is not supported for this platform")
-			return
-		}
-		if !groupAllowsOpenAIImages(c) {
-			writeOpenAIImagesRouteNotFound(c, "Images API is not enabled for this group")
-			return
-		}
-		h.OpenAIGateway.ImageJobStatus(c)
-	}
-	registerOpenAIImagesRoutes := func(group *gin.RouterGroup) {
-		group.POST("/images/generations", openAIImagesHandler)
-		group.POST("/images/edits", openAIImagesHandler)
-	}
-	registerOpenAIImageJobRoutes := func(group *gin.RouterGroup) {
-		group.POST("/images/jobs/generations", openAIImageJobCreateHandler)
-		group.POST("/images/jobs/edits", openAIImageJobCreateHandler)
-		group.GET("/images/jobs/:id", openAIImageJobStatusHandler)
-	}
 
 	// API网关（Claude API兼容）
 	gateway := r.Group("/v1")
@@ -135,8 +88,30 @@ func RegisterGatewayRoutes(
 			}
 			h.Gateway.ChatCompletions(c)
 		})
-		registerOpenAIImagesRoutes(gateway)
-		registerOpenAIImageJobRoutes(gateway)
+		gateway.POST("/images/generations", func(c *gin.Context) {
+			if getGroupPlatform(c) != service.PlatformOpenAI {
+				c.JSON(http.StatusNotFound, gin.H{
+					"error": gin.H{
+						"type":    "not_found_error",
+						"message": "Images API is not supported for this platform",
+					},
+				})
+				return
+			}
+			h.OpenAIGateway.Images(c)
+		})
+		gateway.POST("/images/edits", func(c *gin.Context) {
+			if getGroupPlatform(c) != service.PlatformOpenAI {
+				c.JSON(http.StatusNotFound, gin.H{
+					"error": gin.H{
+						"type":    "not_found_error",
+						"message": "Images API is not supported for this platform",
+					},
+				})
+				return
+			}
+			h.OpenAIGateway.Images(c)
+		})
 	}
 
 	// Gemini 原生 API 兼容层（Gemini SDK/CLI 直连）
@@ -165,6 +140,13 @@ func RegisterGatewayRoutes(
 	r.POST("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, responsesHandler)
 	r.POST("/responses/*subpath", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, responsesHandler)
 	r.GET("/responses", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, h.OpenAIGateway.ResponsesWebSocket)
+	codexDirect := r.Group("/backend-api/codex")
+	codexDirect.Use(bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic)
+	{
+		codexDirect.POST("/responses", responsesHandler)
+		codexDirect.POST("/responses/*subpath", responsesHandler)
+		codexDirect.GET("/responses", h.OpenAIGateway.ResponsesWebSocket)
+	}
 	// OpenAI Chat Completions API（不带v1前缀的别名）— auto-route based on group platform
 	r.POST("/chat/completions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, func(c *gin.Context) {
 		if getGroupPlatform(c) == service.PlatformOpenAI {
@@ -173,31 +155,30 @@ func RegisterGatewayRoutes(
 		}
 		h.Gateway.ChatCompletions(c)
 	})
-	r.POST("/images/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, openAIImagesHandler)
-	r.POST("/images/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, openAIImagesHandler)
-	r.POST("/images/jobs/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, openAIImageJobCreateHandler)
-	r.POST("/images/jobs/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, openAIImageJobCreateHandler)
-	r.GET("/images/jobs/:id", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, openAIImageJobStatusHandler)
-
-	apiProxyV1 := r.Group("/api-proxy/v1")
-	apiProxyV1.Use(bodyLimit)
-	apiProxyV1.Use(clientRequestID)
-	apiProxyV1.Use(opsErrorLogger)
-	apiProxyV1.Use(endpointNorm)
-	apiProxyV1.Use(gin.HandlerFunc(apiKeyAuth))
-	apiProxyV1.Use(requireGroupAnthropic)
-	registerOpenAIImagesRoutes(apiProxyV1)
-	registerOpenAIImageJobRoutes(apiProxyV1)
-
-	openAIV1 := r.Group("/openai/v1")
-	openAIV1.Use(bodyLimit)
-	openAIV1.Use(clientRequestID)
-	openAIV1.Use(opsErrorLogger)
-	openAIV1.Use(endpointNorm)
-	openAIV1.Use(gin.HandlerFunc(apiKeyAuth))
-	openAIV1.Use(requireGroupAnthropic)
-	registerOpenAIImagesRoutes(openAIV1)
-	registerOpenAIImageJobRoutes(openAIV1)
+	r.POST("/images/generations", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, func(c *gin.Context) {
+		if getGroupPlatform(c) != service.PlatformOpenAI {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": gin.H{
+					"type":    "not_found_error",
+					"message": "Images API is not supported for this platform",
+				},
+			})
+			return
+		}
+		h.OpenAIGateway.Images(c)
+	})
+	r.POST("/images/edits", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, func(c *gin.Context) {
+		if getGroupPlatform(c) != service.PlatformOpenAI {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": gin.H{
+					"type":    "not_found_error",
+					"message": "Images API is not supported for this platform",
+				},
+			})
+			return
+		}
+		h.OpenAIGateway.Images(c)
+	})
 
 	// Antigravity 模型列表
 	r.GET("/antigravity/models", gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, h.Gateway.AntigravityModels)
@@ -232,28 +213,6 @@ func RegisterGatewayRoutes(
 		antigravityV1Beta.POST("/models/*modelAction", h.Gateway.GeminiV1BetaModels)
 	}
 
-	// Sora 专用路由（强制使用 sora 平台）
-	soraV1 := r.Group("/sora/v1")
-	soraV1.Use(soraBodyLimit)
-	soraV1.Use(clientRequestID)
-	soraV1.Use(opsErrorLogger)
-	soraV1.Use(endpointNorm)
-	soraV1.Use(middleware.ForcePlatform(service.PlatformSora))
-	soraV1.Use(gin.HandlerFunc(apiKeyAuth))
-	soraV1.Use(requireGroupAnthropic)
-	{
-		soraV1.POST("/chat/completions", h.SoraGateway.ChatCompletions)
-		soraV1.GET("/models", h.Gateway.Models)
-	}
-
-	// Sora 媒体代理（可选 API Key 验证）
-	if cfg.Gateway.SoraMediaRequireAPIKey {
-		r.GET("/sora/media/*filepath", gin.HandlerFunc(apiKeyAuth), h.SoraGateway.MediaProxy)
-	} else {
-		r.GET("/sora/media/*filepath", h.SoraGateway.MediaProxy)
-	}
-	// Sora 媒体代理（签名 URL，无需 API Key）
-	r.GET("/sora/media-signed/*filepath", h.SoraGateway.MediaProxySigned)
 }
 
 // getGroupPlatform extracts the group platform from the API Key stored in context.
@@ -263,18 +222,4 @@ func getGroupPlatform(c *gin.Context) string {
 		return ""
 	}
 	return apiKey.Group.Platform
-}
-
-func groupAllowsOpenAIImages(c *gin.Context) bool {
-	apiKey, ok := middleware.GetAPIKeyFromContext(c)
-	return ok && apiKey.Group != nil && apiKey.Group.AllowsOpenAIImageGeneration()
-}
-
-func writeOpenAIImagesRouteNotFound(c *gin.Context, message string) {
-	c.JSON(http.StatusNotFound, gin.H{
-		"error": gin.H{
-			"type":    "not_found_error",
-			"message": message,
-		},
-	})
 }

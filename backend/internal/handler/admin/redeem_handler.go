@@ -34,25 +34,21 @@ func NewRedeemHandler(adminService service.AdminService, redeemService *service.
 // GenerateRedeemCodesRequest represents generate redeem codes request
 type GenerateRedeemCodesRequest struct {
 	Count        int     `json:"count" binding:"required,min=1,max=100"`
-	Type         string  `json:"type" binding:"required,oneof=balance concurrency subscription"`
-	Value        float64 `json:"value" binding:"min=0"`
-	SourceType   string  `json:"source_type" binding:"omitempty,oneof=commercial benefit compensation system_grant"`
-	GroupID      *int64  `json:"group_id"`                                    // 订阅类型必填
-	ProductID    *int64  `json:"product_id"`                                  // 订阅类型可选：与 group_id 二选一
-	ValidityDays int     `json:"validity_days" binding:"omitempty,max=36500"` // 订阅类型使用，默认30天，最大100年
+	Type         string  `json:"type" binding:"required,oneof=balance concurrency subscription invitation"`
+	Value        float64 `json:"value"`
+	GroupID      *int64  `json:"group_id"`      // 订阅类型必填
+	ValidityDays int     `json:"validity_days"` // 订阅类型使用，正数增加/负数退款扣减
 }
 
 // CreateAndRedeemCodeRequest represents creating a fixed code and redeeming it for a target user.
 // Type 为 omitempty 而非 required 是为了向后兼容旧版调用方（不传 type 时默认 balance）。
 type CreateAndRedeemCodeRequest struct {
 	Code         string  `json:"code" binding:"required,min=3,max=128"`
-	Type         string  `json:"type" binding:"omitempty,oneof=balance concurrency subscription"` // 不传时默认 balance（向后兼容）
-	SourceType   string  `json:"source_type" binding:"omitempty,oneof=commercial benefit compensation system_grant"`
-	Value        float64 `json:"value" binding:"required,gt=0"`
+	Type         string  `json:"type" binding:"omitempty,oneof=balance concurrency subscription invitation"` // 不传时默认 balance（向后兼容）
+	Value        float64 `json:"value" binding:"required"`
 	UserID       int64   `json:"user_id" binding:"required,gt=0"`
-	GroupID      *int64  `json:"group_id"`                                    // subscription 类型必填
-	ProductID    *int64  `json:"product_id"`                                  // subscription 类型可选：与 group_id 二选一
-	ValidityDays int     `json:"validity_days" binding:"omitempty,max=36500"` // subscription 类型必填，>0
+	GroupID      *int64  `json:"group_id"`      // subscription 类型必填
+	ValidityDays int     `json:"validity_days"` // subscription 类型：正数增加，负数退款扣减
 	Notes        string  `json:"notes"`
 }
 
@@ -63,13 +59,15 @@ func (h *RedeemHandler) List(c *gin.Context) {
 	codeType := c.Query("type")
 	status := c.Query("status")
 	search := c.Query("search")
+	sortBy := c.DefaultQuery("sort_by", "id")
+	sortOrder := c.DefaultQuery("sort_order", "desc")
 	// 标准化和验证 search 参数
 	search = strings.TrimSpace(search)
 	if len(search) > 100 {
 		search = search[:100]
 	}
 
-	codes, total, err := h.adminService.ListRedeemCodes(c.Request.Context(), page, pageSize, codeType, status, search)
+	codes, total, err := h.adminService.ListRedeemCodes(c.Request.Context(), page, pageSize, codeType, status, search, sortBy, sortOrder)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -108,26 +106,13 @@ func (h *RedeemHandler) Generate(c *gin.Context) {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
-	if req.Type == service.RedeemTypeSubscription && ((req.GroupID == nil) == (req.ProductID == nil)) {
-		response.BadRequest(c, "exactly one of group_id or product_id is required for subscription type")
-		return
-	}
 
 	executeAdminIdempotentJSON(c, "admin.redeem_codes.generate", req, service.DefaultWriteIdempotencyTTL(), func(ctx context.Context) (any, error) {
-		sourceType := req.SourceType
-		if sourceType == "" {
-			sourceType = service.RedeemSourceSystemGrant
-			if req.Type == service.RedeemTypeBalance || req.Type == service.RedeemTypeSubscription {
-				sourceType = service.RedeemSourceCommercial
-			}
-		}
 		codes, execErr := h.adminService.GenerateRedeemCodes(ctx, &service.GenerateRedeemCodesInput{
 			Count:        req.Count,
 			Type:         req.Type,
 			Value:        req.Value,
-			SourceType:   sourceType,
 			GroupID:      req.GroupID,
-			ProductID:    req.ProductID,
 			ValidityDays: req.ValidityDays,
 		})
 		if execErr != nil {
@@ -161,20 +146,14 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 	if req.Type == "" {
 		req.Type = "balance"
 	}
-	if req.SourceType == "" {
-		req.SourceType = service.RedeemSourceSystemGrant
-		if req.Type == service.RedeemTypeBalance || req.Type == service.RedeemTypeSubscription {
-			req.SourceType = service.RedeemSourceCommercial
-		}
-	}
 
 	if req.Type == "subscription" {
-		if (req.GroupID == nil) == (req.ProductID == nil) {
-			response.BadRequest(c, "exactly one of group_id or product_id is required for subscription type")
+		if req.GroupID == nil {
+			response.BadRequest(c, "group_id is required for subscription type")
 			return
 		}
-		if req.ValidityDays <= 0 {
-			response.BadRequest(c, "validity_days must be greater than 0 for subscription type")
+		if req.ValidityDays == 0 {
+			response.BadRequest(c, "validity_days must not be zero for subscription type")
 			return
 		}
 	}
@@ -191,12 +170,10 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 		createErr := h.redeemService.CreateCode(ctx, &service.RedeemCode{
 			Code:         req.Code,
 			Type:         req.Type,
-			SourceType:   req.SourceType,
 			Value:        req.Value,
 			Status:       service.StatusUnused,
 			Notes:        req.Notes,
 			GroupID:      req.GroupID,
-			ProductID:    req.ProductID,
 			ValidityDays: req.ValidityDays,
 		})
 		if createErr != nil {
@@ -325,9 +302,15 @@ func (h *RedeemHandler) GetStats(c *gin.Context) {
 func (h *RedeemHandler) Export(c *gin.Context) {
 	codeType := c.Query("type")
 	status := c.Query("status")
+	search := strings.TrimSpace(c.Query("search"))
+	sortBy := c.DefaultQuery("sort_by", "id")
+	sortOrder := c.DefaultQuery("sort_order", "desc")
+	if len(search) > 100 {
+		search = search[:100]
+	}
 
 	// Get all codes without pagination (use large page size)
-	codes, _, err := h.adminService.ListRedeemCodes(c.Request.Context(), 1, 10000, codeType, status, "")
+	codes, _, err := h.adminService.ListRedeemCodes(c.Request.Context(), 1, 10000, codeType, status, search, sortBy, sortOrder)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return

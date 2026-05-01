@@ -119,7 +119,12 @@ func (h *UsageHandler) List(c *gin.Context) {
 		endTime = &t
 	}
 
-	params := pagination.PaginationParams{Page: page, PageSize: pageSize}
+	params := pagination.PaginationParams{
+		Page:      page,
+		PageSize:  pageSize,
+		SortBy:    c.DefaultQuery("sort_by", "created_at"),
+		SortOrder: c.DefaultQuery("sort_order", "desc"),
+	}
 	filters := usagestats.UsageLogFilters{
 		UserID:      subject.UserID, // Always filter by current user for security
 		APIKeyID:    apiKeyID,
@@ -233,8 +238,6 @@ func (h *UsageHandler) Stats(c *gin.Context) {
 		// 使用 period 参数
 		period := c.DefaultQuery("period", "today")
 		switch period {
-		case "all":
-			startTime = time.Time{}
 		case "today":
 			startTime = timezone.StartOfDayInUserLocation(now, userTZ)
 		case "week":

@@ -19,26 +19,16 @@ type PromoCode struct {
 	ID int64 `json:"id,omitempty"`
 	// 优惠码
 	Code string `json:"code,omitempty"`
-	// 优惠码场景: register, benefit
-	Scene string `json:"scene,omitempty"`
 	// 赠送余额金额
 	BonusAmount float64 `json:"bonus_amount,omitempty"`
-	// 随机红包总池金额，仅 benefit 场景使用
-	RandomBonusPoolAmount float64 `json:"random_bonus_pool_amount,omitempty"`
-	// 随机红包剩余金额，仅 benefit 场景使用
-	RandomBonusRemaining float64 `json:"random_bonus_remaining,omitempty"`
 	// 最大使用次数，0表示无限制
 	MaxUses int `json:"max_uses,omitempty"`
 	// 已使用次数
 	UsedCount int `json:"used_count,omitempty"`
-	// 是否启用手气排行榜，仅 benefit 场景使用
-	LeaderboardEnabled bool `json:"leaderboard_enabled,omitempty"`
 	// 状态: active, disabled
 	Status string `json:"status,omitempty"`
 	// 过期时间，null表示永不过期
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-	// 兑换成功后展示给用户的弹窗文案
-	SuccessMessage *string `json:"success_message,omitempty"`
 	// 备注
 	Notes *string `json:"notes,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -74,13 +64,11 @@ func (*PromoCode) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case promocode.FieldLeaderboardEnabled:
-			values[i] = new(sql.NullBool)
-		case promocode.FieldBonusAmount, promocode.FieldRandomBonusPoolAmount, promocode.FieldRandomBonusRemaining:
+		case promocode.FieldBonusAmount:
 			values[i] = new(sql.NullFloat64)
 		case promocode.FieldID, promocode.FieldMaxUses, promocode.FieldUsedCount:
 			values[i] = new(sql.NullInt64)
-		case promocode.FieldCode, promocode.FieldScene, promocode.FieldStatus, promocode.FieldSuccessMessage, promocode.FieldNotes:
+		case promocode.FieldCode, promocode.FieldStatus, promocode.FieldNotes:
 			values[i] = new(sql.NullString)
 		case promocode.FieldExpiresAt, promocode.FieldCreatedAt, promocode.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -111,29 +99,11 @@ func (_m *PromoCode) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Code = value.String
 			}
-		case promocode.FieldScene:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field scene", values[i])
-			} else if value.Valid {
-				_m.Scene = value.String
-			}
 		case promocode.FieldBonusAmount:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
 				return fmt.Errorf("unexpected type %T for field bonus_amount", values[i])
 			} else if value.Valid {
 				_m.BonusAmount = value.Float64
-			}
-		case promocode.FieldRandomBonusPoolAmount:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field random_bonus_pool_amount", values[i])
-			} else if value.Valid {
-				_m.RandomBonusPoolAmount = value.Float64
-			}
-		case promocode.FieldRandomBonusRemaining:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field random_bonus_remaining", values[i])
-			} else if value.Valid {
-				_m.RandomBonusRemaining = value.Float64
 			}
 		case promocode.FieldMaxUses:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -147,12 +117,6 @@ func (_m *PromoCode) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.UsedCount = int(value.Int64)
 			}
-		case promocode.FieldLeaderboardEnabled:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field leaderboard_enabled", values[i])
-			} else if value.Valid {
-				_m.LeaderboardEnabled = value.Bool
-			}
 		case promocode.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
@@ -165,13 +129,6 @@ func (_m *PromoCode) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ExpiresAt = new(time.Time)
 				*_m.ExpiresAt = value.Time
-			}
-		case promocode.FieldSuccessMessage:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field success_message", values[i])
-			} else if value.Valid {
-				_m.SuccessMessage = new(string)
-				*_m.SuccessMessage = value.String
 			}
 		case promocode.FieldNotes:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -236,17 +193,8 @@ func (_m *PromoCode) String() string {
 	builder.WriteString("code=")
 	builder.WriteString(_m.Code)
 	builder.WriteString(", ")
-	builder.WriteString("scene=")
-	builder.WriteString(_m.Scene)
-	builder.WriteString(", ")
 	builder.WriteString("bonus_amount=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BonusAmount))
-	builder.WriteString(", ")
-	builder.WriteString("random_bonus_pool_amount=")
-	builder.WriteString(fmt.Sprintf("%v", _m.RandomBonusPoolAmount))
-	builder.WriteString(", ")
-	builder.WriteString("random_bonus_remaining=")
-	builder.WriteString(fmt.Sprintf("%v", _m.RandomBonusRemaining))
 	builder.WriteString(", ")
 	builder.WriteString("max_uses=")
 	builder.WriteString(fmt.Sprintf("%v", _m.MaxUses))
@@ -254,20 +202,12 @@ func (_m *PromoCode) String() string {
 	builder.WriteString("used_count=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UsedCount))
 	builder.WriteString(", ")
-	builder.WriteString("leaderboard_enabled=")
-	builder.WriteString(fmt.Sprintf("%v", _m.LeaderboardEnabled))
-	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
 	if v := _m.ExpiresAt; v != nil {
 		builder.WriteString("expires_at=")
 		builder.WriteString(v.Format(time.ANSIC))
-	}
-	builder.WriteString(", ")
-	if v := _m.SuccessMessage; v != nil {
-		builder.WriteString("success_message=")
-		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	if v := _m.Notes; v != nil {

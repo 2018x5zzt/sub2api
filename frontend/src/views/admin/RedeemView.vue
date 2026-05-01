@@ -47,7 +47,15 @@
       </template>
 
       <template #table>
-        <DataTable :columns="columns" :data="codes" :loading="loading">
+        <DataTable
+          :columns="columns"
+          :data="codes"
+          :loading="loading"
+          :server-side-sort="true"
+          default-sort-key="id"
+          default-sort-order="desc"
+          @sort="handleSort"
+        >
           <template #cell-code="{ value }">
             <div class="flex items-center space-x-2">
               <code class="font-mono text-sm text-gray-900 dark:text-gray-100">{{ value }}</code>
@@ -210,11 +218,11 @@
               <label class="input-label">{{ t('admin.redeem.codeType') }}</label>
               <Select v-model="generateForm.type" :options="typeOptions" />
             </div>
-            <!-- 兑换码面值：余额和订阅作为商业充值返利基数，并发作为并发数量。 -->
-            <div>
+            <!-- 余额/并发类型：显示数值输入 -->
+            <div v-if="generateForm.type !== 'subscription' && generateForm.type !== 'invitation'">
               <label class="input-label">
                 {{
-                  generateForm.type === 'balance' || generateForm.type === 'subscription'
+                  generateForm.type === 'balance'
                     ? t('admin.redeem.amount')
                     : t('admin.redeem.columns.value')
                 }}
@@ -222,35 +230,23 @@
               <input
                 v-model.number="generateForm.value"
                 type="number"
-                :step="generateForm.type === 'balance' || generateForm.type === 'subscription' ? '0.01' : '1'"
-                :min="generateForm.type === 'balance' || generateForm.type === 'subscription' ? '0.01' : '1'"
+                :step="generateForm.type === 'balance' ? '0.01' : '1'"
+                :min="generateForm.type === 'balance' ? '0.01' : '1'"
                 required
                 class="input"
               />
             </div>
-            <div v-if="generateForm.type === 'balance' || generateForm.type === 'subscription'">
-              <label class="input-label">{{ t('admin.redeem.sourceType') }}</label>
-              <Select v-model="generateForm.source_type" :options="sourceTypeOptions" />
-              <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-                {{ t('admin.redeem.sourceTypeHint') }}
+            <!-- 邀请码类型：显示提示信息 -->
+            <div v-if="generateForm.type === 'invitation'" class="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
+              <p class="text-sm text-blue-700 dark:text-blue-300">
+                {{ t('admin.redeem.invitationHint') }}
               </p>
             </div>
             <!-- 订阅类型：显示分组选择和有效天数 -->
             <template v-if="generateForm.type === 'subscription'">
               <div>
-                <label class="input-label">{{ t('admin.redeem.subscriptionTarget') }}</label>
-                <Select v-model="generateForm.subscription_target" :options="subscriptionTargetOptions" />
-              </div>
-              <div>
-                <label class="input-label">
-                  {{
-                    generateForm.subscription_target === 'product'
-                      ? t('admin.redeem.selectProduct')
-                      : t('admin.redeem.selectGroup')
-                  }}
-                </label>
+                <label class="input-label">{{ t('admin.redeem.selectGroup') }}</label>
                 <Select
-                  v-if="generateForm.subscription_target === 'group'"
                   v-model="generateForm.group_id"
                   :options="subscriptionGroupOptions"
                   :placeholder="t('admin.redeem.selectGroupPlaceholder')"
@@ -278,12 +274,6 @@
                     />
                   </template>
                 </Select>
-                <Select
-                  v-else
-                  v-model="generateForm.product_id"
-                  :options="subscriptionProductOptions"
-                  :placeholder="t('admin.redeem.selectProductPlaceholder')"
-                />
               </div>
               <div>
                 <label class="input-label">{{ t('admin.redeem.validityDays') }}</label>
@@ -416,15 +406,7 @@ import { useClipboard } from '@/composables/useClipboard'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { adminAPI } from '@/api/admin'
 import { formatDateTime } from '@/utils/format'
-import type {
-  RedeemCode,
-  RedeemCodeType,
-  RedeemCodeSourceType,
-  Group,
-  GroupPlatform,
-  SubscriptionType,
-  AdminSubscriptionProduct
-} from '@/types'
+import type { RedeemCode, RedeemCodeType, Group, GroupPlatform, SubscriptionType } from '@/types'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -453,7 +435,6 @@ const showGenerateDialog = ref(false)
 const showResultDialog = ref(false)
 const generatedCodes = ref<RedeemCode[]>([])
 const subscriptionGroups = ref<Group[]>([])
-const subscriptionProducts = ref<AdminSubscriptionProduct[]>([])
 
 // 订阅类型分组选项
 const subscriptionGroupOptions = computed(() => {
@@ -468,20 +449,6 @@ const subscriptionGroupOptions = computed(() => {
       rate: g.rate_multiplier
     }))
 })
-
-const subscriptionProductOptions = computed(() =>
-  subscriptionProducts.value
-    .filter((product) => product.status === 'active' || product.status === 'draft')
-    .map((product) => ({
-      value: product.id,
-      label: product.name
-    }))
-)
-
-const subscriptionTargetOptions = computed(() => [
-  { value: 'group', label: t('admin.redeem.subscriptionTargetGroup') },
-  { value: 'product', label: t('admin.redeem.subscriptionTargetProduct') }
-])
 
 const generatedCodesText = computed(() => {
   return generatedCodes.value.map((code) => code.code).join('\n')
@@ -545,21 +512,16 @@ const columns = computed<Column[]>(() => [
 const typeOptions = computed(() => [
   { value: 'balance', label: t('admin.redeem.balance') },
   { value: 'concurrency', label: t('admin.redeem.concurrency') },
-  { value: 'subscription', label: t('admin.redeem.subscription') }
+  { value: 'subscription', label: t('admin.redeem.subscription') },
+  { value: 'invitation', label: t('admin.redeem.invitation') }
 ])
 
 const filterTypeOptions = computed(() => [
   { value: '', label: t('admin.redeem.allTypes') },
   { value: 'balance', label: t('admin.redeem.balance') },
   { value: 'concurrency', label: t('admin.redeem.concurrency') },
-  { value: 'subscription', label: t('admin.redeem.subscription') }
-])
-
-const sourceTypeOptions = computed(() => [
-  { value: 'system_grant', label: t('admin.redeem.sourceTypes.system_grant') },
-  { value: 'commercial', label: t('admin.redeem.sourceTypes.commercial') },
-  { value: 'benefit', label: t('admin.redeem.sourceTypes.benefit') },
-  { value: 'compensation', label: t('admin.redeem.sourceTypes.compensation') }
+  { value: 'subscription', label: t('admin.redeem.subscription') },
+  { value: 'invitation', label: t('admin.redeem.invitation') }
 ])
 
 const filterStatusOptions = computed(() => [
@@ -583,6 +545,10 @@ const pagination = reactive({
   total: 0,
   pages: 0
 })
+const sortState = reactive({
+  sort_by: 'id',
+  sort_order: 'desc' as 'asc' | 'desc'
+})
 
 let abortController: AbortController | null = null
 
@@ -593,31 +559,31 @@ const copiedCode = ref<string | null>(null)
 
 const generateForm = reactive({
   type: 'balance' as RedeemCodeType,
-  source_type: 'system_grant' as RedeemCodeSourceType,
   value: 10,
   count: 1,
-  subscription_target: 'group' as 'group' | 'product',
   group_id: null as number | null,
-  product_id: null as number | null,
   validity_days: 30
 })
 
-// 监听类型变化，保持数值类兑换码的默认面值，并避免旧 invitation 入口残留状态。
+// 监听类型变化，邀请码类型时自动设置 value 为 0
 watch(
   () => generateForm.type,
   (newType) => {
-    if (newType === 'balance' && generateForm.value === 0) {
+    if (newType === 'invitation') {
+      generateForm.value = 0
+    } else if (generateForm.value === 0) {
       generateForm.value = 10
-    } else if (newType !== 'subscription' && generateForm.value === 0) {
-      generateForm.value = 10
-    }
-    if (newType === 'subscription') {
-      generateForm.source_type = 'commercial'
-    } else if (newType !== 'balance') {
-      generateForm.source_type = 'system_grant'
     }
   }
 )
+
+const buildRedeemQueryFilters = () => ({
+  type: (filters.type || undefined) as RedeemCodeType | undefined,
+  status: (filters.status || undefined) as 'used' | 'expired' | 'unused' | undefined,
+  search: searchQuery.value || undefined,
+  sort_by: sortState.sort_by,
+  sort_order: sortState.sort_order
+})
 
 const loadCodes = async () => {
   if (abortController) {
@@ -630,11 +596,7 @@ const loadCodes = async () => {
     const response = await adminAPI.redeem.list(
       pagination.page,
       pagination.page_size,
-      {
-        type: filters.type as RedeemCodeType,
-        status: filters.status as any,
-        search: searchQuery.value || undefined
-      },
+      buildRedeemQueryFilters(),
       {
         signal: currentController.signal
       }
@@ -683,22 +645,17 @@ const handlePageSizeChange = (pageSize: number) => {
   loadCodes()
 }
 
+const handleSort = (key: string, order: 'asc' | 'desc') => {
+  sortState.sort_by = key
+  sortState.sort_order = order
+  pagination.page = 1
+  loadCodes()
+}
+
 const handleGenerateCodes = async () => {
-  // 订阅类型必须选择一个目标：legacy group 或 shared product。
-  if (
-    generateForm.type === 'subscription' &&
-    generateForm.subscription_target === 'group' &&
-    !generateForm.group_id
-  ) {
+  // 订阅类型必须选择分组
+  if (generateForm.type === 'subscription' && !generateForm.group_id) {
     appStore.showError(t('admin.redeem.groupRequired'))
-    return
-  }
-  if (
-    generateForm.type === 'subscription' &&
-    generateForm.subscription_target === 'product' &&
-    !generateForm.product_id
-  ) {
-    appStore.showError(t('admin.redeem.productRequired'))
     return
   }
 
@@ -708,25 +665,14 @@ const handleGenerateCodes = async () => {
       generateForm.count,
       generateForm.type,
       generateForm.value,
-      generateForm.type === 'balance' || generateForm.type === 'subscription'
-        ? generateForm.source_type
-        : 'system_grant',
-      generateForm.type === 'subscription' && generateForm.subscription_target === 'group'
-        ? generateForm.group_id
-        : undefined,
-      generateForm.type === 'subscription' ? generateForm.validity_days : undefined,
-      generateForm.type === 'subscription' && generateForm.subscription_target === 'product'
-        ? generateForm.product_id
-        : undefined
+      generateForm.type === 'subscription' ? generateForm.group_id : undefined,
+      generateForm.type === 'subscription' ? generateForm.validity_days : undefined
     )
     showGenerateDialog.value = false
     generatedCodes.value = result
     showResultDialog.value = true
     // 重置表单
-    generateForm.source_type = 'system_grant'
-    generateForm.subscription_target = 'group'
     generateForm.group_id = null
-    generateForm.product_id = null
     generateForm.validity_days = 30
     loadCodes()
   } catch (error: any) {
@@ -749,10 +695,7 @@ const copyToClipboard = async (text: string) => {
 
 const handleExportCodes = async () => {
   try {
-    const blob = await adminAPI.redeem.exportCodes({
-      type: filters.type as RedeemCodeType,
-      status: filters.status as any
-    })
+    const blob = await adminAPI.redeem.exportCodes(buildRedeemQueryFilters())
 
     // Create download link
     const url = window.URL.createObjectURL(blob)
@@ -823,19 +766,9 @@ const loadSubscriptionGroups = async () => {
   }
 }
 
-const loadSubscriptionProducts = async () => {
-  try {
-    subscriptionProducts.value = await adminAPI.subscriptionProducts.listProducts()
-  } catch (error) {
-    console.error('Error loading subscription products:', error)
-    subscriptionProducts.value = []
-  }
-}
-
 onMounted(() => {
   loadCodes()
   loadSubscriptionGroups()
-  loadSubscriptionProducts()
 })
 
 onUnmounted(() => {

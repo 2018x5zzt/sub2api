@@ -373,63 +373,63 @@ const operator = (value: string) => wrapToken('text-slate-400', value)
 const string = (value: string) => wrapToken('text-amber-200', value)
 const comment = (value: string) => wrapToken('text-slate-500', value)
 
-function stripApiVersionSuffix(value: string): string {
-  return value.replace(/\/(?:v1|v1beta)\/?$/, '').replace(/\/+$/, '')
-}
-
-function ensurePathSuffix(value: string, suffix: string): string {
-  const trimmed = value.replace(/\/+$/, '')
-  return trimmed.endsWith(suffix) ? trimmed : `${trimmed}${suffix}`
-}
-
 // Syntax highlighting helpers
 // Generate file configs based on platform and active tab
 const currentFiles = computed((): FileConfig[] => {
-  const configuredBaseUrl = props.baseUrl || window.location.origin
+  const baseUrl = props.baseUrl || window.location.origin
   const apiKey = props.apiKey
-  const baseRoot = stripApiVersionSuffix(configuredBaseUrl)
-  const openAIBase = ensurePathSuffix(baseRoot, '/v1')
-  const anthropicBase = baseRoot
-  const geminiBase = ensurePathSuffix(baseRoot, '/v1beta')
-  const antigravityAnthropicBase = ensurePathSuffix(baseRoot, '/antigravity')
-  const antigravityGeminiBase = ensurePathSuffix(antigravityAnthropicBase, '/v1beta')
+  const baseRoot = baseUrl.replace(/\/v1\/?$/, '').replace(/\/+$/, '')
+  const ensureV1 = (value: string) => {
+    const trimmed = value.replace(/\/+$/, '')
+    return trimmed.endsWith('/v1') ? trimmed : `${trimmed}/v1`
+  }
+  const apiBase = ensureV1(baseRoot)
+  const antigravityBase = ensureV1(`${baseRoot}/antigravity`)
+  const antigravityGeminiBase = (() => {
+    const trimmed = `${baseRoot}/antigravity`.replace(/\/+$/, '')
+    return trimmed.endsWith('/v1beta') ? trimmed : `${trimmed}/v1beta`
+  })()
+  const geminiBase = (() => {
+    const trimmed = baseRoot.replace(/\/+$/, '')
+    return trimmed.endsWith('/v1beta') ? trimmed : `${trimmed}/v1beta`
+  })()
 
   if (activeClientTab.value === 'opencode') {
     switch (props.platform) {
       case 'anthropic':
-        return [generateOpenCodeConfig('anthropic', anthropicBase, apiKey)]
+        return [generateOpenCodeConfig('anthropic', apiBase, apiKey)]
       case 'openai':
-        return [generateOpenCodeConfig('openai', openAIBase, apiKey)]
+        return [generateOpenCodeConfig('openai', apiBase, apiKey)]
       case 'gemini':
         return [generateOpenCodeConfig('gemini', geminiBase, apiKey)]
       case 'antigravity':
         return [
-          generateOpenCodeConfig('antigravity-claude', antigravityAnthropicBase, apiKey, 'opencode.json (Claude)'),
+          generateOpenCodeConfig('antigravity-claude', antigravityBase, apiKey, 'opencode.json (Claude)'),
           generateOpenCodeConfig('antigravity-gemini', antigravityGeminiBase, apiKey, 'opencode.json (Gemini)')
         ]
       default:
-        return [generateOpenCodeConfig('openai', openAIBase, apiKey)]
+        return [generateOpenCodeConfig('openai', apiBase, apiKey)]
     }
   }
 
   switch (props.platform) {
     case 'openai':
       if (activeClientTab.value === 'claude') {
-        return generateAnthropicFiles(anthropicBase, apiKey)
+        return generateAnthropicFiles(baseUrl, apiKey)
       }
       if (activeClientTab.value === 'codex-ws') {
-        return generateOpenAIWsFiles(openAIBase, apiKey)
+        return generateOpenAIWsFiles(baseUrl, apiKey)
       }
-      return generateOpenAIFiles(openAIBase, apiKey)
+      return generateOpenAIFiles(baseUrl, apiKey)
     case 'gemini':
-      return [generateGeminiCliContent(geminiBase, apiKey)]
+      return [generateGeminiCliContent(baseUrl, apiKey)]
     case 'antigravity':
       if (activeClientTab.value === 'gemini') {
-        return [generateGeminiCliContent(antigravityGeminiBase, apiKey)]
+        return [generateGeminiCliContent(`${baseUrl}/antigravity`, apiKey)]
       }
-      return generateAnthropicFiles(antigravityAnthropicBase, apiKey)
+      return generateAnthropicFiles(`${baseUrl}/antigravity`, apiKey)
     default:
-      return generateAnthropicFiles(anthropicBase, apiKey)
+      return generateAnthropicFiles(baseUrl, apiKey)
   }
 })
 
@@ -617,76 +617,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
     }
   }
   const openaiModels = {
-    'gpt-5': {
-      name: 'GPT-5',
-      limit: {
-        context: 400000,
-        output: 128000
-      },
-      options: {
-        store: false
-      }
-    },
-    'gpt-5-codex': {
-      name: 'GPT-5 Codex',
-      limit: {
-        context: 400000,
-        output: 128000
-      },
-      options: {
-        store: false
-      }
-    },
-    'gpt-5-codex-mini': {
-      name: 'GPT-5 Codex Mini',
-      limit: {
-        context: 272000,
-        output: 128000
-      },
-      options: {
-        store: false
-      }
-    },
-    'gpt-5.1': {
-      name: 'GPT-5.1',
-      limit: {
-        context: 400000,
-        output: 128000
-      },
-      options: {
-        store: false
-      }
-    },
-    'gpt-5.1-codex': {
-      name: 'GPT-5.1 Codex',
-      limit: {
-        context: 400000,
-        output: 128000
-      },
-      options: {
-        store: false
-      }
-    },
-    'gpt-5.1-codex-max': {
-      name: 'GPT-5.1 Codex Max',
-      limit: {
-        context: 400000,
-        output: 128000
-      },
-      options: {
-        store: false
-      }
-    },
-    'gpt-5.1-codex-mini': {
-      name: 'GPT-5.1 Codex Mini',
-      limit: {
-        context: 272000,
-        output: 128000
-      },
-      options: {
-        store: false
-      }
-    },
     'gpt-5.2': {
       name: 'GPT-5.2',
       limit: {
@@ -719,14 +649,52 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         xhigh: {}
       }
     },
-    'gpt-5.2-codex': {
-      name: 'GPT-5.2 Codex',
+    'gpt-5.4': {
+      name: 'GPT-5.4',
+      limit: {
+        context: 1050000,
+        output: 128000
+      },
+      options: {
+        store: false
+      },
+      variants: {
+        low: {},
+        medium: {},
+        high: {},
+        xhigh: {}
+      }
+    },
+    'gpt-5.4-mini': {
+      name: 'GPT-5.4 Mini',
       limit: {
         context: 400000,
         output: 128000
       },
       options: {
         store: false
+      },
+      variants: {
+        low: {},
+        medium: {},
+        high: {},
+        xhigh: {}
+      }
+    },
+    'gpt-5.3-codex-spark': {
+      name: 'GPT-5.3 Codex Spark',
+      limit: {
+        context: 128000,
+        output: 32000
+      },
+      options: {
+        store: false
+      },
+      variants: {
+        low: {},
+        medium: {},
+        high: {},
+        xhigh: {}
       }
     },
     'gpt-5.3-codex': {
@@ -745,39 +713,19 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         xhigh: {}
       }
     },
-    'gpt-5.4': {
-      name: 'GPT-5.4',
+    'codex-mini-latest': {
+      name: 'Codex Mini',
       limit: {
-        context: 1050000,
-        output: 128000
+        context: 200000,
+        output: 100000
       },
       options: {
         store: false
       },
       variants: {
+        low: {},
         medium: {},
-        high: {},
-        xhigh: {}
-      }
-    },
-    'gpt-5.4-mini': {
-      name: 'GPT-5.4 Mini',
-      limit: {
-        context: 1050000,
-        output: 128000
-      },
-      options: {
-        store: false
-      }
-    },
-    'gpt-5.4-nano': {
-      name: 'GPT-5.4 Nano',
-      limit: {
-        context: 1050000,
-        output: 128000
-      },
-      options: {
-        store: false
+        high: {}
       }
     }
   }
@@ -1026,23 +974,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
     },
     'claude-sonnet-4-6': {
       name: 'Claude 4.6 Sonnet',
-      limit: {
-        context: 200000,
-        output: 64000
-      },
-      modalities: {
-        input: ['text', 'image', 'pdf'],
-        output: ['text']
-      },
-      options: {
-        thinking: {
-          budgetTokens: 24576,
-          type: 'enabled'
-        }
-      }
-    },
-    'claude-sonnet-4-6-thinking': {
-      name: 'Claude 4.6 Sonnet (Thinking)',
       limit: {
         context: 200000,
         output: 64000

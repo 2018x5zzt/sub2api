@@ -13,16 +13,23 @@ func UserFromServiceShallow(u *service.User) *User {
 		return nil
 	}
 	return &User{
-		ID:            u.ID,
-		Email:         u.Email,
-		Username:      u.Username,
-		Role:          u.Role,
-		Balance:       u.Balance,
-		Concurrency:   u.Concurrency,
-		Status:        u.Status,
-		AllowedGroups: u.AllowedGroups,
-		CreatedAt:     u.CreatedAt,
-		UpdatedAt:     u.UpdatedAt,
+		ID:                         u.ID,
+		Email:                      u.Email,
+		Username:                   u.Username,
+		Role:                       u.Role,
+		Balance:                    u.Balance,
+		Concurrency:                u.Concurrency,
+		Status:                     u.Status,
+		AllowedGroups:              u.AllowedGroups,
+		LastActiveAt:               u.LastActiveAt,
+		CreatedAt:                  u.CreatedAt,
+		UpdatedAt:                  u.UpdatedAt,
+		BalanceNotifyEnabled:       u.BalanceNotifyEnabled,
+		BalanceNotifyThresholdType: u.BalanceNotifyThresholdType,
+		BalanceNotifyThreshold:     u.BalanceNotifyThreshold,
+		BalanceNotifyExtraEmails:   NotifyEmailEntriesFromService(u.BalanceNotifyExtraEmails),
+		TotalRecharged:             u.TotalRecharged,
+		RPMLimit:                   u.RPMLimit,
 	}
 }
 
@@ -59,11 +66,10 @@ func UserFromServiceAdmin(u *service.User) *AdminUser {
 		return nil
 	}
 	return &AdminUser{
-		User:                  *base,
-		Notes:                 u.Notes,
-		GroupRates:            u.GroupRates,
-		SoraStorageQuotaBytes: u.SoraStorageQuotaBytes,
-		SoraStorageUsedBytes:  u.SoraStorageUsedBytes,
+		User:       *base,
+		Notes:      u.Notes,
+		LastUsedAt: u.LastUsedAt,
+		GroupRates: u.GroupRates,
 	}
 }
 
@@ -72,32 +78,31 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		return nil
 	}
 	out := &APIKey{
-		ID:               k.ID,
-		UserID:           k.UserID,
-		Key:              k.Key,
-		Name:             k.Name,
-		GroupID:          k.GroupID,
-		BudgetMultiplier: k.BudgetMultiplier,
-		Status:           k.Status,
-		IPWhitelist:      k.IPWhitelist,
-		IPBlacklist:      k.IPBlacklist,
-		LastUsedAt:       k.LastUsedAt,
-		Quota:            k.Quota,
-		QuotaUsed:        k.QuotaUsed,
-		ExpiresAt:        k.ExpiresAt,
-		CreatedAt:        k.CreatedAt,
-		UpdatedAt:        k.UpdatedAt,
-		RateLimit5h:      k.RateLimit5h,
-		RateLimit1d:      k.RateLimit1d,
-		RateLimit7d:      k.RateLimit7d,
-		Usage5h:          k.EffectiveUsage5h(),
-		Usage1d:          k.EffectiveUsage1d(),
-		Usage7d:          k.EffectiveUsage7d(),
-		Window5hStart:    k.Window5hStart,
-		Window1dStart:    k.Window1dStart,
-		Window7dStart:    k.Window7dStart,
-		User:             UserFromServiceShallow(k.User),
-		Group:            GroupFromServiceShallow(k.Group),
+		ID:            k.ID,
+		UserID:        k.UserID,
+		Key:           k.Key,
+		Name:          k.Name,
+		GroupID:       k.GroupID,
+		Status:        k.Status,
+		IPWhitelist:   k.IPWhitelist,
+		IPBlacklist:   k.IPBlacklist,
+		LastUsedAt:    k.LastUsedAt,
+		Quota:         k.Quota,
+		QuotaUsed:     k.QuotaUsed,
+		ExpiresAt:     k.ExpiresAt,
+		CreatedAt:     k.CreatedAt,
+		UpdatedAt:     k.UpdatedAt,
+		RateLimit5h:   k.RateLimit5h,
+		RateLimit1d:   k.RateLimit1d,
+		RateLimit7d:   k.RateLimit7d,
+		Usage5h:       k.EffectiveUsage5h(),
+		Usage1d:       k.EffectiveUsage1d(),
+		Usage7d:       k.EffectiveUsage7d(),
+		Window5hStart: k.Window5hStart,
+		Window1dStart: k.Window1dStart,
+		Window7dStart: k.Window7dStart,
+		User:          UserFromServiceShallow(k.User),
+		Group:         GroupFromServiceShallow(k.Group),
 	}
 	if k.Window5hStart != nil && !service.IsWindowExpired(k.Window5hStart, service.RateLimitWindow5h) {
 		t := k.Window5hStart.Add(service.RateLimitWindow5h)
@@ -136,16 +141,17 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		return nil
 	}
 	out := &AdminGroup{
-		Group:                   groupFromServiceBase(g),
-		ModelRouting:            g.ModelRouting,
-		ModelRoutingEnabled:     g.ModelRoutingEnabled,
-		MCPXMLInject:            g.MCPXMLInject,
-		DefaultMappedModel:      g.DefaultMappedModel,
-		SupportedModelScopes:    g.SupportedModelScopes,
-		AccountCount:            g.AccountCount,
-		ActiveAccountCount:      g.ActiveAccountCount,
-		RateLimitedAccountCount: g.RateLimitedAccountCount,
-		SortOrder:               g.SortOrder,
+		Group:                       groupFromServiceBase(g),
+		ModelRouting:                g.ModelRouting,
+		ModelRoutingEnabled:         g.ModelRoutingEnabled,
+		MCPXMLInject:                g.MCPXMLInject,
+		DefaultMappedModel:          g.DefaultMappedModel,
+		MessagesDispatchModelConfig: g.MessagesDispatchModelConfig,
+		SupportedModelScopes:        g.SupportedModelScopes,
+		AccountCount:                g.AccountCount,
+		ActiveAccountCount:          g.ActiveAccountCount,
+		RateLimitedAccountCount:     g.RateLimitedAccountCount,
+		SortOrder:                   g.SortOrder,
 	}
 	if len(g.AccountGroups) > 0 {
 		out.AccountGroups = make([]AccountGroup, 0, len(g.AccountGroups))
@@ -164,8 +170,6 @@ func groupFromServiceBase(g *service.Group) Group {
 		Description:                     g.Description,
 		Platform:                        g.Platform,
 		RateMultiplier:                  g.RateMultiplier,
-		PricingMode:                     g.EffectivePricingMode(),
-		DefaultBudgetMultiplier:         g.DefaultBudgetMultiplier,
 		IsExclusive:                     g.IsExclusive,
 		Status:                          g.Status,
 		SubscriptionType:                g.SubscriptionType,
@@ -175,15 +179,13 @@ func groupFromServiceBase(g *service.Group) Group {
 		ImagePrice1K:                    g.ImagePrice1K,
 		ImagePrice2K:                    g.ImagePrice2K,
 		ImagePrice4K:                    g.ImagePrice4K,
-		SoraImagePrice360:               g.SoraImagePrice360,
-		SoraImagePrice540:               g.SoraImagePrice540,
-		SoraVideoPricePerRequest:        g.SoraVideoPricePerRequest,
-		SoraVideoPricePerRequestHD:      g.SoraVideoPricePerRequestHD,
 		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
 		FallbackGroupID:                 g.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: g.FallbackGroupIDOnInvalidRequest,
-		SoraStorageQuotaBytes:           g.SoraStorageQuotaBytes,
 		AllowMessagesDispatch:           g.AllowMessagesDispatch,
+		RequireOAuthOnly:                g.RequireOAuthOnly,
+		RequirePrivacySet:               g.RequirePrivacySet,
+		RPMLimit:                        g.RPMLimit,
 		CreatedAt:                       g.CreatedAt,
 		UpdatedAt:                       g.UpdatedAt,
 	}
@@ -329,6 +331,26 @@ func AccountFromServiceShallow(a *service.Account) *Account {
 				out.QuotaWeeklyResetAt = &v
 			}
 		}
+
+		// 配额通知配置
+		if enabled := a.GetQuotaNotifyDailyEnabled(); enabled {
+			out.QuotaNotifyDailyEnabled = &enabled
+		}
+		if threshold := a.GetQuotaNotifyDailyThreshold(); threshold > 0 {
+			out.QuotaNotifyDailyThreshold = &threshold
+		}
+		if enabled := a.GetQuotaNotifyWeeklyEnabled(); enabled {
+			out.QuotaNotifyWeeklyEnabled = &enabled
+		}
+		if threshold := a.GetQuotaNotifyWeeklyThreshold(); threshold > 0 {
+			out.QuotaNotifyWeeklyThreshold = &threshold
+		}
+		if enabled := a.GetQuotaNotifyTotalEnabled(); enabled {
+			out.QuotaNotifyTotalEnabled = &enabled
+		}
+		if threshold := a.GetQuotaNotifyTotalThreshold(); threshold > 0 {
+			out.QuotaNotifyTotalThreshold = &threshold
+		}
 	}
 
 	return out
@@ -369,13 +391,12 @@ func AccountGroupFromService(ag *service.AccountGroup) *AccountGroup {
 		return nil
 	}
 	return &AccountGroup{
-		AccountID:         ag.AccountID,
-		GroupID:           ag.GroupID,
-		Priority:          ag.Priority,
-		BillingMultiplier: ag.EffectiveBillingMultiplier(),
-		CreatedAt:         ag.CreatedAt,
-		Account:           AccountFromServiceShallow(ag.Account),
-		Group:             GroupFromServiceShallow(ag.Group),
+		AccountID: ag.AccountID,
+		GroupID:   ag.GroupID,
+		Priority:  ag.Priority,
+		CreatedAt: ag.CreatedAt,
+		Account:   AccountFromServiceShallow(ag.Account),
+		Group:     GroupFromServiceShallow(ag.Group),
 	}
 }
 
@@ -508,7 +529,6 @@ func redeemCodeFromServiceBase(rc *service.RedeemCode) RedeemCode {
 		UsedAt:       rc.UsedAt,
 		CreatedAt:    rc.CreatedAt,
 		GroupID:      rc.GroupID,
-		ProductID:    rc.ProductID,
 		ValidityDays: rc.ValidityDays,
 		User:         UserFromServiceShallow(rc.User),
 		Group:        GroupFromServiceShallow(rc.Group),
@@ -580,6 +600,7 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		MediaType:             l.MediaType,
 		UserAgent:             l.UserAgent,
 		CacheTTLOverridden:    l.CacheTTLOverridden,
+		BillingMode:           l.BillingMode,
 		CreatedAt:             l.CreatedAt,
 		User:                  UserFromServiceShallow(l.User),
 		APIKey:                APIKeyFromService(l.APIKey),
@@ -611,6 +632,7 @@ func UsageLogFromServiceAdmin(l *service.UsageLog) *AdminUsageLog {
 		ModelMappingChain:     l.ModelMappingChain,
 		BillingTier:           l.BillingTier,
 		AccountRateMultiplier: l.AccountRateMultiplier,
+		AccountStatsCost:      l.AccountStatsCost,
 		IPAddress:             l.IPAddress,
 		Account:               AccountSummaryFromService(l.Account),
 	}
@@ -692,26 +714,22 @@ func UserSubscriptionFromServiceAdmin(sub *service.UserSubscription) *AdminUserS
 
 func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscription {
 	return UserSubscription{
-		ID:                         sub.ID,
-		UserID:                     sub.UserID,
-		GroupID:                    sub.GroupID,
-		StartsAt:                   sub.StartsAt,
-		ExpiresAt:                  sub.ExpiresAt,
-		Status:                     sub.Status,
-		DailyWindowStart:           sub.DailyWindowStart,
-		WeeklyWindowStart:          sub.WeeklyWindowStart,
-		MonthlyWindowStart:         sub.MonthlyWindowStart,
-		DailyUsageUSD:              sub.DailyUsageUSD,
-		WeeklyUsageUSD:             sub.WeeklyUsageUSD,
-		MonthlyUsageUSD:            sub.MonthlyUsageUSD,
-		DailyCarryoverInUSD:        0,
-		DailyEffectiveLimitUSD:     sub.DailyEffectiveLimit(sub.Group),
-		DailyRemainingTotalUSD:     sub.DailyRemainingTotal(sub.Group),
-		DailyRemainingCarryoverUSD: 0,
-		CreatedAt:                  sub.CreatedAt,
-		UpdatedAt:                  sub.UpdatedAt,
-		User:                       UserFromServiceShallow(sub.User),
-		Group:                      GroupFromServiceShallow(sub.Group),
+		ID:                 sub.ID,
+		UserID:             sub.UserID,
+		GroupID:            sub.GroupID,
+		StartsAt:           sub.StartsAt,
+		ExpiresAt:          sub.ExpiresAt,
+		Status:             sub.Status,
+		DailyWindowStart:   sub.DailyWindowStart,
+		WeeklyWindowStart:  sub.WeeklyWindowStart,
+		MonthlyWindowStart: sub.MonthlyWindowStart,
+		DailyUsageUSD:      sub.DailyUsageUSD,
+		WeeklyUsageUSD:     sub.WeeklyUsageUSD,
+		MonthlyUsageUSD:    sub.MonthlyUsageUSD,
+		CreatedAt:          sub.CreatedAt,
+		UpdatedAt:          sub.UpdatedAt,
+		User:               UserFromServiceShallow(sub.User),
+		Group:              GroupFromServiceShallow(sub.Group),
 	}
 }
 
@@ -743,21 +761,16 @@ func PromoCodeFromService(pc *service.PromoCode) *PromoCode {
 		return nil
 	}
 	return &PromoCode{
-		ID:                    pc.ID,
-		Code:                  pc.Code,
-		Scene:                 pc.Scene,
-		BonusAmount:           pc.BonusAmount,
-		RandomBonusPoolAmount: pc.RandomBonusPoolAmount,
-		RandomBonusRemaining:  pc.RandomBonusRemaining,
-		MaxUses:               pc.MaxUses,
-		UsedCount:             pc.UsedCount,
-		LeaderboardEnabled:    pc.LeaderboardEnabled,
-		Status:                pc.Status,
-		ExpiresAt:             pc.ExpiresAt,
-		SuccessMessage:        pc.SuccessMessage,
-		Notes:                 pc.Notes,
-		CreatedAt:             pc.CreatedAt,
-		UpdatedAt:             pc.UpdatedAt,
+		ID:          pc.ID,
+		Code:        pc.Code,
+		BonusAmount: pc.BonusAmount,
+		MaxUses:     pc.MaxUses,
+		UsedCount:   pc.UsedCount,
+		Status:      pc.Status,
+		ExpiresAt:   pc.ExpiresAt,
+		Notes:       pc.Notes,
+		CreatedAt:   pc.CreatedAt,
+		UpdatedAt:   pc.UpdatedAt,
 	}
 }
 
@@ -766,13 +779,11 @@ func PromoCodeUsageFromService(u *service.PromoCodeUsage) *PromoCodeUsage {
 		return nil
 	}
 	return &PromoCodeUsage{
-		ID:                u.ID,
-		PromoCodeID:       u.PromoCodeID,
-		UserID:            u.UserID,
-		BonusAmount:       u.BonusAmount,
-		FixedBonusAmount:  u.FixedBonusAmount,
-		RandomBonusAmount: u.RandomBonusAmount,
-		UsedAt:            u.UsedAt,
-		User:              UserFromServiceShallow(u.User),
+		ID:          u.ID,
+		PromoCodeID: u.PromoCodeID,
+		UserID:      u.UserID,
+		BonusAmount: u.BonusAmount,
+		UsedAt:      u.UsedAt,
+		User:        UserFromServiceShallow(u.User),
 	}
 }

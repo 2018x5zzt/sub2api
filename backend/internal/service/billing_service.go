@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
 // APIKeyRateLimitCacheData holds rate limit usage data cached in Redis.
@@ -57,6 +56,7 @@ type ModelPricing struct {
 	LongContextInputThreshold      int     // 超过阈值后按整次会话提升输入价格
 	LongContextInputMultiplier     float64 // 长上下文整次会话输入倍率
 	LongContextOutputMultiplier    float64 // 长上下文整次会话输出倍率
+	ImageOutputPricePerToken       float64 // 图片输出 token 价格 (USD)
 }
 
 const (
@@ -64,26 +64,6 @@ const (
 	openAIGPT54LongContextInputMultiplier  = 2.0
 	openAIGPT54LongContextOutputMultiplier = 1.5
 )
-
-func newOpenAIFallbackPricing(inputPerMTok, outputPerMTok float64) *ModelPricing {
-	inputPerToken := inputPerMTok * 1e-6
-	outputPerToken := outputPerMTok * 1e-6
-	inputPriorityPerToken := inputPerToken * 2
-	outputPriorityPerToken := outputPerToken * 2
-	cacheReadPerToken := inputPerToken / 10
-	cacheReadPriorityPerToken := inputPriorityPerToken / 10
-
-	return &ModelPricing{
-		InputPricePerToken:             inputPerToken,
-		InputPricePerTokenPriority:     inputPriorityPerToken,
-		OutputPricePerToken:            outputPerToken,
-		OutputPricePerTokenPriority:    outputPriorityPerToken,
-		CacheCreationPricePerToken:     inputPerToken,
-		CacheReadPricePerToken:         cacheReadPerToken,
-		CacheReadPricePerTokenPriority: cacheReadPriorityPerToken,
-		SupportsCacheBreakdown:         false,
-	}
-}
 
 func normalizeBillingServiceTier(serviceTier string) string {
 	return strings.ToLower(strings.TrimSpace(serviceTier))
@@ -115,12 +95,14 @@ type UsageTokens struct {
 	CacheReadTokens       int
 	CacheCreation5mTokens int
 	CacheCreation1hTokens int
+	ImageOutputTokens     int
 }
 
 // CostBreakdown 费用明细
 type CostBreakdown struct {
 	InputCost         float64
 	OutputCost        float64
+	ImageOutputCost   float64
 	CacheCreationCost float64
 	CacheReadCost     float64
 	TotalCost         float64
@@ -208,6 +190,8 @@ func (s *BillingService) initFallbackPricing() {
 
 	// Claude 4.6 Opus (与4.5同价)
 	s.fallbackPrices["claude-opus-4.6"] = s.fallbackPrices["claude-opus-4.5"]
+
+	// Claude 4.7 Opus (暂与4.6同价，待官方定价更新)
 	s.fallbackPrices["claude-opus-4.7"] = s.fallbackPrices["claude-opus-4.6"]
 
 	// Gemini 3.1 Pro
@@ -219,16 +203,51 @@ func (s *BillingService) initFallbackPricing() {
 		SupportsCacheBreakdown:     false,
 	}
 
-	// OpenAI GPT-5 / Codex 族兜底价格直接复用静态展示目录，避免目录和计费表漂移。
-	for _, model := range openai.DefaultModels {
-		s.fallbackPrices[model.ID] = newOpenAIFallbackPricing(model.InputPricePerMTok, model.OutputPricePerMTok)
+	// OpenAI GPT-5.4（业务指定价格）
+	s.fallbackPrices["gpt-5.4"] = &ModelPricing{
+		InputPricePerToken:             2.5e-6,  // $2.5 per MTok
+		InputPricePerTokenPriority:     5e-6,    // $5 per MTok
+		OutputPricePerToken:            15e-6,   // $15 per MTok
+		OutputPricePerTokenPriority:    30e-6,   // $30 per MTok
+		CacheCreationPricePerToken:     2.5e-6,  // $2.5 per MTok
+		CacheReadPricePerToken:         0.25e-6, // $0.25 per MTok
+		CacheReadPricePerTokenPriority: 0.5e-6,  // $0.5 per MTok
+		SupportsCacheBreakdown:         false,
+		LongContextInputThreshold:      openAIGPT54LongContextInputThreshold,
+		LongContextInputMultiplier:     openAIGPT54LongContextInputMultiplier,
+		LongContextOutputMultiplier:    openAIGPT54LongContextOutputMultiplier,
 	}
-	s.fallbackPrices["gpt-5.4"].LongContextInputThreshold = openAIGPT54LongContextInputThreshold
-	s.fallbackPrices["gpt-5.4"].LongContextInputMultiplier = openAIGPT54LongContextInputMultiplier
-	s.fallbackPrices["gpt-5.4"].LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
-	s.fallbackPrices["gpt-5.5"].LongContextInputThreshold = openAIGPT54LongContextInputThreshold
-	s.fallbackPrices["gpt-5.5"].LongContextInputMultiplier = openAIGPT54LongContextInputMultiplier
-	s.fallbackPrices["gpt-5.5"].LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
+	// GPT-5.5 暂无独立定价，回退到 GPT-5.4
+	s.fallbackPrices["gpt-5.5"] = s.fallbackPrices["gpt-5.4"]
+
+	s.fallbackPrices["gpt-5.4-mini"] = &ModelPricing{
+		InputPricePerToken:     7.5e-7,
+		OutputPricePerToken:    4.5e-6,
+		CacheReadPricePerToken: 7.5e-8,
+		SupportsCacheBreakdown: false,
+	}
+	// OpenAI GPT-5.2（本地兜底）
+	s.fallbackPrices["gpt-5.2"] = &ModelPricing{
+		InputPricePerToken:             1.75e-6,
+		InputPricePerTokenPriority:     3.5e-6,
+		OutputPricePerToken:            14e-6,
+		OutputPricePerTokenPriority:    28e-6,
+		CacheCreationPricePerToken:     1.75e-6,
+		CacheReadPricePerToken:         0.175e-6,
+		CacheReadPricePerTokenPriority: 0.35e-6,
+		SupportsCacheBreakdown:         false,
+	}
+	// Codex 族兜底统一按 GPT-5.3 Codex 价格计费
+	s.fallbackPrices["gpt-5.3-codex"] = &ModelPricing{
+		InputPricePerToken:             1.5e-6, // $1.5 per MTok
+		InputPricePerTokenPriority:     3e-6,   // $3 per MTok
+		OutputPricePerToken:            12e-6,  // $12 per MTok
+		OutputPricePerTokenPriority:    24e-6,  // $24 per MTok
+		CacheCreationPricePerToken:     1.5e-6, // $1.5 per MTok
+		CacheReadPricePerToken:         0.15e-6,
+		CacheReadPricePerTokenPriority: 0.3e-6,
+		SupportsCacheBreakdown:         false,
+	}
 }
 
 // getFallbackPricing 根据模型系列获取回退价格
@@ -272,34 +291,16 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	if strings.Contains(modelLower, "gpt-5") || strings.Contains(modelLower, "codex") {
 		normalized := normalizeCodexModel(modelLower)
 		switch normalized {
-		case "gpt-5":
-			return s.fallbackPrices["gpt-5"]
-		case "gpt-5-codex":
-			return s.fallbackPrices["gpt-5-codex"]
-		case "gpt-5-codex-mini":
-			return s.fallbackPrices["gpt-5-codex-mini"]
-		case "gpt-5.1":
-			return s.fallbackPrices["gpt-5.1"]
-		case "gpt-5.1-codex":
-			return s.fallbackPrices["gpt-5.1-codex"]
-		case "gpt-5.1-codex-max":
-			return s.fallbackPrices["gpt-5.1-codex-max"]
-		case "gpt-5.1-codex-mini":
-			return s.fallbackPrices["gpt-5.1-codex-mini"]
 		case "gpt-5.5":
 			return s.fallbackPrices["gpt-5.5"]
-		case "gpt-5.2":
-			return s.fallbackPrices["gpt-5.2"]
-		case "gpt-5.2-codex":
-			return s.fallbackPrices["gpt-5.2-codex"]
-		case "gpt-5.3-codex":
-			return s.fallbackPrices["gpt-5.3-codex"]
-		case "gpt-5.4":
-			return s.fallbackPrices["gpt-5.4"]
 		case "gpt-5.4-mini":
 			return s.fallbackPrices["gpt-5.4-mini"]
-		case "gpt-5.4-nano":
-			return s.fallbackPrices["gpt-5.4-nano"]
+		case "gpt-5.4":
+			return s.fallbackPrices["gpt-5.4"]
+		case "gpt-5.2":
+			return s.fallbackPrices["gpt-5.2"]
+		case "gpt-5.3-codex", "gpt-5.3-codex-spark":
+			return s.fallbackPrices["gpt-5.3-codex"]
 		}
 	}
 
@@ -335,6 +336,7 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 				LongContextInputThreshold:      litellmPricing.LongContextInputTokenThreshold,
 				LongContextInputMultiplier:     litellmPricing.LongContextInputCostMultiplier,
 				LongContextOutputMultiplier:    litellmPricing.LongContextOutputCostMultiplier,
+				ImageOutputPricePerToken:       litellmPricing.OutputCostPerImageToken,
 			}), nil
 		}
 	}
@@ -376,13 +378,10 @@ func (s *BillingService) GetModelPricingWithChannel(model string, channelPricing
 		pricing.CacheReadPricePerToken = *channelPricing.CacheReadPrice
 		pricing.CacheReadPricePerTokenPriority = *channelPricing.CacheReadPrice
 	}
+	if channelPricing.ImageOutputPrice != nil {
+		pricing.ImageOutputPricePerToken = *channelPricing.ImageOutputPrice
+	}
 	return pricing, nil
-}
-
-// CalculateCostWithChannel 使用渠道定价计算费用
-// Deprecated: 使用 CalculateCostUnified 代替
-func (s *BillingService) CalculateCostWithChannel(model string, tokens UsageTokens, rateMultiplier float64, channelPricing *ChannelModelPricing) (*CostBreakdown, error) {
-	return s.calculateCostInternal(model, tokens, rateMultiplier, "", channelPricing)
 }
 
 // --- 统一计费入口 ---
@@ -398,6 +397,7 @@ type CostInput struct {
 	RateMultiplier float64
 	ServiceTier    string                // "priority","flex","" 等
 	Resolver       *ModelPricingResolver // 定价解析器
+	Resolved       *ResolvedPricing      // 可选：预解析的定价结果（避免重复 Resolve 调用）
 }
 
 // CalculateCostUnified 统一计费入口，支持三种计费模式。
@@ -408,13 +408,18 @@ func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, 
 		return s.calculateCostInternal(input.Model, input.Tokens, input.RateMultiplier, input.ServiceTier, nil)
 	}
 
-	resolved := input.Resolver.Resolve(input.Ctx, PricingInput{
-		Model:   input.Model,
-		GroupID: input.GroupID,
-	})
+	// 优先使用预解析结果，避免重复 Resolve 调用
+	resolved := input.Resolved
+	if resolved == nil {
+		resolved = input.Resolver.Resolve(input.Ctx, PricingInput{
+			Model:   input.Model,
+			GroupID: input.GroupID,
+		})
+	}
 
-	if input.RateMultiplier <= 0 {
-		input.RateMultiplier = 1.0
+	// 保存时强制 > 0；若仍有负数泄漏（缓存/迁移残留），按 0 处理避免按 1x 误扣。
+	if input.RateMultiplier < 0 {
+		input.RateMultiplier = 0
 	}
 
 	var breakdown *CostBreakdown
@@ -445,60 +450,98 @@ func (s *BillingService) calculateTokenCost(resolved *ResolvedPricing, input Cos
 
 	pricing = s.applyModelSpecificPricingPolicy(input.Model, pricing)
 
-	breakdown := &CostBreakdown{}
-	inputPricePerToken := pricing.InputPricePerToken
-	outputPricePerToken := pricing.OutputPricePerToken
-	cacheReadPricePerToken := pricing.CacheReadPricePerToken
+	// 长上下文定价仅在无区间定价时应用（区间定价已包含上下文分层）
+	applyLongCtx := len(resolved.Intervals) == 0
+
+	return s.computeTokenBreakdown(pricing, input.Tokens, input.RateMultiplier, input.ServiceTier, applyLongCtx), nil
+}
+
+// computeTokenBreakdown 是 token 计费的核心逻辑，由 calculateTokenCost 和 calculateCostInternal 共用。
+// applyLongCtx 控制是否检查长上下文定价（区间定价已自含上下文分层，不需要额外应用）。
+func (s *BillingService) computeTokenBreakdown(
+	pricing *ModelPricing, tokens UsageTokens,
+	rateMultiplier float64, serviceTier string,
+	applyLongCtx bool,
+) *CostBreakdown {
+	// 保存时强制 > 0；若仍有负数泄漏，按 0 处理避免按 1x 误扣。
+	if rateMultiplier < 0 {
+		rateMultiplier = 0
+	}
+
+	inputPrice := pricing.InputPricePerToken
+	outputPrice := pricing.OutputPricePerToken
+	cacheReadPrice := pricing.CacheReadPricePerToken
 	tierMultiplier := 1.0
 
-	if usePriorityServiceTierPricing(input.ServiceTier, pricing) {
+	if usePriorityServiceTierPricing(serviceTier, pricing) {
 		if pricing.InputPricePerTokenPriority > 0 {
-			inputPricePerToken = pricing.InputPricePerTokenPriority
+			inputPrice = pricing.InputPricePerTokenPriority
 		}
 		if pricing.OutputPricePerTokenPriority > 0 {
-			outputPricePerToken = pricing.OutputPricePerTokenPriority
+			outputPrice = pricing.OutputPricePerTokenPriority
 		}
 		if pricing.CacheReadPricePerTokenPriority > 0 {
-			cacheReadPricePerToken = pricing.CacheReadPricePerTokenPriority
+			cacheReadPrice = pricing.CacheReadPricePerTokenPriority
 		}
 	} else {
-		tierMultiplier = serviceTierCostMultiplier(input.ServiceTier)
+		tierMultiplier = serviceTierCostMultiplier(serviceTier)
 	}
 
-	// 长上下文定价（仅在无区间定价时应用，区间定价已包含上下文分层）
-	if len(resolved.Intervals) == 0 && s.shouldApplySessionLongContextPricing(input.Tokens, pricing) {
-		inputPricePerToken *= pricing.LongContextInputMultiplier
-		outputPricePerToken *= pricing.LongContextOutputMultiplier
+	if applyLongCtx && s.shouldApplySessionLongContextPricing(tokens, pricing) {
+		inputPrice *= pricing.LongContextInputMultiplier
+		outputPrice *= pricing.LongContextOutputMultiplier
 	}
 
-	breakdown.InputCost = float64(input.Tokens.InputTokens) * inputPricePerToken
-	breakdown.OutputCost = float64(input.Tokens.OutputTokens) * outputPricePerToken
+	bd := &CostBreakdown{}
+	bd.InputCost = float64(tokens.InputTokens) * inputPrice
 
-	if pricing.SupportsCacheBreakdown && (pricing.CacheCreation5mPrice > 0 || pricing.CacheCreation1hPrice > 0) {
-		if input.Tokens.CacheCreation5mTokens == 0 && input.Tokens.CacheCreation1hTokens == 0 && input.Tokens.CacheCreationTokens > 0 {
-			breakdown.CacheCreationCost = float64(input.Tokens.CacheCreationTokens) * pricing.CacheCreation5mPrice
-		} else {
-			breakdown.CacheCreationCost = float64(input.Tokens.CacheCreation5mTokens)*pricing.CacheCreation5mPrice +
-				float64(input.Tokens.CacheCreation1hTokens)*pricing.CacheCreation1hPrice
+	// 分离图片输出 token 与文本输出 token
+	textOutputTokens := tokens.OutputTokens - tokens.ImageOutputTokens
+	if textOutputTokens < 0 {
+		textOutputTokens = 0
+	}
+	bd.OutputCost = float64(textOutputTokens) * outputPrice
+
+	// 图片输出 token 费用（独立费率）
+	if tokens.ImageOutputTokens > 0 {
+		imgPrice := pricing.ImageOutputPricePerToken
+		if imgPrice == 0 {
+			imgPrice = outputPrice // 回退到常规输出价格
 		}
-	} else {
-		breakdown.CacheCreationCost = float64(input.Tokens.CacheCreationTokens) * pricing.CacheCreationPricePerToken
+		bd.ImageOutputCost = float64(tokens.ImageOutputTokens) * imgPrice
 	}
 
-	breakdown.CacheReadCost = float64(input.Tokens.CacheReadTokens) * cacheReadPricePerToken
+	// 缓存创建费用
+	bd.CacheCreationCost = s.computeCacheCreationCost(pricing, tokens)
+
+	bd.CacheReadCost = float64(tokens.CacheReadTokens) * cacheReadPrice
 
 	if tierMultiplier != 1.0 {
-		breakdown.InputCost *= tierMultiplier
-		breakdown.OutputCost *= tierMultiplier
-		breakdown.CacheCreationCost *= tierMultiplier
-		breakdown.CacheReadCost *= tierMultiplier
+		bd.InputCost *= tierMultiplier
+		bd.OutputCost *= tierMultiplier
+		bd.ImageOutputCost *= tierMultiplier
+		bd.CacheCreationCost *= tierMultiplier
+		bd.CacheReadCost *= tierMultiplier
 	}
 
-	breakdown.TotalCost = breakdown.InputCost + breakdown.OutputCost +
-		breakdown.CacheCreationCost + breakdown.CacheReadCost
-	breakdown.ActualCost = breakdown.TotalCost * input.RateMultiplier
+	bd.TotalCost = bd.InputCost + bd.OutputCost + bd.ImageOutputCost +
+		bd.CacheCreationCost + bd.CacheReadCost
+	bd.ActualCost = bd.TotalCost * rateMultiplier
 
-	return breakdown, nil
+	return bd
+}
+
+// computeCacheCreationCost 计算缓存创建费用（支持 5m/1h 分类或标准计费）。
+func (s *BillingService) computeCacheCreationCost(pricing *ModelPricing, tokens UsageTokens) float64 {
+	if pricing.SupportsCacheBreakdown && (pricing.CacheCreation5mPrice > 0 || pricing.CacheCreation1hPrice > 0) {
+		if tokens.CacheCreation5mTokens == 0 && tokens.CacheCreation1hTokens == 0 && tokens.CacheCreationTokens > 0 {
+			// API 未返回 ephemeral 明细，回退到全部按 5m 单价计费
+			return float64(tokens.CacheCreationTokens) * pricing.CacheCreation5mPrice
+		}
+		return float64(tokens.CacheCreation5mTokens)*pricing.CacheCreation5mPrice +
+			float64(tokens.CacheCreation1hTokens)*pricing.CacheCreation1hPrice
+	}
+	return float64(tokens.CacheCreationTokens) * pricing.CacheCreationPricePerToken
 }
 
 // calculatePerRequestCost 按次/图片计费
@@ -517,6 +560,11 @@ func (s *BillingService) calculatePerRequestCost(resolved *ResolvedPricing, inpu
 	if unitPrice == 0 {
 		totalContext := input.Tokens.InputTokens + input.Tokens.CacheReadTokens
 		unitPrice = input.Resolver.GetRequestTierPriceByContext(resolved, totalContext)
+	}
+
+	// 回退到默认按次价格
+	if unitPrice == 0 {
+		unitPrice = resolved.DefaultPerRequestPrice
 	}
 
 	totalCost := unitPrice * float64(count)
@@ -549,70 +597,8 @@ func (s *BillingService) calculateCostInternal(model string, tokens UsageTokens,
 		return nil, err
 	}
 
-	breakdown := &CostBreakdown{}
-	inputPricePerToken := pricing.InputPricePerToken
-	outputPricePerToken := pricing.OutputPricePerToken
-	cacheReadPricePerToken := pricing.CacheReadPricePerToken
-	tierMultiplier := 1.0
-	if usePriorityServiceTierPricing(serviceTier, pricing) {
-		if pricing.InputPricePerTokenPriority > 0 {
-			inputPricePerToken = pricing.InputPricePerTokenPriority
-		}
-		if pricing.OutputPricePerTokenPriority > 0 {
-			outputPricePerToken = pricing.OutputPricePerTokenPriority
-		}
-		if pricing.CacheReadPricePerTokenPriority > 0 {
-			cacheReadPricePerToken = pricing.CacheReadPricePerTokenPriority
-		}
-	} else {
-		tierMultiplier = serviceTierCostMultiplier(serviceTier)
-	}
-	if s.shouldApplySessionLongContextPricing(tokens, pricing) {
-		inputPricePerToken *= pricing.LongContextInputMultiplier
-		outputPricePerToken *= pricing.LongContextOutputMultiplier
-	}
-
-	// 计算输入token费用（使用per-token价格）
-	breakdown.InputCost = float64(tokens.InputTokens) * inputPricePerToken
-
-	// 计算输出token费用
-	breakdown.OutputCost = float64(tokens.OutputTokens) * outputPricePerToken
-
-	// 计算缓存费用
-	if pricing.SupportsCacheBreakdown && (pricing.CacheCreation5mPrice > 0 || pricing.CacheCreation1hPrice > 0) {
-		// 支持详细缓存分类的模型（5分钟/1小时缓存，价格为 per-token）
-		if tokens.CacheCreation5mTokens == 0 && tokens.CacheCreation1hTokens == 0 && tokens.CacheCreationTokens > 0 {
-			// API 未返回 ephemeral 明细，回退到全部按 5m 单价计费
-			breakdown.CacheCreationCost = float64(tokens.CacheCreationTokens) * pricing.CacheCreation5mPrice
-		} else {
-			breakdown.CacheCreationCost = float64(tokens.CacheCreation5mTokens)*pricing.CacheCreation5mPrice +
-				float64(tokens.CacheCreation1hTokens)*pricing.CacheCreation1hPrice
-		}
-	} else {
-		// 标准缓存创建价格（per-token）
-		breakdown.CacheCreationCost = float64(tokens.CacheCreationTokens) * pricing.CacheCreationPricePerToken
-	}
-
-	breakdown.CacheReadCost = float64(tokens.CacheReadTokens) * cacheReadPricePerToken
-
-	if tierMultiplier != 1.0 {
-		breakdown.InputCost *= tierMultiplier
-		breakdown.OutputCost *= tierMultiplier
-		breakdown.CacheCreationCost *= tierMultiplier
-		breakdown.CacheReadCost *= tierMultiplier
-	}
-
-	// 计算总费用
-	breakdown.TotalCost = breakdown.InputCost + breakdown.OutputCost +
-		breakdown.CacheCreationCost + breakdown.CacheReadCost
-
-	// 应用倍率计算实际费用
-	if rateMultiplier <= 0 {
-		rateMultiplier = 1.0
-	}
-	breakdown.ActualCost = breakdown.TotalCost * rateMultiplier
-
-	return breakdown, nil
+	// 旧路径始终检查长上下文定价（无区间定价概念）
+	return s.computeTokenBreakdown(pricing, tokens, rateMultiplier, serviceTier, true), nil
 }
 
 func (s *BillingService) applyModelSpecificPricingPolicy(model string, pricing *ModelPricing) *ModelPricing {
@@ -714,6 +700,7 @@ func (s *BillingService) CalculateCostWithLongContext(model string, tokens Usage
 		CacheReadTokens:       inRangeCacheTokens,
 		CacheCreation5mTokens: tokens.CacheCreation5mTokens,
 		CacheCreation1hTokens: tokens.CacheCreation1hTokens,
+		ImageOutputTokens:     tokens.ImageOutputTokens,
 	}
 	inRangeCost, err := s.CalculateCost(model, inRangeTokens, rateMultiplier)
 	if err != nil {
@@ -734,6 +721,7 @@ func (s *BillingService) CalculateCostWithLongContext(model string, tokens Usage
 	return &CostBreakdown{
 		InputCost:         inRangeCost.InputCost + outRangeCost.InputCost,
 		OutputCost:        inRangeCost.OutputCost,
+		ImageOutputCost:   inRangeCost.ImageOutputCost,
 		CacheCreationCost: inRangeCost.CacheCreationCost,
 		CacheReadCost:     inRangeCost.CacheReadCost + outRangeCost.CacheReadCost,
 		TotalCost:         inRangeCost.TotalCost + outRangeCost.TotalCost,
@@ -803,14 +791,6 @@ type ImagePriceConfig struct {
 	Price4K *float64 // 4K 尺寸价格（nil 表示使用默认值）
 }
 
-// SoraPriceConfig Sora 按次计费配置
-type SoraPriceConfig struct {
-	ImagePrice360          *float64
-	ImagePrice540          *float64
-	VideoPricePerRequest   *float64
-	VideoPricePerRequestHD *float64
-}
-
 // CalculateImageCost 计算图片生成费用
 // model: 请求的模型名称（用于获取 LiteLLM 默认价格）
 // imageSize: 图片尺寸 "1K", "2K", "4K"
@@ -828,74 +808,16 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 	// 计算总费用
 	totalCost := unitPrice * float64(imageCount)
 
-	// 应用倍率
-	if rateMultiplier <= 0 {
-		rateMultiplier = 1.0
+	// 应用倍率（保存时强制 > 0；负数按 0 处理避免按 1x 误扣）
+	if rateMultiplier < 0 {
+		rateMultiplier = 0
 	}
 	actualCost := totalCost * rateMultiplier
 
 	return &CostBreakdown{
-		TotalCost:  totalCost,
-		ActualCost: actualCost,
-	}
-}
-
-// CalculateSoraImageCost 计算 Sora 图片按次费用
-func (s *BillingService) CalculateSoraImageCost(imageSize string, imageCount int, groupConfig *SoraPriceConfig, rateMultiplier float64) *CostBreakdown {
-	if imageCount <= 0 {
-		return &CostBreakdown{}
-	}
-
-	unitPrice := 0.0
-	if groupConfig != nil {
-		switch imageSize {
-		case "540":
-			if groupConfig.ImagePrice540 != nil {
-				unitPrice = *groupConfig.ImagePrice540
-			}
-		default:
-			if groupConfig.ImagePrice360 != nil {
-				unitPrice = *groupConfig.ImagePrice360
-			}
-		}
-	}
-
-	totalCost := unitPrice * float64(imageCount)
-	if rateMultiplier <= 0 {
-		rateMultiplier = 1.0
-	}
-	actualCost := totalCost * rateMultiplier
-
-	return &CostBreakdown{
-		TotalCost:  totalCost,
-		ActualCost: actualCost,
-	}
-}
-
-// CalculateSoraVideoCost 计算 Sora 视频按次费用
-func (s *BillingService) CalculateSoraVideoCost(model string, groupConfig *SoraPriceConfig, rateMultiplier float64) *CostBreakdown {
-	unitPrice := 0.0
-	if groupConfig != nil {
-		modelLower := strings.ToLower(model)
-		if strings.Contains(modelLower, "sora2pro-hd") {
-			if groupConfig.VideoPricePerRequestHD != nil {
-				unitPrice = *groupConfig.VideoPricePerRequestHD
-			}
-		}
-		if unitPrice <= 0 && groupConfig.VideoPricePerRequest != nil {
-			unitPrice = *groupConfig.VideoPricePerRequest
-		}
-	}
-
-	totalCost := unitPrice
-	if rateMultiplier <= 0 {
-		rateMultiplier = 1.0
-	}
-	actualCost := totalCost * rateMultiplier
-
-	return &CostBreakdown{
-		TotalCost:  totalCost,
-		ActualCost: actualCost,
+		TotalCost:   totalCost,
+		ActualCost:  actualCost,
+		BillingMode: string(BillingModeImage),
 	}
 }
 

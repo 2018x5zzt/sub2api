@@ -120,16 +120,6 @@ func SubscriptionID(v int64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldSubscriptionID, v))
 }
 
-// ProductID applies equality check predicate on the "product_id" field. It's identical to ProductIDEQ.
-func ProductID(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldEQ(FieldProductID, v))
-}
-
-// ProductSubscriptionID applies equality check predicate on the "product_subscription_id" field. It's identical to ProductSubscriptionIDEQ.
-func ProductSubscriptionID(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldEQ(FieldProductSubscriptionID, v))
-}
-
 // InputTokens applies equality check predicate on the "input_tokens" field. It's identical to InputTokensEQ.
 func InputTokens(v int) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldInputTokens, v))
@@ -200,16 +190,6 @@ func AccountRateMultiplier(v float64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldAccountRateMultiplier, v))
 }
 
-// GroupDebitMultiplier applies equality check predicate on the "group_debit_multiplier" field. It's identical to GroupDebitMultiplierEQ.
-func GroupDebitMultiplier(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldEQ(FieldGroupDebitMultiplier, v))
-}
-
-// ProductDebitCost applies equality check predicate on the "product_debit_cost" field. It's identical to ProductDebitCostEQ.
-func ProductDebitCost(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldEQ(FieldProductDebitCost, v))
-}
-
 // BillingType applies equality check predicate on the "billing_type" field. It's identical to BillingTypeEQ.
 func BillingType(v int8) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldBillingType, v))
@@ -248,11 +228,6 @@ func ImageCount(v int) predicate.UsageLog {
 // ImageSize applies equality check predicate on the "image_size" field. It's identical to ImageSizeEQ.
 func ImageSize(v string) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldImageSize, v))
-}
-
-// MediaType applies equality check predicate on the "media_type" field. It's identical to MediaTypeEQ.
-func MediaType(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldEQ(FieldMediaType, v))
 }
 
 // CacheTTLOverridden applies equality check predicate on the "cache_ttl_overridden" field. It's identical to CacheTTLOverriddenEQ.
@@ -940,106 +915,6 @@ func SubscriptionIDNotNil() predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldNotNull(FieldSubscriptionID))
 }
 
-// ProductIDEQ applies the EQ predicate on the "product_id" field.
-func ProductIDEQ(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldEQ(FieldProductID, v))
-}
-
-// ProductIDNEQ applies the NEQ predicate on the "product_id" field.
-func ProductIDNEQ(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNEQ(FieldProductID, v))
-}
-
-// ProductIDIn applies the In predicate on the "product_id" field.
-func ProductIDIn(vs ...int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldIn(FieldProductID, vs...))
-}
-
-// ProductIDNotIn applies the NotIn predicate on the "product_id" field.
-func ProductIDNotIn(vs ...int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNotIn(FieldProductID, vs...))
-}
-
-// ProductIDGT applies the GT predicate on the "product_id" field.
-func ProductIDGT(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldGT(FieldProductID, v))
-}
-
-// ProductIDGTE applies the GTE predicate on the "product_id" field.
-func ProductIDGTE(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldGTE(FieldProductID, v))
-}
-
-// ProductIDLT applies the LT predicate on the "product_id" field.
-func ProductIDLT(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldLT(FieldProductID, v))
-}
-
-// ProductIDLTE applies the LTE predicate on the "product_id" field.
-func ProductIDLTE(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldLTE(FieldProductID, v))
-}
-
-// ProductIDIsNil applies the IsNil predicate on the "product_id" field.
-func ProductIDIsNil() predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldIsNull(FieldProductID))
-}
-
-// ProductIDNotNil applies the NotNil predicate on the "product_id" field.
-func ProductIDNotNil() predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNotNull(FieldProductID))
-}
-
-// ProductSubscriptionIDEQ applies the EQ predicate on the "product_subscription_id" field.
-func ProductSubscriptionIDEQ(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldEQ(FieldProductSubscriptionID, v))
-}
-
-// ProductSubscriptionIDNEQ applies the NEQ predicate on the "product_subscription_id" field.
-func ProductSubscriptionIDNEQ(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNEQ(FieldProductSubscriptionID, v))
-}
-
-// ProductSubscriptionIDIn applies the In predicate on the "product_subscription_id" field.
-func ProductSubscriptionIDIn(vs ...int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldIn(FieldProductSubscriptionID, vs...))
-}
-
-// ProductSubscriptionIDNotIn applies the NotIn predicate on the "product_subscription_id" field.
-func ProductSubscriptionIDNotIn(vs ...int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNotIn(FieldProductSubscriptionID, vs...))
-}
-
-// ProductSubscriptionIDGT applies the GT predicate on the "product_subscription_id" field.
-func ProductSubscriptionIDGT(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldGT(FieldProductSubscriptionID, v))
-}
-
-// ProductSubscriptionIDGTE applies the GTE predicate on the "product_subscription_id" field.
-func ProductSubscriptionIDGTE(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldGTE(FieldProductSubscriptionID, v))
-}
-
-// ProductSubscriptionIDLT applies the LT predicate on the "product_subscription_id" field.
-func ProductSubscriptionIDLT(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldLT(FieldProductSubscriptionID, v))
-}
-
-// ProductSubscriptionIDLTE applies the LTE predicate on the "product_subscription_id" field.
-func ProductSubscriptionIDLTE(v int64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldLTE(FieldProductSubscriptionID, v))
-}
-
-// ProductSubscriptionIDIsNil applies the IsNil predicate on the "product_subscription_id" field.
-func ProductSubscriptionIDIsNil() predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldIsNull(FieldProductSubscriptionID))
-}
-
-// ProductSubscriptionIDNotNil applies the NotNil predicate on the "product_subscription_id" field.
-func ProductSubscriptionIDNotNil() predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNotNull(FieldProductSubscriptionID))
-}
-
 // InputTokensEQ applies the EQ predicate on the "input_tokens" field.
 func InputTokensEQ(v int) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldInputTokens, v))
@@ -1610,106 +1485,6 @@ func AccountRateMultiplierNotNil() predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldNotNull(FieldAccountRateMultiplier))
 }
 
-// GroupDebitMultiplierEQ applies the EQ predicate on the "group_debit_multiplier" field.
-func GroupDebitMultiplierEQ(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldEQ(FieldGroupDebitMultiplier, v))
-}
-
-// GroupDebitMultiplierNEQ applies the NEQ predicate on the "group_debit_multiplier" field.
-func GroupDebitMultiplierNEQ(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNEQ(FieldGroupDebitMultiplier, v))
-}
-
-// GroupDebitMultiplierIn applies the In predicate on the "group_debit_multiplier" field.
-func GroupDebitMultiplierIn(vs ...float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldIn(FieldGroupDebitMultiplier, vs...))
-}
-
-// GroupDebitMultiplierNotIn applies the NotIn predicate on the "group_debit_multiplier" field.
-func GroupDebitMultiplierNotIn(vs ...float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNotIn(FieldGroupDebitMultiplier, vs...))
-}
-
-// GroupDebitMultiplierGT applies the GT predicate on the "group_debit_multiplier" field.
-func GroupDebitMultiplierGT(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldGT(FieldGroupDebitMultiplier, v))
-}
-
-// GroupDebitMultiplierGTE applies the GTE predicate on the "group_debit_multiplier" field.
-func GroupDebitMultiplierGTE(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldGTE(FieldGroupDebitMultiplier, v))
-}
-
-// GroupDebitMultiplierLT applies the LT predicate on the "group_debit_multiplier" field.
-func GroupDebitMultiplierLT(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldLT(FieldGroupDebitMultiplier, v))
-}
-
-// GroupDebitMultiplierLTE applies the LTE predicate on the "group_debit_multiplier" field.
-func GroupDebitMultiplierLTE(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldLTE(FieldGroupDebitMultiplier, v))
-}
-
-// GroupDebitMultiplierIsNil applies the IsNil predicate on the "group_debit_multiplier" field.
-func GroupDebitMultiplierIsNil() predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldIsNull(FieldGroupDebitMultiplier))
-}
-
-// GroupDebitMultiplierNotNil applies the NotNil predicate on the "group_debit_multiplier" field.
-func GroupDebitMultiplierNotNil() predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNotNull(FieldGroupDebitMultiplier))
-}
-
-// ProductDebitCostEQ applies the EQ predicate on the "product_debit_cost" field.
-func ProductDebitCostEQ(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldEQ(FieldProductDebitCost, v))
-}
-
-// ProductDebitCostNEQ applies the NEQ predicate on the "product_debit_cost" field.
-func ProductDebitCostNEQ(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNEQ(FieldProductDebitCost, v))
-}
-
-// ProductDebitCostIn applies the In predicate on the "product_debit_cost" field.
-func ProductDebitCostIn(vs ...float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldIn(FieldProductDebitCost, vs...))
-}
-
-// ProductDebitCostNotIn applies the NotIn predicate on the "product_debit_cost" field.
-func ProductDebitCostNotIn(vs ...float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNotIn(FieldProductDebitCost, vs...))
-}
-
-// ProductDebitCostGT applies the GT predicate on the "product_debit_cost" field.
-func ProductDebitCostGT(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldGT(FieldProductDebitCost, v))
-}
-
-// ProductDebitCostGTE applies the GTE predicate on the "product_debit_cost" field.
-func ProductDebitCostGTE(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldGTE(FieldProductDebitCost, v))
-}
-
-// ProductDebitCostLT applies the LT predicate on the "product_debit_cost" field.
-func ProductDebitCostLT(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldLT(FieldProductDebitCost, v))
-}
-
-// ProductDebitCostLTE applies the LTE predicate on the "product_debit_cost" field.
-func ProductDebitCostLTE(v float64) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldLTE(FieldProductDebitCost, v))
-}
-
-// ProductDebitCostIsNil applies the IsNil predicate on the "product_debit_cost" field.
-func ProductDebitCostIsNil() predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldIsNull(FieldProductDebitCost))
-}
-
-// ProductDebitCostNotNil applies the NotNil predicate on the "product_debit_cost" field.
-func ProductDebitCostNotNil() predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNotNull(FieldProductDebitCost))
-}
-
 // BillingTypeEQ applies the EQ predicate on the "billing_type" field.
 func BillingTypeEQ(v int8) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldBillingType, v))
@@ -2123,81 +1898,6 @@ func ImageSizeEqualFold(v string) predicate.UsageLog {
 // ImageSizeContainsFold applies the ContainsFold predicate on the "image_size" field.
 func ImageSizeContainsFold(v string) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldContainsFold(FieldImageSize, v))
-}
-
-// MediaTypeEQ applies the EQ predicate on the "media_type" field.
-func MediaTypeEQ(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldEQ(FieldMediaType, v))
-}
-
-// MediaTypeNEQ applies the NEQ predicate on the "media_type" field.
-func MediaTypeNEQ(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNEQ(FieldMediaType, v))
-}
-
-// MediaTypeIn applies the In predicate on the "media_type" field.
-func MediaTypeIn(vs ...string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldIn(FieldMediaType, vs...))
-}
-
-// MediaTypeNotIn applies the NotIn predicate on the "media_type" field.
-func MediaTypeNotIn(vs ...string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNotIn(FieldMediaType, vs...))
-}
-
-// MediaTypeGT applies the GT predicate on the "media_type" field.
-func MediaTypeGT(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldGT(FieldMediaType, v))
-}
-
-// MediaTypeGTE applies the GTE predicate on the "media_type" field.
-func MediaTypeGTE(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldGTE(FieldMediaType, v))
-}
-
-// MediaTypeLT applies the LT predicate on the "media_type" field.
-func MediaTypeLT(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldLT(FieldMediaType, v))
-}
-
-// MediaTypeLTE applies the LTE predicate on the "media_type" field.
-func MediaTypeLTE(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldLTE(FieldMediaType, v))
-}
-
-// MediaTypeContains applies the Contains predicate on the "media_type" field.
-func MediaTypeContains(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldContains(FieldMediaType, v))
-}
-
-// MediaTypeHasPrefix applies the HasPrefix predicate on the "media_type" field.
-func MediaTypeHasPrefix(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldHasPrefix(FieldMediaType, v))
-}
-
-// MediaTypeHasSuffix applies the HasSuffix predicate on the "media_type" field.
-func MediaTypeHasSuffix(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldHasSuffix(FieldMediaType, v))
-}
-
-// MediaTypeIsNil applies the IsNil predicate on the "media_type" field.
-func MediaTypeIsNil() predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldIsNull(FieldMediaType))
-}
-
-// MediaTypeNotNil applies the NotNil predicate on the "media_type" field.
-func MediaTypeNotNil() predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldNotNull(FieldMediaType))
-}
-
-// MediaTypeEqualFold applies the EqualFold predicate on the "media_type" field.
-func MediaTypeEqualFold(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldEqualFold(FieldMediaType, v))
-}
-
-// MediaTypeContainsFold applies the ContainsFold predicate on the "media_type" field.
-func MediaTypeContainsFold(v string) predicate.UsageLog {
-	return predicate.UsageLog(sql.FieldContainsFold(FieldMediaType, v))
 }
 
 // CacheTTLOverriddenEQ applies the EQ predicate on the "cache_ttl_overridden" field.

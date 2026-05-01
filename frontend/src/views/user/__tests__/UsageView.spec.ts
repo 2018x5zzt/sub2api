@@ -4,9 +4,8 @@ import { nextTick } from 'vue'
 
 import UsageView from '../UsageView.vue'
 
-const { query, getStats, getStatsByDateRange, list, showError, showWarning, showSuccess, showInfo } = vi.hoisted(() => ({
+const { query, getStatsByDateRange, list, showError, showWarning, showSuccess, showInfo } = vi.hoisted(() => ({
   query: vi.fn(),
-  getStats: vi.fn(),
   getStatsByDateRange: vi.fn(),
   list: vi.fn(),
   showError: vi.fn(),
@@ -42,12 +41,10 @@ const messages: Record<string, string> = {
   'usage.duration': 'Duration',
   'usage.time': 'Time',
   'usage.userAgent': 'User Agent',
-  'usage.cacheCreationUnavailableHint': 'OpenAI cache creation may be unavailable',
 }
 
 vi.mock('@/api', () => ({
   usageAPI: {
-    getStats,
     query,
     getStatsByDateRange,
   },
@@ -78,7 +75,6 @@ const TablePageLayoutStub = {
 describe('user UsageView tooltip', () => {
   beforeEach(() => {
     query.mockReset()
-    getStats.mockReset()
     getStatsByDateRange.mockReset()
     list.mockReset()
     showError.mockReset()
@@ -104,7 +100,7 @@ describe('user UsageView tooltip', () => {
     }
   })
 
-  it('shows only billed cost in user tooltip without internal pricing details', async () => {
+  it('shows fast service tier and unit prices in user tooltip', async () => {
     query.mockResolvedValue({
       items: [
         {
@@ -133,7 +129,7 @@ describe('user UsageView tooltip', () => {
       total: 1,
       pages: 1,
     })
-    getStats.mockResolvedValue({
+    getStatsByDateRange.mockResolvedValue({
       total_requests: 1,
       total_tokens: 100,
       total_cost: 0.1,
@@ -179,16 +175,15 @@ describe('user UsageView tooltip', () => {
     const text = wrapper.text()
     expect(text).toContain('Service tier')
     expect(text).toContain('Fast')
+    expect(text).toContain('Rate')
+    expect(text).toContain('1.00x')
     expect(text).toContain('Billed')
     expect(text).toContain('$0.092883')
-    expect(text).not.toContain('Cost Breakdown')
-    expect(text).not.toContain('Rate')
-    expect(text).not.toContain('Original')
-    expect(text).not.toContain('$5.0000 / 1M tokens')
-    expect(text).not.toContain('$30.0000 / 1M tokens')
+    expect(text).toContain('$5.0000 / 1M tokens')
+    expect(text).toContain('$30.0000 / 1M tokens')
   })
 
-  it('exports csv without internal multiplier or original cost columns', async () => {
+  it('exports csv with input and output unit price columns', async () => {
     const exportedLogs = [
       {
         request_id: 'req-user-export',
@@ -222,23 +217,13 @@ describe('user UsageView tooltip', () => {
       total: 1,
       pages: 1,
     })
-    getStats.mockResolvedValue({
+    getStatsByDateRange.mockResolvedValue({
       total_requests: 1,
       total_tokens: 100,
       total_cost: 0.1,
       avg_duration_ms: 1,
     })
     list.mockResolvedValue({ items: [] })
-
-    let capturedBlobParts: BlobPart[] = []
-    const OriginalBlob = globalThis.Blob
-    class BlobCapture extends OriginalBlob {
-      constructor(parts: BlobPart[], options?: BlobPropertyBag) {
-        super(parts, options)
-        capturedBlobParts = parts
-      }
-    }
-    globalThis.Blob = BlobCapture as typeof Blob
 
     let exportedBlob: Blob | null = null
     const originalCreateObjectURL = window.URL.createObjectURL
@@ -271,149 +256,22 @@ describe('user UsageView tooltip', () => {
     await setupState.exportToCSV()
 
     expect(exportedBlob).not.toBeNull()
+    const hasSortedExportQuery = query.mock.calls.some((call) => {
+      const params = call[0] as Record<string, unknown> | undefined
+      const config = call[1]
+      return (
+        params?.page_size === 100 &&
+        params?.sort_by === 'created_at' &&
+        params?.sort_order === 'desc' &&
+        config === undefined
+      )
+    })
+    expect(hasSortedExportQuery).toBe(true)
     expect(clickSpy).toHaveBeenCalled()
     expect(showSuccess).toHaveBeenCalled()
 
-    const csvText = capturedBlobParts.join('')
-    const [headerLine, dataLine] = csvText.trim().split('\n')
-    expect(headerLine).toContain('Cost')
-    expect(headerLine).not.toContain('Rate Multiplier')
-    expect(headerLine).not.toContain('Original Cost')
-    expect(dataLine).toContain('0.09288300')
-    expect(dataLine).not.toContain(',1,')
-
-    globalThis.Blob = OriginalBlob
     window.URL.createObjectURL = originalCreateObjectURL
     window.URL.revokeObjectURL = originalRevokeObjectURL
     clickSpy.mockRestore()
-  })
-
-  it('shows billed summary only without standard cost comparison text', async () => {
-    query.mockResolvedValue({
-      items: [],
-      total: 0,
-      pages: 0,
-    })
-    getStats.mockResolvedValue({
-      total_requests: 1,
-      total_tokens: 100,
-      total_actual_cost: 0.092883,
-      total_cost: 0.1,
-      average_duration_ms: 1,
-    })
-    list.mockResolvedValue({ items: [] })
-
-    const wrapper = mount(UsageView, {
-      global: {
-        stubs: {
-          AppLayout: AppLayoutStub,
-          TablePageLayout: TablePageLayoutStub,
-          Pagination: true,
-          EmptyState: true,
-          Select: true,
-          DateRangePicker: true,
-          Icon: true,
-          Teleport: true,
-        },
-      },
-    })
-
-    await flushPromises()
-    await nextTick()
-
-    const text = wrapper.text()
-    expect(text).toContain('$0.0929')
-    expect(text).toContain('Billed')
-    expect(text).not.toContain('Actual')
-    expect(text).not.toContain('Standard')
-  })
-
-  it('shows cache creation availability hint for OpenAI-like token rows', async () => {
-    query.mockResolvedValue({
-      items: [],
-      total: 0,
-      pages: 0,
-    })
-    getStats.mockResolvedValue({
-      total_requests: 0,
-      total_tokens: 0,
-      total_cost: 0,
-      avg_duration_ms: 0,
-    })
-    list.mockResolvedValue({ items: [] })
-
-    const wrapper = mount(UsageView, {
-      global: {
-        stubs: {
-          AppLayout: AppLayoutStub,
-          TablePageLayout: TablePageLayoutStub,
-          Pagination: true,
-          EmptyState: true,
-          Select: true,
-          DateRangePicker: true,
-          Icon: true,
-          Teleport: true,
-        },
-      },
-    })
-
-    await flushPromises()
-    await nextTick()
-
-    const setupState = (wrapper.vm as any).$?.setupState
-    setupState.tokenTooltipData = {
-      cache_creation_tokens: 0,
-      cache_read_tokens: 512,
-      upstream_endpoint: '/v1/responses',
-      model: 'gpt-5.4',
-    }
-    setupState.tokenTooltipVisible = true
-    await nextTick()
-
-    expect(wrapper.text()).toContain('OpenAI cache creation may be unavailable')
-  })
-
-  it('defaults to all-time usage filters on initial load', async () => {
-    query.mockResolvedValue({
-      items: [],
-      total: 0,
-      pages: 0,
-    })
-    getStats.mockResolvedValue({
-      total_requests: 0,
-      total_tokens: 0,
-      total_cost: 0,
-      avg_duration_ms: 0,
-    })
-    getStatsByDateRange.mockResolvedValue({
-      total_requests: 0,
-      total_tokens: 0,
-      total_cost: 0,
-      avg_duration_ms: 0,
-    })
-    list.mockResolvedValue({ items: [] })
-
-    mount(UsageView, {
-      global: {
-        stubs: {
-          AppLayout: AppLayoutStub,
-          TablePageLayout: TablePageLayoutStub,
-          Pagination: true,
-          EmptyState: true,
-          Select: true,
-          DateRangePicker: true,
-          Icon: true,
-          Teleport: true,
-        },
-      },
-    })
-
-    await flushPromises()
-
-    expect(query).toHaveBeenCalled()
-    expect(query.mock.calls[0][0]).not.toHaveProperty('start_date')
-    expect(query.mock.calls[0][0]).not.toHaveProperty('end_date')
-    expect(getStats).toHaveBeenCalledWith('all', undefined)
-    expect(getStatsByDateRange).not.toHaveBeenCalled()
   })
 })

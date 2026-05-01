@@ -34,12 +34,6 @@ func TestApplyThinkingModelSuffix(t *testing.T) {
 			thinkingEnabled: true,
 			expected:        "claude-sonnet-4-5-thinking",
 		},
-		{
-			name:            "thinking enabled - claude-sonnet-4-6 becomes thinking version",
-			mappedModel:     "claude-sonnet-4-6",
-			thinkingEnabled: true,
-			expected:        "claude-sonnet-4-6-thinking",
-		},
 
 		// Thinking 开启 + 其他模型：保持原样
 		{

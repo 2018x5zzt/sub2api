@@ -93,29 +93,6 @@ func TestSettingService_UpdateSettings_DefaultSubscriptions_ValidGroup(t *testin
 	}, got)
 }
 
-func TestSettingService_UpdateSettings_PersistsDefaultProductSubscriptions(t *testing.T) {
-	repo := &settingUpdateRepoStub{}
-	svc := NewSettingService(repo, &config.Config{})
-
-	err := svc.UpdateSettings(context.Background(), &SystemSettings{
-		DefaultSubscriptionProducts: []DefaultSubscriptionProductSetting{
-			{ProductID: 101, ValidityDays: 30},
-			{ProductID: 102, ValidityDays: 7},
-		},
-	})
-	require.NoError(t, err)
-
-	raw, ok := repo.updates[SettingKeyDefaultSubscriptionProducts]
-	require.True(t, ok)
-
-	var got []DefaultSubscriptionProductSetting
-	require.NoError(t, json.Unmarshal([]byte(raw), &got))
-	require.Equal(t, []DefaultSubscriptionProductSetting{
-		{ProductID: 101, ValidityDays: 30},
-		{ProductID: 102, ValidityDays: 7},
-	}, got)
-}
-
 func TestSettingService_UpdateSettings_DefaultSubscriptions_RejectsNonSubscriptionGroup(t *testing.T) {
 	repo := &settingUpdateRepoStub{}
 	groupReader := &defaultSubGroupReaderStub{
@@ -217,33 +194,6 @@ func TestSettingService_UpdateSettings_RegistrationEmailSuffixWhitelist_Invalid(
 	require.Equal(t, "INVALID_REGISTRATION_EMAIL_SUFFIX_WHITELIST", infraerrors.Reason(err))
 }
 
-func TestSettingService_UpdateSettings_EnterpriseVisibleGroups_DropsInvalidOrInactiveGroups(t *testing.T) {
-	repo := &settingUpdateRepoStub{}
-	groupReader := &defaultSubGroupReaderStub{
-		byID: map[int64]*Group{
-			2:  {ID: 2, Status: StatusActive},
-			5:  {ID: 5, Status: StatusActive},
-			9:  {ID: 9, Status: StatusActive},
-			11: {ID: 11, Status: StatusActive},
-			18: {ID: 18, Status: StatusDisabled},
-		},
-	}
-	svc := NewSettingService(repo, &config.Config{})
-	svc.SetDefaultSubscriptionGroupReader(groupReader)
-
-	err := svc.UpdateSettings(context.Background(), &SystemSettings{
-		EnterpriseVisibleGroups: []EnterpriseVisibleGroupSetting{
-			{EnterpriseName: "  Acme ", VisibleGroupIDs: []int64{9, 2, 9, 0, 77, 18}},
-			{EnterpriseName: "acme", VisibleGroupIDs: []int64{11}},
-			{EnterpriseName: "Bustest", VisibleGroupIDs: []int64{5, 5}},
-			{EnterpriseName: "   ", VisibleGroupIDs: []int64{2}},
-		},
-	})
-	require.NoError(t, err)
-
-	require.JSONEq(t, `{"acme":[2,9,11],"bustest":[5]}`, repo.updates[SettingKeyEnterpriseVisibleGroupIDsByEnterprise])
-}
-
 func TestParseDefaultSubscriptions_NormalizesValues(t *testing.T) {
 	got := parseDefaultSubscriptions(`[{"group_id":11,"validity_days":30},{"group_id":11,"validity_days":60},{"group_id":0,"validity_days":10},{"group_id":12,"validity_days":99999}]`)
 	require.Equal(t, []DefaultSubscriptionSetting{
@@ -253,10 +203,54 @@ func TestParseDefaultSubscriptions_NormalizesValues(t *testing.T) {
 	}, got)
 }
 
-func TestParseDefaultSubscriptionProducts_NormalizesValues(t *testing.T) {
-	got := parseDefaultSubscriptionProducts(`[{"product_id":101,"validity_days":30},{"product_id":0,"validity_days":10},{"product_id":102,"validity_days":99999}]`)
-	require.Equal(t, []DefaultSubscriptionProductSetting{
-		{ProductID: 101, ValidityDays: 30},
-		{ProductID: 102, ValidityDays: MaxValidityDays},
-	}, got)
+func TestSettingService_UpdateSettings_TablePreferences(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		TableDefaultPageSize: 50,
+		TablePageSizeOptions: []int{20, 50, 100},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "50", repo.updates[SettingKeyTableDefaultPageSize])
+	require.Equal(t, "[20,50,100]", repo.updates[SettingKeyTablePageSizeOptions])
+
+	err = svc.UpdateSettings(context.Background(), &SystemSettings{
+		TableDefaultPageSize: 1000,
+		TablePageSizeOptions: []int{20, 100},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "1000", repo.updates[SettingKeyTableDefaultPageSize])
+	require.Equal(t, "[20,100]", repo.updates[SettingKeyTablePageSizeOptions])
+}
+
+func TestSettingService_UpdateSettings_PaymentVisibleMethodsAndAdvancedScheduler(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		PaymentVisibleMethodAlipaySource:  "alipay",
+		PaymentVisibleMethodWxpaySource:   "easypay",
+		PaymentVisibleMethodAlipayEnabled: true,
+		PaymentVisibleMethodWxpayEnabled:  false,
+		OpenAIAdvancedSchedulerEnabled:    true,
+	})
+	require.NoError(t, err)
+	require.Equal(t, VisibleMethodSourceOfficialAlipay, repo.updates[SettingPaymentVisibleMethodAlipaySource])
+	require.Equal(t, VisibleMethodSourceEasyPayWechat, repo.updates[SettingPaymentVisibleMethodWxpaySource])
+	require.Equal(t, "true", repo.updates[SettingPaymentVisibleMethodAlipayEnabled])
+	require.Equal(t, "false", repo.updates[SettingPaymentVisibleMethodWxpayEnabled])
+	require.Equal(t, "true", repo.updates[openAIAdvancedSchedulerSettingKey])
+}
+
+func TestSettingService_UpdateSettings_RejectsInvalidPaymentVisibleMethodSource(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		PaymentVisibleMethodAlipaySource: "not-a-provider",
+	})
+	require.Error(t, err)
+	require.Equal(t, "INVALID_PAYMENT_VISIBLE_METHOD_SOURCE", infraerrors.Reason(err))
+	require.Nil(t, repo.updates)
 }

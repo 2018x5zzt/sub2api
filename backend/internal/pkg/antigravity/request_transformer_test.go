@@ -8,13 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildModelIdentityText_DistinguishesSonnet46Thinking(t *testing.T) {
-	text := buildModelIdentityText("claude-sonnet-4-6-thinking")
-
-	require.Contains(t, text, "Claude Sonnet 4.6 Thinking")
-	require.Contains(t, text, "ModelId is claude-sonnet-4-6-thinking")
-}
-
 // TestBuildParts_ThinkingBlockWithoutSignature 测试thinking block无signature时的处理
 func TestBuildParts_ThinkingBlockWithoutSignature(t *testing.T) {
 	tests := []struct {
@@ -270,6 +263,29 @@ func TestBuildTools_CustomTypeTools(t *testing.T) {
 	}
 }
 
+func TestBuildTools_PreservesWebSearchAlongsideFunctions(t *testing.T) {
+	tools := []ClaudeTool{
+		{
+			Name:        "get_weather",
+			Description: "Get weather information",
+			InputSchema: map[string]any{"type": "object"},
+		},
+		{
+			Type: "web_search_20250305",
+			Name: "web_search",
+		},
+	}
+
+	result := buildTools(tools)
+	require.Len(t, result, 2)
+	require.Len(t, result[0].FunctionDeclarations, 1)
+	require.Equal(t, "get_weather", result[0].FunctionDeclarations[0].Name)
+	require.NotNil(t, result[1].GoogleSearch)
+	require.NotNil(t, result[1].GoogleSearch.EnhancedContent)
+	require.NotNil(t, result[1].GoogleSearch.EnhancedContent.ImageSearch)
+	require.Equal(t, 5, result[1].GoogleSearch.EnhancedContent.ImageSearch.MaxResultCount)
+}
+
 func TestBuildGenerationConfig_ThinkingDynamicBudget(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -307,13 +323,6 @@ func TestBuildGenerationConfig_ThinkingDynamicBudget(t *testing.T) {
 			wantPresent: true,
 		},
 		{
-			name:        "adaptive on opus4.7 maps to high budget (24576)",
-			model:       "claude-opus-4-7",
-			thinking:    &ThinkingConfig{Type: "adaptive", BudgetTokens: 20000},
-			wantBudget:  ClaudeAdaptiveHighThinkingBudgetTokens,
-			wantPresent: true,
-		},
-		{
 			name:        "adaptive on non-opus model keeps default dynamic (-1)",
 			model:       "claude-sonnet-4-5-thinking",
 			thinking:    &ThinkingConfig{Type: "adaptive"},
@@ -329,7 +338,7 @@ func TestBuildGenerationConfig_ThinkingDynamicBudget(t *testing.T) {
 		},
 		{
 			name:        "nil thinking does not emit thinkingConfig",
-			model:       "claude-opus-4-6",
+			model:       "claude-opus-4-6-thinking",
 			thinking:    nil,
 			wantBudget:  0,
 			wantPresent: false,
@@ -365,31 +374,6 @@ func TestBuildGenerationConfig_ThinkingDynamicBudget(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestBuildGenerationConfig_DefaultThinkingModels(t *testing.T) {
-	t.Run("thinking model without explicit config still enables thoughts", func(t *testing.T) {
-		req := &ClaudeRequest{
-			Model: "claude-opus-4-6-thinking",
-		}
-
-		cfg := buildGenerationConfig(req)
-		require.NotNil(t, cfg)
-		require.NotNil(t, cfg.ThinkingConfig)
-		require.True(t, cfg.ThinkingConfig.IncludeThoughts)
-		require.Equal(t, -1, cfg.ThinkingConfig.ThinkingBudget)
-	})
-
-	t.Run("explicit disabled keeps thinking off even on thinking model", func(t *testing.T) {
-		req := &ClaudeRequest{
-			Model:    "claude-opus-4-6-thinking",
-			Thinking: &ThinkingConfig{Type: "disabled"},
-		}
-
-		cfg := buildGenerationConfig(req)
-		require.NotNil(t, cfg)
-		require.Nil(t, cfg.ThinkingConfig)
-	})
 }
 
 func TestTransformClaudeToGeminiWithOptions_PreservesBillingHeaderSystemBlock(t *testing.T) {
@@ -438,4 +422,37 @@ func TestTransformClaudeToGeminiWithOptions_PreservesBillingHeaderSystemBlock(t 
 			require.True(t, found, "转换后的 systemInstruction 应保留 x-anthropic-billing-header 内容")
 		})
 	}
+}
+
+func TestTransformClaudeToGeminiWithOptions_PreservesWebSearchAlongsideFunctions(t *testing.T) {
+	claudeReq := &ClaudeRequest{
+		Model: "claude-3-5-sonnet-latest",
+		Messages: []ClaudeMessage{
+			{
+				Role:    "user",
+				Content: json.RawMessage(`[{"type":"text","text":"hello"}]`),
+			},
+		},
+		Tools: []ClaudeTool{
+			{
+				Name:        "get_weather",
+				Description: "Get weather information",
+				InputSchema: map[string]any{"type": "object"},
+			},
+			{
+				Type: "web_search_20250305",
+				Name: "web_search",
+			},
+		},
+	}
+
+	body, err := TransformClaudeToGeminiWithOptions(claudeReq, "project-1", "gemini-2.5-flash", DefaultTransformOptions())
+	require.NoError(t, err)
+
+	var req V1InternalRequest
+	require.NoError(t, json.Unmarshal(body, &req))
+	require.Len(t, req.Request.Tools, 2)
+	require.Len(t, req.Request.Tools[0].FunctionDeclarations, 1)
+	require.Equal(t, "get_weather", req.Request.Tools[0].FunctionDeclarations[0].Name)
+	require.NotNil(t, req.Request.Tools[1].GoogleSearch)
 }

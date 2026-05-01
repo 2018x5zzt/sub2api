@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"hash/fnv"
+	"log/slog"
 	"reflect"
 	"sort"
 	"strconv"
@@ -90,22 +91,6 @@ func (a *Account) BillingRateMultiplier() float64 {
 	return *a.RateMultiplier
 }
 
-// GroupBillingMultiplier 返回账号在指定分组绑定下的扣费乘数。
-// - 未绑定或未配置时按 1.0 处理
-// - 非法值（<=0）按 1.0 处理，避免影响既有计费链路
-func (a *Account) GroupBillingMultiplier(groupID *int64) float64 {
-	if a == nil || groupID == nil || *groupID <= 0 {
-		return 1.0
-	}
-	for i := range a.AccountGroups {
-		ag := a.AccountGroups[i]
-		if ag.GroupID == *groupID {
-			return ag.EffectiveBillingMultiplier()
-		}
-	}
-	return 1.0
-}
-
 func (a *Account) EffectiveLoadFactor() int {
 	if a == nil {
 		return 1
@@ -136,6 +121,9 @@ func (a *Account) IsSchedulable() bool {
 	if a.TempUnschedulableUntil != nil && now.Before(*a.TempUnschedulableUntil) {
 		return false
 	}
+	if a.IsAPIKeyOrBedrock() && a.IsQuotaExceeded() {
+		return false
+	}
 	return true
 }
 
@@ -155,6 +143,21 @@ func (a *Account) IsOverloaded() bool {
 
 func (a *Account) IsOAuth() bool {
 	return a.Type == AccountTypeOAuth || a.Type == AccountTypeSetupToken
+}
+
+// IsPrivacySet 检查账号的 privacy 是否已成功设置。
+// OpenAI: privacy_mode == "training_off"
+// Antigravity: privacy_mode == "privacy_set"
+// 其他平台: 无 privacy 概念，始终返回 true
+func (a *Account) IsPrivacySet() bool {
+	switch a.Platform {
+	case PlatformOpenAI:
+		return a.getExtraString("privacy_mode") == PrivacyModeTrainingOff
+	case PlatformAntigravity:
+		return a.getExtraString("privacy_mode") == AntigravityPrivacySet
+	default:
+		return true
+	}
 }
 
 func (a *Account) IsGemini() bool {
@@ -390,6 +393,56 @@ func parseTempUnschedInt(value any) int {
 	return 0
 }
 
+const (
+	// OpenAICompactModeAuto follows compact-probe results when deciding compact eligibility.
+	OpenAICompactModeAuto = "auto"
+	// OpenAICompactModeForceOn always treats the account as compact-supported.
+	OpenAICompactModeForceOn = "force_on"
+	// OpenAICompactModeForceOff always treats the account as compact-unsupported.
+	OpenAICompactModeForceOff = "force_off"
+)
+
+func normalizeOpenAICompactMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case OpenAICompactModeForceOn:
+		return OpenAICompactModeForceOn
+	case OpenAICompactModeForceOff:
+		return OpenAICompactModeForceOff
+	default:
+		return OpenAICompactModeAuto
+	}
+}
+
+func stringMappingFromRaw(raw any) map[string]string {
+	switch mapping := raw.(type) {
+	case map[string]any:
+		if len(mapping) == 0 {
+			return nil
+		}
+		result := make(map[string]string, len(mapping))
+		for key, value := range mapping {
+			if str, ok := value.(string); ok {
+				result[key] = str
+			}
+		}
+		if len(result) == 0 {
+			return nil
+		}
+		return result
+	case map[string]string:
+		if len(mapping) == 0 {
+			return nil
+		}
+		result := make(map[string]string, len(mapping))
+		for key, value := range mapping {
+			result[key] = value
+		}
+		return result
+	default:
+		return nil
+	}
+}
+
 func (a *Account) GetModelMapping() map[string]string {
 	credentialsPtr := mapPtr(a.Credentials)
 	rawMapping, _ := a.Credentials["model_mapping"].(map[string]any)
@@ -516,19 +569,43 @@ func ensureAntigravityDefaultPassthroughs(mapping map[string]string, models []st
 	}
 }
 
-func (a *Account) normalizeOpenAIRequestedModelForMapping(requestedModel string) string {
-	if a == nil || !a.IsOpenAI() {
+func normalizeRequestedModelForLookup(platform, requestedModel string) string {
+	trimmed := strings.TrimSpace(requestedModel)
+	if trimmed == "" {
 		return ""
 	}
-	requestedModel = strings.TrimSpace(requestedModel)
+	if platform != PlatformGemini && platform != PlatformAntigravity {
+		return trimmed
+	}
+	if trimmed == "gemini-3.1-pro-preview-customtools" {
+		return "gemini-3.1-pro-preview"
+	}
+	return trimmed
+}
+
+func mappingSupportsRequestedModel(mapping map[string]string, requestedModel string) bool {
 	if requestedModel == "" {
-		return ""
+		return false
 	}
-	normalized := normalizeCodexModel(requestedModel)
-	if normalized == "" || normalized == requestedModel {
-		return ""
+	if _, exists := mapping[requestedModel]; exists {
+		return true
 	}
-	return normalized
+	for pattern := range mapping {
+		if matchWildcard(pattern, requestedModel) {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveRequestedModelInMapping(mapping map[string]string, requestedModel string) (mappedModel string, matched bool) {
+	if requestedModel == "" {
+		return "", false
+	}
+	if mappedModel, exists := mapping[requestedModel]; exists {
+		return mappedModel, true
+	}
+	return matchWildcardMappingResult(mapping, requestedModel)
 }
 
 // IsModelSupported 检查模型是否在 model_mapping 中（支持通配符）
@@ -538,27 +615,11 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 	if len(mapping) == 0 {
 		return true // 无映射 = 允许所有
 	}
-	// 精确匹配
-	if _, exists := mapping[requestedModel]; exists {
+	if mappingSupportsRequestedModel(mapping, requestedModel) {
 		return true
 	}
-	// 通配符匹配
-	for pattern := range mapping {
-		if matchWildcard(pattern, requestedModel) {
-			return true
-		}
-	}
-	if normalized := a.normalizeOpenAIRequestedModelForMapping(requestedModel); normalized != "" {
-		if _, exists := mapping[normalized]; exists {
-			return true
-		}
-		for pattern := range mapping {
-			if matchWildcard(pattern, normalized) {
-				return true
-			}
-		}
-	}
-	return false
+	normalized := normalizeRequestedModelForLookup(a.Platform, requestedModel)
+	return normalized != requestedModel && mappingSupportsRequestedModel(mapping, normalized)
 }
 
 // GetMappedModel 获取映射后的模型名（支持通配符，最长优先匹配）
@@ -575,21 +636,85 @@ func (a *Account) ResolveMappedModel(requestedModel string) (mappedModel string,
 	if len(mapping) == 0 {
 		return requestedModel, false
 	}
-	// 精确匹配优先
-	if mappedModel, exists := mapping[requestedModel]; exists {
+	if mappedModel, matched := resolveRequestedModelInMapping(mapping, requestedModel); matched {
 		return mappedModel, true
 	}
-	// 通配符匹配（最长优先）
-	if mappedModel, matched = matchWildcardMappingResult(mapping, requestedModel); matched {
-		return mappedModel, true
+	normalized := normalizeRequestedModelForLookup(a.Platform, requestedModel)
+	if normalized != requestedModel {
+		if mappedModel, matched := resolveRequestedModelInMapping(mapping, normalized); matched {
+			return mappedModel, true
+		}
 	}
-	if normalized := a.normalizeOpenAIRequestedModelForMapping(requestedModel); normalized != "" {
-		if mappedModel, exists := mapping[normalized]; exists {
-			return mappedModel, true
-		}
-		if mappedModel, matched = matchWildcardMappingResult(mapping, normalized); matched {
-			return mappedModel, true
-		}
+	return requestedModel, false
+}
+
+// GetOpenAICompactMode returns the compact routing mode for an OpenAI account.
+// Missing or invalid values fall back to "auto".
+func (a *Account) GetOpenAICompactMode() string {
+	if a == nil || !a.IsOpenAI() || a.Extra == nil {
+		return OpenAICompactModeAuto
+	}
+	mode, _ := a.Extra["openai_compact_mode"].(string)
+	return normalizeOpenAICompactMode(mode)
+}
+
+// OpenAICompactSupportKnown reports whether compact capability is known for this
+// account and, when known, whether it is supported.
+func (a *Account) OpenAICompactSupportKnown() (supported bool, known bool) {
+	if a == nil || !a.IsOpenAI() {
+		return false, false
+	}
+
+	switch a.GetOpenAICompactMode() {
+	case OpenAICompactModeForceOn:
+		return true, true
+	case OpenAICompactModeForceOff:
+		return false, true
+	}
+
+	if a.Extra == nil {
+		return false, false
+	}
+	supported, ok := a.Extra["openai_compact_supported"].(bool)
+	if !ok {
+		return false, false
+	}
+	return supported, true
+}
+
+// AllowsOpenAICompact reports whether the account may be considered for compact
+// requests. Unknown capability remains allowed to avoid breaking older accounts
+// before an explicit probe has been run.
+func (a *Account) AllowsOpenAICompact() bool {
+	if a == nil || !a.IsOpenAI() {
+		return false
+	}
+	supported, known := a.OpenAICompactSupportKnown()
+	if !known {
+		return true
+	}
+	return supported
+}
+
+// GetCompactModelMapping returns compact-only model remapping configuration.
+// This mapping is intended for /responses/compact only and does not affect
+// normal /responses traffic.
+func (a *Account) GetCompactModelMapping() map[string]string {
+	if a == nil || a.Credentials == nil {
+		return nil
+	}
+	return stringMappingFromRaw(a.Credentials["compact_model_mapping"])
+}
+
+// ResolveCompactMappedModel resolves compact-only model remapping and reports
+// whether a compact-specific mapping rule matched.
+func (a *Account) ResolveCompactMappedModel(requestedModel string) (mappedModel string, matched bool) {
+	mapping := a.GetCompactModelMapping()
+	if len(mapping) == 0 {
+		return requestedModel, false
+	}
+	if mappedModel, matched := resolveRequestedModelInMapping(mapping, requestedModel); matched {
+		return mappedModel, true
 	}
 	return requestedModel, false
 }
@@ -602,7 +727,7 @@ func (a *Account) GetBaseURL() string {
 	if baseURL == "" {
 		return "https://api.anthropic.com"
 	}
-	if a.Platform == PlatformAntigravity && a.ShouldAppendAPIPath() {
+	if a.Platform == PlatformAntigravity {
 		return strings.TrimRight(baseURL, "/") + "/antigravity"
 	}
 	return baseURL
@@ -615,55 +740,10 @@ func (a *Account) GetGeminiBaseURL(defaultBaseURL string) string {
 	if baseURL == "" {
 		return defaultBaseURL
 	}
-	if a.Platform == PlatformAntigravity && a.Type == AccountTypeAPIKey && a.ShouldAppendAPIPath() {
+	if a.Platform == PlatformAntigravity && a.Type == AccountTypeAPIKey {
 		return strings.TrimRight(baseURL, "/") + "/antigravity"
 	}
 	return baseURL
-}
-
-// ShouldAppendAPIPath controls whether Sub2API should append platform-specific
-// upstream paths (for example /v1/messages or /v1/responses) to the configured
-// base_url. It defaults to true for backwards compatibility.
-func (a *Account) ShouldAppendAPIPath() bool {
-	if a.Credentials == nil {
-		return true
-	}
-	raw, ok := a.Credentials["append_api_path"]
-	if !ok {
-		return true
-	}
-	enabled, ok := parseBoolish(raw)
-	if !ok {
-		return true
-	}
-	return enabled
-}
-
-// UseDirectEndpointMode is enabled when the account should use base_url as a
-// fixed endpoint without appending platform-specific paths.
-func (a *Account) UseDirectEndpointMode() bool {
-	return !a.ShouldAppendAPIPath()
-}
-
-func parseBoolish(value any) (bool, bool) {
-	switch v := value.(type) {
-	case bool:
-		return v, true
-	case string:
-		switch strings.ToLower(strings.TrimSpace(v)) {
-		case "true", "1", "yes", "on":
-			return true, true
-		case "false", "0", "no", "off":
-			return false, true
-		}
-	case int:
-		return v != 0, true
-	case int64:
-		return v != 0, true
-	case float64:
-		return v != 0, true
-	}
-	return false, false
 }
 
 func (a *Account) GetExtraString(key string) string {
@@ -971,10 +1051,8 @@ func (a *Account) SupportsOpenAIImageCapability(capability OpenAIImagesCapabilit
 		return false
 	}
 	switch capability {
-	case OpenAIImagesCapabilityBasic:
+	case OpenAIImagesCapabilityBasic, OpenAIImagesCapabilityNative:
 		return a.Type == AccountTypeOAuth || a.Type == AccountTypeAPIKey
-	case OpenAIImagesCapabilityNative:
-		return a.Type == AccountTypeAPIKey
 	default:
 		return true
 	}
@@ -1042,7 +1120,7 @@ func (a *Account) IsOveragesEnabled() bool {
 	return false
 }
 
-// IsOpenAIPassthroughEnabled 返回 OpenAI 账号是否启用“自动透传（仅替换认证）”。
+// IsOpenAIPassthroughEnabled 返回 OpenAI 账号是否启用"自动透传（仅替换认证）"。
 //
 // 新字段：accounts.extra.openai_passthrough。
 // 兼容字段：accounts.extra.openai_oauth_passthrough（历史 OAuth 开关）。
@@ -1206,7 +1284,7 @@ func (a *Account) ResolveOpenAIResponsesWebSocketV2Mode(defaultMode string) stri
 	return resolvedDefault
 }
 
-// IsOpenAIWSForceHTTPEnabled 返回账号级“强制 HTTP”开关。
+// IsOpenAIWSForceHTTPEnabled 返回账号级"强制 HTTP"开关。
 // 字段：accounts.extra.openai_ws_force_http。
 func (a *Account) IsOpenAIWSForceHTTPEnabled() bool {
 	if a == nil || !a.IsOpenAI() || a.Extra == nil {
@@ -1226,22 +1304,12 @@ func (a *Account) IsOpenAIWSAllowStoreRecoveryEnabled() bool {
 	return ok && enabled
 }
 
-// IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled 返回 OAuth/Codex 兼容过滤开关。
-// 字段：accounts.extra.openai_oauth_drop_store_false_native_item_references。
-func (a *Account) IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled() bool {
-	if a == nil || !a.IsOpenAIOAuth() || a.Extra == nil {
-		return false
-	}
-	enabled, ok := a.Extra["openai_oauth_drop_store_false_native_item_references"].(bool)
-	return ok && enabled
-}
-
 // IsOpenAIOAuthPassthroughEnabled 兼容旧接口，等价于 OAuth 账号的 IsOpenAIPassthroughEnabled。
 func (a *Account) IsOpenAIOAuthPassthroughEnabled() bool {
 	return a != nil && a.IsOpenAIOAuth() && a.IsOpenAIPassthroughEnabled()
 }
 
-// IsAnthropicAPIKeyPassthroughEnabled 返回 Anthropic API Key 账号是否启用“自动透传（仅替换认证）”。
+// IsAnthropicAPIKeyPassthroughEnabled 返回 Anthropic API Key 账号是否启用"自动透传（仅替换认证）"。
 // 字段：accounts.extra.anthropic_passthrough。
 // 字段缺失或类型不正确时，按 false（关闭）处理。
 func (a *Account) IsAnthropicAPIKeyPassthroughEnabled() bool {
@@ -1252,7 +1320,42 @@ func (a *Account) IsAnthropicAPIKeyPassthroughEnabled() bool {
 	return ok && enabled
 }
 
-// IsCodexCLIOnlyEnabled 返回 OpenAI OAuth 账号是否启用“仅允许 Codex 官方客户端”。
+// WebSearch 模拟三态常量
+const (
+	WebSearchModeDefault  = "default"  // 跟随渠道配置
+	WebSearchModeEnabled  = "enabled"  // 强制开启
+	WebSearchModeDisabled = "disabled" // 强制关闭
+)
+
+// GetWebSearchEmulationMode 返回账号的 WebSearch 模拟模式。
+// 三态：default（跟随渠道）/ enabled（强制开启）/ disabled（强制关闭）。
+// 兼容旧 bool 值：true→enabled, false→default（并记录 debug 日志）。
+func (a *Account) GetWebSearchEmulationMode() string {
+	if a == nil || a.Platform != PlatformAnthropic || a.Type != AccountTypeAPIKey || a.Extra == nil {
+		return WebSearchModeDefault
+	}
+	raw := a.Extra[featureKeyWebSearchEmulation]
+	// Tolerant: legacy bool values (pre-migration or stale writes)
+	if b, ok := raw.(bool); ok {
+		slog.Debug("legacy bool web_search_emulation value", "account_id", a.ID, "value", b)
+		if b {
+			return WebSearchModeEnabled
+		}
+		return WebSearchModeDefault
+	}
+	mode, ok := raw.(string)
+	if !ok {
+		return WebSearchModeDefault
+	}
+	switch mode {
+	case WebSearchModeEnabled, WebSearchModeDisabled:
+		return mode
+	default:
+		return WebSearchModeDefault
+	}
+}
+
+// IsCodexCLIOnlyEnabled 返回 OpenAI OAuth 账号是否启用"仅允许 Codex 官方客户端"。
 // 字段：accounts.extra.codex_cli_only。
 // 字段缺失或类型不正确时，按 false（关闭）处理。
 func (a *Account) IsCodexCLIOnlyEnabled() bool {
@@ -1478,6 +1581,19 @@ func (a *Account) getExtraTime(key string) time.Time {
 	return time.Time{}
 }
 
+// getExtraBool 从 Extra 中读取指定 key 的 bool 值
+func (a *Account) getExtraBool(key string) bool {
+	if a.Extra == nil {
+		return false
+	}
+	if v, ok := a.Extra[key]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return false
+}
+
 // getExtraString 从 Extra 中读取指定 key 的字符串值
 func (a *Account) getExtraString(key string) string {
 	if a.Extra == nil {
@@ -1489,6 +1605,14 @@ func (a *Account) getExtraString(key string) string {
 		}
 	}
 	return ""
+}
+
+// getExtraStringDefault 从 Extra 中读取指定 key 的字符串值，不存在时返回 defaultVal
+func (a *Account) getExtraStringDefault(key, defaultVal string) string {
+	if v := a.getExtraString(key); v != "" {
+		return v
+	}
+	return defaultVal
 }
 
 // getExtraInt 从 Extra 中读取指定 key 的 int 值
@@ -1545,6 +1669,62 @@ func (a *Account) GetQuotaResetTimezone() string {
 		return tz
 	}
 	return "UTC"
+}
+
+// --- Quota Notification Getters ---
+
+// QuotaNotifyConfig returns the notify configuration for a given quota dimension.
+// dim must be one of quotaDimDaily, quotaDimWeekly, quotaDimTotal.
+func (a *Account) QuotaNotifyConfig(dim string) (enabled bool, threshold float64, thresholdType string) {
+	enabled = a.getExtraBool("quota_notify_" + dim + "_enabled")
+	threshold = a.getExtraFloat64("quota_notify_" + dim + "_threshold")
+	thresholdType = a.getExtraStringDefault("quota_notify_"+dim+"_threshold_type", thresholdTypeFixed)
+	return
+}
+
+func (a *Account) GetQuotaNotifyDailyEnabled() bool {
+	e, _, _ := a.QuotaNotifyConfig(quotaDimDaily)
+	return e
+}
+
+func (a *Account) GetQuotaNotifyDailyThreshold() float64 {
+	_, t, _ := a.QuotaNotifyConfig(quotaDimDaily)
+	return t
+}
+
+func (a *Account) GetQuotaNotifyDailyThresholdType() string {
+	_, _, tt := a.QuotaNotifyConfig(quotaDimDaily)
+	return tt
+}
+
+func (a *Account) GetQuotaNotifyWeeklyEnabled() bool {
+	e, _, _ := a.QuotaNotifyConfig(quotaDimWeekly)
+	return e
+}
+
+func (a *Account) GetQuotaNotifyWeeklyThreshold() float64 {
+	_, t, _ := a.QuotaNotifyConfig(quotaDimWeekly)
+	return t
+}
+
+func (a *Account) GetQuotaNotifyWeeklyThresholdType() string {
+	_, _, tt := a.QuotaNotifyConfig(quotaDimWeekly)
+	return tt
+}
+
+func (a *Account) GetQuotaNotifyTotalEnabled() bool {
+	e, _, _ := a.QuotaNotifyConfig(quotaDimTotal)
+	return e
+}
+
+func (a *Account) GetQuotaNotifyTotalThreshold() float64 {
+	_, t, _ := a.QuotaNotifyConfig(quotaDimTotal)
+	return t
+}
+
+func (a *Account) GetQuotaNotifyTotalThresholdType() string {
+	_, _, tt := a.QuotaNotifyConfig(quotaDimTotal)
+	return tt
 }
 
 // nextFixedDailyReset 计算在 after 之后的下一个每日固定重置时间点
@@ -1862,22 +2042,47 @@ func (a *Account) GetRPMStrategy() string {
 }
 
 // GetRPMStickyBuffer 获取 RPM 粘性缓冲数量
-// tiered 模式下的黄区大小，默认为 base_rpm 的 20%（至少 1）
+// Cache-driven: buffer = concurrency + maxSessions（覆盖幽灵窗口 + 稳态会话需求）
+// floor = baseRPM / 5（向后兼容 maxSessions=0 且 concurrency=0 场景）
 func (a *Account) GetRPMStickyBuffer() int {
 	if a.Extra == nil {
 		return 0
 	}
+
+	// 手动 override 最高优先级
 	if v, ok := a.Extra["rpm_sticky_buffer"]; ok {
 		val := parseExtraInt(v)
 		if val > 0 {
 			return val
 		}
 	}
+
 	base := a.GetBaseRPM()
-	buffer := base / 5
-	if buffer < 1 && base > 0 {
-		buffer = 1
+	if base <= 0 {
+		return 0
 	}
+
+	// Cache-driven buffer = concurrency + maxSessions
+	conc := a.Concurrency
+	if conc < 0 {
+		conc = 0
+	}
+	sess := a.GetMaxSessions()
+	if sess < 0 {
+		sess = 0
+	}
+
+	buffer := conc + sess
+
+	// floor: 向后兼容
+	floor := base / 5
+	if floor < 1 {
+		floor = 1
+	}
+	if buffer < floor {
+		buffer = floor
+	}
+
 	return buffer
 }
 

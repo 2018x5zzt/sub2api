@@ -128,130 +128,6 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 	require.InDelta(t, 2.5, dailyUsage, 0.000001)
 }
 
-func TestUsageBillingRepositoryApply_SubscriptionCostAdvancesDailyWindowWithoutCarryover(t *testing.T) {
-	ctx := context.Background()
-	client := testEntClient(t)
-	repo := NewUsageBillingRepository(client, integrationDB)
-
-	user := mustCreateUser(t, client, &service.User{
-		Email:        fmt.Sprintf("usage-billing-carry-user-%d@example.com", time.Now().UnixNano()),
-		PasswordHash: "hash",
-	})
-	dailyLimit := 45.0
-	group := mustCreateGroup(t, client, &service.Group{
-		Name:             "usage-billing-carry-group-" + uuid.NewString(),
-		Platform:         service.PlatformAnthropic,
-		SubscriptionType: service.SubscriptionTypeSubscription,
-		DailyLimitUSD:    &dailyLimit,
-	})
-	apiKey := mustCreateApiKey(t, client, &service.APIKey{
-		UserID:  user.ID,
-		GroupID: &group.ID,
-		Key:     "sk-usage-billing-carry-" + uuid.NewString(),
-		Name:    "billing-carry",
-	})
-	subscription := mustCreateSubscription(t, client, &service.UserSubscription{
-		UserID:  user.ID,
-		GroupID: group.ID,
-	})
-
-	yesterdayStart := time.Now().UTC().Truncate(24 * time.Hour).Add(-24 * time.Hour)
-	_, err := integrationDB.ExecContext(ctx, `
-		UPDATE user_subscriptions
-		SET daily_window_start = $1,
-			daily_usage_usd = 30,
-			weekly_usage_usd = 20,
-			monthly_usage_usd = 30,
-			daily_carryover_in_usd = 10,
-			daily_carryover_remaining_usd = 0
-		WHERE id = $2
-	`, yesterdayStart, subscription.ID)
-	require.NoError(t, err)
-
-	cmd := &service.UsageBillingCommand{
-		RequestID:        uuid.NewString(),
-		APIKeyID:         apiKey.ID,
-		UserID:           user.ID,
-		SubscriptionID:   &subscription.ID,
-		SubscriptionCost: 5,
-	}
-
-	result, err := repo.Apply(ctx, cmd)
-	require.NoError(t, err)
-	require.True(t, result.Applied)
-
-	var expectedWindowStart time.Time
-	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('day', NOW())`).Scan(&expectedWindowStart))
-
-	var dailyWindowStart time.Time
-	var dailyUsage, weeklyUsage, monthlyUsage float64
-	var carryoverIn, carryoverRemaining float64
-	require.NoError(t, integrationDB.QueryRowContext(ctx, `
-		SELECT daily_window_start, daily_usage_usd, weekly_usage_usd, monthly_usage_usd, daily_carryover_in_usd, daily_carryover_remaining_usd
-		FROM user_subscriptions
-		WHERE id = $1
-	`, subscription.ID).Scan(&dailyWindowStart, &dailyUsage, &weeklyUsage, &monthlyUsage, &carryoverIn, &carryoverRemaining))
-
-	require.WithinDuration(t, expectedWindowStart, dailyWindowStart, time.Second)
-	require.InDelta(t, 5.0, dailyUsage, 0.000001)
-	require.InDelta(t, 25.0, weeklyUsage, 0.000001)
-	require.InDelta(t, 35.0, monthlyUsage, 0.000001)
-	require.InDelta(t, 0.0, carryoverIn, 0.000001)
-	require.InDelta(t, 0.0, carryoverRemaining, 0.000001)
-}
-
-func TestUsageBillingRepositoryApply_ProductSubscriptionCostAdvancesProductWindows(t *testing.T) {
-	ctx := context.Background()
-	client := testEntClient(t)
-	repo := NewUsageBillingRepository(client, integrationDB)
-
-	user := mustCreateUser(t, client, &service.User{
-		Email:        fmt.Sprintf("usage-billing-product-user-%d@example.com", time.Now().UnixNano()),
-		PasswordHash: "hash",
-	})
-	group := mustCreateGroup(t, client, &service.Group{
-		Name:             "usage-billing-product-group-" + uuid.NewString(),
-		Platform:         service.PlatformOpenAI,
-		SubscriptionType: service.SubscriptionTypeSubscription,
-	})
-	apiKey := mustCreateApiKey(t, client, &service.APIKey{
-		UserID:  user.ID,
-		GroupID: &group.ID,
-		Key:     "sk-usage-billing-product-" + uuid.NewString(),
-		Name:    "billing-product",
-	})
-	product := mustCreateSubscriptionProduct(t, "usage_billing_product", "Usage Billing Product", "active")
-	mustCreateSubscriptionProductGroup(t, product.ID, group.ID, 1.5, "active", 10)
-	productSub := mustCreateUserProductSubscription(t, user.ID, product.ID, service.SubscriptionStatusActive, time.Now().Add(24*time.Hour))
-
-	multiplier := 1.5
-	cmd := &service.UsageBillingCommand{
-		RequestID:             uuid.NewString(),
-		APIKeyID:              apiKey.ID,
-		UserID:                user.ID,
-		ProductID:             &product.ID,
-		ProductSubscriptionID: &productSub.ID,
-		GroupID:               &group.ID,
-		GroupDebitMultiplier:  &multiplier,
-		StandardTotalCost:     4,
-		ProductDebitCost:      6,
-	}
-
-	result, err := repo.Apply(ctx, cmd)
-	require.NoError(t, err)
-	require.True(t, result.Applied)
-
-	var dailyUsage, weeklyUsage, monthlyUsage float64
-	require.NoError(t, integrationDB.QueryRowContext(ctx, `
-		SELECT daily_usage_usd, weekly_usage_usd, monthly_usage_usd
-		FROM user_product_subscriptions
-		WHERE id = $1
-	`, productSub.ID).Scan(&dailyUsage, &weeklyUsage, &monthlyUsage))
-	require.InDelta(t, 6.0, dailyUsage, 0.000001)
-	require.InDelta(t, 6.0, weeklyUsage, 0.000001)
-	require.InDelta(t, 6.0, monthlyUsage, 0.000001)
-}
-
 func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
@@ -321,6 +197,94 @@ func TestUsageBillingRepositoryApply_UpdatesAccountQuota(t *testing.T) {
 	var quotaUsed float64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COALESCE((extra->>'quota_used')::numeric, 0) FROM accounts WHERE id = $1", account.ID).Scan(&quotaUsed))
 	require.InDelta(t, 3.5, quotaUsed, 0.000001)
+}
+
+func TestUsageBillingRepositoryApply_EnqueuesSchedulerOutboxOnQuotaCrossing(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	newFixture := func(t *testing.T, extra map[string]any) (int64, int64) {
+		t.Helper()
+		user := mustCreateUser(t, client, &service.User{
+			Email:        fmt.Sprintf("usage-billing-outbox-user-%d-%s@example.com", time.Now().UnixNano(), uuid.NewString()),
+			PasswordHash: "hash",
+		})
+		apiKey := mustCreateApiKey(t, client, &service.APIKey{
+			UserID: user.ID,
+			Key:    "sk-usage-billing-outbox-" + uuid.NewString(),
+			Name:   "billing-outbox",
+		})
+		account := mustCreateAccount(t, client, &service.Account{
+			Name:  "usage-billing-outbox-" + uuid.NewString(),
+			Type:  service.AccountTypeAPIKey,
+			Extra: extra,
+		})
+		return apiKey.ID, account.ID
+	}
+
+	outboxCountFor := func(t *testing.T, accountID int64) int {
+		t.Helper()
+		var count int
+		require.NoError(t, integrationDB.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM scheduler_outbox WHERE event_type = $1 AND account_id = $2",
+			service.SchedulerOutboxEventAccountChanged, accountID,
+		).Scan(&count))
+		return count
+	}
+
+	t.Run("daily_first_crossing_enqueues", func(t *testing.T) {
+		apiKeyID, accountID := newFixture(t, map[string]any{
+			"quota_daily_limit": 10.0,
+		})
+		// 第一次低于日限额：不应入队 outbox
+		_, err := repo.Apply(ctx, &service.UsageBillingCommand{
+			RequestID:        uuid.NewString(),
+			APIKeyID:         apiKeyID,
+			AccountID:        accountID,
+			AccountType:      service.AccountTypeAPIKey,
+			AccountQuotaCost: 4,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 0, outboxCountFor(t, accountID), "below limit should not enqueue")
+
+		// 第二次跨越日限额：应入队一次 outbox
+		_, err = repo.Apply(ctx, &service.UsageBillingCommand{
+			RequestID:        uuid.NewString(),
+			APIKeyID:         apiKeyID,
+			AccountID:        accountID,
+			AccountType:      service.AccountTypeAPIKey,
+			AccountQuotaCost: 8,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, outboxCountFor(t, accountID), "crossing daily limit should enqueue once")
+
+		// 再次递增（已超）：不应重复入队
+		_, err = repo.Apply(ctx, &service.UsageBillingCommand{
+			RequestID:        uuid.NewString(),
+			APIKeyID:         apiKeyID,
+			AccountID:        accountID,
+			AccountType:      service.AccountTypeAPIKey,
+			AccountQuotaCost: 2,
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, outboxCountFor(t, accountID), "subsequent increments beyond limit should not re-enqueue")
+	})
+
+	t.Run("weekly_first_crossing_enqueues", func(t *testing.T) {
+		apiKeyID, accountID := newFixture(t, map[string]any{
+			"quota_weekly_limit": 10.0,
+		})
+		_, err := repo.Apply(ctx, &service.UsageBillingCommand{
+			RequestID:        uuid.NewString(),
+			APIKeyID:         apiKeyID,
+			AccountID:        accountID,
+			AccountType:      service.AccountTypeAPIKey,
+			AccountQuotaCost: 15, // 单次即跨越
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, outboxCountFor(t, accountID), "single-shot crossing weekly limit should enqueue once")
+	})
 }
 
 func TestDashboardAggregationRepositoryCleanupUsageBillingDedup_BatchDeletesOldRows(t *testing.T) {

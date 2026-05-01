@@ -6,8 +6,6 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
-	"github.com/Wei-Shaw/sub2api/ent/productsubscriptionmigrationsource"
-	"github.com/Wei-Shaw/sub2api/ent/userproductsubscription"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -37,8 +35,6 @@ func (r *userSubscriptionRepository) Create(ctx context.Context, sub *service.Us
 		SetDailyUsageUsd(sub.DailyUsageUSD).
 		SetWeeklyUsageUsd(sub.WeeklyUsageUSD).
 		SetMonthlyUsageUsd(sub.MonthlyUsageUSD).
-		SetDailyCarryoverInUsd(0).
-		SetDailyCarryoverRemainingUsd(0).
 		SetNillableAssignedBy(sub.AssignedBy)
 
 	if sub.StartsAt.IsZero() {
@@ -123,8 +119,6 @@ func (r *userSubscriptionRepository) Update(ctx context.Context, sub *service.Us
 		SetDailyUsageUsd(sub.DailyUsageUSD).
 		SetWeeklyUsageUsd(sub.WeeklyUsageUSD).
 		SetMonthlyUsageUsd(sub.MonthlyUsageUSD).
-		SetDailyCarryoverInUsd(0).
-		SetDailyCarryoverRemainingUsd(0).
 		SetNillableAssignedBy(sub.AssignedBy).
 		SetAssignedAt(sub.AssignedAt).
 		SetNotes(sub.Notes)
@@ -172,24 +166,6 @@ func (r *userSubscriptionRepository) ListActiveByUserID(ctx context.Context, use
 		return nil, err
 	}
 	return userSubscriptionEntitiesToService(subs), nil
-}
-
-func (r *userSubscriptionRepository) ListMigratedLegacySubscriptionIDs(ctx context.Context, userID int64) (map[int64]struct{}, error) {
-	client := clientFromContext(ctx, r.client)
-	sources, err := client.ProductSubscriptionMigrationSource.Query().
-		Where(productsubscriptionmigrationsource.HasProductSubscriptionWith(
-			userproductsubscription.UserIDEQ(userID),
-		)).
-		All(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	ids := make(map[int64]struct{}, len(sources))
-	for _, source := range sources {
-		ids[source.LegacyUserSubscriptionID] = struct{}{}
-	}
-	return ids, nil
 }
 
 func (r *userSubscriptionRepository) ListByGroupID(ctx context.Context, groupID int64, params pagination.PaginationParams) ([]service.UserSubscription, *pagination.PaginationResult, error) {
@@ -333,23 +309,10 @@ func (r *userSubscriptionRepository) ActivateWindows(ctx context.Context, id int
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }
 
-func (r *userSubscriptionRepository) AdvanceDailyWindow(ctx context.Context, id int64, newWindowStart time.Time, _, _ float64) error {
-	client := clientFromContext(ctx, r.client)
-	_, err := client.UserSubscription.UpdateOneID(id).
-		SetDailyUsageUsd(0).
-		SetDailyCarryoverInUsd(0).
-		SetDailyCarryoverRemainingUsd(0).
-		SetDailyWindowStart(newWindowStart).
-		Save(ctx)
-	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
-}
-
 func (r *userSubscriptionRepository) ResetDailyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
 	client := clientFromContext(ctx, r.client)
 	_, err := client.UserSubscription.UpdateOneID(id).
 		SetDailyUsageUsd(0).
-		SetDailyCarryoverInUsd(0).
-		SetDailyCarryoverRemainingUsd(0).
 		SetDailyWindowStart(newWindowStart).
 		Save(ctx)
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
@@ -373,9 +336,41 @@ func (r *userSubscriptionRepository) ResetMonthlyUsage(ctx context.Context, id i
 	return translatePersistenceError(err, service.ErrSubscriptionNotFound, nil)
 }
 
+// IncrementUsage 原子性地累加订阅用量。
+// 限额检查已在请求前由 BillingCacheService.CheckBillingEligibility 完成，
+// 此处仅负责记录实际消费，确保消费数据的完整性。
 func (r *userSubscriptionRepository) IncrementUsage(ctx context.Context, id int64, costUSD float64) error {
+	const updateSQL = `
+		UPDATE user_subscriptions us
+		SET
+			daily_usage_usd = us.daily_usage_usd + $1,
+			weekly_usage_usd = us.weekly_usage_usd + $1,
+			monthly_usage_usd = us.monthly_usage_usd + $1,
+			updated_at = NOW()
+		FROM groups g
+		WHERE us.id = $2
+			AND us.deleted_at IS NULL
+			AND us.group_id = g.id
+			AND g.deleted_at IS NULL
+	`
+
 	client := clientFromContext(ctx, r.client)
-	return advanceAndIncrementSubscriptionUsage(ctx, client, id, costUSD)
+	result, err := client.ExecContext(ctx, updateSQL, costUSD, id)
+	if err != nil {
+		return err
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if affected > 0 {
+		return nil
+	}
+
+	// affected == 0：订阅不存在或已删除
+	return service.ErrSubscriptionNotFound
 }
 
 func (r *userSubscriptionRepository) BatchUpdateExpiredStatus(ctx context.Context) (int64, error) {
@@ -435,25 +430,23 @@ func userSubscriptionEntityToService(m *dbent.UserSubscription) *service.UserSub
 		return nil
 	}
 	out := &service.UserSubscription{
-		ID:                         m.ID,
-		UserID:                     m.UserID,
-		GroupID:                    m.GroupID,
-		StartsAt:                   m.StartsAt,
-		ExpiresAt:                  m.ExpiresAt,
-		Status:                     m.Status,
-		DailyWindowStart:           m.DailyWindowStart,
-		WeeklyWindowStart:          m.WeeklyWindowStart,
-		MonthlyWindowStart:         m.MonthlyWindowStart,
-		DailyUsageUSD:              m.DailyUsageUsd,
-		WeeklyUsageUSD:             m.WeeklyUsageUsd,
-		MonthlyUsageUSD:            m.MonthlyUsageUsd,
-		DailyCarryoverInUSD:        0,
-		DailyCarryoverRemainingUSD: 0,
-		AssignedBy:                 m.AssignedBy,
-		AssignedAt:                 m.AssignedAt,
-		Notes:                      derefString(m.Notes),
-		CreatedAt:                  m.CreatedAt,
-		UpdatedAt:                  m.UpdatedAt,
+		ID:                 m.ID,
+		UserID:             m.UserID,
+		GroupID:            m.GroupID,
+		StartsAt:           m.StartsAt,
+		ExpiresAt:          m.ExpiresAt,
+		Status:             m.Status,
+		DailyWindowStart:   m.DailyWindowStart,
+		WeeklyWindowStart:  m.WeeklyWindowStart,
+		MonthlyWindowStart: m.MonthlyWindowStart,
+		DailyUsageUSD:      m.DailyUsageUsd,
+		WeeklyUsageUSD:     m.WeeklyUsageUsd,
+		MonthlyUsageUSD:    m.MonthlyUsageUsd,
+		AssignedBy:         m.AssignedBy,
+		AssignedAt:         m.AssignedAt,
+		Notes:              derefString(m.Notes),
+		CreatedAt:          m.CreatedAt,
+		UpdatedAt:          m.UpdatedAt,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)

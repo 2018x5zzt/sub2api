@@ -18,6 +18,9 @@
                 {{ t('admin.ops.errorLog.type') }}
               </th>
               <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
+                {{ t('admin.ops.errorLog.endpoint') }}
+              </th>
+              <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
                 {{ t('admin.ops.errorLog.platform') }}
               </th>
               <th class="border-b border-gray-200 px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-gray-500 dark:border-dark-700 dark:text-dark-400">
@@ -42,7 +45,7 @@
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
             <tr v-if="rows.length === 0">
-              <td colspan="9" class="py-12 text-center text-sm text-gray-400 dark:text-dark-500">
+              <td colspan="10" class="py-12 text-center text-sm text-gray-400 dark:text-dark-500">
                 {{ t('admin.ops.errorLog.noErrors') }}
               </td>
             </tr>
@@ -72,6 +75,18 @@
                 >
                   {{ getTypeBadge(log).label }}
                 </span>
+              </td>
+
+              <!-- Endpoint -->
+              <td class="px-4 py-2">
+                <div class="max-w-[160px]">
+                  <el-tooltip v-if="log.inbound_endpoint" :content="formatEndpointTooltip(log)" placement="top" :show-after="500">
+                    <span class="truncate font-mono text-[11px] text-gray-700 dark:text-gray-300">
+                      {{ log.inbound_endpoint }}
+                    </span>
+                  </el-tooltip>
+                  <span v-else class="text-xs text-gray-400">-</span>
+                </div>
               </td>
 
               <!-- Platform -->
@@ -149,6 +164,12 @@
                   >
                     {{ log.severity }}
                   </span>
+                  <span
+                    v-if="log.request_type != null && log.request_type > 0"
+                    class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold text-gray-600 dark:bg-dark-700 dark:text-gray-300"
+                  >
+                    {{ formatRequestType(log.request_type) }}
+                  </span>
                 </div>
               </td>
 
@@ -181,7 +202,6 @@
           :total="total"
           :page="page"
           :page-size="pageSize"
-          :page-size-options="[10]"
           @update:page="emit('update:page', $event)"
           @update:pageSize="emit('update:pageSize', $event)"
         />
@@ -202,6 +222,13 @@ function isUpstreamRow(log: OpsErrorLog): boolean {
   const phase = String(log.phase || '').toLowerCase()
   const owner = String(log.error_owner || '').toLowerCase()
   return phase === 'upstream' && owner === 'provider'
+}
+
+function formatEndpointTooltip(log: OpsErrorLog): string {
+  const parts: string[] = []
+  if (log.inbound_endpoint) parts.push(`Inbound: ${log.inbound_endpoint}`)
+  if (log.upstream_endpoint) parts.push(`Upstream: ${log.upstream_endpoint}`)
+  return parts.join('\n') || ''
 }
 
 function hasModelMapping(log: OpsErrorLog): boolean {
@@ -226,6 +253,15 @@ function displayModel(log: OpsErrorLog): string {
   return String(log.model || '').trim()
 }
 
+function formatRequestType(type: number | null | undefined): string {
+  switch (type) {
+    case 1: return t('admin.ops.errorLog.requestTypeSync')
+    case 2: return t('admin.ops.errorLog.requestTypeStream')
+    case 3: return t('admin.ops.errorLog.requestTypeWs')
+    default: return ''
+  }
+}
+
 function getTypeBadge(log: OpsErrorLog): { label: string; className: string } {
   const phase = String(log.phase || '').toLowerCase()
   const owner = String(log.error_owner || '').toLowerCase()
@@ -246,8 +282,8 @@ function getTypeBadge(log: OpsErrorLog): { label: string; className: string } {
     return { label: t('admin.ops.errorLog.typeInternal'), className: 'bg-gray-100 text-gray-800 ring-gray-600/20 dark:bg-dark-700 dark:text-gray-200 dark:ring-dark-500/40' }
   }
 
-  const fallback = phase || owner || t('common.unknown')
-  return { label: fallback, className: 'bg-gray-50 text-gray-700 ring-gray-600/10 dark:bg-dark-900 dark:text-gray-300 dark:ring-dark-700' }
+    const fallback = phase || owner || t('common.unknown')
+    return { label: fallback, className: 'bg-gray-50 text-gray-700 ring-gray-600/10 dark:bg-dark-900 dark:text-gray-300 dark:ring-dark-700' }
 }
 
 interface Props {
@@ -294,5 +330,6 @@ function formatSmartMessage(msg: string): string {
   if (msg.toLowerCase().includes('rate limit')) return t('admin.ops.errorLog.commonErrors.rateLimit')
 
   return msg.length > 200 ? msg.substring(0, 200) + '...' : msg
+
 }
 </script>

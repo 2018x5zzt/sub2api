@@ -90,11 +90,6 @@ func GroupID(v int64) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldGroupID, v))
 }
 
-// BudgetMultiplier applies equality check predicate on the "budget_multiplier" field. It's identical to BudgetMultiplierEQ.
-func BudgetMultiplier(v float64) predicate.APIKey {
-	return predicate.APIKey(sql.FieldEQ(FieldBudgetMultiplier, v))
-}
-
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldStatus, v))
@@ -473,56 +468,6 @@ func GroupIDIsNil() predicate.APIKey {
 // GroupIDNotNil applies the NotNil predicate on the "group_id" field.
 func GroupIDNotNil() predicate.APIKey {
 	return predicate.APIKey(sql.FieldNotNull(FieldGroupID))
-}
-
-// BudgetMultiplierEQ applies the EQ predicate on the "budget_multiplier" field.
-func BudgetMultiplierEQ(v float64) predicate.APIKey {
-	return predicate.APIKey(sql.FieldEQ(FieldBudgetMultiplier, v))
-}
-
-// BudgetMultiplierNEQ applies the NEQ predicate on the "budget_multiplier" field.
-func BudgetMultiplierNEQ(v float64) predicate.APIKey {
-	return predicate.APIKey(sql.FieldNEQ(FieldBudgetMultiplier, v))
-}
-
-// BudgetMultiplierIn applies the In predicate on the "budget_multiplier" field.
-func BudgetMultiplierIn(vs ...float64) predicate.APIKey {
-	return predicate.APIKey(sql.FieldIn(FieldBudgetMultiplier, vs...))
-}
-
-// BudgetMultiplierNotIn applies the NotIn predicate on the "budget_multiplier" field.
-func BudgetMultiplierNotIn(vs ...float64) predicate.APIKey {
-	return predicate.APIKey(sql.FieldNotIn(FieldBudgetMultiplier, vs...))
-}
-
-// BudgetMultiplierGT applies the GT predicate on the "budget_multiplier" field.
-func BudgetMultiplierGT(v float64) predicate.APIKey {
-	return predicate.APIKey(sql.FieldGT(FieldBudgetMultiplier, v))
-}
-
-// BudgetMultiplierGTE applies the GTE predicate on the "budget_multiplier" field.
-func BudgetMultiplierGTE(v float64) predicate.APIKey {
-	return predicate.APIKey(sql.FieldGTE(FieldBudgetMultiplier, v))
-}
-
-// BudgetMultiplierLT applies the LT predicate on the "budget_multiplier" field.
-func BudgetMultiplierLT(v float64) predicate.APIKey {
-	return predicate.APIKey(sql.FieldLT(FieldBudgetMultiplier, v))
-}
-
-// BudgetMultiplierLTE applies the LTE predicate on the "budget_multiplier" field.
-func BudgetMultiplierLTE(v float64) predicate.APIKey {
-	return predicate.APIKey(sql.FieldLTE(FieldBudgetMultiplier, v))
-}
-
-// BudgetMultiplierIsNil applies the IsNil predicate on the "budget_multiplier" field.
-func BudgetMultiplierIsNil() predicate.APIKey {
-	return predicate.APIKey(sql.FieldIsNull(FieldBudgetMultiplier))
-}
-
-// BudgetMultiplierNotNil applies the NotNil predicate on the "budget_multiplier" field.
-func BudgetMultiplierNotNil() predicate.APIKey {
-	return predicate.APIKey(sql.FieldNotNull(FieldBudgetMultiplier))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

@@ -243,12 +243,6 @@ func TestOpenAITokenRefresher_CanRefresh(t *testing.T) {
 			want:     true,
 		},
 		{
-			name:     "sora oauth - cannot refresh directly",
-			platform: PlatformSora,
-			accType:  AccountTypeOAuth,
-			want:     false,
-		},
-		{
 			name:     "openai apikey - cannot refresh",
 			platform: PlatformOpenAI,
 			accType:  AccountTypeAPIKey,
@@ -265,31 +259,4 @@ func TestOpenAITokenRefresher_CanRefresh(t *testing.T) {
 			require.Equal(t, tt.want, refresher.CanRefresh(account))
 		})
 	}
-}
-
-func TestOpenAITokenRefresher_NeedsRefresh_MissingExpiresAtWhileRateLimited(t *testing.T) {
-	refresher := &OpenAITokenRefresher{}
-	refreshWindow := 30 * time.Minute
-	future := time.Now().Add(6 * time.Hour)
-
-	t.Run("rate limited account still refreshes", func(t *testing.T) {
-		account := &Account{
-			Platform:         PlatformOpenAI,
-			Type:             AccountTypeOAuth,
-			Credentials:      map[string]any{},
-			RateLimitResetAt: &future,
-		}
-
-		require.True(t, refresher.NeedsRefresh(account, refreshWindow))
-	})
-
-	t.Run("missing expires_at without rate limit stays fresh", func(t *testing.T) {
-		account := &Account{
-			Platform:    PlatformOpenAI,
-			Type:        AccountTypeOAuth,
-			Credentials: map[string]any{},
-		}
-
-		require.False(t, refresher.NeedsRefresh(account, refreshWindow))
-	})
 }

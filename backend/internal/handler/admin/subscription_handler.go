@@ -224,11 +224,6 @@ type ResetSubscriptionQuotaRequest struct {
 	Monthly bool `json:"monthly"`
 }
 
-// BulkResetDailyQuotaRequest represents a one-off daily compensation reset request.
-type BulkResetDailyQuotaRequest struct {
-	GroupID *int64 `json:"group_id"`
-}
-
 // ResetQuota resets daily, weekly, and/or monthly usage for a subscription.
 // POST /api/v1/admin/subscriptions/:id/reset-quota
 func (h *SubscriptionHandler) ResetQuota(c *gin.Context) {
@@ -252,25 +247,6 @@ func (h *SubscriptionHandler) ResetQuota(c *gin.Context) {
 		return
 	}
 	response.Success(c, dto.UserSubscriptionFromServiceAdmin(sub))
-}
-
-// ResetDailyQuota performs a one-off compensation reset for active subscription daily state.
-// POST /api/v1/admin/subscriptions/reset-daily
-func (h *SubscriptionHandler) ResetDailyQuota(c *gin.Context) {
-	var req BulkResetDailyQuotaRequest
-	if c.Request.ContentLength > 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			response.BadRequest(c, "Invalid request: "+err.Error())
-			return
-		}
-	}
-
-	result, err := h.subscriptionService.AdminBulkResetDailyQuota(c.Request.Context(), req.GroupID)
-	if err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-	response.Success(c, result)
 }
 
 // Revoke handles revoking a subscription

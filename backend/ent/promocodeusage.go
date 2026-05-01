@@ -25,10 +25,6 @@ type PromoCodeUsage struct {
 	UserID int64 `json:"user_id,omitempty"`
 	// 实际赠送金额
 	BonusAmount float64 `json:"bonus_amount,omitempty"`
-	// 固定赠送金额
-	FixedBonusAmount float64 `json:"fixed_bonus_amount,omitempty"`
-	// 随机红包金额
-	RandomBonusAmount float64 `json:"random_bonus_amount,omitempty"`
 	// 使用时间
 	UsedAt time.Time `json:"used_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -75,7 +71,7 @@ func (*PromoCodeUsage) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case promocodeusage.FieldBonusAmount, promocodeusage.FieldFixedBonusAmount, promocodeusage.FieldRandomBonusAmount:
+		case promocodeusage.FieldBonusAmount:
 			values[i] = new(sql.NullFloat64)
 		case promocodeusage.FieldID, promocodeusage.FieldPromoCodeID, promocodeusage.FieldUserID:
 			values[i] = new(sql.NullInt64)
@@ -119,18 +115,6 @@ func (_m *PromoCodeUsage) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field bonus_amount", values[i])
 			} else if value.Valid {
 				_m.BonusAmount = value.Float64
-			}
-		case promocodeusage.FieldFixedBonusAmount:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field fixed_bonus_amount", values[i])
-			} else if value.Valid {
-				_m.FixedBonusAmount = value.Float64
-			}
-		case promocodeusage.FieldRandomBonusAmount:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field random_bonus_amount", values[i])
-			} else if value.Valid {
-				_m.RandomBonusAmount = value.Float64
 			}
 		case promocodeusage.FieldUsedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -192,12 +176,6 @@ func (_m *PromoCodeUsage) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("bonus_amount=")
 	builder.WriteString(fmt.Sprintf("%v", _m.BonusAmount))
-	builder.WriteString(", ")
-	builder.WriteString("fixed_bonus_amount=")
-	builder.WriteString(fmt.Sprintf("%v", _m.FixedBonusAmount))
-	builder.WriteString(", ")
-	builder.WriteString("random_bonus_amount=")
-	builder.WriteString(fmt.Sprintf("%v", _m.RandomBonusAmount))
 	builder.WriteString(", ")
 	builder.WriteString("used_at=")
 	builder.WriteString(_m.UsedAt.Format(time.ANSIC))

@@ -16,26 +16,16 @@ const (
 	FieldID = "id"
 	// FieldCode holds the string denoting the code field in the database.
 	FieldCode = "code"
-	// FieldScene holds the string denoting the scene field in the database.
-	FieldScene = "scene"
 	// FieldBonusAmount holds the string denoting the bonus_amount field in the database.
 	FieldBonusAmount = "bonus_amount"
-	// FieldRandomBonusPoolAmount holds the string denoting the random_bonus_pool_amount field in the database.
-	FieldRandomBonusPoolAmount = "random_bonus_pool_amount"
-	// FieldRandomBonusRemaining holds the string denoting the random_bonus_remaining field in the database.
-	FieldRandomBonusRemaining = "random_bonus_remaining"
 	// FieldMaxUses holds the string denoting the max_uses field in the database.
 	FieldMaxUses = "max_uses"
 	// FieldUsedCount holds the string denoting the used_count field in the database.
 	FieldUsedCount = "used_count"
-	// FieldLeaderboardEnabled holds the string denoting the leaderboard_enabled field in the database.
-	FieldLeaderboardEnabled = "leaderboard_enabled"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
 	FieldExpiresAt = "expires_at"
-	// FieldSuccessMessage holds the string denoting the success_message field in the database.
-	FieldSuccessMessage = "success_message"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -59,16 +49,11 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldCode,
-	FieldScene,
 	FieldBonusAmount,
-	FieldRandomBonusPoolAmount,
-	FieldRandomBonusRemaining,
 	FieldMaxUses,
 	FieldUsedCount,
-	FieldLeaderboardEnabled,
 	FieldStatus,
 	FieldExpiresAt,
-	FieldSuccessMessage,
 	FieldNotes,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -87,22 +72,12 @@ func ValidColumn(column string) bool {
 var (
 	// CodeValidator is a validator for the "code" field. It is called by the builders before save.
 	CodeValidator func(string) error
-	// DefaultScene holds the default value on creation for the "scene" field.
-	DefaultScene string
-	// SceneValidator is a validator for the "scene" field. It is called by the builders before save.
-	SceneValidator func(string) error
 	// DefaultBonusAmount holds the default value on creation for the "bonus_amount" field.
 	DefaultBonusAmount float64
-	// DefaultRandomBonusPoolAmount holds the default value on creation for the "random_bonus_pool_amount" field.
-	DefaultRandomBonusPoolAmount float64
-	// DefaultRandomBonusRemaining holds the default value on creation for the "random_bonus_remaining" field.
-	DefaultRandomBonusRemaining float64
 	// DefaultMaxUses holds the default value on creation for the "max_uses" field.
 	DefaultMaxUses int
 	// DefaultUsedCount holds the default value on creation for the "used_count" field.
 	DefaultUsedCount int
-	// DefaultLeaderboardEnabled holds the default value on creation for the "leaderboard_enabled" field.
-	DefaultLeaderboardEnabled bool
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
@@ -128,24 +103,9 @@ func ByCode(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCode, opts...).ToFunc()
 }
 
-// ByScene orders the results by the scene field.
-func ByScene(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldScene, opts...).ToFunc()
-}
-
 // ByBonusAmount orders the results by the bonus_amount field.
 func ByBonusAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBonusAmount, opts...).ToFunc()
-}
-
-// ByRandomBonusPoolAmount orders the results by the random_bonus_pool_amount field.
-func ByRandomBonusPoolAmount(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldRandomBonusPoolAmount, opts...).ToFunc()
-}
-
-// ByRandomBonusRemaining orders the results by the random_bonus_remaining field.
-func ByRandomBonusRemaining(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldRandomBonusRemaining, opts...).ToFunc()
 }
 
 // ByMaxUses orders the results by the max_uses field.
@@ -158,11 +118,6 @@ func ByUsedCount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUsedCount, opts...).ToFunc()
 }
 
-// ByLeaderboardEnabled orders the results by the leaderboard_enabled field.
-func ByLeaderboardEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldLeaderboardEnabled, opts...).ToFunc()
-}
-
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
@@ -171,11 +126,6 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByExpiresAt orders the results by the expires_at field.
 func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldExpiresAt, opts...).ToFunc()
-}
-
-// BySuccessMessage orders the results by the success_message field.
-func BySuccessMessage(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSuccessMessage, opts...).ToFunc()
 }
 
 // ByNotes orders the results by the notes field.

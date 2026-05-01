@@ -395,13 +395,15 @@ func parseOpenAIWSResponseUsageFromCompletedEvent(message []byte, usage *OpenAIU
 	if usage == nil || len(message) == 0 {
 		return
 	}
-	*usage = extractOpenAIUsageFromJSONPaths(
+	values := gjson.GetManyBytes(
 		message,
 		"response.usage.input_tokens",
 		"response.usage.output_tokens",
-		"response.usage.cache_creation_input_tokens",
 		"response.usage.input_tokens_details.cached_tokens",
 	)
+	usage.InputTokens = int(values[0].Int())
+	usage.OutputTokens = int(values[1].Int())
+	usage.CacheReadInputTokens = int(values[2].Int())
 }
 
 func parseOpenAIWSErrorEventFields(message []byte) (code string, errType string, errMessage string) {
@@ -1189,7 +1191,6 @@ func (s *OpenAIGatewayService) buildOpenAIWSCreatePayload(reqBody map[string]any
 	}
 
 	delete(payload, "background")
-	applyInstructions(payload, false)
 	if _, exists := payload["stream"]; !exists {
 		payload["stream"] = true
 	}
@@ -1365,14 +1366,25 @@ func setPreviousResponseIDToRawPayload(payload []byte, previousResponseID string
 func shouldInferIngressFunctionCallOutputPreviousResponseID(
 	storeDisabled bool,
 	turn int,
-	hasFunctionCallOutput bool,
+	signals ToolContinuationSignals,
 	currentPreviousResponseID string,
 	expectedPreviousResponseID string,
 ) bool {
-	if !storeDisabled || turn <= 1 || !hasFunctionCallOutput {
+	if !storeDisabled || turn <= 1 || !signals.HasFunctionCallOutput {
 		return false
 	}
 	if strings.TrimSpace(currentPreviousResponseID) != "" {
+		return false
+	}
+	if signals.HasFunctionCallOutputMissingCallID {
+		return false
+	}
+	// If the client already sent the actual tool-call context, treat this as
+	// a full replay / self-contained continuation payload rather than
+	// downgrading it into an inferred delta continuation. item_reference alone
+	// is not enough on the store=false WS path: it still needs a valid prior
+	// response anchor so upstream can resolve the referenced function_call.
+	if signals.HasToolCallContext {
 		return false
 	}
 	return strings.TrimSpace(expectedPreviousResponseID) != ""
@@ -2365,6 +2377,15 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		return errors.New("token is empty")
 	}
 
+	// 预取一次 OpenAI Fast Policy settings，绑定到 ctx，让该 WS session
+	// 内所有帧的 evaluateOpenAIFastPolicy 调用复用同一份快照，避免每帧
+	// 进入 DB / settingRepo。Trade-off 见 withOpenAIFastPolicyContext 注释。
+	if s.settingService != nil {
+		if settings, err := s.settingService.GetOpenAIFastPolicySettings(ctx); err == nil && settings != nil {
+			ctx = withOpenAIFastPolicyContext(ctx, settings)
+		}
+	}
+
 	wsDecision := s.getOpenAIWSProtocolResolver().Resolve(account)
 	modeRouterV2Enabled := s != nil && s.cfg != nil && s.cfg.Gateway.OpenAIWS.ModeRouterV2Enabled
 	ingressMode := OpenAIWSIngressModeCtxPool
@@ -2514,26 +2535,52 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 			normalized = next
 		}
-		mappedModel := account.GetMappedModel(originalModel)
-		normalizedModel := normalizeCodexModel(mappedModel)
-		if account.Type == AccountTypeOAuth {
-			normalizedModel, _ = normalizeChatGPTOAuthModel(mappedModel)
-		}
-		if normalizedModel != "" {
-			mappedModel = normalizedModel
-		}
-		if mappedModel != originalModel {
-			next, setErr := applyPayloadMutation(normalized, "model", mappedModel)
+		upstreamModel := normalizeOpenAIModelForUpstream(account, account.GetMappedModel(originalModel))
+		if upstreamModel != originalModel {
+			next, setErr := applyPayloadMutation(normalized, "model", upstreamModel)
 			if setErr != nil {
 				return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", setErr)
 			}
 			normalized = next
 		}
-		withInstructions, _, ensureErr := ensureOpenAIRequestInstructions(normalized)
-		if ensureErr != nil {
-			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", ensureErr)
+
+		// Apply OpenAI Fast Policy on the response.create frame using the same
+		// evaluator/normalize/scope rules as the HTTP entrypoints. This is the
+		// single integration point for all WS ingress turns (first + follow-up
+		// frames flow through here).
+		//
+		// Model fallback: parseClientPayload above rejects any frame whose
+		// "model" field is missing (line ~2493-2500), so by the time we
+		// reach this point upstreamModel is always derived from a non-empty
+		// per-frame model. The capturedSessionModel fallback used in the
+		// passthrough adapter is therefore not needed in this path.
+		policyApplied, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, upstreamModel, normalized)
+		if policyErr != nil {
+			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", policyErr)
 		}
-		normalized = withInstructions
+		if blocked != nil {
+			// Send a Realtime-style error event to the client first, then
+			// signal the handler to close the connection with PolicyViolation.
+			// We intentionally do NOT forward this frame upstream.
+			//
+			// coder/websocket@v1.8.14 Conn.Write is synchronous and flushes
+			// the underlying bufio writer before returning (write.go:42 →
+			// 307-311), and the subsequent close handshake re-acquires the
+			// same writeFrameMu, so the error event is guaranteed to reach
+			// the kernel send buffer before any close frame is queued.
+			eventBytes := buildOpenAIFastPolicyBlockedWSEvent(blocked)
+			if eventBytes != nil {
+				writeCtx, cancel := context.WithTimeout(ctx, s.openAIWSWriteTimeout())
+				_ = clientConn.Write(writeCtx, coderws.MessageText, eventBytes)
+				cancel()
+			}
+			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(
+				coderws.StatusPolicyViolation,
+				blocked.Message,
+				blocked,
+			)
+		}
+		normalized = policyApplied
 
 		return openAIWSClientPayload{
 			payloadRaw:         normalized,
@@ -2784,14 +2831,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		mappedModel := ""
 		var mappedModelBytes []byte
 		if originalModel != "" {
-			mappedModel = account.GetMappedModel(originalModel)
-			normalizedModel := normalizeCodexModel(mappedModel)
-			if account.Type == AccountTypeOAuth {
-				normalizedModel, _ = normalizeChatGPTOAuthModel(mappedModel)
-			}
-			if normalizedModel != "" {
-				mappedModel = normalizedModel
-			}
+			mappedModel = normalizeOpenAIModelForUpstream(account, account.GetMappedModel(originalModel))
 			needModelReplace = mappedModel != "" && mappedModel != originalModel
 			if needModelReplace {
 				mappedModelBytes = []byte(mappedModel)
@@ -3150,13 +3190,22 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		skipBeforeTurn = false
 		currentPreviousResponseID := openAIWSPayloadStringFromRaw(currentPayload, "previous_response_id")
 		expectedPrev := strings.TrimSpace(lastTurnResponseID)
-		hasFunctionCallOutput := gjson.GetBytes(currentPayload, `input.#(type=="function_call_output")`).Exists()
+		toolSignals := ToolContinuationSignals{
+			HasFunctionCallOutput: gjson.GetBytes(currentPayload, `input.#(type=="function_call_output")`).Exists(),
+		}
+		if toolSignals.HasFunctionCallOutput {
+			var currentReqBody map[string]any
+			if err := json.Unmarshal(currentPayload, &currentReqBody); err == nil {
+				toolSignals = AnalyzeToolContinuationSignals(currentReqBody)
+			}
+		}
+		hasFunctionCallOutput := toolSignals.HasFunctionCallOutput
 		// store=false + function_call_output 场景必须有续链锚点。
 		// 若客户端未传 previous_response_id，优先回填上一轮响应 ID，避免上游报 call_id 无法关联。
 		if shouldInferIngressFunctionCallOutputPreviousResponseID(
 			storeDisabled,
 			turn,
-			hasFunctionCallOutput,
+			toolSignals,
 			currentPreviousResponseID,
 			expectedPrev,
 		) {
@@ -3784,13 +3833,15 @@ func populateOpenAIUsageFromResponseJSON(body []byte, usage *OpenAIUsage) {
 	if usage == nil || len(body) == 0 {
 		return
 	}
-	*usage = extractOpenAIUsageFromJSONPaths(
+	values := gjson.GetManyBytes(
 		body,
 		"usage.input_tokens",
 		"usage.output_tokens",
-		"usage.cache_creation_input_tokens",
 		"usage.input_tokens_details.cached_tokens",
 	)
+	usage.InputTokens = int(values[0].Int())
+	usage.OutputTokens = int(values[1].Int())
+	usage.CacheReadInputTokens = int(values[2].Int())
 }
 
 func getOpenAIGroupIDFromContext(c *gin.Context) int64 {
@@ -3816,6 +3867,7 @@ func (s *OpenAIGatewayService) SelectAccountByPreviousResponseID(
 	previousResponseID string,
 	requestedModel string,
 	excludedIDs map[int64]struct{},
+	requireCompact bool,
 ) (*AccountSelectionResult, error) {
 	if s == nil {
 		return nil, nil
@@ -3856,8 +3908,13 @@ func (s *OpenAIGatewayService) SelectAccountByPreviousResponseID(
 	if requestedModel != "" && !account.IsModelSupported(requestedModel) {
 		return nil, nil
 	}
-	account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
+	account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel, requireCompact)
 	if account == nil {
+		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
+		return nil, nil
+	}
+	// 兜底：若上游 compact 能力刚被探测为不支持，但 sticky 还在，需要主动放弃。
+	if requireCompact && openAICompactSupportTier(account) == 0 {
 		_ = store.DeleteResponseAccount(ctx, derefGroupID(groupID), responseID)
 		return nil, nil
 	}

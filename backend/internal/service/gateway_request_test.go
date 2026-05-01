@@ -41,14 +41,6 @@ func TestParseGatewayRequest_ThinkingAdaptiveEnabled(t *testing.T) {
 	require.True(t, parsed.ThinkingEnabled)
 }
 
-func TestParseGatewayRequest_ThinkingModelSuffixEnabled(t *testing.T) {
-	body := []byte(`{"model":"claude-opus-4-6-thinking","messages":[{"content":"hi"}]}`)
-	parsed, err := ParseGatewayRequest(body, "")
-	require.NoError(t, err)
-	require.Equal(t, "claude-opus-4-6-thinking", parsed.Model)
-	require.True(t, parsed.ThinkingEnabled)
-}
-
 func TestParseGatewayRequest_MaxTokens(t *testing.T) {
 	body := []byte(`{"model":"claude-haiku-4-5","max_tokens":1}`)
 	parsed, err := ParseGatewayRequest(body, "")
@@ -1158,6 +1150,11 @@ func TestParseGatewayRequest_OutputEffort(t *testing.T) {
 			wantEffort: "max",
 		},
 		{
+			name:       "output_config.effort xhigh",
+			body:       `{"model":"claude-opus-4-7","output_config":{"effort":"xhigh"},"messages":[]}`,
+			wantEffort: "xhigh",
+		},
+		{
 			name:       "output_config without effort",
 			body:       `{"model":"claude-opus-4-6","output_config":{},"messages":[]}`,
 			wantEffort: "",
@@ -1194,9 +1191,10 @@ func TestNormalizeClaudeOutputEffort(t *testing.T) {
 		{"LOW", strPtr("low")},
 		{"Max", strPtr("max")},
 		{" medium ", strPtr("medium")},
+		{"xhigh", strPtr("xhigh")},
+		{"XHIGH", strPtr("xhigh")},
 		{"", nil},
 		{"unknown", nil},
-		{"xhigh", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {

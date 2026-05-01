@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"fmt"
+
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 
@@ -52,18 +54,6 @@ func (User) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
-		field.String("invite_code").
-			MaxLen(32).
-			Optional().
-			Nillable().
-			Unique(),
-		field.Int64("invited_by_user_id").
-			Optional().
-			Nillable(),
-		field.Time("invite_bound_at").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 
 		// Optional profile fields (added later; default '' in DB migration)
 		field.String("username").
@@ -84,11 +74,43 @@ func (User) Fields() []ent.Field {
 		field.Time("totp_enabled_at").
 			Optional().
 			Nillable(),
+		field.String("signup_source").
+			Validate(func(value string) error {
+				switch value {
+				case "email", "linuxdo", "wechat", "oidc":
+					return nil
+				default:
+					return fmt.Errorf("must be one of email, linuxdo, wechat, oidc")
+				}
+			}).
+			Default("email"),
+		field.Time("last_login_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+		field.Time("last_active_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 
-		// Sora 存储配额
-		field.Int64("sora_storage_quota_bytes").
+		// 余额不足通知
+		field.Bool("balance_notify_enabled").
+			Default(true),
+		field.String("balance_notify_threshold_type").
+			Default("fixed"), // "fixed" | "percentage"
+		field.Float("balance_notify_threshold").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Optional().
+			Nillable(),
+		field.String("balance_notify_extra_emails").
+			SchemaType(map[string]string{dialect.Postgres: "text"}).
+			Default("[]"),
+		field.Float("total_recharged").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
-		field.Int64("sora_storage_used_bytes").
+
+		// 用户级每分钟请求数上限（0 = 不限制）。仅当所在分组未设置 rpm_limit 时作为兜底生效。
+		field.Int("rpm_limit").
 			Default(0),
 	}
 }
@@ -105,14 +127,16 @@ func (User) Edges() []ent.Edge {
 		edge.To("usage_logs", UsageLog.Type),
 		edge.To("attribute_values", UserAttributeValue.Type),
 		edge.To("promo_code_usages", PromoCodeUsage.Type),
+		edge.To("payment_orders", PaymentOrder.Type),
+		edge.To("auth_identities", AuthIdentity.Type).
+			Annotations(entsql.OnDelete(entsql.Cascade)),
+		edge.To("pending_auth_sessions", PendingAuthSession.Type),
 	}
 }
 
 func (User) Indexes() []ent.Index {
 	return []ent.Index{
 		// email 字段已在 Fields() 中声明 Unique()，无需重复索引
-		index.Fields("invite_code"),
-		index.Fields("invited_by_user_id"),
 		index.Fields("status"),
 		index.Fields("deleted_at"),
 	}

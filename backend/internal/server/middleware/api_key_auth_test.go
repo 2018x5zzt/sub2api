@@ -4,7 +4,6 @@ package middleware
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -65,17 +64,15 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 
 		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
 
-		dailyPast := time.Now().Add(-48 * time.Hour)
-		weeklyPast := time.Now().Add(-8 * 24 * time.Hour)
+		past := time.Now().Add(-48 * time.Hour)
 		sub := &service.UserSubscription{
-			ID:                55,
-			UserID:            user.ID,
-			GroupID:           group.ID,
-			Status:            service.SubscriptionStatusActive,
-			ExpiresAt:         time.Now().Add(24 * time.Hour),
-			DailyWindowStart:  &dailyPast,
-			WeeklyWindowStart: &weeklyPast,
-			DailyUsageUSD:     0,
+			ID:               55,
+			UserID:           user.ID,
+			GroupID:          group.ID,
+			Status:           service.SubscriptionStatusActive,
+			ExpiresAt:        time.Now().Add(24 * time.Hour),
+			DailyWindowStart: &past,
+			DailyUsageUSD:    0,
 		}
 		maintenanceCalled := make(chan struct{}, 1)
 		subscriptionRepo := &stubUserSubscriptionRepo{
@@ -86,12 +83,10 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 			updateStatus:   func(ctx context.Context, subscriptionID int64, status string) error { return nil },
 			activateWindow: func(ctx context.Context, id int64, start time.Time) error { return nil },
 			resetDaily: func(ctx context.Context, id int64, start time.Time) error {
-				return nil
-			},
-			resetWeekly: func(ctx context.Context, id int64, start time.Time) error {
 				maintenanceCalled <- struct{}{}
 				return nil
 			},
+			resetWeekly:  func(ctx context.Context, id int64, start time.Time) error { return nil },
 			resetMonthly: func(ctx context.Context, id int64, start time.Time) error { return nil },
 		}
 		subscriptionService := service.NewSubscriptionService(nil, subscriptionRepo, nil, nil, cfg)
@@ -238,181 +233,6 @@ func TestAPIKeyAuthSetsGroupContext(t *testing.T) {
 	router.ServeHTTP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestAPIKeyAuthSetsAPIKeyRequestContext(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	group := &service.Group{
-		ID:       101,
-		Name:     "g1",
-		Status:   service.StatusActive,
-		Platform: service.PlatformAnthropic,
-		Hydrated: true,
-	}
-	user := &service.User{
-		ID:          7,
-		Role:        service.RoleUser,
-		Status:      service.StatusActive,
-		Balance:     10,
-		Concurrency: 3,
-	}
-	budget := 4.5
-	apiKey := &service.APIKey{
-		ID:               100,
-		UserID:           user.ID,
-		Key:              "test-key",
-		Status:           service.StatusActive,
-		User:             user,
-		Group:            group,
-		BudgetMultiplier: &budget,
-	}
-	apiKey.GroupID = &group.ID
-
-	apiKeyRepo := &stubApiKeyRepo{
-		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
-			if key != apiKey.Key {
-				return nil, service.ErrAPIKeyNotFound
-			}
-			clone := *apiKey
-			return &clone, nil
-		},
-	}
-
-	cfg := &config.Config{RunMode: config.RunModeSimple}
-	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
-	router := gin.New()
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
-	router.GET("/t", func(c *gin.Context) {
-		apiKeyFromCtx, ok := c.Request.Context().Value(ctxkey.APIKey).(*service.APIKey)
-		if !ok || apiKeyFromCtx == nil || apiKeyFromCtx.ID != apiKey.ID || apiKeyFromCtx.BudgetMultiplier == nil || *apiKeyFromCtx.BudgetMultiplier != budget {
-			c.JSON(http.StatusInternalServerError, gin.H{"ok": false})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"ok": true})
-	})
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/t", nil)
-	req.Header.Set("x-api-key", apiKey.Key)
-	router.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestAPIKeyAuth_ProductSettledGroupLoadsProductContext(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	group := &service.Group{
-		ID:               88,
-		Name:             "Product Pro",
-		Status:           service.StatusActive,
-		SubscriptionType: service.SubscriptionTypeSubscription,
-		Hydrated:         true,
-	}
-	user := &service.User{ID: 7, Role: service.RoleUser, Status: service.StatusActive, Balance: 0, Concurrency: 3}
-	apiKey := &service.APIKey{ID: 100, UserID: user.ID, Key: "product-key", Status: service.StatusActive, User: user, Group: group}
-	apiKey.GroupID = &group.ID
-
-	apiKeyRepo := &stubApiKeyRepo{getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
-		if key != apiKey.Key {
-			return nil, service.ErrAPIKeyNotFound
-		}
-		clone := *apiKey
-		return &clone, nil
-	}}
-	cfg := &config.Config{RunMode: config.RunModeStandard}
-	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
-	subscriptionService := service.NewSubscriptionService(nil, &stubUserSubscriptionRepo{getActive: func(context.Context, int64, int64) (*service.UserSubscription, error) {
-		return nil, service.ErrSubscriptionNotFound
-	}}, nil, nil, cfg)
-	productService := service.NewSubscriptionProductService(&productAuthRepoStub{
-		binding: &service.SubscriptionProductBinding{
-			ProductID:       101,
-			ProductCode:     "shared",
-			ProductName:     "Shared",
-			ProductStatus:   service.SubscriptionProductStatusActive,
-			BindingStatus:   service.SubscriptionProductBindingStatusActive,
-			GroupID:         group.ID,
-			DebitMultiplier: 1,
-		},
-		subscription: &service.UserProductSubscription{
-			ID:        202,
-			UserID:    user.ID,
-			ProductID: 101,
-			Status:    service.SubscriptionStatusActive,
-			ExpiresAt: time.Now().Add(time.Hour),
-		},
-	})
-
-	router := gin.New()
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg, productService)))
-	router.GET("/t", func(c *gin.Context) {
-		productSub, ok := c.Get(string(ContextKeyProductSubscription))
-		require.True(t, ok)
-		require.Equal(t, int64(202), productSub.(*service.UserProductSubscription).ID)
-		binding, ok := c.Get(string(ContextKeySubscriptionProduct))
-		require.True(t, ok)
-		require.Equal(t, int64(101), binding.(*service.SubscriptionProductBinding).ProductID)
-		_, legacyExists := c.Get(string(ContextKeySubscription))
-		require.False(t, legacyExists)
-		c.JSON(http.StatusOK, gin.H{"ok": true})
-	})
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/t", nil)
-	req.Header.Set("x-api-key", apiKey.Key)
-	router.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestAPIKeyAuth_ProductSettledGroupReturnsStructuredRuntimeError(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	group := &service.Group{ID: 88, Name: "Product Pro", Status: service.StatusActive, SubscriptionType: service.SubscriptionTypeSubscription, Hydrated: true}
-	user := &service.User{ID: 7, Role: service.RoleUser, Status: service.StatusActive, Balance: 0, Concurrency: 3}
-	apiKey := &service.APIKey{ID: 100, UserID: user.ID, Key: "product-key", Status: service.StatusActive, User: user, Group: group}
-	apiKey.GroupID = &group.ID
-	apiKeyRepo := &stubApiKeyRepo{getByKey: func(context.Context, string) (*service.APIKey, error) {
-		clone := *apiKey
-		return &clone, nil
-	}}
-	cfg := &config.Config{RunMode: config.RunModeStandard}
-	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
-	subscriptionService := service.NewSubscriptionService(nil, &stubUserSubscriptionRepo{getActive: func(context.Context, int64, int64) (*service.UserSubscription, error) {
-		return nil, service.ErrSubscriptionNotFound
-	}}, nil, nil, cfg)
-	productService := service.NewSubscriptionProductService(&productAuthRepoStub{
-		binding: &service.SubscriptionProductBinding{
-			ProductID:       101,
-			ProductCode:     "shared",
-			ProductName:     "Shared",
-			ProductStatus:   service.SubscriptionProductStatusActive,
-			BindingStatus:   service.SubscriptionProductBindingStatusActive,
-			GroupID:         group.ID,
-			DebitMultiplier: 1.5,
-		},
-	})
-	router := gin.New()
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg, productService)))
-	router.GET("/t", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/t", nil)
-	req.Header.Set("x-api-key", apiKey.Key)
-	router.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusForbidden, w.Code)
-	var body struct {
-		Reason   string            `json:"reason"`
-		Metadata map[string]string `json:"metadata"`
-	}
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-	require.Equal(t, "PRODUCT_SUBSCRIPTION_INVALID", body.Reason)
-	require.Equal(t, "101", body.Metadata["product_id"])
-	require.Equal(t, "88", body.Metadata["group_id"])
-	require.Equal(t, "1.5", body.Metadata["debit_multiplier"])
 }
 
 func TestAPIKeyAuthOverwritesInvalidContextGroup(t *testing.T) {
@@ -626,48 +446,6 @@ func TestAPIKeyAuthTouchLastUsedFailureDoesNotBlock(t *testing.T) {
 	require.Equal(t, 1, touchCalls)
 }
 
-func TestAPIKeyAuthQuotaExhaustedIncludesHelpURL(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	user := &service.User{
-		ID:          10,
-		Role:        service.RoleUser,
-		Status:      service.StatusActive,
-		Balance:     10,
-		Concurrency: 3,
-	}
-	apiKey := &service.APIKey{
-		ID:     103,
-		UserID: user.ID,
-		Key:    "quota-help",
-		Status: service.StatusAPIKeyQuotaExhausted,
-		User:   user,
-	}
-
-	apiKeyRepo := &stubApiKeyRepo{
-		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
-			if key != apiKey.Key {
-				return nil, service.ErrAPIKeyNotFound
-			}
-			clone := *apiKey
-			return &clone, nil
-		},
-	}
-
-	cfg := &config.Config{RunMode: config.RunModeStandard}
-	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
-	router := newAuthTestRouter(apiKeyService, nil, cfg)
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/t", nil)
-	req.Header.Set("x-api-key", apiKey.Key)
-	router.ServeHTTP(w, req)
-
-	require.Equal(t, http.StatusTooManyRequests, w.Code)
-	require.Contains(t, w.Body.String(), "API_KEY_QUOTA_EXHAUSTED")
-	require.Contains(t, w.Body.String(), "https://xlabapi.top")
-}
-
 func TestAPIKeyAuthTouchesLastUsedInStandardMode(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -833,27 +611,6 @@ type stubUserSubscriptionRepo struct {
 	resetMonthly   func(ctx context.Context, id int64, start time.Time) error
 }
 
-type productAuthRepoStub struct {
-	binding      *service.SubscriptionProductBinding
-	subscription *service.UserProductSubscription
-}
-
-func (r *productAuthRepoStub) GetActiveProductBindingByGroupID(context.Context, int64) (*service.SubscriptionProductBinding, error) {
-	return r.binding, nil
-}
-
-func (r *productAuthRepoStub) GetActiveUserProductSubscription(context.Context, int64, int64) (*service.UserProductSubscription, error) {
-	return r.subscription, nil
-}
-
-func (r *productAuthRepoStub) ListVisibleGroupsByUserID(context.Context, int64) ([]service.Group, error) {
-	return nil, nil
-}
-
-func (r *productAuthRepoStub) ListActiveProductsByUserID(context.Context, int64) ([]service.ActiveSubscriptionProduct, error) {
-	return nil, nil
-}
-
 func (r *stubUserSubscriptionRepo) Create(ctx context.Context, sub *service.UserSubscription) error {
 	return errors.New("not implemented")
 }
@@ -920,10 +677,6 @@ func (r *stubUserSubscriptionRepo) ActivateWindows(ctx context.Context, id int64
 	if r.activateWindow != nil {
 		return r.activateWindow(ctx, id, start)
 	}
-	return errors.New("not implemented")
-}
-
-func (r *stubUserSubscriptionRepo) AdvanceDailyWindow(ctx context.Context, id int64, newWindowStart time.Time, carryoverIn, carryoverRemaining float64) error {
 	return errors.New("not implemented")
 }
 

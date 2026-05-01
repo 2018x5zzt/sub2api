@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -53,11 +54,14 @@ func (s *openaiOAuthService) ExchangeCode(ctx context.Context, code, codeVerifie
 		Post(s.tokenURL)
 
 	if err != nil {
+		if shouldReturnOpenAINoProxyHint(ctx, proxyURL, err) {
+			return nil, newOpenAINoProxyHintError(err)
+		}
 		return nil, infraerrors.Newf(http.StatusBadGateway, "OPENAI_OAUTH_REQUEST_FAILED", "request failed: %v", err)
 	}
 
 	if !resp.IsSuccessState() {
-		return nil, newOpenAIOAuthUpstreamError(resp.StatusCode, "OPENAI_OAUTH_TOKEN_EXCHANGE_FAILED", "token exchange failed: status %d, body: %s", resp.StatusCode, resp.String())
+		return nil, infraerrors.Newf(http.StatusBadGateway, "OPENAI_OAUTH_TOKEN_EXCHANGE_FAILED", "token exchange failed: status %d, body: %s", resp.StatusCode, resp.String())
 	}
 
 	return &tokenResp, nil
@@ -98,11 +102,14 @@ func (s *openaiOAuthService) refreshTokenWithClientID(ctx context.Context, refre
 		Post(s.tokenURL)
 
 	if err != nil {
+		if shouldReturnOpenAINoProxyHint(ctx, proxyURL, err) {
+			return nil, newOpenAINoProxyHintError(err)
+		}
 		return nil, infraerrors.Newf(http.StatusBadGateway, "OPENAI_OAUTH_REQUEST_FAILED", "request failed: %v", err)
 	}
 
 	if !resp.IsSuccessState() {
-		return nil, newOpenAIOAuthUpstreamError(resp.StatusCode, "OPENAI_OAUTH_TOKEN_REFRESH_FAILED", "token refresh failed: status %d, body: %s", resp.StatusCode, resp.String())
+		return nil, infraerrors.Newf(http.StatusBadGateway, "OPENAI_OAUTH_TOKEN_REFRESH_FAILED", "token refresh failed: status %d, body: %s", resp.StatusCode, resp.String())
 	}
 
 	return &tokenResp, nil
@@ -115,9 +122,20 @@ func createOpenAIReqClient(proxyURL string) (*req.Client, error) {
 	})
 }
 
-func newOpenAIOAuthUpstreamError(statusCode int, reason, format string, a ...any) error {
-	if statusCode <= 0 {
-		statusCode = http.StatusBadGateway
+func shouldReturnOpenAINoProxyHint(ctx context.Context, proxyURL string, err error) bool {
+	if strings.TrimSpace(proxyURL) != "" || err == nil {
+		return false
 	}
-	return infraerrors.Newf(statusCode, reason, format, a...)
+	if ctx != nil && ctx.Err() != nil {
+		return false
+	}
+	return !errors.Is(err, context.Canceled)
+}
+
+func newOpenAINoProxyHintError(cause error) error {
+	return infraerrors.New(
+		http.StatusBadGateway,
+		"OPENAI_OAUTH_PROXY_REQUIRED",
+		"OpenAI OAuth request failed: no proxy is configured and this server could not reach OpenAI directly. Select a proxy that can access OpenAI, then retry; if the authorization code has expired, regenerate the authorization URL.",
+	).WithCause(cause)
 }

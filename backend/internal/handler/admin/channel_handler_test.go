@@ -36,7 +36,7 @@ func TestChannelToResponse_FullChannel(t *testing.T) {
 		RestrictModels:     true,
 		CreatedAt:          now,
 		UpdatedAt:          now.Add(time.Hour),
-		GroupIDs:            []int64{1, 2, 3},
+		GroupIDs:           []int64{1, 2, 3},
 		ModelPricing: []service.ChannelModelPricing{
 			{
 				ID:              10,
@@ -91,11 +91,11 @@ func TestChannelToResponse_EmptyDefaults(t *testing.T) {
 	ch := &service.Channel{
 		ID:                 1,
 		Name:               "ch",
-		BillingModelSource: "",
+		BillingModelSource: service.BillingModelSourceChannelMapped,
 		CreatedAt:          now,
 		UpdatedAt:          now,
-		GroupIDs:            nil,
-		ModelMapping:        nil,
+		GroupIDs:           nil,
+		ModelMapping:       nil,
 		ModelPricing: []service.ChannelModelPricing{
 			{
 				Platform:    "",
@@ -105,8 +105,11 @@ func TestChannelToResponse_EmptyDefaults(t *testing.T) {
 		},
 	}
 
+	// handler 层 channelToResponse 现在是纯透传：BillingModelSource 的空值兜底
+	// 已下放到 service 层（Create/GetByID/List/Update/ListAvailable 出口统一处理），
+	// 因此这里构造 fixture 时直接传入归一化后的值。
 	resp := channelToResponse(ch)
-	require.Equal(t, "requested", resp.BillingModelSource)
+	require.Equal(t, "channel_mapped", resp.BillingModelSource)
 	require.NotNil(t, resp.GroupIDs)
 	require.Empty(t, resp.GroupIDs)
 	require.NotNil(t, resp.ModelMapping)
@@ -115,6 +118,19 @@ func TestChannelToResponse_EmptyDefaults(t *testing.T) {
 	require.Len(t, resp.ModelPricing, 1)
 	require.Equal(t, "anthropic", resp.ModelPricing[0].Platform)
 	require.Equal(t, "token", resp.ModelPricing[0].BillingMode)
+}
+
+func TestChannelToResponse_BillingModelSourcePassthrough(t *testing.T) {
+	// handler 不再兜底 BillingModelSource：空值应原样透传（由 service 层负责默认回填）。
+	ch := &service.Channel{
+		ID:                 1,
+		Name:               "ch",
+		BillingModelSource: "",
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+	}
+	resp := channelToResponse(ch)
+	require.Equal(t, "", resp.BillingModelSource, "handler 应纯透传，默认值由 service.normalizeBillingModelSource 负责")
 }
 
 func TestChannelToResponse_NilModels(t *testing.T) {
@@ -273,13 +289,13 @@ func TestPricingRequestToService_Defaults(t *testing.T) {
 			wantValue: string(service.BillingModeToken),
 		},
 		{
-			name: "empty platform defaults to anthropic",
+			name: "empty platform stays empty",
 			req: channelModelPricingRequest{
 				Models:   []string{"m1"},
 				Platform: "",
 			},
 			wantField: "Platform",
-			wantValue: "anthropic",
+			wantValue: "",
 		},
 	}
 
@@ -399,104 +415,4 @@ func TestPricingRequestToService_NilPriceFields(t *testing.T) {
 	require.Nil(t, r.CacheReadPrice)
 	require.Nil(t, r.ImageOutputPrice)
 	require.Nil(t, r.PerRequestPrice)
-}
-
-// ---------------------------------------------------------------------------
-// 3. validatePricingBillingMode
-// ---------------------------------------------------------------------------
-
-func TestValidatePricingBillingMode(t *testing.T) {
-	tests := []struct {
-		name    string
-		pricing []service.ChannelModelPricing
-		wantErr bool
-	}{
-		{
-			name: "token mode - valid",
-			pricing: []service.ChannelModelPricing{
-				{BillingMode: service.BillingModeToken},
-			},
-			wantErr: false,
-		},
-		{
-			name: "per_request with price - valid",
-			pricing: []service.ChannelModelPricing{
-				{
-					BillingMode:     service.BillingModePerRequest,
-					PerRequestPrice: float64Ptr(0.5),
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "per_request with intervals - valid",
-			pricing: []service.ChannelModelPricing{
-				{
-					BillingMode: service.BillingModePerRequest,
-					Intervals: []service.PricingInterval{
-						{MinTokens: 0, MaxTokens: intPtr(1000), PerRequestPrice: float64Ptr(0.1)},
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "per_request no price no intervals - invalid",
-			pricing: []service.ChannelModelPricing{
-				{BillingMode: service.BillingModePerRequest},
-			},
-			wantErr: true,
-		},
-		{
-			name: "image with price - valid",
-			pricing: []service.ChannelModelPricing{
-				{
-					BillingMode:     service.BillingModeImage,
-					PerRequestPrice: float64Ptr(0.2),
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "image no price no intervals - invalid",
-			pricing: []service.ChannelModelPricing{
-				{BillingMode: service.BillingModeImage},
-			},
-			wantErr: true,
-		},
-		{
-			name:    "empty list - valid",
-			pricing: []service.ChannelModelPricing{},
-			wantErr: false,
-		},
-		{
-			name: "mixed modes with invalid image - invalid",
-			pricing: []service.ChannelModelPricing{
-				{
-					BillingMode: service.BillingModeToken,
-					InputPrice:  float64Ptr(0.01),
-				},
-				{
-					BillingMode:     service.BillingModePerRequest,
-					PerRequestPrice: float64Ptr(0.5),
-				},
-				{
-					BillingMode: service.BillingModeImage,
-				},
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validatePricingBillingMode(tt.pricing)
-			if tt.wantErr {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), "Per-request price or intervals required")
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
 }

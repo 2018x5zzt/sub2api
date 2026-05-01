@@ -11,7 +11,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/stretchr/testify/require"
 )
 
@@ -300,25 +299,6 @@ func (m *mockGroupRepoForGateway) UpdateSortOrders(ctx context.Context, updates 
 
 func ptr[T any](v T) *T {
 	return &v
-}
-
-type dynamicPricingUsageLogRepoStub struct {
-	UsageLogRepository
-	stats       *usagestats.UsageStats
-	err         error
-	lastFilters usagestats.UsageLogFilters
-}
-
-func (s *dynamicPricingUsageLogRepoStub) GetStatsWithFilters(_ context.Context, filters usagestats.UsageLogFilters) (*usagestats.UsageStats, error) {
-	s.lastFilters = filters
-	if s.err != nil {
-		return nil, s.err
-	}
-	if s.stats == nil {
-		return &usagestats.UsageStats{}, nil
-	}
-	clone := *s.stats
-	return &clone, nil
 }
 
 // TestGatewayService_SelectAccountForModelWithPlatform_Anthropic 测试 anthropic 单平台选择
@@ -720,192 +700,6 @@ func TestGatewayService_SelectAccountForModelWithExclusions_ForcePlatform(t *tes
 	require.Equal(t, PlatformAntigravity, acc.Platform)
 }
 
-func TestGatewayService_SelectAccountForModelWithExclusions_ChannelPricingRestrictionRequestedModel(t *testing.T) {
-	ctx := context.Background()
-	groupID := int64(101)
-	group := &Group{
-		ID:       groupID,
-		Platform: PlatformAnthropic,
-		Status:   StatusActive,
-		Hydrated: true,
-	}
-	ctx = context.WithValue(ctx, ctxkey.Group, group)
-
-	repo := &mockAccountRepoForPlatform{
-		accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformAnthropic,
-				Priority:    1,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID},
-				},
-			},
-		},
-		accountsByID: map[int64]*Account{},
-	}
-	for i := range repo.accounts {
-		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
-	}
-
-	channelRepo := makeStandardRepo(Channel{
-		ID:                 1,
-		Status:             StatusActive,
-		GroupIDs:           []int64{groupID},
-		RestrictModels:     true,
-		BillingModelSource: BillingModelSourceRequested,
-		ModelPricing: []ChannelModelPricing{
-			{Platform: PlatformAnthropic, Models: []string{"claude-allowed"}},
-		},
-	}, map[int64]string{groupID: PlatformAnthropic})
-
-	svc := &GatewayService{
-		accountRepo:    repo,
-		groupRepo:      &mockGroupRepoForGateway{groups: map[int64]*Group{groupID: group}},
-		channelService: newTestChannelService(channelRepo),
-		cfg:            testConfig(),
-	}
-
-	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "claude-blocked", nil)
-	require.ErrorIs(t, err, ErrNoAvailableAccounts)
-	require.Nil(t, acc)
-	require.Contains(t, err.Error(), "channel pricing restriction")
-}
-
-func TestGatewayService_SelectAccountForModelWithExclusions_ChannelPricingRestrictionUpstreamSkipsRestrictedAccount(t *testing.T) {
-	ctx := context.Background()
-	groupID := int64(102)
-	group := &Group{
-		ID:       groupID,
-		Platform: PlatformAnthropic,
-		Status:   StatusActive,
-		Hydrated: true,
-	}
-	ctx = context.WithValue(ctx, ctxkey.Group, group)
-
-	repo := &mockAccountRepoForPlatform{
-		accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformAnthropic,
-				Priority:    1,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID},
-				},
-				Credentials: map[string]any{
-					"model_mapping": map[string]any{
-						"claude-requested": "claude-upstream-blocked",
-					},
-				},
-			},
-			{
-				ID:          2,
-				Platform:    PlatformAnthropic,
-				Priority:    2,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID},
-				},
-				Credentials: map[string]any{
-					"model_mapping": map[string]any{
-						"claude-requested": "claude-upstream-allowed",
-					},
-				},
-			},
-		},
-		accountsByID: map[int64]*Account{},
-	}
-	for i := range repo.accounts {
-		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
-	}
-
-	channelRepo := makeStandardRepo(Channel{
-		ID:                 1,
-		Status:             StatusActive,
-		GroupIDs:           []int64{groupID},
-		RestrictModels:     true,
-		BillingModelSource: BillingModelSourceUpstream,
-		ModelPricing: []ChannelModelPricing{
-			{Platform: PlatformAnthropic, Models: []string{"claude-upstream-allowed"}},
-		},
-	}, map[int64]string{groupID: PlatformAnthropic})
-
-	svc := &GatewayService{
-		accountRepo:    repo,
-		groupRepo:      &mockGroupRepoForGateway{groups: map[int64]*Group{groupID: group}},
-		channelService: newTestChannelService(channelRepo),
-		cfg:            testConfig(),
-	}
-
-	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "claude-requested", nil)
-	require.NoError(t, err)
-	require.NotNil(t, acc)
-	require.Equal(t, int64(2), acc.ID)
-}
-
-func TestGatewayService_SelectAccountWithLoadAwareness_ChannelPricingRestrictionRequestedModel(t *testing.T) {
-	ctx := context.Background()
-	groupID := int64(103)
-	group := &Group{
-		ID:       groupID,
-		Platform: PlatformAnthropic,
-		Status:   StatusActive,
-		Hydrated: true,
-	}
-	ctx = context.WithValue(ctx, ctxkey.Group, group)
-
-	repo := &mockAccountRepoForPlatform{
-		accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformAnthropic,
-				Priority:    1,
-				Status:      StatusActive,
-				Schedulable: true,
-				Concurrency: 5,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID},
-				},
-			},
-		},
-		accountsByID: map[int64]*Account{},
-	}
-	for i := range repo.accounts {
-		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
-	}
-
-	channelRepo := makeStandardRepo(Channel{
-		ID:                 1,
-		Status:             StatusActive,
-		GroupIDs:           []int64{groupID},
-		RestrictModels:     true,
-		BillingModelSource: BillingModelSourceRequested,
-		ModelPricing: []ChannelModelPricing{
-			{Platform: PlatformAnthropic, Models: []string{"claude-allowed"}},
-		},
-	}, map[int64]string{groupID: PlatformAnthropic})
-
-	cfg := testConfig()
-	cfg.Gateway.Scheduling.LoadBatchEnabled = true
-
-	svc := &GatewayService{
-		accountRepo:        repo,
-		groupRepo:          &mockGroupRepoForGateway{groups: map[int64]*Group{groupID: group}},
-		channelService:     newTestChannelService(channelRepo),
-		cfg:                cfg,
-		concurrencyService: NewConcurrencyService(&mockConcurrencyCache{}),
-	}
-
-	result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "claude-blocked", nil, "")
-	require.ErrorIs(t, err, ErrNoAvailableAccounts)
-	require.Nil(t, result)
-}
-
 func TestGatewayService_SelectAccountForModelWithPlatform_RoutedStickySessionClears(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(10)
@@ -1113,487 +907,6 @@ func TestGatewayService_SelectAccountForModelWithPlatform_GeminiPreferOAuth(t *t
 	require.NoError(t, err)
 	require.NotNil(t, acc)
 	require.Equal(t, int64(2), acc.ID)
-}
-
-func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingSkipsAccountsAboveBudget(t *testing.T) {
-	groupID := int64(42)
-	defaultBudget := 5.0
-	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
-		ID:                      groupID,
-		Platform:                PlatformAnthropic,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	})
-
-	repo := &mockAccountRepoForPlatform{
-		accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformAnthropic,
-				Priority:    0,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 7.0},
-				},
-			},
-			{
-				ID:          2,
-				Platform:    PlatformAnthropic,
-				Priority:    1,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 4.0},
-				},
-			},
-		},
-		accountsByID: map[int64]*Account{},
-	}
-	for i := range repo.accounts {
-		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
-	}
-
-	svc := &GatewayService{
-		accountRepo: repo,
-		cfg:         testConfig(),
-	}
-
-	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
-	require.NoError(t, err)
-	require.NotNil(t, acc)
-	require.Equal(t, int64(2), acc.ID)
-}
-
-func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingReturnsNoAvailableAccountsWhenBudgetExhausted(t *testing.T) {
-	groupID := int64(42)
-	defaultBudget := 3.0
-	ctx := context.WithValue(context.Background(), ctxkey.Group, &Group{
-		ID:                      groupID,
-		Platform:                PlatformAnthropic,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	})
-
-	repo := &mockAccountRepoForPlatform{
-		accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformAnthropic,
-				Priority:    0,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 7.0},
-				},
-			},
-		},
-		accountsByID: map[int64]*Account{},
-	}
-	for i := range repo.accounts {
-		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
-	}
-
-	svc := &GatewayService{
-		accountRepo: repo,
-		cfg:         testConfig(),
-	}
-
-	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
-	require.ErrorIs(t, err, ErrNoAvailableAccounts)
-	require.Nil(t, acc)
-}
-
-func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingUsesAPIKeyBudgetOverride(t *testing.T) {
-	groupID := int64(42)
-	defaultBudget := 8.0
-	group := &Group{
-		ID:                      groupID,
-		Platform:                PlatformAnthropic,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	}
-	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
-	keyBudget := 4.0
-	ctx = context.WithValue(ctx, ctxkey.APIKey, &APIKey{
-		ID:               9,
-		UserID:           7,
-		GroupID:          &groupID,
-		Group:            group,
-		BudgetMultiplier: &keyBudget,
-	})
-
-	repo := &mockAccountRepoForPlatform{
-		accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformAnthropic,
-				Priority:    0,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 6.0},
-				},
-			},
-			{
-				ID:          2,
-				Platform:    PlatformAnthropic,
-				Priority:    1,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 3.0},
-				},
-			},
-		},
-		accountsByID: map[int64]*Account{},
-	}
-	for i := range repo.accounts {
-		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
-	}
-
-	svc := &GatewayService{
-		accountRepo: repo,
-		cfg:         testConfig(),
-	}
-
-	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
-	require.NoError(t, err)
-	require.NotNil(t, acc)
-	require.Equal(t, int64(2), acc.ID)
-}
-
-func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingPrefersClosestLowerOrEqualMultiplier(t *testing.T) {
-	groupID := int64(42)
-	defaultBudget := 8.0
-	group := &Group{
-		ID:                      groupID,
-		Platform:                PlatformAnthropic,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	}
-	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
-	ctx = context.WithValue(ctx, ctxkey.APIKey, &APIKey{
-		ID:               9,
-		UserID:           7,
-		GroupID:          &groupID,
-		Group:            group,
-		BudgetMultiplier: &defaultBudget,
-	})
-
-	repo := &mockAccountRepoForPlatform{
-		accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformAnthropic,
-				Priority:    0,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 4.0},
-				},
-			},
-			{
-				ID:          2,
-				Platform:    PlatformAnthropic,
-				Priority:    99,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 7.0},
-				},
-			},
-		},
-		accountsByID: map[int64]*Account{},
-	}
-	for i := range repo.accounts {
-		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
-	}
-
-	svc := &GatewayService{
-		accountRepo: repo,
-		cfg:         testConfig(),
-	}
-
-	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
-	require.NoError(t, err)
-	require.NotNil(t, acc)
-	require.Equal(t, int64(2), acc.ID)
-}
-
-func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingPrefersLowerMultiplierBeforeCompatibleHigherBy7dAverage(t *testing.T) {
-	groupID := int64(42)
-	defaultBudget := 8.0
-	group := &Group{
-		ID:                      groupID,
-		Platform:                PlatformAnthropic,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	}
-	now := time.Now()
-	apiKey := &APIKey{
-		ID:               9,
-		UserID:           7,
-		GroupID:          &groupID,
-		Group:            group,
-		BudgetMultiplier: &defaultBudget,
-		CreatedAt:        now.Add(-48 * time.Hour),
-	}
-	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
-	ctx = context.WithValue(ctx, ctxkey.APIKey, apiKey)
-
-	repo := &mockAccountRepoForPlatform{
-		accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformAnthropic,
-				Priority:    0,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 9.0},
-				},
-			},
-			{
-				ID:          2,
-				Platform:    PlatformAnthropic,
-				Priority:    99,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 4.0},
-				},
-			},
-		},
-		accountsByID: map[int64]*Account{},
-	}
-	for i := range repo.accounts {
-		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
-	}
-
-	usageRepo := &dynamicPricingUsageLogRepoStub{
-		stats: &usagestats.UsageStats{
-			TotalRequests:   10,
-			TotalCost:       100,
-			TotalActualCost: 500,
-		},
-	}
-
-	svc := &GatewayService{
-		accountRepo:  repo,
-		usageLogRepo: usageRepo,
-		cfg:          testConfig(),
-	}
-
-	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
-	require.NoError(t, err)
-	require.NotNil(t, acc)
-	require.Equal(t, int64(2), acc.ID)
-}
-
-func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingFallsBackToCompatibleHigherMultiplierBy7dAverage(t *testing.T) {
-	groupID := int64(42)
-	defaultBudget := 8.0
-	group := &Group{
-		ID:                      groupID,
-		Platform:                PlatformAnthropic,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	}
-	now := time.Now()
-	apiKey := &APIKey{
-		ID:               9,
-		UserID:           7,
-		GroupID:          &groupID,
-		Group:            group,
-		BudgetMultiplier: &defaultBudget,
-		CreatedAt:        now.Add(-48 * time.Hour),
-	}
-	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
-	ctx = context.WithValue(ctx, ctxkey.APIKey, apiKey)
-
-	repo := &mockAccountRepoForPlatform{
-		accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformAnthropic,
-				Priority:    99,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 9.0},
-				},
-			},
-		},
-		accountsByID: map[int64]*Account{},
-	}
-	for i := range repo.accounts {
-		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
-	}
-
-	usageRepo := &dynamicPricingUsageLogRepoStub{
-		stats: &usagestats.UsageStats{
-			TotalRequests:   10,
-			TotalCost:       100,
-			TotalActualCost: 500,
-		},
-	}
-
-	svc := &GatewayService{
-		accountRepo:  repo,
-		usageLogRepo: usageRepo,
-		cfg:          testConfig(),
-	}
-
-	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
-	require.NoError(t, err)
-	require.NotNil(t, acc)
-	require.Equal(t, int64(1), acc.ID)
-}
-
-func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingReturnsBudgetExceededWhen7dAverageAlreadyOverTarget(t *testing.T) {
-	groupID := int64(42)
-	defaultBudget := 5.0
-	group := &Group{
-		ID:                      groupID,
-		Platform:                PlatformAnthropic,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	}
-	now := time.Now()
-	apiKey := &APIKey{
-		ID:               9,
-		UserID:           7,
-		GroupID:          &groupID,
-		Group:            group,
-		BudgetMultiplier: &defaultBudget,
-		CreatedAt:        now.Add(-48 * time.Hour),
-	}
-	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
-	ctx = context.WithValue(ctx, ctxkey.APIKey, apiKey)
-
-	repo := &mockAccountRepoForPlatform{
-		accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformAnthropic,
-				Priority:    0,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 4.0},
-				},
-			},
-		},
-		accountsByID: map[int64]*Account{},
-	}
-	for i := range repo.accounts {
-		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
-	}
-
-	usageRepo := &dynamicPricingUsageLogRepoStub{
-		stats: &usagestats.UsageStats{
-			TotalRequests:   10,
-			TotalCost:       100,
-			TotalActualCost: 600,
-		},
-	}
-
-	svc := &GatewayService{
-		accountRepo:  repo,
-		usageLogRepo: usageRepo,
-		cfg:          testConfig(),
-	}
-
-	acc, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
-	require.ErrorIs(t, err, ErrDynamicPricingBudgetExceeded)
-	require.Nil(t, acc)
-}
-
-func TestGatewayService_SelectAccountForModelWithExclusions_DynamicPricingUsesKeyAgeWhenUnder7Days(t *testing.T) {
-	groupID := int64(42)
-	defaultBudget := 5.0
-	group := &Group{
-		ID:                      groupID,
-		Platform:                PlatformAnthropic,
-		Status:                  StatusActive,
-		Hydrated:                true,
-		PricingMode:             GroupPricingModeDynamic,
-		DefaultBudgetMultiplier: &defaultBudget,
-		RateMultiplier:          1.0,
-	}
-	now := time.Now()
-	createdAt := now.Add(-48 * time.Hour)
-	apiKey := &APIKey{
-		ID:               9,
-		UserID:           7,
-		GroupID:          &groupID,
-		Group:            group,
-		BudgetMultiplier: &defaultBudget,
-		CreatedAt:        createdAt,
-	}
-	ctx := context.WithValue(context.Background(), ctxkey.Group, group)
-	ctx = context.WithValue(ctx, ctxkey.APIKey, apiKey)
-
-	repo := &mockAccountRepoForPlatform{
-		accounts: []Account{
-			{
-				ID:          1,
-				Platform:    PlatformAnthropic,
-				Priority:    0,
-				Status:      StatusActive,
-				Schedulable: true,
-				AccountGroups: []AccountGroup{
-					{GroupID: groupID, BillingMultiplier: 4.0},
-				},
-			},
-		},
-		accountsByID: map[int64]*Account{},
-	}
-	for i := range repo.accounts {
-		repo.accountsByID[repo.accounts[i].ID] = &repo.accounts[i]
-	}
-
-	usageRepo := &dynamicPricingUsageLogRepoStub{
-		stats: &usagestats.UsageStats{
-			TotalRequests:   1,
-			TotalCost:       10,
-			TotalActualCost: 40,
-		},
-	}
-
-	svc := &GatewayService{
-		accountRepo:  repo,
-		usageLogRepo: usageRepo,
-		cfg:          testConfig(),
-	}
-
-	_, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "", nil)
-	require.NoError(t, err)
-	require.NotNil(t, usageRepo.lastFilters.StartTime)
-	require.WithinDuration(t, createdAt, *usageRepo.lastFilters.StartTime, time.Second)
-	require.NotNil(t, usageRepo.lastFilters.EndTime)
 }
 
 func TestGatewayService_SelectAccountForModelWithPlatform_GeminiAPIKeyModelMappingFilter(t *testing.T) {
@@ -2718,7 +2031,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: nil, // No concurrency service
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -2771,7 +2084,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: nil, // legacy path
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, sessionHash, "claude-b", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, sessionHash, "claude-b", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -2803,7 +2116,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: nil,
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -2835,7 +2148,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 		}
 
 		excludedIDs := map[int64]struct{}{1: {}}
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", excludedIDs, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", excludedIDs, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -2869,7 +2182,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sticky", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sticky", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -2905,7 +2218,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sticky", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sticky", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -2946,7 +2259,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(testCtx, nil, "sticky", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(testCtx, nil, "sticky", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -2974,7 +2287,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: nil,
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.Error(t, err)
 		require.Nil(t, result)
 		require.ErrorIs(t, err, ErrNoAvailableAccounts)
@@ -3006,7 +2319,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: nil,
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -3039,7 +2352,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: nil,
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -3077,7 +2390,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sticky", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sticky", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.WaitPlan)
@@ -3113,7 +2426,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "legacy", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "legacy", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -3172,7 +2485,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, sessionHash, "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, sessionHash, "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.WaitPlan)
@@ -3226,7 +2539,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, sessionHash, "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, sessionHash, "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -3280,7 +2593,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, sessionHash, "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, sessionHash, "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -3338,7 +2651,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "route", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "route", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -3396,7 +2709,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "route-full", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "route-full", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.WaitPlan)
@@ -3454,7 +2767,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "fallback", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "fallback", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -3491,7 +2804,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.WaitPlan)
@@ -3543,7 +2856,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "gemini", "gemini-2.5-pro", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "gemini", "gemini-2.5-pro", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -3621,7 +2934,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 		}
 
 		excluded := map[int64]struct{}{1: {}}
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "claude-3-5-sonnet-20241022", excluded, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "claude-3-5-sonnet-20241022", excluded, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -3675,7 +2988,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: nil,
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "gemini-2.5-pro", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "gemini-2.5-pro", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -3708,7 +3021,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: nil,
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.Error(t, err)
 		require.Nil(t, result)
 		require.ErrorIs(t, err, ErrClaudeCodeOnly)
@@ -3746,7 +3059,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "wait", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "wait", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.WaitPlan)
@@ -3784,7 +3097,7 @@ func TestGatewayService_SelectAccountWithLoadAwareness(t *testing.T) {
 			concurrencyService: NewConcurrencyService(concurrencyCache),
 		}
 
-		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "missing-load", "claude-3-5-sonnet-20241022", nil, "")
+		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "missing-load", "claude-3-5-sonnet-20241022", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, result.Account)
@@ -3826,7 +3139,7 @@ func TestGatewayService_GroupResolution_ReusesContextGroup(t *testing.T) {
 	account, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "claude-3-5-sonnet-20241022", nil)
 	require.NoError(t, err)
 	require.NotNil(t, account)
-	require.Equal(t, 0, groupRepo.getByIDCalls)
+	require.Equal(t, 1, groupRepo.getByIDCalls) // +1 for require_privacy_set check
 	require.Equal(t, 0, groupRepo.getByIDLiteCalls)
 }
 
@@ -3869,7 +3182,7 @@ func TestGatewayService_GroupResolution_IgnoresInvalidContextGroup(t *testing.T)
 	account, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "claude-3-5-sonnet-20241022", nil)
 	require.NoError(t, err)
 	require.NotNil(t, account)
-	require.Equal(t, 0, groupRepo.getByIDCalls)
+	require.Equal(t, 1, groupRepo.getByIDCalls) // +1 for require_privacy_set check
 	require.Equal(t, 1, groupRepo.getByIDLiteCalls)
 }
 
@@ -3939,7 +3252,7 @@ func TestGatewayService_GroupResolution_FallbackUsesLiteOnce(t *testing.T) {
 	account, err := svc.SelectAccountForModelWithExclusions(ctx, &groupID, "", "claude-3-5-sonnet-20241022", nil)
 	require.NoError(t, err)
 	require.NotNil(t, account)
-	require.Equal(t, 0, groupRepo.getByIDCalls)
+	require.Equal(t, 1, groupRepo.getByIDCalls) // +1 for require_privacy_set check
 	require.Equal(t, 1, groupRepo.getByIDLiteCalls)
 }
 

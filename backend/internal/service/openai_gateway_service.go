@@ -10,9 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand"
 	"net/http"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -55,29 +55,8 @@ const (
 	openAIWSRetryJitterRatioDefault    = 0.2
 	openAICompactSessionSeedKey        = "openai_compact_session_seed"
 	codexCLIVersion                    = "0.125.0"
-	openAIResponsesDefaultInstructions = "You are a helpful coding assistant."
 	// Codex 限额快照仅用于后台展示/诊断，不需要每个成功请求都立即落库。
 	openAICodexSnapshotPersistMinInterval = 30 * time.Second
-)
-
-func logOpenAICodexDroppedNativeItemReferences(account *Account, source string, droppedCount int) {
-	if account == nil || droppedCount <= 0 {
-		return
-	}
-	logger.L().Info("openai oauth: dropped store=false native item references",
-		zap.Int64("account_id", account.ID),
-		zap.String("account_name", account.Name),
-		zap.String("account_type", account.Type),
-		zap.String("source", strings.TrimSpace(source)),
-		zap.Int("dropped_native_item_reference_count", droppedCount),
-	)
-}
-
-var (
-	errOpenAIEmptyResponse         = errors.New("upstream request failed: empty response")
-	errOpenAIHTMLResponse          = errors.New("upstream request failed: html response")
-	errOpenAIStreamMissingTerminal = errors.New("stream usage incomplete: missing terminal event")
-	openAIDefaultReasoningModelRE  = regexp.MustCompile(`^gpt-5(?:\.\d+)*(?:-(?:mini|nano|chat|pro|codex(?:-(?:mini|max))?))?(?:-(?:latest|\d{4}-\d{2}-\d{2}))?$`)
 )
 
 // OpenAI allowed headers whitelist (for non-passthrough).
@@ -106,8 +85,6 @@ var openaiPassthroughAllowedHeaders = map[string]bool{
 	"x-codex-turn-state":    true,
 	"x-codex-turn-metadata": true,
 }
-
-var openAIPassthroughRequestIDSuffixRegex = regexp.MustCompile(`(?i)\s*\(request id:\s*([^)]+)\)`)
 
 // codex_cli_only 拒绝时记录的请求头白名单（仅用于诊断日志，不参与上游透传）
 var codexCLIOnlyDebugHeaderWhitelist = []string{
@@ -329,30 +306,35 @@ func (t *accountWriteThrottle) Allow(id int64, now time.Time) bool {
 
 var defaultOpenAICodexSnapshotPersistThrottle = newAccountWriteThrottle(openAICodexSnapshotPersistMinInterval)
 
+// ErrNoAvailableCompactAccounts indicates the request needs /responses/compact
+// support but no compatible account is available.
+var ErrNoAvailableCompactAccounts = errors.New("no available OpenAI accounts support /responses/compact")
+
 // OpenAIGatewayService handles OpenAI API gateway operations
 type OpenAIGatewayService struct {
-	accountRepo                      AccountRepository
-	usageLogRepo                     UsageLogRepository
-	usageBillingRepo                 UsageBillingRepository
-	userRepo                         UserRepository
-	userSubRepo                      UserSubscriptionRepository
-	cache                            GatewayCache
-	cfg                              *config.Config
-	codexDetector                    CodexClientRestrictionDetector
-	schedulerSnapshot                *SchedulerSnapshotService
-	concurrencyService               *ConcurrencyService
-	billingService                   *BillingService
-	rateLimitService                 *RateLimitService
-	billingCacheService              *BillingCacheService
-	userGroupRateResolver            *userGroupRateResolver
-	httpUpstream                     HTTPUpstream
-	deferredService                  *DeferredService
-	openAITokenProvider              *OpenAITokenProvider
-	toolCorrector                    *CodexToolCorrector
-	openaiWSResolver                 OpenAIWSProtocolResolver
-	resolver                         *ModelPricingResolver
-	channelService                   *ChannelService
-	subscriptionReadCacheInvalidator subscriptionReadCacheInvalidator
+	accountRepo           AccountRepository
+	usageLogRepo          UsageLogRepository
+	usageBillingRepo      UsageBillingRepository
+	userRepo              UserRepository
+	userSubRepo           UserSubscriptionRepository
+	cache                 GatewayCache
+	cfg                   *config.Config
+	codexDetector         CodexClientRestrictionDetector
+	schedulerSnapshot     *SchedulerSnapshotService
+	concurrencyService    *ConcurrencyService
+	billingService        *BillingService
+	rateLimitService      *RateLimitService
+	billingCacheService   *BillingCacheService
+	userGroupRateResolver *userGroupRateResolver
+	httpUpstream          HTTPUpstream
+	deferredService       *DeferredService
+	openAITokenProvider   *OpenAITokenProvider
+	toolCorrector         *CodexToolCorrector
+	openaiWSResolver      OpenAIWSProtocolResolver
+	resolver              *ModelPricingResolver
+	channelService        *ChannelService
+	balanceNotifyService  *BalanceNotifyService
+	settingService        *SettingService
 
 	openaiWSPoolOnce              sync.Once
 	openaiWSStateStoreOnce        sync.Once
@@ -390,6 +372,8 @@ func NewOpenAIGatewayService(
 	openAITokenProvider *OpenAITokenProvider,
 	resolver *ModelPricingResolver,
 	channelService *ChannelService,
+	balanceNotifyService *BalanceNotifyService,
+	settingService *SettingService,
 ) *OpenAIGatewayService {
 	svc := &OpenAIGatewayService{
 		accountRepo:         accountRepo,
@@ -419,18 +403,13 @@ func NewOpenAIGatewayService(
 		openaiWSResolver:      NewOpenAIWSProtocolResolver(cfg),
 		resolver:              resolver,
 		channelService:        channelService,
+		balanceNotifyService:  balanceNotifyService,
+		settingService:        settingService,
 		responseHeaderFilter:  compileResponseHeaderFilter(cfg),
 		codexSnapshotThrottle: newAccountWriteThrottle(openAICodexSnapshotPersistMinInterval),
 	}
 	svc.logOpenAIWSModeBootstrap()
 	return svc
-}
-
-func (s *OpenAIGatewayService) SetSubscriptionReadCacheInvalidator(v subscriptionReadCacheInvalidator) {
-	if s == nil {
-		return
-	}
-	s.subscriptionReadCacheInvalidator = v
 }
 
 // ResolveChannelMapping 解析渠道级模型映射（代理到 ChannelService）
@@ -449,12 +428,51 @@ func (s *OpenAIGatewayService) IsModelRestricted(ctx context.Context, groupID in
 	return s.channelService.IsModelRestricted(ctx, groupID, model)
 }
 
-// ResolveChannelMappingAndRestrict 解析渠道映射并检查模型限制。
+// ResolveChannelMappingAndRestrict 解析渠道映射。
+// 模型限制检查已移至调度阶段，restricted 始终返回 false。
 func (s *OpenAIGatewayService) ResolveChannelMappingAndRestrict(ctx context.Context, groupID *int64, model string) (ChannelMappingResult, bool) {
 	if s.channelService == nil {
 		return ChannelMappingResult{MappedModel: model}, false
 	}
 	return s.channelService.ResolveChannelMappingAndRestrict(ctx, groupID, model)
+}
+
+func (s *OpenAIGatewayService) checkChannelPricingRestriction(ctx context.Context, groupID *int64, requestedModel string) bool {
+	if groupID == nil || s.channelService == nil || requestedModel == "" {
+		return false
+	}
+	mapping := s.channelService.ResolveChannelMapping(ctx, *groupID, requestedModel)
+	billingModel := billingModelForRestriction(mapping.BillingModelSource, requestedModel, mapping.MappedModel)
+	if billingModel == "" {
+		return false
+	}
+	return s.channelService.IsModelRestricted(ctx, *groupID, billingModel)
+}
+
+func (s *OpenAIGatewayService) isUpstreamModelRestrictedByChannel(ctx context.Context, groupID int64, account *Account, requestedModel string, requireCompact bool) bool {
+	if s.channelService == nil {
+		return false
+	}
+	upstreamModel := resolveOpenAIAccountUpstreamModelForRequest(account, requestedModel, requireCompact)
+	if upstreamModel == "" {
+		return false
+	}
+	return s.channelService.IsModelRestricted(ctx, groupID, upstreamModel)
+}
+
+func (s *OpenAIGatewayService) needsUpstreamChannelRestrictionCheck(ctx context.Context, groupID *int64) bool {
+	if groupID == nil || s.channelService == nil {
+		return false
+	}
+	ch, err := s.channelService.GetChannelForGroup(ctx, *groupID)
+	if err != nil {
+		slog.Warn("failed to check openai channel upstream restriction", "group_id", *groupID, "error", err)
+		return false
+	}
+	if ch == nil || !ch.RestrictModels {
+		return false
+	}
+	return ch.BillingModelSource == BillingModelSourceUpstream
 }
 
 // ReplaceModelInBody 替换请求体中的 JSON model 字段（通用 gjson/sjson 实现）。
@@ -471,12 +489,12 @@ func (s *OpenAIGatewayService) getCodexSnapshotThrottle() *accountWriteThrottle 
 
 func (s *OpenAIGatewayService) billingDeps() *billingDeps {
 	return &billingDeps{
-		accountRepo:                      s.accountRepo,
-		userRepo:                         s.userRepo,
-		userSubRepo:                      s.userSubRepo,
-		billingCacheService:              s.billingCacheService,
-		subscriptionReadCacheInvalidator: s.subscriptionReadCacheInvalidator,
-		deferredService:                  s.deferredService,
+		accountRepo:          s.accountRepo,
+		userRepo:             s.userRepo,
+		userSubRepo:          s.userSubRepo,
+		billingCacheService:  s.billingCacheService,
+		deferredService:      s.deferredService,
+		balanceNotifyService: s.balanceNotifyService,
 	}
 }
 
@@ -533,16 +551,6 @@ func (s *OpenAIGatewayService) getOpenAIWSProtocolResolver() OpenAIWSProtocolRes
 		cfg = s.cfg
 	}
 	return NewOpenAIWSProtocolResolver(cfg)
-}
-
-func (s *OpenAIGatewayService) isOpenAIAccountTransportCompatible(account *Account, requiredTransport OpenAIUpstreamTransport) bool {
-	if requiredTransport == OpenAIUpstreamTransportAny || requiredTransport == OpenAIUpstreamTransportHTTPSSE {
-		return true
-	}
-	if s == nil || account == nil {
-		return false
-	}
-	return s.getOpenAIWSProtocolResolver().Resolve(account).Transport == requiredTransport
 }
 
 func classifyOpenAIWSReconnectReason(err error) (string, bool) {
@@ -1120,13 +1128,7 @@ func (s *OpenAIGatewayService) ExtractSessionID(c *gin.Context, body []byte) str
 	return sessionID
 }
 
-// GenerateSessionHash generates a sticky-session hash for OpenAI requests.
-//
-// Priority:
-//  1. Header: session_id
-//  2. Header: conversation_id
-//  3. Body:   prompt_cache_key (opencode)
-func (s *OpenAIGatewayService) GenerateSessionHash(c *gin.Context, body []byte) string {
+func explicitOpenAISessionID(c *gin.Context, body []byte) string {
 	if c == nil {
 		return ""
 	}
@@ -1138,6 +1140,36 @@ func (s *OpenAIGatewayService) GenerateSessionHash(c *gin.Context, body []byte) 
 	if sessionID == "" && len(body) > 0 {
 		sessionID = strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())
 	}
+	return sessionID
+}
+
+// GenerateExplicitSessionHash generates a sticky-session hash only from explicit
+// client session signals. It intentionally skips content-derived fallback and is
+// used by stateless endpoints such as /v1/images.
+func (s *OpenAIGatewayService) GenerateExplicitSessionHash(c *gin.Context, body []byte) string {
+	sessionID := explicitOpenAISessionID(c, body)
+	if sessionID == "" {
+		return ""
+	}
+
+	currentHash, legacyHash := deriveOpenAISessionHashes(sessionID)
+	attachOpenAILegacySessionHashToGin(c, legacyHash)
+	return currentHash
+}
+
+// GenerateSessionHash generates a sticky-session hash for OpenAI requests.
+//
+// Priority:
+//  1. Header: session_id
+//  2. Header: conversation_id
+//  3. Body:   prompt_cache_key (opencode)
+//  4. Body:   content-based fallback (model + system + tools + first user message)
+func (s *OpenAIGatewayService) GenerateSessionHash(c *gin.Context, body []byte) string {
+	if c == nil {
+		return ""
+	}
+
+	sessionID := explicitOpenAISessionID(c, body)
 	if sessionID == "" && len(body) > 0 {
 		sessionID = deriveOpenAIContentSessionSeed(body)
 	}
@@ -1206,17 +1238,104 @@ func (s *OpenAIGatewayService) SelectAccountForModel(ctx context.Context, groupI
 // SelectAccountForModelWithExclusions selects an account supporting the requested model while excluding specified accounts.
 // SelectAccountForModelWithExclusions 选择支持指定模型的账号，同时排除指定的账号。
 func (s *OpenAIGatewayService) SelectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*Account, error) {
-	return s.selectAccountForModelWithExclusions(ctx, groupID, sessionHash, requestedModel, excludedIDs, 0)
+	return s.selectAccountForModelWithExclusions(ctx, groupID, sessionHash, requestedModel, excludedIDs, false, 0)
 }
 
-func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, stickyAccountID int64) (*Account, error) {
-	ctx = withDynamicPricingBudgetState(ctx, groupID, s.usageLogRepo)
-	if err := validateDynamicPricingBudgetAvailable(ctx, groupID); err != nil {
-		return nil, err
+// noAvailableOpenAISelectionError builds the standard "no account available" error
+// while preserving the compact-specific error when applicable.
+func noAvailableOpenAISelectionError(requestedModel string, compactBlocked bool) error {
+	if compactBlocked {
+		return ErrNoAvailableCompactAccounts
 	}
+	if requestedModel != "" {
+		return fmt.Errorf("no available OpenAI accounts supporting model: %s", requestedModel)
+	}
+	return errors.New("no available OpenAI accounts")
+}
+
+// openAICompactSupportTier classifies an OpenAI account by compact capability.
+// 0 = explicitly unsupported, 1 = unknown / not yet probed, 2 = explicitly supported.
+func openAICompactSupportTier(account *Account) int {
+	if account == nil || !account.IsOpenAI() {
+		return 0
+	}
+	supported, known := account.OpenAICompactSupportKnown()
+	if !known {
+		return 1
+	}
+	if supported {
+		return 2
+	}
+	return 0
+}
+
+// isOpenAIAccountEligibleForRequest centralises the schedulable / OpenAI / model /
+// compact-support checks used during account selection.
+func isOpenAIAccountEligibleForRequest(account *Account, requestedModel string, requireCompact bool) bool {
+	if account == nil || !account.IsSchedulable() || !account.IsOpenAI() {
+		return false
+	}
+	if requestedModel != "" && !account.IsModelSupported(requestedModel) {
+		return false
+	}
+	if requireCompact && openAICompactSupportTier(account) == 0 {
+		return false
+	}
+	return true
+}
+
+// prioritizeOpenAICompactAccounts re-orders a slice so that accounts with known
+// compact support are tried first, followed by unknown, then explicitly unsupported.
+// The relative order within each tier is preserved.
+func prioritizeOpenAICompactAccounts(accounts []*Account) []*Account {
+	if len(accounts) == 0 {
+		return nil
+	}
+	supported := make([]*Account, 0, len(accounts))
+	unknown := make([]*Account, 0, len(accounts))
+	unsupported := make([]*Account, 0, len(accounts))
+	for _, account := range accounts {
+		switch openAICompactSupportTier(account) {
+		case 2:
+			supported = append(supported, account)
+		case 1:
+			unknown = append(unknown, account)
+		default:
+			unsupported = append(unsupported, account)
+		}
+	}
+	out := make([]*Account, 0, len(accounts))
+	out = append(out, supported...)
+	out = append(out, unknown...)
+	out = append(out, unsupported...)
+	return out
+}
+
+// resolveOpenAIAccountUpstreamModelForRequest resolves the upstream model that
+// would be sent for a given request, honouring compact-only mappings when the
+// caller is on the /responses/compact path.
+func resolveOpenAIAccountUpstreamModelForRequest(account *Account, requestedModel string, requireCompact bool) string {
+	upstreamModel := resolveOpenAIForwardModel(account, requestedModel, "")
+	if upstreamModel == "" {
+		return ""
+	}
+	if requireCompact {
+		return resolveOpenAICompactForwardModel(account, upstreamModel)
+	}
+	return upstreamModel
+}
+
+func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, stickyAccountID int64) (*Account, error) {
+	if s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
+		slog.Warn("channel pricing restriction blocked request",
+			"group_id", derefGroupID(groupID),
+			"model", requestedModel)
+		return nil, fmt.Errorf("%w supporting model: %s (channel pricing restriction)", ErrNoAvailableAccounts, requestedModel)
+	}
+
 	// 1. 尝试粘性会话命中
 	// Try sticky session hit
-	if account := s.tryStickySessionHit(ctx, groupID, sessionHash, requestedModel, excludedIDs, stickyAccountID); account != nil {
+	if account := s.tryStickySessionHit(ctx, groupID, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID); account != nil {
 		return account, nil
 	}
 
@@ -1229,13 +1348,10 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 
 	// 3. 按优先级 + LRU 选择最佳账号
 	// Select by priority + LRU
-	selected := s.selectBestAccount(ctx, accounts, groupID, requestedModel, excludedIDs)
+	selected, compactBlocked := s.selectBestAccount(ctx, groupID, accounts, requestedModel, excludedIDs, requireCompact)
 
 	if selected == nil {
-		if requestedModel != "" {
-			return nil, fmt.Errorf("no available OpenAI accounts supporting model: %s", requestedModel)
-		}
-		return nil, errors.New("no available OpenAI accounts")
+		return nil, noAvailableOpenAISelectionError(requestedModel, compactBlocked)
 	}
 
 	// 4. 设置粘性会话绑定
@@ -1244,7 +1360,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 		_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, selected.ID, openaiStickySessionTTL)
 	}
 
-	return selected, nil
+	return s.hydrateSelectedAccount(ctx, selected)
 }
 
 // tryStickySessionHit 尝试从粘性会话获取账号。
@@ -1252,7 +1368,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 //
 // tryStickySessionHit attempts to get account from sticky session.
 // Returns account if hit and usable; clears session and returns nil if account is unavailable.
-func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID *int64, sessionHash, requestedModel string, excludedIDs map[int64]struct{}, stickyAccountID int64) *Account {
+func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID *int64, sessionHash, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, stickyAccountID int64) *Account {
 	if sessionHash == "" {
 		return nil
 	}
@@ -1284,17 +1400,16 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 
 	// 验证账号是否可用于当前请求
 	// Verify account is usable for current request
-	if !account.IsSchedulable() || !account.IsOpenAI() {
+	if !isOpenAIAccountEligibleForRequest(account, requestedModel, false) {
 		return nil
 	}
-	if requestedModel != "" && !account.IsModelSupported(requestedModel) {
+	account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel, requireCompact)
+	if account == nil {
+		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 		return nil
 	}
-	if !s.isAccountSchedulableForDynamicPricing(ctx, account, groupID) {
-		return nil
-	}
-	account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
-	if account == nil || !s.isAccountSchedulableForDynamicPricing(ctx, account, groupID) {
+	if groupID != nil && s.needsUpstreamChannelRestrictionCheck(ctx, groupID) &&
+		s.isUpstreamModelRestrictedByChannel(ctx, *groupID, account, requestedModel, requireCompact) {
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 		return nil
 	}
@@ -1309,9 +1424,14 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 // 返回 nil 表示无可用账号。
 //
 // selectBestAccount selects the best account from candidates (priority + LRU).
-// Returns nil if no available account.
-func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, accounts []Account, groupID *int64, requestedModel string, excludedIDs map[int64]struct{}) *Account {
+// Returns nil if no available account. The second return reports whether at
+// least one candidate was filtered out solely because it lacks compact support
+// (only meaningful when requireCompact=true).
+func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *int64, accounts []Account, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool) (*Account, bool) {
 	var selected *Account
+	selectedCompactTier := -1
+	compactBlocked := false
+	needsUpstreamCheck := s.needsUpstreamChannelRestrictionCheck(ctx, groupID)
 
 	for i := range accounts {
 		acc := &accounts[i]
@@ -1322,78 +1442,100 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, accounts [
 			continue
 		}
 
-		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, requestedModel)
+		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, requestedModel, false)
 		if fresh == nil {
 			continue
 		}
-		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel)
+		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel, false)
 		if fresh == nil {
 			continue
 		}
-		if !s.isAccountSchedulableForDynamicPricing(ctx, fresh, groupID) {
+		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
 			continue
+		}
+		compactTier := 0
+		if requireCompact {
+			compactTier = openAICompactSupportTier(fresh)
+			if compactTier == 0 {
+				compactBlocked = true
+				continue
+			}
 		}
 
 		// 选择优先级最高且最久未使用的账号
 		// Select highest priority and least recently used
-		if selected == nil || s.compareAccountsForSelection(ctx, groupID, fresh, selected) < 0 {
+		if selected == nil {
 			selected = fresh
+			selectedCompactTier = compactTier
+			continue
+		}
+
+		// compact 模式下高 tier 优先；同 tier 内才比较 priority/LRU。
+		if requireCompact && compactTier != selectedCompactTier {
+			if compactTier > selectedCompactTier {
+				selected = fresh
+				selectedCompactTier = compactTier
+			}
+			continue
+		}
+
+		if s.isBetterAccount(fresh, selected) {
+			selected = fresh
+			selectedCompactTier = compactTier
 		}
 	}
 
-	return selected
+	return selected, compactBlocked
 }
 
-func (s *OpenAIGatewayService) compareAccountsForSelection(ctx context.Context, groupID *int64, a, b *Account) int {
-	if cmp := compareDynamicPricingAccountPreference(ctx, groupID, a, b, s.getUserGroupRateMultiplier); cmp != 0 {
-		return cmp
+// isBetterAccount 判断 candidate 是否比 current 更优。
+// 规则：优先级更高（数值更小）优先；同优先级时，未使用过的优先，其次是最久未使用的。
+//
+// isBetterAccount checks if candidate is better than current.
+// Rules: higher priority (lower value) wins; same priority: never used > least recently used.
+func (s *OpenAIGatewayService) isBetterAccount(candidate, current *Account) bool {
+	// 优先级更高（数值更小）
+	// Higher priority (lower value)
+	if candidate.Priority < current.Priority {
+		return true
 	}
-	return compareAccountsByPriorityAndLastUsed(a, b, false)
-}
+	if candidate.Priority > current.Priority {
+		return false
+	}
 
-func (s *OpenAIGatewayService) compareAccountLoadsForSelection(ctx context.Context, groupID *int64, a, b accountWithLoad) int {
-	if cmp := compareDynamicPricingAccountPreference(ctx, groupID, a.account, b.account, s.getUserGroupRateMultiplier); cmp != 0 {
-		return cmp
+	// 同优先级，比较最后使用时间
+	// Same priority, compare last used time
+	switch {
+	case candidate.LastUsedAt == nil && current.LastUsedAt != nil:
+		// candidate 从未使用，优先
+		return true
+	case candidate.LastUsedAt != nil && current.LastUsedAt == nil:
+		// current 从未使用，保持
+		return false
+	case candidate.LastUsedAt == nil && current.LastUsedAt == nil:
+		// 都未使用，保持
+		return false
+	default:
+		// 都使用过，选择最久未使用的
+		return candidate.LastUsedAt.Before(*current.LastUsedAt)
 	}
-	if cmp := compareAccountsByPriorityOnly(a.account, b.account, false); cmp != 0 {
-		return cmp
-	}
-	if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
-		if a.loadInfo.LoadRate < b.loadInfo.LoadRate {
-			return -1
-		}
-		return 1
-	}
-	return compareAccountsByLastUsed(a.account, b.account, false)
-}
-
-func (s *OpenAIGatewayService) sortAccountsForSelection(ctx context.Context, groupID *int64, accounts []*Account) {
-	if group := dynamicPricingGroupFromContext(ctx, groupID); group != nil && group.IsDynamicPricing() {
-		sort.SliceStable(accounts, func(i, j int) bool {
-			return s.compareAccountsForSelection(ctx, groupID, accounts[i], accounts[j]) < 0
-		})
-		return
-	}
-	sortAccountsByPriorityAndLastUsed(accounts, false)
-}
-
-func (s *OpenAIGatewayService) sortAccountLoadsForSelection(ctx context.Context, groupID *int64, accounts []accountWithLoad) {
-	sort.SliceStable(accounts, func(i, j int) bool {
-		return s.compareAccountLoadsForSelection(ctx, groupID, accounts[i], accounts[j]) < 0
-	})
-	if group := dynamicPricingGroupFromContext(ctx, groupID); group != nil && group.IsDynamicPricing() {
-		return
-	}
-	shuffleWithinSortGroups(accounts)
 }
 
 // SelectAccountWithLoadAwareness selects an account with load-awareness and wait plan.
 func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
-	ctx = withDynamicPricingBudgetState(ctx, groupID, s.usageLogRepo)
-	if err := validateDynamicPricingBudgetAvailable(ctx, groupID); err != nil {
-		return nil, err
+	return s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, excludedIDs, false)
+}
+
+func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool) (*AccountSelectionResult, error) {
+	if s.checkChannelPricingRestriction(ctx, groupID, requestedModel) {
+		slog.Warn("channel pricing restriction blocked request",
+			"group_id", derefGroupID(groupID),
+			"model", requestedModel)
+		return nil, fmt.Errorf("%w supporting model: %s (channel pricing restriction)", ErrNoAvailableAccounts, requestedModel)
 	}
+
 	cfg := s.schedulingConfig()
+	needsUpstreamCheck := s.needsUpstreamChannelRestrictionCheck(ctx, groupID)
 	var stickyAccountID int64
 	if sessionHash != "" && s.cache != nil {
 		if accountID, err := s.getStickySessionAccountID(ctx, groupID, sessionHash); err == nil {
@@ -1401,41 +1543,31 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 		}
 	}
 	if s.concurrencyService == nil || !cfg.LoadBatchEnabled {
-		account, err := s.selectAccountForModelWithExclusions(ctx, groupID, sessionHash, requestedModel, excludedIDs, stickyAccountID)
+		account, err := s.selectAccountForModelWithExclusions(ctx, groupID, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID)
 		if err != nil {
 			return nil, err
 		}
 		result, err := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
 		if err == nil && result.Acquired {
-			return &AccountSelectionResult{
-				Account:     account,
-				Acquired:    true,
-				ReleaseFunc: result.ReleaseFunc,
-			}, nil
+			return s.newSelectionResult(ctx, account, true, result.ReleaseFunc, nil)
 		}
 		if stickyAccountID > 0 && stickyAccountID == account.ID && s.concurrencyService != nil {
 			waitingCount, _ := s.concurrencyService.GetAccountWaitingCount(ctx, account.ID)
 			if waitingCount < cfg.StickySessionMaxWaiting {
-				return &AccountSelectionResult{
-					Account: account,
-					WaitPlan: &AccountWaitPlan{
-						AccountID:      account.ID,
-						MaxConcurrency: account.Concurrency,
-						Timeout:        cfg.StickySessionWaitTimeout,
-						MaxWaiting:     cfg.StickySessionMaxWaiting,
-					},
-				}, nil
+				return s.newSelectionResult(ctx, account, false, nil, &AccountWaitPlan{
+					AccountID:      account.ID,
+					MaxConcurrency: account.Concurrency,
+					Timeout:        cfg.StickySessionWaitTimeout,
+					MaxWaiting:     cfg.StickySessionMaxWaiting,
+				})
 			}
 		}
-		return &AccountSelectionResult{
-			Account: account,
-			WaitPlan: &AccountWaitPlan{
-				AccountID:      account.ID,
-				MaxConcurrency: account.Concurrency,
-				Timeout:        cfg.FallbackWaitTimeout,
-				MaxWaiting:     cfg.FallbackMaxWaiting,
-			},
-		}, nil
+		return s.newSelectionResult(ctx, account, false, nil, &AccountWaitPlan{
+			AccountID:      account.ID,
+			MaxConcurrency: account.Concurrency,
+			Timeout:        cfg.FallbackWaitTimeout,
+			MaxWaiting:     cfg.FallbackMaxWaiting,
+		})
 	}
 
 	accounts, err := s.listSchedulableAccounts(ctx, groupID)
@@ -1464,34 +1596,27 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 				if clearSticky {
 					_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 				}
-				if !clearSticky && account.IsSchedulable() && account.IsOpenAI() &&
-					(requestedModel == "" || account.IsModelSupported(requestedModel)) &&
-					s.isAccountSchedulableForDynamicPricing(ctx, account, groupID) {
-					account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
-					if account == nil || !s.isAccountSchedulableForDynamicPricing(ctx, account, groupID) {
+				if !clearSticky && isOpenAIAccountEligibleForRequest(account, requestedModel, false) {
+					account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel, requireCompact)
+					if account == nil {
+						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+					} else if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, account, requestedModel, requireCompact) {
 						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 					} else {
 						result, err := s.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
 						if err == nil && result.Acquired {
 							_ = s.refreshStickySessionTTL(ctx, groupID, sessionHash, openaiStickySessionTTL)
-							return &AccountSelectionResult{
-								Account:     account,
-								Acquired:    true,
-								ReleaseFunc: result.ReleaseFunc,
-							}, nil
+							return s.newSelectionResult(ctx, account, true, result.ReleaseFunc, nil)
 						}
 
 						waitingCount, _ := s.concurrencyService.GetAccountWaitingCount(ctx, accountID)
 						if waitingCount < cfg.StickySessionMaxWaiting {
-							return &AccountSelectionResult{
-								Account: account,
-								WaitPlan: &AccountWaitPlan{
-									AccountID:      accountID,
-									MaxConcurrency: account.Concurrency,
-									Timeout:        cfg.StickySessionWaitTimeout,
-									MaxWaiting:     cfg.StickySessionMaxWaiting,
-								},
-							}, nil
+							return s.newSelectionResult(ctx, account, false, nil, &AccountWaitPlan{
+								AccountID:      accountID,
+								MaxConcurrency: account.Concurrency,
+								Timeout:        cfg.StickySessionWaitTimeout,
+								MaxWaiting:     cfg.StickySessionMaxWaiting,
+							})
 						}
 					}
 				}
@@ -1500,6 +1625,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 	}
 
 	// ============ Layer 2: Load-aware selection ============
+	baseCandidateCount := 0
 	candidates := make([]*Account, 0, len(accounts))
 	for i := range accounts {
 		acc := &accounts[i]
@@ -1515,9 +1641,10 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 		if requestedModel != "" && !acc.IsModelSupported(requestedModel) {
 			continue
 		}
-		if !s.isAccountSchedulableForDynamicPricing(ctx, acc, groupID) {
+		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, acc, requestedModel, requireCompact) {
 			continue
 		}
+		baseCandidateCount++
 		candidates = append(candidates, acc)
 	}
 
@@ -1536,14 +1663,20 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 	loadMap, err := s.concurrencyService.GetAccountsLoadBatch(ctx, accountLoads)
 	if err != nil {
 		ordered := append([]*Account(nil), candidates...)
-		s.sortAccountsForSelection(ctx, groupID, ordered)
+		sortAccountsByPriorityAndLastUsed(ordered, false)
+		if requireCompact {
+			ordered = prioritizeOpenAICompactAccounts(ordered)
+		}
 		for _, acc := range ordered {
-			fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, requestedModel)
+			fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, requestedModel, false)
 			if fresh == nil {
 				continue
 			}
-			fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel)
-			if fresh == nil || !s.isAccountSchedulableForDynamicPricing(ctx, fresh, groupID) {
+			fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel, requireCompact)
+			if fresh == nil {
+				continue
+			}
+			if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
 				continue
 			}
 			result, err := s.tryAcquireAccountSlot(ctx, fresh.ID, fresh.Concurrency)
@@ -1551,11 +1684,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 				if sessionHash != "" {
 					_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, fresh.ID, openaiStickySessionTTL)
 				}
-				return &AccountSelectionResult{
-					Account:     fresh,
-					Acquired:    true,
-					ReleaseFunc: result.ReleaseFunc,
-				}, nil
+				return s.newSelectionResult(ctx, fresh, true, result.ReleaseFunc, nil)
 			}
 		}
 	} else {
@@ -1574,15 +1703,56 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 		}
 
 		if len(available) > 0 {
-			s.sortAccountLoadsForSelection(ctx, groupID, available)
+			sort.SliceStable(available, func(i, j int) bool {
+				a, b := available[i], available[j]
+				if a.account.Priority != b.account.Priority {
+					return a.account.Priority < b.account.Priority
+				}
+				if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
+					return a.loadInfo.LoadRate < b.loadInfo.LoadRate
+				}
+				switch {
+				case a.account.LastUsedAt == nil && b.account.LastUsedAt != nil:
+					return true
+				case a.account.LastUsedAt != nil && b.account.LastUsedAt == nil:
+					return false
+				case a.account.LastUsedAt == nil && b.account.LastUsedAt == nil:
+					return false
+				default:
+					return a.account.LastUsedAt.Before(*b.account.LastUsedAt)
+				}
+			})
+			shuffleWithinSortGroups(available)
 
-			for _, item := range available {
-				fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, item.account, requestedModel)
+			selectionOrder := make([]accountWithLoad, 0, len(available))
+			if requireCompact {
+				appendTier := func(out []accountWithLoad, tier int) []accountWithLoad {
+					for _, item := range available {
+						if openAICompactSupportTier(item.account) == tier {
+							out = append(out, item)
+						}
+					}
+					return out
+				}
+				selectionOrder = appendTier(selectionOrder, 2)
+				selectionOrder = appendTier(selectionOrder, 1)
+				// tier 0 候选作为兜底追加：DB recheck 时若发现 cache tier 0 实际
+				// 已升级为 1/2（探测刚跑完，cache 尚未刷新），仍可正常命中。
+				selectionOrder = appendTier(selectionOrder, 0)
+			} else {
+				selectionOrder = append(selectionOrder, available...)
+			}
+
+			for _, item := range selectionOrder {
+				fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, item.account, requestedModel, false)
 				if fresh == nil {
 					continue
 				}
-				fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel)
-				if fresh == nil || !s.isAccountSchedulableForDynamicPricing(ctx, fresh, groupID) {
+				fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel, requireCompact)
+				if fresh == nil {
+					continue
+				}
+				if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
 					continue
 				}
 				result, err := s.tryAcquireAccountSlot(ctx, fresh.ID, fresh.Concurrency)
@@ -1590,38 +1760,40 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 					if sessionHash != "" {
 						_ = s.setStickySessionAccountID(ctx, groupID, sessionHash, fresh.ID, openaiStickySessionTTL)
 					}
-					return &AccountSelectionResult{
-						Account:     fresh,
-						Acquired:    true,
-						ReleaseFunc: result.ReleaseFunc,
-					}, nil
+					return s.newSelectionResult(ctx, fresh, true, result.ReleaseFunc, nil)
 				}
 			}
 		}
 	}
 
 	// ============ Layer 3: Fallback wait ============
-	s.sortAccountsForSelection(ctx, groupID, candidates)
+	sortAccountsByPriorityAndLastUsed(candidates, false)
+	if requireCompact {
+		candidates = prioritizeOpenAICompactAccounts(candidates)
+	}
 	for _, acc := range candidates {
-		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, requestedModel)
+		fresh := s.resolveFreshSchedulableOpenAIAccount(ctx, acc, requestedModel, false)
 		if fresh == nil {
 			continue
 		}
-		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel)
-		if fresh == nil || !s.isAccountSchedulableForDynamicPricing(ctx, fresh, groupID) {
+		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel, requireCompact)
+		if fresh == nil {
 			continue
 		}
-		return &AccountSelectionResult{
-			Account: fresh,
-			WaitPlan: &AccountWaitPlan{
-				AccountID:      fresh.ID,
-				MaxConcurrency: fresh.Concurrency,
-				Timeout:        cfg.FallbackWaitTimeout,
-				MaxWaiting:     cfg.FallbackMaxWaiting,
-			},
-		}, nil
+		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
+			continue
+		}
+		return s.newSelectionResult(ctx, fresh, false, nil, &AccountWaitPlan{
+			AccountID:      fresh.ID,
+			MaxConcurrency: fresh.Concurrency,
+			Timeout:        cfg.FallbackWaitTimeout,
+			MaxWaiting:     cfg.FallbackMaxWaiting,
+		})
 	}
 
+	if requireCompact && baseCandidateCount > 0 {
+		return nil, ErrNoAvailableCompactAccounts
+	}
 	return nil, ErrNoAvailableAccounts
 }
 
@@ -1652,7 +1824,7 @@ func (s *OpenAIGatewayService) tryAcquireAccountSlot(ctx context.Context, accoun
 	return s.concurrencyService.AcquireAccountSlot(ctx, accountID, maxConcurrency)
 }
 
-func (s *OpenAIGatewayService) resolveFreshSchedulableOpenAIAccount(ctx context.Context, account *Account, requestedModel string) *Account {
+func (s *OpenAIGatewayService) resolveFreshSchedulableOpenAIAccount(ctx context.Context, account *Account, requestedModel string, requireCompact bool) *Account {
 	if account == nil {
 		return nil
 	}
@@ -1666,20 +1838,20 @@ func (s *OpenAIGatewayService) resolveFreshSchedulableOpenAIAccount(ctx context.
 		fresh = current
 	}
 
-	if !fresh.IsSchedulable() || !fresh.IsOpenAI() {
-		return nil
-	}
-	if requestedModel != "" && !fresh.IsModelSupported(requestedModel) {
+	if !isOpenAIAccountEligibleForRequest(fresh, requestedModel, requireCompact) {
 		return nil
 	}
 	return fresh
 }
 
-func (s *OpenAIGatewayService) recheckSelectedOpenAIAccountFromDB(ctx context.Context, account *Account, requestedModel string) *Account {
+func (s *OpenAIGatewayService) recheckSelectedOpenAIAccountFromDB(ctx context.Context, account *Account, requestedModel string, requireCompact bool) *Account {
 	if account == nil {
 		return nil
 	}
 	if s.schedulerSnapshot == nil || s.accountRepo == nil {
+		if !isOpenAIAccountEligibleForRequest(account, requestedModel, requireCompact) {
+			return nil
+		}
 		return account
 	}
 
@@ -1687,10 +1859,7 @@ func (s *OpenAIGatewayService) recheckSelectedOpenAIAccountFromDB(ctx context.Co
 	if err != nil || latest == nil {
 		return nil
 	}
-	if !latest.IsSchedulable() || !latest.IsOpenAI() {
-		return nil
-	}
-	if requestedModel != "" && !latest.IsModelSupported(requestedModel) {
+	if !isOpenAIAccountEligibleForRequest(latest, requestedModel, requireCompact) {
 		return nil
 	}
 	return latest
@@ -1712,6 +1881,33 @@ func (s *OpenAIGatewayService) getSchedulableAccount(ctx context.Context, accoun
 	return account, nil
 }
 
+func (s *OpenAIGatewayService) hydrateSelectedAccount(ctx context.Context, account *Account) (*Account, error) {
+	if account == nil || s.schedulerSnapshot == nil {
+		return account, nil
+	}
+	hydrated, err := s.schedulerSnapshot.GetAccount(ctx, account.ID)
+	if err != nil {
+		return nil, err
+	}
+	if hydrated == nil {
+		return nil, fmt.Errorf("selected openai account %d not found during hydration", account.ID)
+	}
+	return hydrated, nil
+}
+
+func (s *OpenAIGatewayService) newSelectionResult(ctx context.Context, account *Account, acquired bool, release func(), waitPlan *AccountWaitPlan) (*AccountSelectionResult, error) {
+	hydrated, err := s.hydrateSelectedAccount(ctx, account)
+	if err != nil {
+		return nil, err
+	}
+	return &AccountSelectionResult{
+		Account:     hydrated,
+		Acquired:    acquired,
+		ReleaseFunc: release,
+		WaitPlan:    waitPlan,
+	}, nil
+}
+
 func (s *OpenAIGatewayService) schedulingConfig() config.GatewaySchedulingConfig {
 	if s.cfg != nil {
 		return s.cfg.Gateway.Scheduling
@@ -1724,21 +1920,6 @@ func (s *OpenAIGatewayService) schedulingConfig() config.GatewaySchedulingConfig
 		LoadBatchEnabled:         true,
 		SlotCleanupInterval:      30 * time.Second,
 	}
-}
-
-func (s *OpenAIGatewayService) getUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
-	if s == nil {
-		return groupDefaultMultiplier
-	}
-	resolver := s.userGroupRateResolver
-	if resolver == nil {
-		resolver = newUserGroupRateResolver(nil, nil, resolveUserGroupRateCacheTTL(s.cfg), nil, "service.openai_gateway")
-	}
-	return resolver.Resolve(ctx, userID, groupID, groupDefaultMultiplier)
-}
-
-func (s *OpenAIGatewayService) isAccountSchedulableForDynamicPricing(ctx context.Context, account *Account, groupID *int64) bool {
-	return isAccountWithinDynamicBudget(ctx, groupID, account, s.getUserGroupRateMultiplier)
 }
 
 // GetAccessToken gets the access token for an OpenAI account
@@ -1922,40 +2103,117 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 
 	// 非透传模式下，instructions 为空时注入默认指令。
 	if isInstructionsEmpty(reqBody) {
-		reqBody["instructions"] = openAIResponsesDefaultInstructions
+		reqBody["instructions"] = "You are a helpful coding assistant."
 		bodyModified = true
-		markPatchSet("instructions", openAIResponsesDefaultInstructions)
+		markPatchSet("instructions", "You are a helpful coding assistant.")
+	}
+
+	if isCodexCLI && ensureOpenAIResponsesImageGenerationTool(reqBody) {
+		bodyModified = true
+		disablePatch()
+		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Injected /responses image_generation tool for Codex client")
+	}
+
+	if normalizeOpenAIResponsesImageGenerationTools(reqBody) {
+		bodyModified = true
+		disablePatch()
+		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized /responses image_generation tool payload")
+	}
+	if isCodexCLI && applyCodexImageGenerationBridgeInstructions(reqBody) {
+		bodyModified = true
+		disablePatch()
+		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Added Codex image_generation bridge instructions")
 	}
 
 	// 对所有请求执行模型映射（包含 Codex CLI）。
-	mappedModel := account.GetMappedModel(reqModel)
-	reasoningModel := resolveOpenAIResponsesReasoningModel(originalModel, mappedModel)
-	if mappedModel != reqModel {
-		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Model mapping applied: %s -> %s (account: %s, isCodexCLI: %v)", reqModel, mappedModel, account.Name, isCodexCLI)
-		reqBody["model"] = mappedModel
+	billingModel := account.GetMappedModel(reqModel)
+	if billingModel != reqModel {
+		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Model mapping applied: %s -> %s (account: %s, isCodexCLI: %v)", reqModel, billingModel, account.Name, isCodexCLI)
+		reqBody["model"] = billingModel
 		bodyModified = true
-		markPatchSet("model", mappedModel)
+		markPatchSet("model", billingModel)
+	}
+	upstreamModel := billingModel
+	if normalizeOpenAIResponsesImageOnlyModel(reqBody) {
+		bodyModified = true
+		disablePatch()
+		if model, ok := reqBody["model"].(string); ok {
+			upstreamModel = strings.TrimSpace(model)
+		}
+		logger.LegacyPrintf(
+			"service.openai_gateway",
+			"[OpenAI] Normalized /responses image-only model request inbound_model=%s image_model=%s upstream_model=%s",
+			reqModel,
+			billingModel,
+			upstreamModel,
+		)
+	}
+	if err := validateOpenAIResponsesImageModel(reqBody, upstreamModel); err != nil {
+		setOpsUpstreamError(c, http.StatusBadRequest, err.Error(), "")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"type":    "invalid_request_error",
+				"message": err.Error(),
+				"param":   "model",
+			},
+		})
+		return nil, err
+	}
+	if hasOpenAIImageGenerationTool(reqBody) {
+		logger.LegacyPrintf(
+			"service.openai_gateway",
+			"[OpenAI] /responses image_generation request inbound_model=%s mapped_model=%s account_type=%s",
+			reqModel,
+			upstreamModel,
+			account.Type,
+		)
+	}
+	if err := validateCodexSparkInput(reqBody, upstreamModel); err != nil {
+		setOpsUpstreamError(c, http.StatusBadRequest, err.Error(), "")
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": gin.H{
+				"type":    "invalid_request_error",
+				"message": err.Error(),
+				"param":   "input",
+			},
+		})
+		return nil, err
 	}
 
-	// OAuth 账号走 ChatGPT internal Codex endpoint，需要规范化模型名。
-	// API Key 账号则保留原始/映射后的模型名，兼容 OpenAI-compatible 上游。
-	if model, ok := reqBody["model"].(string); ok {
-		normalizedModel := normalizeOpenAIModelForUpstream(account, model)
-		if account.Type == AccountTypeOAuth {
-			normalizedModel, _ = normalizeChatGPTOAuthModel(model)
-		}
-		if normalizedModel != "" && normalizedModel != model {
-			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Codex model normalization: %s -> %s (account: %s, type: %s, isCodexCLI: %v)",
-				model, normalizedModel, account.Name, account.Type, isCodexCLI)
-			reqBody["model"] = normalizedModel
-			mappedModel = normalizedModel
+	// Compact-only model 映射：仅在 /responses/compact 路径生效，且优先级高于
+	// OAuth 模型规范化（避免 OAuth 规范化覆盖 compact-only 自定义模型）。
+	isCompactRequest := isOpenAIResponsesCompactPath(c)
+	compactMapped := false
+	if isCompactRequest {
+		compactMappedModel := resolveOpenAICompactForwardModel(account, billingModel)
+		if compactMappedModel != "" && compactMappedModel != billingModel {
+			compactMapped = true
+			upstreamModel = compactMappedModel
+			reqBody["model"] = compactMappedModel
 			bodyModified = true
-			markPatchSet("model", normalizedModel)
+			markPatchSet("model", compactMappedModel)
+			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Compact model mapping applied: %s -> %s (account: %s, isCodexCLI: %v)", billingModel, compactMappedModel, account.Name, isCodexCLI)
+		}
+	}
+
+	// OpenAI OAuth 账号走 ChatGPT internal Codex endpoint，需要将模型名规范化为
+	// 上游可识别的 Codex/GPT 系列。API Key 账号则应保留原始/映射后的模型名，
+	// 以兼容自定义 base_url 的 OpenAI-compatible 上游。
+	if model, ok := reqBody["model"].(string); ok {
+		if !compactMapped {
+			upstreamModel = normalizeOpenAIModelForUpstream(account, model)
+			if upstreamModel != "" && upstreamModel != model {
+				logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Upstream model resolved: %s -> %s (account: %s, type: %s, isCodexCLI: %v)",
+					model, upstreamModel, account.Name, account.Type, isCodexCLI)
+				reqBody["model"] = upstreamModel
+				bodyModified = true
+				markPatchSet("model", upstreamModel)
+			}
 		}
 
 		// 移除 gpt-5.2-codex 以下的版本 verbosity 参数
 		// 确保高版本模型向低版本模型映射不报错
-		if !SupportsVerbosity(normalizedModel) {
+		if !SupportsVerbosity(upstreamModel) {
 			if text, ok := reqBody["text"].(map[string]any); ok {
 				delete(text, "verbosity")
 			}
@@ -1963,54 +2221,27 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 
 	// 规范化 reasoning.effort 参数（minimal -> none），与上游允许值对齐。
-	if normalizeOpenAIResponsesMinimalReasoning(reqBody) {
-		bodyModified = true
-		markPatchSet("reasoning.effort", "none")
-		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized reasoning.effort: minimal -> none (account: %s)", account.Name)
+	if reasoning, ok := reqBody["reasoning"].(map[string]any); ok {
+		if effort, ok := reasoning["effort"].(string); ok && effort == "minimal" {
+			reasoning["effort"] = "none"
+			bodyModified = true
+			markPatchSet("reasoning.effort", "none")
+			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Normalized reasoning.effort: minimal -> none (account: %s)", account.Name)
+		}
 	}
 
 	if account.Type == AccountTypeOAuth {
-		codexResult := applyCodexOAuthTransformWithOptions(reqBody, isCodexCLI, isOpenAIResponsesCompactPath(c), codexTransformOptions{
-			DropStoreFalseNativeItemReferences: account.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled(),
-		})
+		codexResult := applyCodexOAuthTransform(reqBody, isCodexCLI, isCompactRequest)
 		if codexResult.Modified {
 			bodyModified = true
 			disablePatch()
 		}
 		if codexResult.NormalizedModel != "" {
-			mappedModel = codexResult.NormalizedModel
+			upstreamModel = codexResult.NormalizedModel
 		}
 		if codexResult.PromptCacheKey != "" {
 			promptCacheKey = codexResult.PromptCacheKey
 		}
-		logOpenAICodexDroppedNativeItemReferences(account, "responses_forward", codexResult.DroppedNativeItemReferenceCount)
-	}
-
-	if normalizeOpenAIResponsesImageGenerationTools(reqBody) {
-		bodyModified = true
-		disablePatch()
-	}
-
-	if model, ok := reqBody["model"].(string); ok {
-		if imageModelErr := validateOpenAIResponsesImageModel(reqBody, model); imageModelErr != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": gin.H{
-					"type":    "invalid_request_error",
-					"message": imageModelErr.Error(),
-				},
-			})
-			return nil, imageModelErr
-		}
-	}
-
-	if ensureOpenAIResponsesReasoning(reqBody, reasoningModel) {
-		bodyModified = true
-		disablePatch()
-	}
-
-	if sanitizeEmptyBase64InputImagesInOpenAIRequestBodyMap(reqBody) {
-		bodyModified = true
-		disablePatch()
 	}
 
 	// Handle max_output_tokens based on platform and account type
@@ -2057,7 +2288,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 
 		// Remove unsupported fields (not supported by upstream OpenAI API)
-		unsupportedFields := []string{"prompt_cache_retention", "safety_identifier", "max_outputs_tokens"}
+		unsupportedFields := []string{"prompt_cache_retention", "safety_identifier"}
 		for _, unsupportedField := range unsupportedFields {
 			if _, has := reqBody[unsupportedField]; has {
 				delete(reqBody, unsupportedField)
@@ -2074,6 +2305,53 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			delete(reqBody, "previous_response_id")
 			bodyModified = true
 			markPatchDelete("previous_response_id")
+		}
+	}
+
+	if sanitizeEmptyBase64InputImagesInOpenAIRequestBodyMap(reqBody) {
+		bodyModified = true
+		disablePatch()
+	}
+
+	// Apply OpenAI fast policy (参照 Claude BetaPolicy 的 fast-mode 过滤)：
+	// 针对 body 的 service_tier 字段（"priority" 即 fast，"flex"），按策略
+	// 执行 filter（删除字段）或 block（拒绝请求）。对 gpt-5.5 等模型屏蔽
+	// fast 时在此生效。
+	//
+	// 注意：
+	//   1. 此处统一使用 upstreamModel（已经过 GetMappedModel +
+	//      normalizeOpenAIModelForUpstream + Codex OAuth normalize），与
+	//      chat-completions / messages 入口保持一致，避免不同入口因为模型
+	//      维度不同而出现 whitelist 命中差异。
+	//   2. action=pass 时也要把 raw "fast" 归一化为 "priority" 写回 body，
+	//      否则 native /responses 入口透传 "fast" 给上游会被拒。chat-
+	//      completions 入口由 normalizeResponsesBodyServiceTier 完成同一
+	//      行为，这里手工实现等效逻辑。
+	if rawTier, ok := reqBody["service_tier"].(string); ok {
+		if normTier := normalizedOpenAIServiceTierValue(rawTier); normTier != "" {
+			action, errMsg := s.evaluateOpenAIFastPolicy(ctx, account, upstreamModel, normTier)
+			switch action {
+			case BetaPolicyActionBlock:
+				msg := errMsg
+				if msg == "" {
+					msg = fmt.Sprintf("openai service_tier=%s is not allowed for model %s", normTier, upstreamModel)
+				}
+				blocked := &OpenAIFastBlockedError{Message: msg}
+				writeOpenAIFastPolicyBlockedResponse(c, blocked)
+				return nil, blocked
+			case BetaPolicyActionFilter:
+				delete(reqBody, "service_tier")
+				bodyModified = true
+				disablePatch()
+			default:
+				// pass：若客户端传的是别名 "fast"，归一化为 "priority"
+				// 后写回 body，确保上游收到的是其能识别的规范值。
+				if normTier != rawTier {
+					reqBody["service_tier"] = normTier
+					bodyModified = true
+					markPatchSet("service_tier", normTier)
+				}
+			}
 		}
 	}
 
@@ -2123,7 +2401,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			"forward_start account_id=%d account_type=%s model=%s stream=%v has_previous_response_id=%v",
 			account.ID,
 			account.Type,
-			mappedModel,
+			upstreamModel,
 			reqStream,
 			hasPreviousResponseID,
 		)
@@ -2212,7 +2490,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				isCodexCLI,
 				reqStream,
 				originalModel,
-				mappedModel,
+				upstreamModel,
 				startTime,
 				attempt,
 				wsLastFailureReason,
@@ -2313,7 +2591,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				firstTokenMs,
 				wsAttempts,
 			)
-			wsResult.UpstreamModel = mappedModel
+			wsResult.UpstreamModel = upstreamModel
 			return wsResult, nil
 		}
 		s.writeOpenAIWSFallbackErrorResponse(c, account, wsErr)
@@ -2418,14 +2696,14 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		var usage *OpenAIUsage
 		var firstTokenMs *int
 		if reqStream {
-			streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, mappedModel)
+			streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, upstreamModel)
 			if err != nil {
 				return nil, err
 			}
 			usage = streamResult.usage
 			firstTokenMs = streamResult.firstTokenMs
 		} else {
-			usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, mappedModel)
+			usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, upstreamModel)
 			if err != nil {
 				return nil, err
 			}
@@ -2449,7 +2727,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			RequestID:       resp.Header.Get("x-request-id"),
 			Usage:           *usage,
 			Model:           originalModel,
-			UpstreamModel:   mappedModel,
+			UpstreamModel:   upstreamModel,
 			ServiceTier:     serviceTier,
 			ReasoningEffort: reasoningEffort,
 			Stream:          reqStream,
@@ -2470,6 +2748,19 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	reqStream bool,
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
+	upstreamPassthroughModel := ""
+	if isOpenAIResponsesCompactPath(c) {
+		compactMappedModel := resolveOpenAICompactForwardModel(account, reqModel)
+		if compactMappedModel != "" && compactMappedModel != reqModel {
+			nextBody, setErr := sjson.SetBytes(body, "model", compactMappedModel)
+			if setErr != nil {
+				return nil, fmt.Errorf("set compact passthrough model: %w", setErr)
+			}
+			body = nextBody
+			upstreamPassthroughModel = compactMappedModel
+		}
+	}
+
 	if account != nil && account.Type == AccountTypeOAuth {
 		if rejectReason := detectOpenAIPassthroughInstructionsRejectReason(reqModel, body); rejectReason != "" {
 			rejectMsg := "OpenAI codex passthrough requires a non-empty instructions field"
@@ -2494,37 +2785,14 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			return nil, fmt.Errorf("openai passthrough rejected before upstream: %s", rejectReason)
 		}
 
-		normalizedBody, normalized, droppedCount, err := normalizeOpenAIPassthroughOAuthBody(
-			body,
-			isOpenAIResponsesCompactPath(c),
-			account.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled(),
-		)
+		normalizedBody, normalized, err := normalizeOpenAIPassthroughOAuthBody(body, isOpenAIResponsesCompactPath(c))
 		if err != nil {
 			return nil, err
 		}
 		if normalized {
 			body = normalizedBody
 		}
-		logOpenAICodexDroppedNativeItemReferences(account, "oauth_passthrough", droppedCount)
 		reqStream = gjson.GetBytes(body, "stream").Bool()
-	}
-
-	bodyWithInstructions, instructionsChanged, err := ensureOpenAIPassthroughInstructions(body)
-	if err != nil {
-		return nil, err
-	}
-	if instructionsChanged {
-		body = bodyWithInstructions
-	}
-
-	if shouldNormalizeOpenAIPassthroughReasoningBody(body) {
-		reasoningBody, reasoningChanged, err := normalizeOpenAIPassthroughReasoningBody(body)
-		if err != nil {
-			return nil, err
-		}
-		if reasoningChanged {
-			body = reasoningBody
-		}
 	}
 
 	sanitizedBody, sanitized, err := sanitizeEmptyBase64InputImagesInOpenAIBody(body)
@@ -2534,6 +2802,26 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	if sanitized {
 		body = sanitizedBody
 	}
+
+	// Apply OpenAI fast policy to the passthrough body (filter/block by service_tier).
+	// 统一使用 upstream 视角的 model：透传路径下 body 已经过 compact 映射 +
+	// OAuth normalize，body 中的 model 字段即上游真正会看到的 slug。
+	// 这样可以与 chat-completions / messages / native /responses 入口的
+	// upstreamModel 保持一致，避免 whitelist 命中差异。当 body 中没有
+	// model 字段时退回 reqModel。
+	policyModel := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	if policyModel == "" {
+		policyModel = reqModel
+	}
+	updatedBody, policyErr := s.applyOpenAIFastPolicyToBody(ctx, account, policyModel, body)
+	if policyErr != nil {
+		var blocked *OpenAIFastBlockedError
+		if errors.As(policyErr, &blocked) {
+			writeOpenAIFastPolicyBlockedResponse(c, blocked)
+		}
+		return nil, policyErr
+	}
+	body = updatedBody
 
 	logger.LegacyPrintf("service.openai_gateway",
 		"[OpenAI 自动透传] 命中自动透传分支: account=%d name=%s type=%s model=%s stream=%v",
@@ -2604,30 +2892,30 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		})
 		return nil, fmt.Errorf("upstream request failed: %s", safeErr)
 	}
-	if resp == nil || resp.Body == nil {
-		return nil, wrapRecoverableOpenAIPassthroughError(c, account, resp, errOpenAIEmptyResponse)
-	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		// 透传模式仍保留原始响应体；但对明确可恢复的错误允许上层切号，
-		// 避免单个坏号持续把上游错误直接扩散给客户端。
+		// 透传模式默认保持原样代理；但 429/529 属于网关必须兜底的
+		// 上游容量类错误，应先触发多账号 failover 以维持基础 SLA。
+		if shouldFailoverOpenAIPassthroughResponse(resp.StatusCode) {
+			return nil, s.handleFailoverErrorResponsePassthrough(ctx, resp, c, account, body)
+		}
 		return nil, s.handleErrorResponsePassthrough(ctx, resp, c, account, body)
 	}
 
 	var usage *OpenAIUsage
 	var firstTokenMs *int
 	if reqStream {
-		result, err := s.handleStreamingResponsePassthrough(ctx, resp, c, account, startTime)
+		result, err := s.handleStreamingResponsePassthrough(ctx, resp, c, account, startTime, reqModel, upstreamPassthroughModel)
 		if err != nil {
-			return nil, wrapRecoverableOpenAIPassthroughError(c, account, resp, err)
+			return nil, err
 		}
 		usage = result.usage
 		firstTokenMs = result.firstTokenMs
 	} else {
-		usage, err = s.handleNonStreamingResponsePassthrough(ctx, resp, c, account)
+		usage, err = s.handleNonStreamingResponsePassthrough(ctx, resp, c, reqModel, upstreamPassthroughModel)
 		if err != nil {
-			return nil, wrapRecoverableOpenAIPassthroughError(c, account, resp, err)
+			return nil, err
 		}
 	}
 
@@ -2643,6 +2931,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		RequestID:       resp.Header.Get("x-request-id"),
 		Usage:           *usage,
 		Model:           reqModel,
+		UpstreamModel:   upstreamPassthroughModel,
 		ServiceTier:     extractOpenAIServiceTierFromBody(body),
 		ReasoningEffort: reasoningEffort,
 		Stream:          reqStream,
@@ -2701,15 +2990,10 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 			if err != nil {
 				return nil, err
 			}
-			targetURL = validatedURL
-			if account.ShouldAppendAPIPath() {
-				targetURL = buildOpenAIResponsesURL(validatedURL)
-			}
+			targetURL = buildOpenAIResponsesURL(validatedURL)
 		}
 	}
-	if account.ShouldAppendAPIPath() {
-		targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
-	}
+	targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -2799,7 +3083,16 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	return req, nil
 }
 
-func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
+func shouldFailoverOpenAIPassthroughResponse(statusCode int) bool {
+	switch statusCode {
+	case http.StatusTooManyRequests, 529:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *OpenAIGatewayService) handleFailoverErrorResponsePassthrough(
 	ctx context.Context,
 	resp *http.Response,
 	c *gin.Context,
@@ -2807,8 +3100,6 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 	requestBody []byte,
 ) error {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	rawBody := append([]byte(nil), body...)
-	body = normalizeOpenAIPassthroughErrorBody(resp.StatusCode, resp.Header, body)
 
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
 	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
@@ -2818,33 +3109,53 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 		if maxBytes <= 0 {
 			maxBytes = 2048
 		}
-		upstreamDetail = truncateString(string(rawBody), maxBytes)
+		upstreamDetail = truncateString(string(body), maxBytes)
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 	logOpenAIInstructionsRequiredDebug(ctx, c, account, resp.StatusCode, upstreamMsg, requestBody, body)
-	if s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, body) {
-		if s.rateLimitService != nil {
-			_ = s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
-		}
-		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-			Platform:             account.Platform,
-			AccountID:            account.ID,
-			AccountName:          account.Name,
-			UpstreamStatusCode:   resp.StatusCode,
-			UpstreamRequestID:    resp.Header.Get("x-request-id"),
-			Passthrough:          true,
-			Kind:                 "failover",
-			Message:              upstreamMsg,
-			Detail:               upstreamDetail,
-			UpstreamResponseBody: upstreamDetail,
-		})
-		return &UpstreamFailoverError{
-			StatusCode:             resp.StatusCode,
-			ResponseBody:           body,
-			ResponseHeaders:        resp.Header.Clone(),
-			RetryableOnSameAccount: account.IsPoolMode() && (isPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, body)),
-		}
+	if s.rateLimitService != nil {
+		_ = s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
 	}
+	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		Platform:             account.Platform,
+		AccountID:            account.ID,
+		AccountName:          account.Name,
+		UpstreamStatusCode:   resp.StatusCode,
+		UpstreamRequestID:    resp.Header.Get("x-request-id"),
+		Passthrough:          true,
+		Kind:                 "failover",
+		Message:              upstreamMsg,
+		Detail:               upstreamDetail,
+		UpstreamResponseBody: upstreamDetail,
+	})
+	return &UpstreamFailoverError{
+		StatusCode:      resp.StatusCode,
+		ResponseBody:    body,
+		ResponseHeaders: resp.Header.Clone(),
+	}
+}
+
+func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
+	ctx context.Context,
+	resp *http.Response,
+	c *gin.Context,
+	account *Account,
+	requestBody []byte,
+) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+
+	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
+	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+	upstreamDetail := ""
+	if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+		maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+		if maxBytes <= 0 {
+			maxBytes = 2048
+		}
+		upstreamDetail = truncateString(string(body), maxBytes)
+	}
+	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
+	logOpenAIInstructionsRequiredDebug(ctx, c, account, resp.StatusCode, upstreamMsg, requestBody, body)
 	if s.rateLimitService != nil {
 		// Passthrough mode preserves the raw upstream error response, but runtime
 		// account state still needs to be updated so sticky routing can stop
@@ -2875,196 +3186,6 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 		return fmt.Errorf("upstream error: %d", resp.StatusCode)
 	}
 	return fmt.Errorf("upstream error: %d message=%s", resp.StatusCode, upstreamMsg)
-}
-
-func normalizeOpenAIPassthroughErrorBody(statusCode int, headers http.Header, body []byte) []byte {
-	trimmed := bytes.TrimSpace(body)
-	if len(trimmed) == 0 {
-		return body
-	}
-	if isLikelyOpenAIHTMLResponse(headers, trimmed) {
-		return buildSyntheticOpenAIHTMLResponseBody(statusCode)
-	}
-	if !gjson.ValidBytes(trimmed) || !gjson.GetBytes(trimmed, "error").Exists() {
-		return body
-	}
-
-	originalMsg := strings.TrimSpace(gjson.GetBytes(trimmed, "error.message").String())
-	normalizedMsg := strings.TrimSpace(extractUpstreamErrorMessage(trimmed))
-	normalizedMsg = sanitizeUpstreamErrorMessage(normalizedMsg)
-	normalizedMsg = collapseTrailingRequestIDSuffixes(normalizedMsg)
-
-	errType := strings.TrimSpace(extractUpstreamErrorType(trimmed))
-	shouldFixType := !isUsableOpenAIErrorType(errType)
-	if shouldFixType {
-		errType = fallbackOpenAIPassthroughErrorType(statusCode)
-	}
-
-	shouldFixMessage := normalizedMsg != "" && normalizedMsg != originalMsg
-	if !shouldFixType && !shouldFixMessage {
-		return body
-	}
-
-	normalized := append([]byte(nil), trimmed...)
-	var err error
-	if shouldFixType {
-		normalized, err = sjson.SetBytes(normalized, "error.type", errType)
-		if err != nil {
-			return body
-		}
-	}
-	if shouldFixMessage {
-		normalized, err = sjson.SetBytes(normalized, "error.message", normalizedMsg)
-		if err != nil {
-			return body
-		}
-	}
-	return normalized
-}
-
-func isLikelyOpenAIHTMLResponse(headers http.Header, body []byte) bool {
-	trimmed := bytes.TrimSpace(body)
-	if len(trimmed) == 0 {
-		return false
-	}
-
-	contentType := ""
-	if headers != nil {
-		contentType = strings.ToLower(strings.TrimSpace(headers.Get("Content-Type")))
-	}
-	if strings.Contains(contentType, "text/html") {
-		return true
-	}
-
-	preview := trimmed
-	if len(preview) > 4096 {
-		preview = preview[:4096]
-	}
-	lowerPreview := strings.ToLower(string(preview))
-	return strings.Contains(lowerPreview, "<html") ||
-		strings.Contains(lowerPreview, "<!doctype html") ||
-		strings.Contains(lowerPreview, "window._cf_chl_opt")
-}
-
-func buildSyntheticOpenAIHTMLResponseBody(statusCode int) []byte {
-	message := "Upstream returned an HTML error page"
-	code := "html_error_response"
-	if statusCode >= 200 && statusCode < 300 {
-		message = "Upstream returned an HTML response"
-		code = "html_response"
-	}
-	return buildSyntheticOpenAIErrorResponseBody(message, code)
-}
-
-func extractUpstreamErrorType(body []byte) string {
-	if errType := strings.TrimSpace(gjson.GetBytes(body, "error.type").String()); errType != "" {
-		return errType
-	}
-
-	inner := strings.TrimSpace(gjson.GetBytes(body, "error.message").String())
-	if !strings.HasPrefix(inner, "{") {
-		return ""
-	}
-
-	if errType := strings.TrimSpace(gjson.Get(inner, "error.type").String()); errType != "" {
-		return errType
-	}
-
-	if lastBrace := strings.LastIndex(inner, "}"); lastBrace >= 0 {
-		if errType := strings.TrimSpace(gjson.Get(inner[:lastBrace+1], "error.type").String()); errType != "" {
-			return errType
-		}
-	}
-
-	return ""
-}
-
-func isUsableOpenAIErrorType(errType string) bool {
-	lower := strings.ToLower(strings.TrimSpace(errType))
-	switch lower {
-	case "", "<nil>", "null":
-		return false
-	}
-	return !strings.Contains(lower, "<nil>")
-}
-
-func fallbackOpenAIPassthroughErrorType(statusCode int) string {
-	switch statusCode {
-	case http.StatusBadRequest, http.StatusUnprocessableEntity:
-		return "invalid_request_error"
-	case http.StatusUnauthorized:
-		return "authentication_error"
-	case http.StatusForbidden:
-		return "permission_error"
-	case http.StatusNotFound:
-		return "not_found_error"
-	case http.StatusTooManyRequests:
-		return "rate_limit_error"
-	default:
-		return "api_error"
-	}
-}
-
-func collapseTrailingRequestIDSuffixes(message string) string {
-	message = strings.TrimSpace(message)
-	if message == "" {
-		return message
-	}
-
-	matches := openAIPassthroughRequestIDSuffixRegex.FindAllStringSubmatchIndex(message, -1)
-	if len(matches) <= 1 {
-		return message
-	}
-
-	suffixStart := len(message)
-	ids := make([]string, 0, len(matches))
-	for i := len(matches) - 1; i >= 0; i-- {
-		match := matches[i]
-		if strings.TrimSpace(message[match[1]:suffixStart]) != "" {
-			break
-		}
-		suffixStart = match[0]
-		if len(match) >= 4 {
-			if requestID := strings.TrimSpace(message[match[2]:match[3]]); requestID != "" {
-				ids = append(ids, requestID)
-			}
-		}
-	}
-	if len(ids) <= 1 {
-		return message
-	}
-
-	for left, right := 0, len(ids)-1; left < right; left, right = left+1, right-1 {
-		ids[left], ids[right] = ids[right], ids[left]
-	}
-
-	uniq := make([]string, 0, len(ids))
-	seen := make(map[string]struct{}, len(ids))
-	for _, requestID := range ids {
-		key := strings.ToLower(requestID)
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		uniq = append(uniq, requestID)
-	}
-
-	prefix := strings.TrimSpace(message[:suffixStart])
-	switch len(uniq) {
-	case 0:
-		return prefix
-	case 1:
-		if prefix == "" {
-			return fmt.Sprintf("(request id: %s)", uniq[0])
-		}
-		return prefix + " (request id: " + uniq[0] + ")"
-	default:
-		joined := strings.Join(uniq, ", ")
-		if prefix == "" {
-			return fmt.Sprintf("(request ids: %s)", joined)
-		}
-		return prefix + " (request ids: " + joined + ")"
-	}
 }
 
 func isOpenAIPassthroughAllowedRequestHeader(lowerKey string, allowTimeoutHeaders bool) bool {
@@ -3109,99 +3230,116 @@ func collectOpenAIPassthroughTimeoutHeaders(h http.Header) []string {
 	return matched
 }
 
-func buildSyntheticOpenAIErrorResponseBody(message, code string) []byte {
-	payload := map[string]any{
-		"error": map[string]any{
-			"type":    "upstream_error",
-			"message": message,
-		},
-	}
-	if strings.TrimSpace(code) != "" {
-		payload["error"].(map[string]any)["code"] = code
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return []byte(message)
-	}
-	return raw
-}
-
-func wrapRecoverableOpenAIStreamError(c *gin.Context, account *Account, resp *http.Response, err error, passthrough bool) error {
-	if err == nil {
-		return nil
-	}
-	if c == nil || c.Writer == nil || c.Writer.Written() {
-		return err
-	}
-
-	message := ""
-	code := ""
-	switch {
-	case errors.Is(err, errOpenAIEmptyResponse):
-		message = "Upstream returned empty response"
-		code = "empty_response"
-	case errors.Is(err, errOpenAIHTMLResponse):
-		message = "Upstream returned an HTML response"
-		code = "html_response"
-	case errors.Is(err, errOpenAIStreamMissingTerminal):
-		message = "Upstream stream ended before a terminal event"
-		code = "stream_incomplete"
-	default:
-		return err
-	}
-
-	upstreamStatusCode := 0
-	upstreamRequestID := ""
-	var responseHeaders http.Header
-	if resp != nil {
-		upstreamStatusCode = resp.StatusCode
-		if resp.Header != nil {
-			upstreamRequestID = strings.TrimSpace(resp.Header.Get("x-request-id"))
-			responseHeaders = resp.Header.Clone()
-		}
-	}
-
-	event := OpsUpstreamErrorEvent{
-		UpstreamStatusCode: upstreamStatusCode,
-		UpstreamRequestID:  upstreamRequestID,
-		Passthrough:        passthrough,
-		Kind:               "failover",
-		Message:            message,
-	}
-	if account != nil {
-		event.Platform = account.Platform
-		event.AccountID = account.ID
-		event.AccountName = account.Name
-	}
-	appendOpsUpstreamError(c, event)
-
-	return &UpstreamFailoverError{
-		StatusCode:             http.StatusBadGateway,
-		ResponseBody:           buildSyntheticOpenAIErrorResponseBody(message, code),
-		ResponseHeaders:        responseHeaders,
-		RetryableOnSameAccount: account != nil && account.IsPoolMode(),
-	}
-}
-
-func wrapRecoverableOpenAIPassthroughError(c *gin.Context, account *Account, resp *http.Response, err error) error {
-	return wrapRecoverableOpenAIStreamError(c, account, resp, err, true)
-}
-
-func shouldDelayOpenAIPassthroughPrelude(line string) bool {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" {
-		return true
-	}
-	lower := strings.ToLower(trimmed)
-	return strings.HasPrefix(lower, ":") ||
-		strings.HasPrefix(lower, "event:") ||
-		strings.HasPrefix(lower, "id:") ||
-		strings.HasPrefix(lower, "retry:")
-}
-
 type openaiStreamingResultPassthrough struct {
 	usage        *OpenAIUsage
 	firstTokenMs *int
+}
+
+func openAIStreamClientOutputStarted(c *gin.Context, localStarted bool) bool {
+	if localStarted {
+		return true
+	}
+	return c != nil && c.Writer != nil && c.Writer.Written()
+}
+
+func openAIStreamEventIsPreamble(eventType string) bool {
+	switch strings.TrimSpace(eventType) {
+	case "response.created", "response.in_progress":
+		return true
+	default:
+		return false
+	}
+}
+
+func openAIStreamDataStartsClientOutput(data, eventType string) bool {
+	trimmed := strings.TrimSpace(data)
+	if trimmed == "" {
+		return false
+	}
+	if strings.TrimSpace(eventType) == "response.failed" {
+		return false
+	}
+	return !openAIStreamEventIsPreamble(eventType)
+}
+
+func openAIStreamFailedEventShouldFailover(payload []byte, message string) bool {
+	code := strings.ToLower(strings.TrimSpace(gjson.GetBytes(payload, "response.error.code").String()))
+	if code == "" {
+		code = strings.ToLower(strings.TrimSpace(gjson.GetBytes(payload, "error.code").String()))
+	}
+	errType := strings.ToLower(strings.TrimSpace(gjson.GetBytes(payload, "response.error.type").String()))
+	if errType == "" {
+		errType = strings.ToLower(strings.TrimSpace(gjson.GetBytes(payload, "error.type").String()))
+	}
+	combined := strings.ToLower(strings.TrimSpace(message + " " + code + " " + errType))
+	if combined == "" {
+		return true
+	}
+	nonRetryableMarkers := []string{
+		"invalid_request",
+		"content_policy",
+		"policy",
+		"safety",
+		"high-risk cyber",
+		"not allowed",
+		"violat",
+	}
+	for _, marker := range nonRetryableMarkers {
+		if strings.Contains(combined, marker) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *OpenAIGatewayService) newOpenAIStreamFailoverError(
+	c *gin.Context,
+	account *Account,
+	passthrough bool,
+	upstreamRequestID string,
+	payload []byte,
+	message string,
+) *UpstreamFailoverError {
+	message = sanitizeUpstreamErrorMessage(strings.TrimSpace(message))
+	if message == "" {
+		message = "OpenAI stream disconnected before completion"
+	}
+	detail := ""
+	if len(payload) > 0 && s != nil && s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+		maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+		if maxBytes <= 0 {
+			maxBytes = 2048
+		}
+		detail = truncateString(string(payload), maxBytes)
+	}
+	if c != nil {
+		setOpsUpstreamError(c, http.StatusBadGateway, message, detail)
+		event := OpsUpstreamErrorEvent{
+			Platform:           PlatformOpenAI,
+			UpstreamStatusCode: http.StatusBadGateway,
+			UpstreamRequestID:  strings.TrimSpace(upstreamRequestID),
+			Passthrough:        passthrough,
+			Kind:               "failover",
+			Message:            message,
+			Detail:             detail,
+		}
+		if account != nil {
+			event.Platform = account.Platform
+			event.AccountID = account.ID
+			event.AccountName = account.Name
+		}
+		appendOpsUpstreamError(c, event)
+	}
+	body, _ := json.Marshal(gin.H{
+		"error": gin.H{
+			"type":    "upstream_error",
+			"message": message,
+		},
+	})
+	return &UpstreamFailoverError{
+		StatusCode:   http.StatusBadGateway,
+		ResponseBody: body,
+	}
 }
 
 func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
@@ -3210,6 +3348,8 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	c *gin.Context,
 	account *Account,
 	startTime time.Time,
+	originalModel string,
+	mappedModel string,
 ) (*openaiStreamingResultPassthrough, error) {
 	writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 
@@ -3233,9 +3373,22 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	clientDisconnected := false
 	sawDone := false
 	sawTerminalEvent := false
-	streamActivated := false
-	pendingPrelude := make([]string, 0, 4)
+	sawFailedEvent := false
+	failedMessage := ""
+	clientOutputStarted := false
 	upstreamRequestID := strings.TrimSpace(resp.Header.Get("x-request-id"))
+	pendingLines := make([]string, 0, 8)
+	writePendingLines := func() bool {
+		for _, pending := range pendingLines {
+			if _, err := fmt.Fprintln(w, pending); err != nil {
+				clientDisconnected = true
+				logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] Client disconnected during streaming, continue draining upstream for usage: account=%d", account.ID)
+				return false
+			}
+		}
+		pendingLines = pendingLines[:0]
+		return true
+	}
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -3246,85 +3399,71 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	scanner.Buffer(scanBuf[:0], maxLineSize)
 	defer putSSEScannerBuf64K(scanBuf)
 
-	writeLine := func(line string) {
-		if clientDisconnected {
-			return
-		}
-		if _, err := fmt.Fprintln(w, line); err != nil {
-			clientDisconnected = true
-			logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] Client disconnected during streaming, continue draining upstream for usage: account=%d", account.ID)
-			return
-		}
-		flusher.Flush()
-	}
-	flushPrelude := func() {
-		if len(pendingPrelude) == 0 {
-			return
-		}
-		for _, line := range pendingPrelude {
-			writeLine(line)
-			if clientDisconnected {
-				break
-			}
-		}
-		pendingPrelude = pendingPrelude[:0]
-	}
-	errorEventSent := false
-	sendErrorEvent := func(reason string) {
-		if errorEventSent || clientDisconnected {
-			return
-		}
-		errorEventSent = true
-		if !streamActivated {
-			streamActivated = true
-			flushPrelude()
-		}
-		payload := `{"type":"error","sequence_number":0,"error":{"type":"upstream_error","message":` + strconv.Quote(reason) + `,"code":` + strconv.Quote(reason) + `}}`
-		writeLine("data: " + payload)
-		writeLine("")
-	}
+	needModelReplace := strings.TrimSpace(originalModel) != "" && strings.TrimSpace(mappedModel) != "" && strings.TrimSpace(originalModel) != strings.TrimSpace(mappedModel)
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		lineStartsClientOutput := false
+		forceFlushFailedEvent := false
 		if data, ok := extractOpenAISSEDataLine(line); ok {
 			dataBytes := []byte(data)
 			trimmedData := strings.TrimSpace(data)
+			if needModelReplace && strings.Contains(data, mappedModel) {
+				line = s.replaceModelInSSELine(line, mappedModel, originalModel)
+				if replacedData, replaced := extractOpenAISSEDataLine(line); replaced {
+					dataBytes = []byte(replacedData)
+					trimmedData = strings.TrimSpace(replacedData)
+				}
+			}
+			eventType := strings.TrimSpace(gjson.Get(trimmedData, "type").String())
+			if eventType == "response.failed" {
+				failedMessage = extractOpenAISSEErrorMessage(dataBytes)
+				if !openAIStreamClientOutputStarted(c, clientOutputStarted) && openAIStreamFailedEventShouldFailover(dataBytes, failedMessage) {
+					return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs},
+						s.newOpenAIStreamFailoverError(c, account, true, upstreamRequestID, dataBytes, failedMessage)
+				}
+				forceFlushFailedEvent = true
+				sawFailedEvent = true
+			}
 			if trimmedData == "[DONE]" {
 				sawDone = true
 			}
 			if openAIStreamEventIsTerminal(trimmedData) {
 				sawTerminalEvent = true
 			}
-			if firstTokenMs == nil && trimmedData != "" && trimmedData != "[DONE]" {
+			lineStartsClientOutput = forceFlushFailedEvent || openAIStreamDataStartsClientOutput(trimmedData, eventType)
+			if firstTokenMs == nil && lineStartsClientOutput && trimmedData != "[DONE]" {
 				ms := int(time.Since(startTime).Milliseconds())
 				firstTokenMs = &ms
 			}
 			s.parseSSEUsageBytes(dataBytes, usage)
+		}
 
-			if !streamActivated {
-				if trimmedData == "" || trimmedData == "[DONE]" {
-					pendingPrelude = append(pendingPrelude, line)
+		if !clientDisconnected {
+			if !clientOutputStarted && !lineStartsClientOutput {
+				pendingLines = append(pendingLines, line)
+				continue
+			}
+			if !clientOutputStarted && len(pendingLines) > 0 {
+				if !writePendingLines() {
 					continue
 				}
-				streamActivated = true
-				flushPrelude()
 			}
-		} else if !streamActivated && shouldDelayOpenAIPassthroughPrelude(line) {
-			pendingPrelude = append(pendingPrelude, line)
-			continue
-		} else if !streamActivated {
-			streamActivated = true
-			flushPrelude()
+			if _, err := fmt.Fprintln(w, line); err != nil {
+				clientDisconnected = true
+				logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] Client disconnected during streaming, continue draining upstream for usage: account=%d", account.ID)
+			} else {
+				clientOutputStarted = true
+				flusher.Flush()
+			}
 		}
-
-		writeLine(line)
 	}
 	if err := scanner.Err(); err != nil {
-		if sawTerminalEvent {
+		if sawTerminalEvent && !sawFailedEvent {
 			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, nil
 		}
-		if clientDisconnected {
-			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream usage incomplete after disconnect: %w", err)
+		if sawFailedEvent {
+			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("upstream response failed: %s", failedMessage)
 		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream usage incomplete: %w", err)
@@ -3332,6 +3471,17 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		if errors.Is(err, bufio.ErrTooLong) {
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] SSE line too long: account=%d max_size=%d error=%v", account.ID, maxLineSize, err)
 			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, err
+		}
+		if !openAIStreamClientOutputStarted(c, clientOutputStarted) {
+			msg := "OpenAI stream disconnected before completion"
+			if errText := strings.TrimSpace(err.Error()); errText != "" {
+				msg += ": " + errText
+			}
+			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs},
+				s.newOpenAIStreamFailoverError(c, account, true, upstreamRequestID, nil, msg)
+		}
+		if clientDisconnected {
+			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream usage incomplete after disconnect: %w", err)
 		}
 		logger.LegacyPrintf("service.openai_gateway",
 			"[OpenAI passthrough] 流读取异常中断: account=%d request_id=%s err=%v",
@@ -3341,13 +3491,8 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		)
 		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream read error: %w", err)
 	}
-	if !clientDisconnected && !streamActivated && ctx.Err() == nil {
-		logger.FromContext(ctx).With(
-			zap.String("component", "service.openai_gateway"),
-			zap.Int64("account_id", account.ID),
-			zap.String("upstream_request_id", upstreamRequestID),
-		).Info("OpenAI passthrough 上游流在未收到有效 data 事件时结束，疑似空传")
-		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, errOpenAIEmptyResponse
+	if sawFailedEvent {
+		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("upstream response failed: %s", failedMessage)
 	}
 	if !clientDisconnected && !sawDone && !sawTerminalEvent && ctx.Err() == nil {
 		logger.FromContext(ctx).With(
@@ -3355,8 +3500,11 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			zap.Int64("account_id", account.ID),
 			zap.String("upstream_request_id", upstreamRequestID),
 		).Info("OpenAI passthrough 上游流在未收到 [DONE] 时结束，疑似断流")
-		sendErrorEvent("missing_terminal_event")
-		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, errOpenAIStreamMissingTerminal
+		if !openAIStreamClientOutputStarted(c, clientOutputStarted) {
+			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs},
+				s.newOpenAIStreamFailoverError(c, account, true, upstreamRequestID, nil, "OpenAI stream ended before a terminal event")
+		}
+		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, errors.New("stream usage incomplete: missing terminal event")
 	}
 
 	return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, nil
@@ -3366,17 +3514,20 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	ctx context.Context,
 	resp *http.Response,
 	c *gin.Context,
-	account *Account,
+	originalModel string,
+	mappedModel string,
 ) (*OpenAIUsage, error) {
 	body, err := ReadUpstreamResponseBody(resp.Body, s.cfg, c, openAITooLargeError)
 	if err != nil {
 		return nil, err
 	}
-	if len(bytes.TrimSpace(body)) == 0 {
-		return nil, errOpenAIEmptyResponse
-	}
-	if isLikelyOpenAIHTMLResponse(resp.Header, body) {
-		return nil, errOpenAIHTMLResponse
+
+	// Detect SSE responses from upstream and convert to JSON.
+	// Some upstreams (e.g. other sub2api instances) may return SSE even when
+	// stream=false was requested. Without this conversion the client would
+	// receive raw SSE text or a terminal event with empty output.
+	if isEventStreamResponse(resp.Header) {
+		return s.handlePassthroughSSEToJSON(resp, c, body, originalModel, mappedModel)
 	}
 
 	usage := &OpenAIUsage{}
@@ -3386,9 +3537,6 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 			*usage = parsedUsage
 			usageParsed = true
 		}
-	}
-	if isEventStreamResponse(resp.Header) {
-		return s.handlePassthroughSSEToJSON(resp, c, body)
 	}
 	if !usageParsed {
 		// 兜底：尝试从 SSE 文本中解析 usage
@@ -3401,11 +3549,18 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 	if contentType == "" {
 		contentType = "application/json"
 	}
+	if originalModel != "" && mappedModel != "" && originalModel != mappedModel {
+		body = s.replaceModelInResponseBody(body, mappedModel, originalModel)
+	}
 	c.Data(resp.StatusCode, contentType, body)
 	return usage, nil
 }
 
-func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c *gin.Context, body []byte) (*OpenAIUsage, error) {
+// handlePassthroughSSEToJSON converts an SSE response body into a JSON
+// response for the passthrough path. It mirrors handleSSEToJSON while
+// preserving passthrough payloads, except compact-only model remapping may
+// rewrite model fields back to the original requested model.
+func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c *gin.Context, body []byte, originalModel string, mappedModel string) (*OpenAIUsage, error) {
 	bodyText := string(body)
 	finalResponse, ok := extractCodexFinalResponse(bodyText)
 
@@ -3414,7 +3569,21 @@ func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c
 		if parsedUsage, parsed := extractOpenAIUsageFromJSONBytes(finalResponse); parsed {
 			*usage = parsedUsage
 		}
-		body = s.correctToolCallsInResponseBody(finalResponse)
+		// When the terminal event has an empty output array, reconstruct
+		// output from accumulated delta events so the client gets full content.
+		if len(gjson.GetBytes(finalResponse, "output").Array()) == 0 {
+			if outputJSON, reconstructed := reconstructResponseOutputFromSSE(bodyText); reconstructed {
+				if patched, err := sjson.SetRawBytes(finalResponse, "output", outputJSON); err == nil {
+					finalResponse = patched
+				}
+			}
+		}
+		body = finalResponse
+		if originalModel != "" && mappedModel != "" && originalModel != mappedModel {
+			body = s.replaceModelInResponseBody(body, mappedModel, originalModel)
+		}
+		// Correct tool calls in final response
+		body = s.correctToolCallsInResponseBody(body)
 	} else {
 		terminalType, terminalPayload, terminalOK := extractOpenAISSETerminalEvent(bodyText)
 		if terminalOK && terminalType == "response.failed" {
@@ -3425,6 +3594,10 @@ func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c
 			return nil, s.writeOpenAINonStreamingProtocolError(resp, c, msg)
 		}
 		usage = s.parseSSEUsageFromBody(bodyText)
+		if originalModel != "" && mappedModel != "" && originalModel != mappedModel {
+			bodyText = s.replaceModelInSSEBody(bodyText, mappedModel, originalModel)
+		}
+		body = []byte(bodyText)
 	}
 
 	writeOpenAIPassthroughResponseHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
@@ -3436,8 +3609,8 @@ func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c
 			contentType = "text/event-stream"
 		}
 	}
-	c.Writer.Header().Set("Content-Type", contentType)
 	c.Data(resp.StatusCode, contentType, body)
+
 	return usage, nil
 }
 
@@ -3506,17 +3679,12 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 			if err != nil {
 				return nil, err
 			}
-			targetURL = validatedURL
-			if account.ShouldAppendAPIPath() {
-				targetURL = buildOpenAIResponsesURL(validatedURL)
-			}
+			targetURL = buildOpenAIResponsesURL(validatedURL)
 		}
 	default:
 		targetURL = openaiPlatformAPIURL
 	}
-	if account.ShouldAppendAPIPath() {
-		targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
-	}
+	targetURL = appendOpenAIResponsesRequestPathSuffix(targetURL, openAIResponsesRequestPathSuffix(c))
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -3704,13 +3872,6 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 	var statusCode int
 
 	switch resp.StatusCode {
-	case 400:
-		statusCode = http.StatusBadRequest
-		errType = "invalid_request_error"
-		errMsg = upstreamMsg
-		if errMsg == "" {
-			errMsg = "Invalid request"
-		}
 	case 401:
 		statusCode = http.StatusBadGateway
 		errType = "upstream_error"
@@ -3935,8 +4096,10 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	if keepaliveTicker != nil {
 		keepaliveCh = keepaliveTicker.C
 	}
-	// 记录上次收到上游数据的时间，用于控制 keepalive 发送频率
-	lastDataAt := time.Now()
+	// Track downstream writes separately from upstream reads: pre-output failover
+	// can buffer response.created / response.in_progress, so keepalive must be
+	// based on downstream idle time.
+	lastDownstreamWriteAt := time.Now()
 
 	// 仅发送一次错误事件，避免多次写入导致协议混乱。
 	// 注意：OpenAI `/v1/responses` streaming 事件必须符合 OpenAI Responses schema；
@@ -3944,6 +4107,11 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	errorEventSent := false
 	clientDisconnected := false // 客户端断开后继续 drain 上游以收集 usage
 	sawTerminalEvent := false
+	sawFailedEvent := false
+	failedMessage := ""
+	clientOutputStarted := false
+	upstreamRequestID := strings.TrimSpace(resp.Header.Get("x-request-id"))
+	var streamFailoverErr error
 	sendErrorEvent := func(reason string) {
 		if errorEventSent || clientDisconnected {
 			return
@@ -3960,24 +4128,42 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 		}
 		if err := flushBuffered(); err != nil {
 			clientDisconnected = true
+			return
 		}
+		clientOutputStarted = true
+		lastDownstreamWriteAt = time.Now()
 	}
 
 	needModelReplace := originalModel != mappedModel
-	responsesAccumulator := newResponsesStreamAccumulator()
 	resultWithUsage := func() *openaiStreamingResult {
 		return &openaiStreamingResult{usage: usage, firstTokenMs: firstTokenMs}
 	}
 	finalizeStream := func() (*openaiStreamingResult, error) {
+		if !sawTerminalEvent {
+			if !openAIStreamClientOutputStarted(c, clientOutputStarted) {
+				return resultWithUsage(), s.newOpenAIStreamFailoverError(
+					c,
+					account,
+					false,
+					upstreamRequestID,
+					nil,
+					"OpenAI stream ended before a terminal event",
+				)
+			}
+			return resultWithUsage(), fmt.Errorf("stream usage incomplete: missing terminal event")
+		}
+		if sawFailedEvent {
+			return resultWithUsage(), fmt.Errorf("upstream response failed: %s", failedMessage)
+		}
 		if !clientDisconnected {
+			hadBufferedData := bufferedWriter.Buffered() > 0
 			if err := flushBuffered(); err != nil {
 				clientDisconnected = true
 				logger.LegacyPrintf("service.openai_gateway", "Client disconnected during final flush, returning collected usage")
+			} else if hadBufferedData {
+				clientOutputStarted = true
+				lastDownstreamWriteAt = time.Now()
 			}
-		}
-		if !sawTerminalEvent {
-			sendErrorEvent("missing_terminal_event")
-			return resultWithUsage(), fmt.Errorf("stream usage incomplete: missing terminal event")
 		}
 		return resultWithUsage(), nil
 	}
@@ -3985,48 +4171,65 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 		if scanErr == nil {
 			return nil, nil, false
 		}
-		if sawTerminalEvent {
+		if sawTerminalEvent && !sawFailedEvent {
 			logger.LegacyPrintf("service.openai_gateway", "Upstream scan ended after terminal event: %v", scanErr)
 			return resultWithUsage(), nil, true
+		}
+		if sawFailedEvent {
+			return resultWithUsage(), fmt.Errorf("upstream response failed: %s", failedMessage), true
 		}
 		// 客户端断开/取消请求时，上游读取往往会返回 context canceled。
 		// /v1/responses 的 SSE 事件必须符合 OpenAI 协议；这里不注入自定义 error event，避免下游 SDK 解析失败。
 		if errors.Is(scanErr, context.Canceled) || errors.Is(scanErr, context.DeadlineExceeded) {
 			return resultWithUsage(), fmt.Errorf("stream usage incomplete: %w", scanErr), true
 		}
-		// 客户端已断开时，上游出错仅影响体验，不影响计费；返回已收集 usage
-		if clientDisconnected {
-			return resultWithUsage(), fmt.Errorf("stream usage incomplete after disconnect: %w", scanErr), true
-		}
 		if errors.Is(scanErr, bufio.ErrTooLong) {
 			logger.LegacyPrintf("service.openai_gateway", "SSE line too long: account=%d max_size=%d error=%v", account.ID, maxLineSize, scanErr)
 			sendErrorEvent("response_too_large")
 			return resultWithUsage(), scanErr, true
 		}
+		if !openAIStreamClientOutputStarted(c, clientOutputStarted) {
+			msg := "OpenAI stream disconnected before completion"
+			if errText := strings.TrimSpace(scanErr.Error()); errText != "" {
+				msg += ": " + errText
+			}
+			return resultWithUsage(), s.newOpenAIStreamFailoverError(c, account, false, upstreamRequestID, nil, msg), true
+		}
+		// 客户端已断开时，上游出错仅影响体验，不影响计费；返回已收集 usage
+		if clientDisconnected {
+			return resultWithUsage(), fmt.Errorf("stream usage incomplete after disconnect: %w", scanErr), true
+		}
 		sendErrorEvent("stream_read_error")
 		return resultWithUsage(), fmt.Errorf("stream read error: %w", scanErr), true
 	}
 	processSSELine := func(line string, queueDrained bool) {
-		lastDataAt = time.Now()
-
+		if streamFailoverErr != nil {
+			return
+		}
 		// Extract data from SSE line (supports both "data: " and "data:" formats)
 		if data, ok := extractOpenAISSEDataLine(line); ok {
 
 			// Replace model in response if needed.
 			// Fast path: most events do not contain model field values.
 			if needModelReplace && mappedModel != "" && strings.Contains(data, mappedModel) {
-				replacedLine := s.replaceModelInSSELine(line, mappedModel, originalModel)
-				if replacedLine != line {
-					line = replacedLine
-					if replacedData, ok := extractOpenAISSEDataLine(line); ok {
-						data = replacedData
-					}
-				}
+				line = s.replaceModelInSSELine(line, mappedModel, originalModel)
 			}
 
 			dataBytes := []byte(data)
 			if openAIStreamEventIsTerminal(data) {
 				sawTerminalEvent = true
+			}
+			eventType := strings.TrimSpace(gjson.GetBytes(dataBytes, "type").String())
+			forceFlushFailedEvent := false
+			if eventType == "response.failed" {
+				failedMessage = extractOpenAISSEErrorMessage(dataBytes)
+				if !openAIStreamClientOutputStarted(c, clientOutputStarted) && openAIStreamFailedEventShouldFailover(dataBytes, failedMessage) {
+					sawFailedEvent = true
+					streamFailoverErr = s.newOpenAIStreamFailoverError(c, account, false, upstreamRequestID, dataBytes, failedMessage)
+					return
+				}
+				forceFlushFailedEvent = true
+				sawFailedEvent = true
 			}
 
 			// Correct Codex tool calls if needed (apply_patch -> edit, etc.)
@@ -4034,17 +4237,14 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 				dataBytes = correctedData
 				data = string(correctedData)
 				line = "data: " + data
+				eventType = strings.TrimSpace(gjson.GetBytes(dataBytes, "type").String())
 			}
-			if patchedData, patched := patchResponsesTerminalOutputSSEData(dataBytes, responsesAccumulator); patched {
-				dataBytes = patchedData
-				data = string(patchedData)
-				line = "data: " + data
-			}
+			startsClientOutput := forceFlushFailedEvent || openAIStreamDataStartsClientOutput(data, eventType)
 
 			// 写入客户端（客户端断开后继续 drain 上游）
 			if !clientDisconnected {
-				shouldFlush := queueDrained
-				if firstTokenMs == nil && data != "" && data != "[DONE]" {
+				shouldFlush := queueDrained && (clientOutputStarted || startsClientOutput)
+				if firstTokenMs == nil && startsClientOutput {
 					// 保证首个 token 事件尽快出站，避免影响 TTFT。
 					shouldFlush = true
 				}
@@ -4058,12 +4258,15 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 					if err := flushBuffered(); err != nil {
 						clientDisconnected = true
 						logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming flush, continuing to drain upstream for billing")
+					} else {
+						clientOutputStarted = true
+						lastDownstreamWriteAt = time.Now()
 					}
 				}
 			}
 
 			// Record first token time
-			if firstTokenMs == nil && data != "" && data != "[DONE]" {
+			if firstTokenMs == nil && startsClientOutput {
 				ms := int(time.Since(startTime).Milliseconds())
 				firstTokenMs = &ms
 			}
@@ -4079,10 +4282,13 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			} else if _, err := bufferedWriter.WriteString("\n"); err != nil {
 				clientDisconnected = true
 				logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming, continuing to drain upstream for billing")
-			} else if queueDrained {
+			} else if queueDrained && clientOutputStarted {
 				if err := flushBuffered(); err != nil {
 					clientDisconnected = true
 					logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming flush, continuing to drain upstream for billing")
+				} else {
+					clientOutputStarted = true
+					lastDownstreamWriteAt = time.Now()
 				}
 			}
 		}
@@ -4093,6 +4299,9 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 		defer putSSEScannerBuf64K(scanBuf)
 		for scanner.Scan() {
 			processSSELine(scanner.Text(), true)
+			if streamFailoverErr != nil {
+				return resultWithUsage(), streamFailoverErr
+			}
 		}
 		if result, err, done := handleScanErr(scanner.Err()); done {
 			return result, err
@@ -4142,6 +4351,9 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 				return result, err
 			}
 			processSSELine(ev.line, len(events) == 0)
+			if streamFailoverErr != nil {
+				return resultWithUsage(), streamFailoverErr
+			}
 
 		case <-intervalCh:
 			lastRead := time.Unix(0, atomic.LoadInt64(&lastReadAt))
@@ -4163,7 +4375,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			if clientDisconnected {
 				continue
 			}
-			if time.Since(lastDataAt) < keepaliveInterval {
+			if time.Since(lastDownstreamWriteAt) < keepaliveInterval {
 				continue
 			}
 			if _, err := bufferedWriter.WriteString(":\n\n"); err != nil {
@@ -4174,6 +4386,8 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			if err := flushBuffered(); err != nil {
 				clientDisconnected = true
 				logger.LegacyPrintf("service.openai_gateway", "Client disconnected during keepalive flush, continuing to drain upstream for billing")
+			} else {
+				lastDownstreamWriteAt = time.Now()
 			}
 		}
 	}
@@ -4194,215 +4408,6 @@ func extractOpenAISSEDataLine(line string) (string, bool) {
 		start++
 	}
 	return line[start:], true
-}
-
-func patchResponsesTerminalOutputSSEData(data []byte, accumulator *responsesStreamAccumulator) ([]byte, bool) {
-	if accumulator == nil {
-		return data, false
-	}
-	trimmed := bytes.TrimSpace(data)
-	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("[DONE]")) || !bytes.Contains(trimmed, []byte("response.")) {
-		return data, false
-	}
-
-	var event apicompat.ResponsesStreamEvent
-	if err := json.Unmarshal(trimmed, &event); err != nil || event.Type == "" {
-		return data, false
-	}
-	accumulator.ApplyEvent(&event)
-
-	switch event.Type {
-	case "response.completed", "response.done", "response.incomplete", "response.failed":
-	default:
-		return data, false
-	}
-
-	finalResponse, ok := accumulator.FinalResponse()
-	if !ok || len(finalResponse.Output) == 0 {
-		return data, false
-	}
-	finalOutput := normalizeResponsesTerminalOutput(finalResponse.Output)
-	if len(finalOutput) == 0 || !responsesTerminalOutputNeedsPatch(trimmed, finalOutput) {
-		return data, false
-	}
-
-	outputBytes, err := json.Marshal(finalOutput)
-	if err != nil {
-		return data, false
-	}
-	patched, err := sjson.SetRawBytes(trimmed, "response.output", outputBytes)
-	if err != nil {
-		return data, false
-	}
-	return patched, true
-}
-
-func normalizeResponsesTerminalOutput(output []apicompat.ResponsesOutput) []apicompat.ResponsesOutput {
-	out := cloneResponsesOutputs(output)
-	for i := range out {
-		item := &out[i]
-		if item.Type == "" {
-			item.Type = inferResponsesOutputType(item)
-		}
-		switch item.Type {
-		case "message":
-			if item.Role == "" {
-				item.Role = "assistant"
-			}
-			if len(item.Content) == 0 {
-				item.Content = []apicompat.ResponsesContentPart{{Type: "output_text"}}
-				continue
-			}
-			for j := range item.Content {
-				if item.Content[j].Type == "" {
-					item.Content[j].Type = inferResponsesContentPartType(item.Content[j])
-				}
-			}
-		case "reasoning":
-			for j := range item.Summary {
-				if item.Summary[j].Type == "" {
-					item.Summary[j].Type = "summary_text"
-				}
-			}
-		}
-	}
-	return out
-}
-
-func inferResponsesOutputType(item *apicompat.ResponsesOutput) string {
-	if item == nil {
-		return ""
-	}
-	if len(item.Content) > 0 || item.Role != "" {
-		return "message"
-	}
-	if len(item.Summary) > 0 || item.EncryptedContent != "" {
-		return "reasoning"
-	}
-	if item.CallID != "" || item.Name != "" || item.Arguments != "" {
-		return "function_call"
-	}
-	if item.Action != nil {
-		return "web_search_call"
-	}
-	return ""
-}
-
-func inferResponsesContentPartType(part apicompat.ResponsesContentPart) string {
-	if part.ImageURL != "" {
-		return "output_image"
-	}
-	return "output_text"
-}
-
-func responsesTerminalOutputNeedsPatch(data []byte, finalOutput []apicompat.ResponsesOutput) bool {
-	output := gjson.GetBytes(data, "response.output")
-	if !output.Exists() || !output.IsArray() {
-		return true
-	}
-	items := output.Array()
-	if len(items) < len(finalOutput) {
-		return true
-	}
-	for i := range finalOutput {
-		basePath := fmt.Sprintf("response.output.%d", i)
-		item := finalOutput[i]
-		currentType := gjson.GetBytes(data, basePath+".type").String()
-		if currentType == "" && item.Type != "" {
-			return true
-		}
-		typ := firstNonEmpty(currentType, item.Type)
-		switch typ {
-		case "message":
-			if item.Role != "" && gjson.GetBytes(data, basePath+".role").String() == "" {
-				return true
-			}
-			if responsesTerminalContentNeedsPatch(data, basePath, item.Content) {
-				return true
-			}
-		case "reasoning":
-			if responsesTerminalSummaryNeedsPatch(data, basePath, item.Summary) {
-				return true
-			}
-		case "function_call":
-			if item.CallID != "" && gjson.GetBytes(data, basePath+".call_id").String() != item.CallID {
-				return true
-			}
-			if item.Name != "" && gjson.GetBytes(data, basePath+".name").String() != item.Name {
-				return true
-			}
-			if item.Arguments != "" && gjson.GetBytes(data, basePath+".arguments").String() != item.Arguments {
-				return true
-			}
-		case "web_search_call":
-			if item.Action != nil {
-				actionPath := basePath + ".action"
-				if !gjson.GetBytes(data, actionPath).Exists() {
-					return true
-				}
-				if item.Action.Type != "" && gjson.GetBytes(data, actionPath+".type").String() != item.Action.Type {
-					return true
-				}
-				if item.Action.Query != "" && gjson.GetBytes(data, actionPath+".query").String() != item.Action.Query {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-func responsesTerminalContentNeedsPatch(data []byte, itemPath string, finalContent []apicompat.ResponsesContentPart) bool {
-	if len(finalContent) == 0 {
-		return false
-	}
-	contentPath := itemPath + ".content"
-	content := gjson.GetBytes(data, contentPath)
-	if !content.Exists() || !content.IsArray() {
-		return true
-	}
-	parts := content.Array()
-	if len(parts) < len(finalContent) {
-		return true
-	}
-	for i, part := range finalContent {
-		partPath := fmt.Sprintf("%s.%d", contentPath, i)
-		if part.Type != "" && gjson.GetBytes(data, partPath+".type").String() != part.Type {
-			return true
-		}
-		if part.Text != "" && gjson.GetBytes(data, partPath+".text").String() != part.Text {
-			return true
-		}
-		if part.ImageURL != "" && gjson.GetBytes(data, partPath+".image_url").String() != part.ImageURL {
-			return true
-		}
-	}
-	return false
-}
-
-func responsesTerminalSummaryNeedsPatch(data []byte, itemPath string, finalSummary []apicompat.ResponsesSummary) bool {
-	if len(finalSummary) == 0 {
-		return false
-	}
-	summaryPath := itemPath + ".summary"
-	summary := gjson.GetBytes(data, summaryPath)
-	if !summary.Exists() || !summary.IsArray() {
-		return true
-	}
-	parts := summary.Array()
-	if len(parts) < len(finalSummary) {
-		return true
-	}
-	for i, part := range finalSummary {
-		partPath := fmt.Sprintf("%s.%d", summaryPath, i)
-		if part.Type != "" && gjson.GetBytes(data, partPath+".type").String() != part.Type {
-			return true
-		}
-		if part.Text != "" && gjson.GetBytes(data, partPath+".text").String() != part.Text {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *OpenAIGatewayService) replaceModelInSSELine(line, fromModel, toModel string) string {
@@ -4461,95 +4466,34 @@ func (s *OpenAIGatewayService) parseSSEUsageBytes(data []byte, usage *OpenAIUsag
 		return
 	}
 	eventType := gjson.GetBytes(data, "type").String()
-	if !isResponsesTerminalUsageEvent(eventType) {
+	if eventType != "response.completed" && eventType != "response.done" &&
+		eventType != "response.incomplete" && eventType != "response.cancelled" && eventType != "response.canceled" {
 		return
 	}
 
-	*usage = extractOpenAIUsageFromJSONPaths(
-		data,
-		"response.usage.input_tokens",
-		"response.usage.output_tokens",
-		"response.usage.cache_creation_input_tokens",
-		"response.usage.input_tokens_details.cached_tokens",
-		"response.usage.output_tokens_details.image_tokens",
-	)
+	usage.InputTokens = int(gjson.GetBytes(data, "response.usage.input_tokens").Int())
+	usage.OutputTokens = int(gjson.GetBytes(data, "response.usage.output_tokens").Int())
+	usage.CacheReadInputTokens = int(gjson.GetBytes(data, "response.usage.input_tokens_details.cached_tokens").Int())
+	usage.ImageOutputTokens = int(gjson.GetBytes(data, "response.usage.output_tokens_details.image_tokens").Int())
 }
 
 func extractOpenAIUsageFromJSONBytes(body []byte) (OpenAIUsage, bool) {
 	if len(body) == 0 || !gjson.ValidBytes(body) {
 		return OpenAIUsage{}, false
 	}
-	return extractOpenAIUsageFromJSONPaths(
+	values := gjson.GetManyBytes(
 		body,
 		"usage.input_tokens",
 		"usage.output_tokens",
-		"usage.cache_creation_input_tokens",
 		"usage.input_tokens_details.cached_tokens",
 		"usage.output_tokens_details.image_tokens",
-	), true
-}
-
-func extractOpenAIUsageFromJSONPaths(body []byte, inputPath, outputPath, cacheCreationPath, cacheReadPath string, imageOutputPath ...string) OpenAIUsage {
-	paths := []string{inputPath, outputPath, cacheCreationPath, cacheReadPath}
-	imageOutputIndex := -1
-	if len(imageOutputPath) > 0 && strings.TrimSpace(imageOutputPath[0]) != "" {
-		imageOutputIndex = len(paths)
-		paths = append(paths, imageOutputPath[0])
-	}
-	cacheCreationBreakdownStart := len(paths)
-	breakdown5mPath, breakdown1hPath := deriveOpenAICacheCreationBreakdownPaths(cacheCreationPath)
-	if breakdown5mPath != "" && breakdown1hPath != "" {
-		paths = append(paths, breakdown5mPath, breakdown1hPath)
-	}
-	values := gjson.GetManyBytes(body, paths...)
-	cacheCreationTokens := int(values[2].Int())
-	if cacheCreationTokens == 0 && len(values) >= cacheCreationBreakdownStart+2 {
-		cacheCreationTokens = int(values[cacheCreationBreakdownStart].Int() + values[cacheCreationBreakdownStart+1].Int())
-	}
+	)
 	return OpenAIUsage{
-		InputTokens:              int(values[0].Int()),
-		OutputTokens:             int(values[1].Int()),
-		CacheCreationInputTokens: cacheCreationTokens,
-		CacheReadInputTokens:     int(values[3].Int()),
-		ImageOutputTokens:        usageValueAt(values, imageOutputIndex),
-	}
-}
-
-func deriveOpenAICacheCreationBreakdownPaths(cacheCreationPath string) (string, string) {
-	cacheCreationPath = strings.TrimSpace(cacheCreationPath)
-	if !strings.HasSuffix(cacheCreationPath, "cache_creation_input_tokens") {
-		return "", ""
-	}
-	prefix := strings.TrimSuffix(cacheCreationPath, "cache_creation_input_tokens")
-	return prefix + "cache_creation.ephemeral_5m_input_tokens", prefix + "cache_creation.ephemeral_1h_input_tokens"
-}
-
-func mergeOpenAIUsageFillZero(dst *OpenAIUsage, src OpenAIUsage) {
-	if dst == nil {
-		return
-	}
-	if dst.InputTokens == 0 {
-		dst.InputTokens = src.InputTokens
-	}
-	if dst.OutputTokens == 0 {
-		dst.OutputTokens = src.OutputTokens
-	}
-	if dst.CacheCreationInputTokens == 0 {
-		dst.CacheCreationInputTokens = src.CacheCreationInputTokens
-	}
-	if dst.CacheReadInputTokens == 0 {
-		dst.CacheReadInputTokens = src.CacheReadInputTokens
-	}
-	if dst.ImageOutputTokens == 0 {
-		dst.ImageOutputTokens = src.ImageOutputTokens
-	}
-}
-
-func usageValueAt(values []gjson.Result, idx int) int {
-	if idx < 0 || idx >= len(values) {
-		return 0
-	}
-	return int(values[idx].Int())
+		InputTokens:          int(values[0].Int()),
+		OutputTokens:         int(values[1].Int()),
+		CacheReadInputTokens: int(values[2].Int()),
+		ImageOutputTokens:    int(values[3].Int()),
+	}, true
 }
 
 func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*OpenAIUsage, error) {
@@ -4558,13 +4502,21 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		return nil, err
 	}
 
+	// Detect SSE responses for ALL account types via Content-Type header.
+	// Some OpenAI-compatible upstreams (including other sub2api instances)
+	// may return SSE even when stream=false was requested.
 	if isEventStreamResponse(resp.Header) {
-		return s.handleOAuthSSEToJSON(resp, c, body, originalModel, mappedModel)
+		return s.handleSSEToJSON(resp, c, body, originalModel, mappedModel)
 	}
+	// For OAuth accounts, also fall back to a body-content heuristic because
+	// the upstream may omit the Content-Type header while still sending SSE.
+	// This heuristic is NOT applied to API-key accounts to avoid false
+	// positives on JSON responses that coincidentally contain "data:" or
+	// "event:" in their text content.
 	if account.Type == AccountTypeOAuth {
 		bodyLooksLikeSSE := bytes.Contains(body, []byte("data:")) || bytes.Contains(body, []byte("event:"))
 		if bodyLooksLikeSSE {
-			return s.handleOAuthSSEToJSON(resp, c, body, originalModel, mappedModel)
+			return s.handleSSEToJSON(resp, c, body, originalModel, mappedModel)
 		}
 	}
 
@@ -4588,7 +4540,6 @@ func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, r
 		}
 	}
 
-	c.Writer.Header().Set("Content-Type", contentType)
 	c.Data(resp.StatusCode, contentType, body)
 
 	return usage, nil
@@ -4599,7 +4550,7 @@ func isEventStreamResponse(header http.Header) bool {
 	return strings.Contains(contentType, "text/event-stream")
 }
 
-func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.Context, body []byte, originalModel, mappedModel string) (*OpenAIUsage, error) {
+func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Context, body []byte, originalModel, mappedModel string) (*OpenAIUsage, error) {
 	bodyText := string(body)
 	finalResponse, ok := extractCodexFinalResponse(bodyText)
 
@@ -4607,6 +4558,16 @@ func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.
 	if ok {
 		if parsedUsage, parsed := extractOpenAIUsageFromJSONBytes(finalResponse); parsed {
 			*usage = parsedUsage
+		}
+		// When the terminal event has an empty output array, reconstruct
+		// output from accumulated delta events so the client gets full content.
+		// gjson Array() returns empty slice for null, missing, or empty arrays.
+		if len(gjson.GetBytes(finalResponse, "output").Array()) == 0 {
+			if outputJSON, reconstructed := reconstructResponseOutputFromSSE(bodyText); reconstructed {
+				if patched, err := sjson.SetRawBytes(finalResponse, "output", outputJSON); err == nil {
+					finalResponse = patched
+				}
+			}
 		}
 		body = finalResponse
 		if originalModel != mappedModel {
@@ -4639,7 +4600,6 @@ func (s *OpenAIGatewayService) handleOAuthSSEToJSON(resp *http.Response, c *gin.
 			contentType = "text/event-stream"
 		}
 	}
-	c.Writer.Header().Set("Content-Type", contentType)
 	c.Data(resp.StatusCode, contentType, body)
 
 	return usage, nil
@@ -4654,7 +4614,7 @@ func extractOpenAISSETerminalEvent(body string) (string, []byte, bool) {
 		}
 		eventType := strings.TrimSpace(gjson.Get(data, "type").String())
 		switch eventType {
-		case "response.completed", "response.done", "response.failed":
+		case "response.completed", "response.done", "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
 			return eventType, []byte(data), true
 		}
 	}
@@ -4691,7 +4651,6 @@ func (s *OpenAIGatewayService) writeOpenAINonStreamingProtocolError(resp *http.R
 }
 
 func extractCodexFinalResponse(body string) ([]byte, bool) {
-	accumulator := newResponsesStreamAccumulator()
 	lines := strings.Split(body, "\n")
 	for _, line := range lines {
 		data, ok := extractOpenAISSEDataLine(line)
@@ -4701,24 +4660,86 @@ func extractCodexFinalResponse(body string) ([]byte, bool) {
 		if data == "" || data == "[DONE]" {
 			continue
 		}
+		eventType := gjson.Get(data, "type").String()
+		if eventType == "response.done" || eventType == "response.completed" {
+			if response := gjson.Get(data, "response"); response.Exists() && response.Type == gjson.JSON && response.Raw != "" {
+				return []byte(response.Raw), true
+			}
+		}
+	}
+	return nil, false
+}
+
+// reconstructResponseOutputFromSSE scans raw SSE body text for delta events and
+// returns a JSON-encoded output array reconstructed from accumulated deltas.
+// Returns (nil, false) if no content was found in deltas.
+func reconstructResponseOutputFromSSE(bodyText string) ([]byte, bool) {
+	acc := apicompat.NewBufferedResponseAccumulator()
+	imageOutputs := make([]json.RawMessage, 0, 1)
+	seenImages := make(map[string]struct{})
+	lines := strings.Split(bodyText, "\n")
+	for _, line := range lines {
+		data, ok := extractOpenAISSEDataLine(line)
+		if !ok || data == "" || data == "[DONE]" {
+			continue
+		}
+		if imageOutput, ok := extractImageGenerationOutputFromSSEData([]byte(data), seenImages); ok {
+			imageOutputs = append(imageOutputs, imageOutput)
+		}
 		var event apicompat.ResponsesStreamEvent
 		if err := json.Unmarshal([]byte(data), &event); err != nil {
 			continue
 		}
-		accumulator.ApplyEvent(&event)
+		acc.ProcessEvent(&event)
 	}
-	if terminalType := accumulator.TerminalEventType(); terminalType != "response.done" && terminalType != "response.completed" && terminalType != "response.incomplete" {
+	if !acc.HasContent() && len(imageOutputs) == 0 {
 		return nil, false
 	}
-	finalResponse, ok := accumulator.FinalResponse()
-	if !ok {
+
+	var output []json.RawMessage
+	if acc.HasContent() {
+		outputJSON, err := json.Marshal(acc.BuildOutput())
+		if err == nil {
+			_ = json.Unmarshal(outputJSON, &output)
+		}
+	}
+	output = append(output, imageOutputs...)
+	if len(output) == 0 {
 		return nil, false
 	}
-	bodyBytes, err := json.Marshal(finalResponse)
+
+	outputJSON, err := json.Marshal(output)
 	if err != nil {
 		return nil, false
 	}
-	return bodyBytes, true
+	return outputJSON, true
+}
+
+func extractImageGenerationOutputFromSSEData(data []byte, seen map[string]struct{}) (json.RawMessage, bool) {
+	if len(data) == 0 || !gjson.ValidBytes(data) {
+		return nil, false
+	}
+	if gjson.GetBytes(data, "type").String() != "response.output_item.done" {
+		return nil, false
+	}
+	item := gjson.GetBytes(data, "item")
+	if !item.Exists() || !item.IsObject() || item.Get("type").String() != "image_generation_call" {
+		return nil, false
+	}
+	if strings.TrimSpace(item.Get("result").String()) == "" {
+		return nil, false
+	}
+	key := strings.TrimSpace(item.Get("id").String())
+	if key == "" {
+		key = strings.TrimSpace(item.Get("output_format").String()) + "|" + strings.TrimSpace(item.Get("result").String())
+	}
+	if key != "" && seen != nil {
+		if _, exists := seen[key]; exists {
+			return nil, false
+		}
+		seen[key] = struct{}{}
+	}
+	return json.RawMessage(item.Raw), true
 }
 
 func (s *OpenAIGatewayService) parseSSEUsageFromBody(body string) *OpenAIUsage {
@@ -4908,7 +4929,18 @@ func normalizeOpenAICompactRequestBody(body []byte) ([]byte, bool, error) {
 	}
 
 	normalized := []byte(`{}`)
-	for _, field := range []string{"model", "input", "instructions", "previous_response_id"} {
+	// Keep the current Codex /compact schema while still dropping request-scoped
+	// fields such as prompt_cache_key, store, and stream.
+	for _, field := range []string{
+		"model",
+		"input",
+		"instructions",
+		"tools",
+		"parallel_tool_calls",
+		"reasoning",
+		"text",
+		"previous_response_id",
+	} {
 		value := gjson.GetBytes(body, field)
 		if !value.Exists() {
 			continue
@@ -4993,7 +5025,6 @@ type OpenAIRecordUsageInput struct {
 	User               *User
 	Account            *Account
 	Subscription       *UserSubscription
-	ProductSettlement  *ProductSettlementContext
 	InboundEndpoint    string
 	UpstreamEndpoint   string
 	UserAgent          string // 请求的 User-Agent
@@ -5006,6 +5037,9 @@ type OpenAIRecordUsageInput struct {
 // RecordUsage records usage and deducts balance
 func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRecordUsageInput) error {
 	result := input.Result
+	if s.rateLimitService != nil && input != nil && input.Account != nil && input.Account.Platform == PlatformOpenAI {
+		s.rateLimitService.ResetOpenAI403Counter(ctx, input.Account.ID)
+	}
 
 	// 跳过所有 token 均为零的用量记录——上游未返回 usage 时不应写入数据库
 	if result.Usage.InputTokens == 0 && result.Usage.OutputTokens == 0 &&
@@ -5018,7 +5052,6 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
-	productSettlement := input.ProductSettlement
 
 	// 计算实际的新输入token（减去缓存读取的token）
 	// 因为 input_tokens 包含了 cache_read_tokens，而缓存读取的token不应按输入价格计费
@@ -5033,10 +5066,14 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		OutputTokens:        result.Usage.OutputTokens,
 		CacheCreationTokens: result.Usage.CacheCreationInputTokens,
 		CacheReadTokens:     result.Usage.CacheReadInputTokens,
+		ImageOutputTokens:   result.Usage.ImageOutputTokens,
 	}
 
 	// Get rate multiplier
-	multiplier := s.cfg.Default.RateMultiplier
+	multiplier := 1.0
+	if s.cfg != nil {
+		multiplier = s.cfg.Default.RateMultiplier
+	}
 	if apiKey.GroupID != nil && apiKey.Group != nil {
 		resolver := s.userGroupRateResolver
 		if resolver == nil {
@@ -5044,13 +5081,15 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		}
 		multiplier = resolver.Resolve(ctx, user.ID, *apiKey.GroupID, apiKey.Group.RateMultiplier)
 	}
-	effectiveRateMultiplier := multiplier * account.GroupBillingMultiplier(apiKey.GroupID)
 
 	var cost *CostBreakdown
 	var err error
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)
 	if result.BillingModel != "" {
 		billingModel = strings.TrimSpace(result.BillingModel)
+	}
+	if input.BillingModelSource == BillingModelSourceChannelMapped && input.ChannelMappedModel != "" && input.ChannelMappedModel != input.OriginalModel {
+		billingModel = input.ChannelMappedModel
 	}
 	if input.BillingModelSource == BillingModelSourceRequested && input.OriginalModel != "" {
 		billingModel = input.OriginalModel
@@ -5059,13 +5098,13 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if result.ServiceTier != nil {
 		serviceTier = strings.TrimSpace(*result.ServiceTier)
 	}
-	cost, err = s.calculateOpenAIRecordUsageCost(ctx, result, apiKey, billingModel, effectiveRateMultiplier, tokens, serviceTier)
+	cost, err = s.calculateOpenAIRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, tokens, serviceTier)
 	if err != nil {
 		cost = &CostBreakdown{ActualCost: 0}
 	}
 
 	// Determine billing type
-	isSubscriptionBilling := (subscription != nil || hasProductSettlement(productSettlement)) && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription
@@ -5075,45 +5114,54 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	durationMs := int(result.Duration.Milliseconds())
 	accountRateMultiplier := account.BillingRateMultiplier()
 	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
+
+	// 确定 RequestedModel（渠道映射前的原始模型）
 	requestedModel := result.Model
 	if input.OriginalModel != "" {
 		requestedModel = input.OriginalModel
 	}
+
 	usageLog := &UsageLog{
-		UserID:                user.ID,
-		APIKeyID:              apiKey.ID,
-		AccountID:             account.ID,
-		RequestID:             requestID,
-		Model:                 result.Model,
-		RequestedModel:        requestedModel,
-		UpstreamModel:         optionalNonEqualStringPtr(result.UpstreamModel, result.Model),
-		ServiceTier:           result.ServiceTier,
-		ReasoningEffort:       result.ReasoningEffort,
-		InboundEndpoint:       optionalTrimmedStringPtr(input.InboundEndpoint),
-		UpstreamEndpoint:      optionalTrimmedStringPtr(input.UpstreamEndpoint),
-		InputTokens:           actualInputTokens,
-		OutputTokens:          result.Usage.OutputTokens,
-		CacheCreationTokens:   result.Usage.CacheCreationInputTokens,
-		CacheReadTokens:       result.Usage.CacheReadInputTokens,
-		ImageCount:            result.ImageCount,
-		ImageSize:             optionalTrimmedStringPtr(result.ImageSize),
-		InputCost:             cost.InputCost,
-		OutputCost:            cost.OutputCost,
-		CacheCreationCost:     cost.CacheCreationCost,
-		CacheReadCost:         cost.CacheReadCost,
-		TotalCost:             cost.TotalCost,
-		ActualCost:            cost.ActualCost,
-		RateMultiplier:        effectiveRateMultiplier,
-		AccountRateMultiplier: &accountRateMultiplier,
-		BillingType:           billingType,
-		Stream:                result.Stream,
-		OpenAIWSMode:          result.OpenAIWSMode,
-		DurationMs:            &durationMs,
-		FirstTokenMs:          result.FirstTokenMs,
-		CreatedAt:             time.Now(),
+		UserID:              user.ID,
+		APIKeyID:            apiKey.ID,
+		AccountID:           account.ID,
+		RequestID:           requestID,
+		Model:               result.Model,
+		RequestedModel:      requestedModel,
+		UpstreamModel:       optionalNonEqualStringPtr(result.UpstreamModel, result.Model),
+		ServiceTier:         result.ServiceTier,
+		ReasoningEffort:     result.ReasoningEffort,
+		InboundEndpoint:     optionalTrimmedStringPtr(input.InboundEndpoint),
+		UpstreamEndpoint:    optionalTrimmedStringPtr(input.UpstreamEndpoint),
+		InputTokens:         actualInputTokens,
+		OutputTokens:        result.Usage.OutputTokens,
+		CacheCreationTokens: result.Usage.CacheCreationInputTokens,
+		CacheReadTokens:     result.Usage.CacheReadInputTokens,
+		ImageOutputTokens:   result.Usage.ImageOutputTokens,
+		ImageCount:          result.ImageCount,
+		ImageSize:           optionalTrimmedStringPtr(result.ImageSize),
 	}
+	if cost != nil {
+		usageLog.InputCost = cost.InputCost
+		usageLog.OutputCost = cost.OutputCost
+		usageLog.ImageOutputCost = cost.ImageOutputCost
+		usageLog.CacheCreationCost = cost.CacheCreationCost
+		usageLog.CacheReadCost = cost.CacheReadCost
+		usageLog.TotalCost = cost.TotalCost
+		usageLog.ActualCost = cost.ActualCost
+	}
+	usageLog.RateMultiplier = multiplier
+	usageLog.AccountRateMultiplier = &accountRateMultiplier
+	usageLog.BillingType = billingType
+	usageLog.Stream = result.Stream
+	usageLog.OpenAIWSMode = result.OpenAIWSMode
+	usageLog.DurationMs = &durationMs
+	usageLog.FirstTokenMs = result.FirstTokenMs
+	usageLog.CreatedAt = time.Now()
+	// 设置渠道信息
 	usageLog.ChannelID = optionalInt64Ptr(input.ChannelID)
 	usageLog.ModelMappingChain = optionalTrimmedStringPtr(input.ModelMappingChain)
+	// 设置计费模式
 	if cost != nil && cost.BillingMode != "" {
 		billingMode := cost.BillingMode
 		usageLog.BillingMode = &billingMode
@@ -5121,7 +5169,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		billingMode := string(BillingModeImage)
 		usageLog.BillingMode = &billingMode
 	} else {
-		billingMode := "token"
+		billingMode := string(BillingModeToken)
 		usageLog.BillingMode = &billingMode
 	}
 	// 添加 UserAgent
@@ -5140,7 +5188,14 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if subscription != nil {
 		usageLog.SubscriptionID = &subscription.ID
 	}
-	applyProductSettlementUsageLog(usageLog, productSettlement, cost.TotalCost)
+
+	// 计算账号统计定价费用（使用最终上游模型匹配自定义规则）
+	if apiKey.GroupID != nil {
+		applyAccountStatsCost(ctx, usageLog, s.channelService, s.billingService,
+			account.ID, *apiKey.GroupID, result.UpstreamModel, result.Model,
+			tokens, cost.TotalCost,
+		)
+	}
 
 	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
 		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
@@ -5156,7 +5211,6 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			APIKey:                apiKey,
 			Account:               account,
 			Subscription:          subscription,
-			ProductSettlement:     productSettlement,
 			RequestPayloadHash:    resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
 			IsSubscriptionBill:    isSubscriptionBilling,
 			AccountRateMultiplier: accountRateMultiplier,
@@ -5183,15 +5237,6 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	serviceTier string,
 ) (*CostBreakdown, error) {
 	if result != nil && result.ImageCount > 0 {
-		if s.hasExplicitOpenAIImagePricing(ctx, billingModel, apiKey, result.ImageSize) {
-			return s.calculateOpenAIImageCost(ctx, billingModel, apiKey, result, multiplier), nil
-		}
-		if hasOpenAIImageUsageTokens(result) {
-			cost, err := s.calculateOpenAIImageTokenCost(ctx, apiKey, billingModel, multiplier, tokens, serviceTier, result.ImageSize)
-			if err == nil {
-				return cost, nil
-			}
-		}
 		return s.calculateOpenAIImageCost(ctx, billingModel, apiKey, result, multiplier), nil
 	}
 	if s.resolver != nil && apiKey.Group != nil {
@@ -5210,32 +5255,6 @@ func (s *OpenAIGatewayService) calculateOpenAIRecordUsageCost(
 	return s.billingService.CalculateCostWithServiceTier(billingModel, tokens, multiplier, serviceTier)
 }
 
-func (s *OpenAIGatewayService) calculateOpenAIImageTokenCost(
-	ctx context.Context,
-	apiKey *APIKey,
-	billingModel string,
-	multiplier float64,
-	tokens UsageTokens,
-	serviceTier string,
-	sizeTier string,
-) (*CostBreakdown, error) {
-	if s.resolver != nil && apiKey.Group != nil {
-		gid := apiKey.Group.ID
-		return s.billingService.CalculateCostUnified(CostInput{
-			Ctx:            ctx,
-			Model:          billingModel,
-			GroupID:        &gid,
-			Tokens:         tokens,
-			RequestCount:   1,
-			SizeTier:       sizeTier,
-			RateMultiplier: multiplier,
-			ServiceTier:    serviceTier,
-			Resolver:       s.resolver,
-		})
-	}
-	return s.billingService.CalculateCostWithServiceTier(billingModel, tokens, multiplier, serviceTier)
-}
-
 func (s *OpenAIGatewayService) calculateOpenAIImageCost(
 	ctx context.Context,
 	billingModel string,
@@ -5243,17 +5262,23 @@ func (s *OpenAIGatewayService) calculateOpenAIImageCost(
 	result *OpenAIForwardResult,
 	multiplier float64,
 ) *CostBreakdown {
-	if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved != nil {
-		cost, err := s.billingService.calculatePerRequestCost(resolved, CostInput{
+	if resolved := s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey); resolved != nil &&
+		(resolved.Mode == BillingModePerRequest || resolved.Mode == BillingModeImage) {
+		gid := apiKey.Group.ID
+		cost, err := s.billingService.CalculateCostUnified(CostInput{
 			Ctx:            ctx,
 			Model:          billingModel,
-			RequestCount:   result.ImageCount,
+			GroupID:        &gid,
+			RequestCount:   1,
 			SizeTier:       result.ImageSize,
 			RateMultiplier: multiplier,
+			Resolver:       s.resolver,
+			Resolved:       resolved,
 		})
 		if err == nil {
 			return cost
 		}
+		logger.LegacyPrintf("service.openai_gateway", "Calculate image channel cost failed: %v", err)
 	}
 
 	var groupConfig *ImagePriceConfig
@@ -5267,51 +5292,16 @@ func (s *OpenAIGatewayService) calculateOpenAIImageCost(
 	return s.billingService.CalculateImageCost(billingModel, result.ImageSize, result.ImageCount, groupConfig, multiplier)
 }
 
-func (s *OpenAIGatewayService) hasExplicitOpenAIImagePricing(ctx context.Context, billingModel string, apiKey *APIKey, imageSize string) bool {
-	if s.resolveOpenAIChannelPricing(ctx, billingModel, apiKey) != nil {
-		return true
-	}
-	if apiKey == nil || apiKey.Group == nil {
-		return false
-	}
-	return apiKey.Group.GetImagePrice(imageSize) != nil
-}
-
 func (s *OpenAIGatewayService) resolveOpenAIChannelPricing(ctx context.Context, billingModel string, apiKey *APIKey) *ResolvedPricing {
-	if s == nil || s.channelService == nil || apiKey == nil || apiKey.Group == nil {
+	if s.resolver == nil || apiKey == nil || apiKey.Group == nil {
 		return nil
 	}
-	channelPricing := s.channelService.GetChannelModelPricing(ctx, apiKey.Group.ID, billingModel)
-	if channelPricing == nil {
-		return nil
+	gid := apiKey.Group.ID
+	resolved := s.resolver.Resolve(ctx, PricingInput{Model: billingModel, GroupID: &gid})
+	if resolved.Source == PricingSourceChannel {
+		return resolved
 	}
-	mode := channelPricing.BillingMode
-	if mode == "" {
-		mode = BillingModeToken
-	}
-	if mode != BillingModePerRequest && mode != BillingModeImage {
-		return nil
-	}
-	resolved := &ResolvedPricing{
-		Mode:   mode,
-		Source: PricingSourceChannel,
-	}
-	if channelPricing.PerRequestPrice != nil {
-		resolved.DefaultPerRequestPrice = *channelPricing.PerRequestPrice
-	}
-	if resolved.DefaultPerRequestPrice == 0 && channelPricing.ImageOutputPrice != nil {
-		resolved.DefaultPerRequestPrice = *channelPricing.ImageOutputPrice
-	}
-	resolved.RequestTiers = channelPricing.Intervals
-	return resolved
-}
-
-func hasOpenAIImageUsageTokens(result *OpenAIForwardResult) bool {
-	return result != nil && (result.Usage.InputTokens > 0 ||
-		result.Usage.OutputTokens > 0 ||
-		result.Usage.CacheCreationInputTokens > 0 ||
-		result.Usage.CacheReadInputTokens > 0 ||
-		result.Usage.ImageOutputTokens > 0)
+	return nil
 }
 
 // ParseCodexRateLimitHeaders extracts Codex usage limits from response headers.
@@ -5551,18 +5541,6 @@ func deriveOpenAIReasoningEffortFromModel(model string) string {
 	return normalizeOpenAIReasoningEffort(parts[len(parts)-1])
 }
 
-func resolveOpenAIResponsesReasoningModel(requestedModel, mappedModel string) string {
-	if _, _, ok := splitOpenAICompatReasoningModel(mappedModel); ok {
-		return mappedModel
-	}
-	if _, _, ok := splitOpenAICompatReasoningModel(requestedModel); ok {
-		if shouldDefaultOpenAIResponsesReasoning(mappedModel) {
-			return requestedModel
-		}
-	}
-	return mappedModel
-}
-
 func extractOpenAIRequestMetaFromBody(body []byte) (model string, stream bool, promptCacheKey string) {
 	if len(body) == 0 {
 		return "", false, ""
@@ -5575,25 +5553,23 @@ func extractOpenAIRequestMetaFromBody(body []byte) (model string, stream bool, p
 }
 
 // normalizeOpenAIPassthroughOAuthBody 将透传 OAuth 请求体收敛为旧链路关键行为：
-// 1) store=false 2) 非 compact 保持 stream=true；compact 强制 stream=false
-func normalizeOpenAIPassthroughOAuthBody(
-	body []byte,
-	compact bool,
-	dropStoreFalseNativeItemReferences bool,
-) ([]byte, bool, int, error) {
+// 1) 删除 ChatGPT internal API 不支持的顶层 Responses 参数
+// 2) store=false 3) 非 compact 保持 stream=true；compact 强制 stream=false
+func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, bool, error) {
 	if len(body) == 0 {
-		return body, false, 0, nil
+		return body, false, nil
 	}
 
 	normalized := body
 	changed := false
-	droppedNativeItemReferenceCount := 0
 
-	model := strings.TrimSpace(gjson.GetBytes(normalized, "model").String())
-	if normalizedModel, remapped := normalizeChatGPTOAuthModel(model); remapped {
-		next, err := sjson.SetBytes(normalized, "model", normalizedModel)
+	for _, field := range openAIChatGPTInternalUnsupportedFields {
+		if value := gjson.GetBytes(normalized, field); !value.Exists() {
+			continue
+		}
+		next, err := sjson.DeleteBytes(normalized, field)
 		if err != nil {
-			return body, false, 0, fmt.Errorf("normalize passthrough body model: %w", err)
+			return body, false, fmt.Errorf("normalize passthrough body delete %s: %w", field, err)
 		}
 		normalized = next
 		changed = true
@@ -5603,7 +5579,7 @@ func normalizeOpenAIPassthroughOAuthBody(
 		if store := gjson.GetBytes(normalized, "store"); store.Exists() {
 			next, err := sjson.DeleteBytes(normalized, "store")
 			if err != nil {
-				return body, false, 0, fmt.Errorf("normalize passthrough body delete store: %w", err)
+				return body, false, fmt.Errorf("normalize passthrough body delete store: %w", err)
 			}
 			normalized = next
 			changed = true
@@ -5611,7 +5587,7 @@ func normalizeOpenAIPassthroughOAuthBody(
 		if stream := gjson.GetBytes(normalized, "stream"); stream.Exists() {
 			next, err := sjson.DeleteBytes(normalized, "stream")
 			if err != nil {
-				return body, false, 0, fmt.Errorf("normalize passthrough body delete stream: %w", err)
+				return body, false, fmt.Errorf("normalize passthrough body delete stream: %w", err)
 			}
 			normalized = next
 			changed = true
@@ -5620,7 +5596,7 @@ func normalizeOpenAIPassthroughOAuthBody(
 		if store := gjson.GetBytes(normalized, "store"); !store.Exists() || store.Type != gjson.False {
 			next, err := sjson.SetBytes(normalized, "store", false)
 			if err != nil {
-				return body, false, 0, fmt.Errorf("normalize passthrough body store=false: %w", err)
+				return body, false, fmt.Errorf("normalize passthrough body store=false: %w", err)
 			}
 			normalized = next
 			changed = true
@@ -5628,119 +5604,14 @@ func normalizeOpenAIPassthroughOAuthBody(
 		if stream := gjson.GetBytes(normalized, "stream"); !stream.Exists() || stream.Type != gjson.True {
 			next, err := sjson.SetBytes(normalized, "stream", true)
 			if err != nil {
-				return body, false, 0, fmt.Errorf("normalize passthrough body stream=true: %w", err)
+				return body, false, fmt.Errorf("normalize passthrough body stream=true: %w", err)
 			}
 			normalized = next
 			changed = true
 		}
 	}
 
-	reasoningBody, reasoningChanged, err := normalizeOpenAIPassthroughReasoningBody(normalized)
-	if err != nil {
-		return body, false, 0, err
-	}
-	if reasoningChanged {
-		normalized = reasoningBody
-		changed = true
-	}
-
-	if dropStoreFalseNativeItemReferences {
-		var reqBody map[string]any
-		if err := json.Unmarshal(normalized, &reqBody); err != nil {
-			return body, false, 0, fmt.Errorf("normalize passthrough body parse json: %w", err)
-		}
-		storeDisabled := false
-		if store, ok := reqBody["store"].(bool); ok && !store {
-			storeDisabled = true
-		}
-		if input, ok := reqBody["input"].([]any); ok {
-			filteredInput, droppedCount := filterCodexInput(input, NeedsToolContinuation(reqBody), storeDisabled, true)
-			if droppedCount > 0 {
-				reqBody["input"] = filteredInput
-				serialized, marshalErr := json.Marshal(reqBody)
-				if marshalErr != nil {
-					return body, false, 0, fmt.Errorf("normalize passthrough body serialize filtered input: %w", marshalErr)
-				}
-				normalized = serialized
-				changed = true
-				droppedNativeItemReferenceCount += droppedCount
-			}
-		}
-	}
-
-	return normalized, changed, droppedNativeItemReferenceCount, nil
-}
-
-func normalizeOpenAIPassthroughReasoningBody(body []byte) ([]byte, bool, error) {
-	if len(body) == 0 {
-		return body, false, nil
-	}
-
-	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
-	normalizedModel, _, hasReasoningAlias := splitOpenAICompatReasoningModel(model)
-	reasoningEffort := extractOpenAIReasoningEffortFromBody(body, model)
-	if reasoningEffort == nil && (!hasReasoningAlias || normalizedModel == "" || normalizedModel == model) {
-		return body, false, nil
-	}
-
-	normalized := body
-	changed := false
-
-	if hasReasoningAlias && normalizedModel != "" && normalizedModel != model {
-		next, err := sjson.SetBytes(normalized, "model", normalizedModel)
-		if err != nil {
-			return body, false, fmt.Errorf("normalize passthrough body model: %w", err)
-		}
-		normalized = next
-		changed = true
-	}
-
-	if reasoningEffort == nil {
-		return normalized, changed, nil
-	}
-
-	reasoningRoot := gjson.GetBytes(normalized, "reasoning")
-	if reasoningRoot.Exists() && reasoningRoot.Type != gjson.JSON {
-		return normalized, changed, nil
-	}
-
-	if strings.TrimSpace(gjson.GetBytes(normalized, "reasoning.effort").String()) == "" {
-		next, err := sjson.SetBytes(normalized, "reasoning.effort", *reasoningEffort)
-		if err != nil {
-			return body, false, fmt.Errorf("normalize passthrough body reasoning.effort: %w", err)
-		}
-		normalized = next
-		changed = true
-	}
-
-	summary := gjson.GetBytes(normalized, "reasoning.summary")
-	if !summary.Exists() || strings.TrimSpace(summary.String()) == "" {
-		next, err := sjson.SetBytes(normalized, "reasoning.summary", "auto")
-		if err != nil {
-			return body, false, fmt.Errorf("normalize passthrough body reasoning.summary: %w", err)
-		}
-		normalized = next
-		changed = true
-	}
-
 	return normalized, changed, nil
-}
-
-func shouldNormalizeOpenAIPassthroughReasoningBody(body []byte) bool {
-	if len(body) == 0 {
-		return false
-	}
-
-	if reasoning := gjson.GetBytes(body, "reasoning"); reasoning.Exists() {
-		return true
-	}
-	if strings.TrimSpace(gjson.GetBytes(body, "reasoning_effort").String()) != "" {
-		return true
-	}
-
-	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
-	normalizedModel, _, hasReasoningAlias := splitOpenAICompatReasoningModel(model)
-	return hasReasoningAlias && normalizedModel != "" && normalizedModel != model
 }
 
 func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byte) string {
@@ -5762,32 +5633,6 @@ func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byt
 	return ""
 }
 
-func ensureOpenAIRequestInstructions(body []byte) ([]byte, bool, error) {
-	if len(body) == 0 {
-		return body, false, nil
-	}
-
-	eventType := strings.TrimSpace(gjson.GetBytes(body, "type").String())
-	if eventType != "" && eventType != "response.create" {
-		return body, false, nil
-	}
-
-	instructions := gjson.GetBytes(body, "instructions")
-	if instructions.Exists() && instructions.Type == gjson.String && strings.TrimSpace(instructions.String()) != "" {
-		return body, false, nil
-	}
-
-	updated, err := sjson.SetBytes(body, "instructions", openAIResponsesDefaultInstructions)
-	if err != nil {
-		return body, false, fmt.Errorf("normalize body instructions: %w", err)
-	}
-	return updated, true, nil
-}
-
-func ensureOpenAIPassthroughInstructions(body []byte) ([]byte, bool, error) {
-	return ensureOpenAIRequestInstructions(body)
-}
-
 func extractOpenAIReasoningEffortFromBody(body []byte, requestedModel string) *string {
 	reasoningEffort := strings.TrimSpace(gjson.GetBytes(body, "reasoning.effort").String())
 	if reasoningEffort == "" {
@@ -5803,69 +5648,9 @@ func extractOpenAIReasoningEffortFromBody(body []byte, requestedModel string) *s
 
 	value := deriveOpenAIReasoningEffortFromModel(requestedModel)
 	if value == "" {
-		if shouldDefaultOpenAIResponsesReasoning(requestedModel) {
-			value = "medium"
-		} else {
-			return nil
-		}
+		return nil
 	}
 	return &value
-}
-
-func ensureOpenAIResponsesReasoning(reqBody map[string]any, requestedModel string) bool {
-	if reqBody == nil {
-		return false
-	}
-
-	reasoningEffort := extractOpenAIReasoningEffort(reqBody, requestedModel)
-	if reasoningEffort == nil {
-		return false
-	}
-
-	reasoningRaw, exists := reqBody["reasoning"]
-	var reasoning map[string]any
-	if exists {
-		casted, ok := reasoningRaw.(map[string]any)
-		if !ok {
-			return false
-		}
-		reasoning = casted
-	} else {
-		reasoning = make(map[string]any)
-		reqBody["reasoning"] = reasoning
-	}
-
-	changed := !exists
-
-	if effort, ok := reasoning["effort"].(string); !ok || strings.TrimSpace(effort) == "" {
-		reasoning["effort"] = *reasoningEffort
-		changed = true
-	}
-
-	if summary, ok := reasoning["summary"].(string); !ok || strings.TrimSpace(summary) == "" {
-		reasoning["summary"] = "auto"
-		changed = true
-	}
-
-	return changed
-}
-
-func normalizeOpenAIResponsesMinimalReasoning(reqBody map[string]any) bool {
-	if reqBody == nil {
-		return false
-	}
-
-	reasoning, ok := reqBody["reasoning"].(map[string]any)
-	if !ok {
-		return false
-	}
-	effort, ok := reasoning["effort"].(string)
-	if !ok || !strings.EqualFold(strings.TrimSpace(effort), "minimal") {
-		return false
-	}
-
-	reasoning["effort"] = "none"
-	return true
 }
 
 func extractOpenAIServiceTier(reqBody map[string]any) *string {
@@ -5894,12 +5679,317 @@ func normalizeOpenAIServiceTier(raw string) *string {
 	if value == "fast" {
 		value = "priority"
 	}
+	// 放过 OpenAI 官方文档定义的所有合法 tier 值：priority/flex/auto/default/scale。
+	// 对 Codex 客户端零影响（Codex 只发 priority 或 flex，见 codex-rs/core/src/client.rs），
+	// 但能让直连 OpenAI SDK 的用户透传 auto/default/scale 以便抓包/调试。
+	// 真未知值仍返回 nil，由 normalizeResponsesBodyServiceTier 从 body 中删除。
 	switch value {
-	case "priority", "flex":
+	case "priority", "flex", "auto", "default", "scale":
 		return &value
 	default:
 		return nil
 	}
+}
+
+// OpenAIFastBlockedError indicates a request was rejected by the OpenAI fast
+// policy (action=block). Mirrors BetaBlockedError on the Claude side.
+type OpenAIFastBlockedError struct {
+	Message string
+}
+
+func (e *OpenAIFastBlockedError) Error() string { return e.Message }
+
+// evaluateOpenAIFastPolicy returns the action and error message that should be
+// applied for a request with the given account/model/service_tier. When the
+// policy service is unavailable or no rule matches, it returns
+// (BetaPolicyActionPass, "") so callers can short-circuit safely.
+//
+// Matching rules:
+//   - Scope filters by account type (all / oauth / apikey / bedrock)
+//   - ServiceTier must be empty (= any), "all", or equal the normalized tier
+//   - ModelWhitelist narrows the rule to specific models; FallbackAction
+//     handles the non-matching case (default: pass)
+//
+// 与 Claude BetaPolicy 的差异（保留首条匹配 short-circuit）：
+//   - BetaPolicy 处理的是 anthropic-beta header 中的 token 集合，不同
+//     规则可能针对不同 token，filter 需要累加成 set；block 则 first-match。
+//   - OpenAI fast policy 操作的是单个字段 service_tier：filter 即删字段，
+//     没有可累加的对象。一次请求只携带一个 service_tier，规则的 tier
+//     维度天然互斥；同一 (scope, tier) 下若多条规则的 model whitelist
+//     发生重叠，admin 可通过规则顺序明确意图。因此采用 first-match 而
+//     非 BetaPolicy 那样的"block 覆盖 filter 覆盖 pass"语义。
+func (s *OpenAIGatewayService) evaluateOpenAIFastPolicy(ctx context.Context, account *Account, model, serviceTier string) (action, errMsg string) {
+	if s == nil || s.settingService == nil {
+		return BetaPolicyActionPass, ""
+	}
+	tier := strings.ToLower(strings.TrimSpace(serviceTier))
+	if tier == "" {
+		return BetaPolicyActionPass, ""
+	}
+	settings := openAIFastPolicySettingsFromContext(ctx)
+	if settings == nil {
+		fetched, err := s.settingService.GetOpenAIFastPolicySettings(ctx)
+		if err != nil || fetched == nil {
+			return BetaPolicyActionPass, ""
+		}
+		settings = fetched
+	}
+	return evaluateOpenAIFastPolicyWithSettings(settings, account, model, tier)
+}
+
+// evaluateOpenAIFastPolicyWithSettings is the pure-function core extracted so
+// long-lived sessions (e.g. WS) can prefetch settings once and avoid hitting
+// the settingService on every frame. See WSSession entry and
+// openAIFastPolicySettingsFromContext for the caching glue.
+func evaluateOpenAIFastPolicyWithSettings(settings *OpenAIFastPolicySettings, account *Account, model, tier string) (action, errMsg string) {
+	if settings == nil {
+		return BetaPolicyActionPass, ""
+	}
+	isOAuth := account != nil && account.IsOAuth()
+	isBedrock := account != nil && account.IsBedrock()
+	for _, rule := range settings.Rules {
+		if !betaPolicyScopeMatches(rule.Scope, isOAuth, isBedrock) {
+			continue
+		}
+		ruleTier := strings.ToLower(strings.TrimSpace(rule.ServiceTier))
+		if ruleTier != "" && ruleTier != OpenAIFastTierAny && ruleTier != tier {
+			continue
+		}
+		eff := BetaPolicyRule{
+			Action:               rule.Action,
+			ErrorMessage:         rule.ErrorMessage,
+			ModelWhitelist:       rule.ModelWhitelist,
+			FallbackAction:       rule.FallbackAction,
+			FallbackErrorMessage: rule.FallbackErrorMessage,
+		}
+		return resolveRuleAction(eff, model)
+	}
+	return BetaPolicyActionPass, ""
+}
+
+// openAIFastPolicyCtxKey 是 context 中预取的 OpenAIFastPolicySettings 缓存
+// 键，仅用于 WebSocket 长会话内多帧复用同一份策略快照，避免每帧 DB 命中。
+//
+// Trade-off：策略变更不会影响当前 WS session（只影响新 session）。这是
+// 有意为之 —— 对长会话来说，"策略一致性"比"立刻生效"更重要，且 Claude
+// BetaPolicy 的 gin.Context 缓存也是同样取舍。需要 hot-reload 时管理员
+// 可以通过踢断 session 强制刷新。
+type openAIFastPolicyCtxKeyType struct{}
+
+var openAIFastPolicyCtxKey = openAIFastPolicyCtxKeyType{}
+
+// withOpenAIFastPolicyContext 将一份 settings 快照绑定到 context，供该 ctx
+// 衍生 goroutine 中的 evaluateOpenAIFastPolicy 复用。
+func withOpenAIFastPolicyContext(ctx context.Context, settings *OpenAIFastPolicySettings) context.Context {
+	if ctx == nil || settings == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, openAIFastPolicyCtxKey, settings)
+}
+
+func openAIFastPolicySettingsFromContext(ctx context.Context) *OpenAIFastPolicySettings {
+	if ctx == nil {
+		return nil
+	}
+	if v, ok := ctx.Value(openAIFastPolicyCtxKey).(*OpenAIFastPolicySettings); ok {
+		return v
+	}
+	return nil
+}
+
+// applyOpenAIFastPolicyToBody applies the OpenAI fast policy to a raw request
+// body. When action=filter it removes the service_tier field; when
+// action=block it returns (body, *OpenAIFastBlockedError). On pass it
+// normalizes the service_tier value (e.g. client alias "fast" → "priority"),
+// rewriting the body so the upstream receives a slug it recognizes.
+//
+// Rationale for normalize-on-pass: chat-completions / messages 入口在调用本
+// 函数之前已经通过 normalizeResponsesBodyServiceTier 把 service_tier 归一化
+// 到了上游可识别值；passthrough（OpenAI 自动透传） / native /responses 等
+// 入口没有这一前置步骤，pass 路径下若不在此处归一化，"fast" 就会被原样
+// 透传到 OpenAI 上游导致 400/拒绝。把归一化收敛到本函数，所有入口行为一致。
+func (s *OpenAIGatewayService) applyOpenAIFastPolicyToBody(ctx context.Context, account *Account, model string, body []byte) ([]byte, error) {
+	if len(body) == 0 {
+		return body, nil
+	}
+	rawTier := gjson.GetBytes(body, "service_tier").String()
+	if rawTier == "" {
+		return body, nil
+	}
+	normTier := normalizedOpenAIServiceTierValue(rawTier)
+	if normTier == "" {
+		return body, nil
+	}
+	action, errMsg := s.evaluateOpenAIFastPolicy(ctx, account, model, normTier)
+	switch action {
+	case BetaPolicyActionBlock:
+		msg := errMsg
+		if msg == "" {
+			msg = fmt.Sprintf("openai service_tier=%s is not allowed for model %s", normTier, model)
+		}
+		return body, &OpenAIFastBlockedError{Message: msg}
+	case BetaPolicyActionFilter:
+		trimmed, err := sjson.DeleteBytes(body, "service_tier")
+		if err != nil {
+			return body, fmt.Errorf("strip service_tier from body: %w", err)
+		}
+		return trimmed, nil
+	default:
+		// pass：把别名（如 "fast"）写回为规范值（"priority"）。
+		if normTier == rawTier {
+			return body, nil
+		}
+		updated, err := sjson.SetBytes(body, "service_tier", normTier)
+		if err != nil {
+			return body, fmt.Errorf("normalize service_tier on pass: %w", err)
+		}
+		return updated, nil
+	}
+}
+
+// writeOpenAIFastPolicyBlockedResponse writes a 403 JSON response for a
+// request blocked by the OpenAI fast policy.
+func writeOpenAIFastPolicyBlockedResponse(c *gin.Context, err *OpenAIFastBlockedError) {
+	if c == nil || err == nil {
+		return
+	}
+	c.JSON(http.StatusForbidden, gin.H{
+		"error": gin.H{
+			"type":    "permission_error",
+			"message": err.Message,
+		},
+	})
+}
+
+// applyOpenAIFastPolicyToWSResponseCreate evaluates the OpenAI fast policy
+// against a single client→upstream WebSocket frame whose top-level
+// "type"=="response.create". It mirrors the HTTP-side
+// applyOpenAIFastPolicyToBody contract but operates on a Realtime/Responses
+// WS payload:
+//
+//   - pass: returns frame unchanged (newBytes == frame, blocked == nil)
+//   - filter: returns a copy with top-level service_tier removed
+//   - block: returns (frame, *OpenAIFastBlockedError)
+//
+// Only frames whose "type" field strictly equals "response.create" are
+// inspected/mutated. Any other frame type — including the empty string —
+// passes through untouched. The OpenAI Realtime client-event spec requires
+// "type" to be set, so an empty type is treated as a malformed frame we do
+// not police; the upstream is the source of truth for rejecting it.
+//
+// service_tier lives at the top level of response.create — same as the
+// Responses HTTP body shape (see openai_gateway_chat_completions.go:304 +
+// extractOpenAIServiceTierFromBody at line 5593, and the test fixture at
+// openai_ws_forwarder_ingress_session_test.go:402). We therefore only need
+// to inspect / strip the top-level field; there is no nested form in the
+// schema today.
+//
+// The caller is responsible for choosing the upstream model passed in —
+// this helper does not re-derive it.
+func (s *OpenAIGatewayService) applyOpenAIFastPolicyToWSResponseCreate(
+	ctx context.Context,
+	account *Account,
+	model string,
+	frame []byte,
+) ([]byte, *OpenAIFastBlockedError, error) {
+	if len(frame) == 0 {
+		return frame, nil, nil
+	}
+	if !gjson.ValidBytes(frame) {
+		return frame, nil, nil
+	}
+	frameType := strings.TrimSpace(gjson.GetBytes(frame, "type").String())
+	// Strict match: only response.create is policy-checked. Empty / other
+	// types pass through untouched so we never accidentally strip fields
+	// from response.cancel, conversation.item.create, or any future
+	// client-event the spec adds. The Realtime spec requires "type" on
+	// every client event, so an empty type is malformed input — let the
+	// upstream reject it rather than guessing at our layer.
+	if frameType != "response.create" {
+		return frame, nil, nil
+	}
+	rawTier := gjson.GetBytes(frame, "service_tier").String()
+	if rawTier == "" {
+		return frame, nil, nil
+	}
+	normTier := normalizedOpenAIServiceTierValue(rawTier)
+	if normTier == "" {
+		return frame, nil, nil
+	}
+	action, errMsg := s.evaluateOpenAIFastPolicy(ctx, account, model, normTier)
+	switch action {
+	case BetaPolicyActionBlock:
+		msg := errMsg
+		if msg == "" {
+			msg = fmt.Sprintf("openai service_tier=%s is not allowed for model %s", normTier, model)
+		}
+		return frame, &OpenAIFastBlockedError{Message: msg}, nil
+	case BetaPolicyActionFilter:
+		trimmed, err := sjson.DeleteBytes(frame, "service_tier")
+		if err != nil {
+			return frame, nil, fmt.Errorf("strip service_tier from ws frame: %w", err)
+		}
+		return trimmed, nil, nil
+	default:
+		return frame, nil, nil
+	}
+}
+
+// newOpenAIFastPolicyWSEventID returns a Realtime-style event_id for a
+// server-emitted error event. Matches the loose "evt_<rand>" convention used
+// by upstream Realtime servers; the exact value is not load-bearing and is
+// only required for client-side log correlation. We reuse the existing
+// google/uuid dependency rather than pulling a new one.
+func newOpenAIFastPolicyWSEventID() string {
+	id, err := uuid.NewRandom()
+	if err != nil {
+		// Extremely unlikely; fall back to a fixed prefix so the field is
+		// still non-empty and the schema stays self-consistent.
+		return "evt_openai_fast_policy"
+	}
+	// Strip dashes so it visually matches "evt_<hex>" rather than UUID v4
+	// canonical form, mirroring what real Realtime traces look like.
+	return "evt_" + strings.ReplaceAll(id.String(), "-", "")
+}
+
+// buildOpenAIFastPolicyBlockedWSEvent renders an OpenAI Realtime/Responses
+// style "error" event payload for a request blocked by the OpenAI fast
+// policy. The shape mirrors Realtime error events as observed in upstream
+// traces and per the spec's server "error" event:
+//
+//	{
+//	  "event_id": "evt_<random>",
+//	  "type": "error",
+//	  "error": {
+//	    "type": "invalid_request_error",
+//	    "code": "policy_violation",
+//	    "message": "..."
+//	  }
+//	}
+//
+// event_id lets clients correlate the rejection in their logs; "code" gives
+// programmatic clients a stable identifier (HTTP-side equivalent is the
+// 403 permission_error JSON body).
+func buildOpenAIFastPolicyBlockedWSEvent(err *OpenAIFastBlockedError) []byte {
+	if err == nil {
+		return nil
+	}
+	eventID := newOpenAIFastPolicyWSEventID()
+	payload, mErr := json.Marshal(map[string]any{
+		"event_id": eventID,
+		"type":     "error",
+		"error": map[string]any{
+			"type":    "invalid_request_error",
+			"code":    "policy_violation",
+			"message": err.Message,
+		},
+	})
+	if mErr != nil {
+		// Fallback to a minimal hand-rolled payload; Marshal of the literal
+		// shape above should never fail in practice.
+		return []byte(`{"event_id":"` + eventID + `","type":"error","error":{"type":"invalid_request_error","code":"policy_violation","message":"openai fast policy blocked this request"}}`)
+	}
+	return payload
 }
 
 func sanitizeEmptyBase64InputImagesInOpenAIBody(body []byte) ([]byte, bool, error) {
@@ -6048,27 +6138,9 @@ func extractOpenAIReasoningEffort(reqBody map[string]any, requestedModel string)
 
 	value := deriveOpenAIReasoningEffortFromModel(requestedModel)
 	if value == "" {
-		if shouldDefaultOpenAIResponsesReasoning(requestedModel) {
-			value = "medium"
-		} else {
-			return nil
-		}
+		return nil
 	}
 	return &value
-}
-
-func shouldDefaultOpenAIResponsesReasoning(model string) bool {
-	modelID := strings.ToLower(strings.TrimSpace(model))
-	if modelID == "" {
-		return false
-	}
-
-	if strings.Contains(modelID, "/") {
-		parts := strings.Split(modelID, "/")
-		modelID = parts[len(parts)-1]
-	}
-
-	return openAIDefaultReasoningModelRE.MatchString(modelID)
 }
 
 func normalizeOpenAIReasoningEffort(raw string) string {
@@ -6085,7 +6157,7 @@ func normalizeOpenAIReasoningEffort(raw string) string {
 		return ""
 	case "low", "medium", "high":
 		return value
-	case "xhigh", "xhight", "extrahigh":
+	case "xhigh", "extrahigh":
 		return "xhigh"
 	default:
 		// Only store known effort levels for now to keep UI consistent.

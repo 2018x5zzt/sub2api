@@ -147,6 +147,9 @@ func (s *httpUpstreamService) Do(req *http.Request, proxyURL string, accountID i
 		return nil, err
 	}
 
+	// 如果上游返回了压缩内容，解压后再交给业务层
+	decompressResponseBody(resp)
+
 	// 包装响应体，在关闭时自动减少计数并更新时间戳
 	// 这确保了流式响应（如 SSE）在完全读取前不会被淘汰
 	resp.Body = wrapTrackedBody(resp.Body, func() {
@@ -193,10 +196,9 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 		slog.Debug("tls_fingerprint_request_failed", "account_id", accountID, "error", err)
 		return nil, err
 	}
-	slog.Debug("tls_fingerprint_request_success", "account_id", accountID, "status", resp.StatusCode)
 
-	// 包装响应体，在关闭时自动减少计数并更新时间戳
 	decompressResponseBody(resp)
+
 	resp.Body = wrapTrackedBody(resp.Body, func() {
 		atomic.AddInt64(&entry.inFlight, -1)
 		atomic.StoreInt64(&entry.lastUsed, time.Now().UnixNano())
@@ -880,7 +882,7 @@ func decompressResponseBody(resp *http.Response) {
 	case "gzip":
 		gr, err := gzip.NewReader(resp.Body)
 		if err != nil {
-			return
+			return // 解压失败，保持原样
 		}
 		reader = gr
 	case "br":
@@ -894,10 +896,11 @@ func decompressResponseBody(resp *http.Response) {
 	originalBody := resp.Body
 	resp.Body = &decompressedBody{reader: reader, closer: originalBody}
 	resp.Header.Del("Content-Encoding")
-	resp.Header.Del("Content-Length")
+	resp.Header.Del("Content-Length") // 解压后长度不确定
 	resp.ContentLength = -1
 }
 
+// decompressedBody 组合解压 reader 和原始 body 的 close。
 type decompressedBody struct {
 	reader io.Reader
 	closer io.Closer
@@ -908,6 +911,7 @@ func (d *decompressedBody) Read(p []byte) (int, error) {
 }
 
 func (d *decompressedBody) Close() error {
+	// 如果 reader 本身也是 Closer（如 gzip.Reader），先关闭它
 	if rc, ok := d.reader.(io.Closer); ok {
 		_ = rc.Close()
 	}

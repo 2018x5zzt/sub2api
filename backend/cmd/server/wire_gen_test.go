@@ -43,10 +43,9 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 	subscriptionExpirySvc := service.NewSubscriptionExpiryService(nil, time.Second)
 	pricingSvc := service.NewPricingService(cfg, nil)
 	emailQueueSvc := service.NewEmailQueueService(nil, 1)
-	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, cfg)
+	billingCacheSvc := service.NewBillingCacheService(nil, nil, nil, nil, nil, nil, cfg)
 	idempotencyCleanupSvc := service.NewIdempotencyCleanupService(nil, cfg)
 	schedulerSnapshotSvc := service.NewSchedulerSnapshotService(nil, nil, nil, nil, cfg)
-	groupHealthHistorySvc := service.NewGroupHealthHistoryService(nil, nil, time.Second, time.Minute)
 	opsSystemLogSinkSvc := service.NewOpsSystemLogSink(nil)
 
 	cleanup := provideCleanup(
@@ -58,9 +57,7 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		&service.OpsCleanupService{},
 		&service.OpsScheduledReportService{},
 		opsSystemLogSinkSvc,
-		&service.SoraMediaCleanupService{},
 		schedulerSnapshotSvc,
-		groupHealthHistorySvc,
 		tokenRefreshSvc,
 		accountExpirySvc,
 		subscriptionExpirySvc,
@@ -78,6 +75,8 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		nil, // openAIGateway
 		nil, // scheduledTestRunner
 		nil, // backupSvc
+		nil, // paymentOrderExpiry
+		nil, // channelMonitorRunner
 	)
 
 	require.NotPanics(t, func() {

@@ -70,14 +70,10 @@ func NewGatewayHandler(
 	settingService *service.SettingService,
 ) *GatewayHandler {
 	pingInterval := time.Duration(0)
-	userSlotWaitTimeout := maxConcurrencyWait
 	maxAccountSwitches := 10
 	maxAccountSwitchesGemini := 3
 	if cfg != nil {
 		pingInterval = time.Duration(cfg.Concurrency.PingInterval) * time.Second
-		if cfg.Concurrency.UserSlotWaitTimeout > 0 {
-			userSlotWaitTimeout = cfg.Concurrency.UserSlotWaitTimeout
-		}
 		if cfg.Gateway.MaxAccountSwitches > 0 {
 			maxAccountSwitches = cfg.Gateway.MaxAccountSwitches
 		}
@@ -91,8 +87,6 @@ func NewGatewayHandler(
 	if userMsgQueueService != nil && cfg != nil {
 		umqHelper = NewUserMsgQueueHelper(userMsgQueueService, SSEPingFormatClaude, pingInterval)
 	}
-	concurrencyHelper := NewConcurrencyHelper(concurrencyService, SSEPingFormatClaude, pingInterval)
-	concurrencyHelper.SetUserSlotWaitTimeout(userSlotWaitTimeout)
 
 	return &GatewayHandler{
 		gatewayService:            gatewayService,
@@ -104,7 +98,7 @@ func NewGatewayHandler(
 		apiKeyService:             apiKeyService,
 		usageRecordWorkerPool:     usageRecordWorkerPool,
 		errorPassthroughService:   errorPassthroughService,
-		concurrencyHelper:         concurrencyHelper,
+		concurrencyHelper:         NewConcurrencyHelper(concurrencyService, SSEPingFormatClaude, pingInterval),
 		userMsgQueueHelper:        umqHelper,
 		maxAccountSwitches:        maxAccountSwitches,
 		maxAccountSwitchesGemini:  maxAccountSwitchesGemini,
@@ -165,22 +159,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
 	// 解析渠道级模型映射
-	var channelMapping service.ChannelMappingResult
-	if apiKey.GroupID != nil {
-		channelMapping = h.gatewayService.ResolveChannelMapping(c.Request.Context(), *apiKey.GroupID, reqModel)
-	}
-
-	// 渠道模型限制检查
-	if apiKey.GroupID != nil {
-		checkModel := reqModel
-		if channelMapping.Mapped {
-			checkModel = channelMapping.MappedModel
-		}
-		if h.gatewayService.IsModelRestricted(c.Request.Context(), *apiKey.GroupID, checkModel) {
-			h.errorResponse(c, http.StatusForbidden, "invalid_request_error", "Model not available in current channel: "+reqModel)
-			return
-		}
-	}
+	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
 
 	// 设置 max_tokens=1 + haiku 探测请求标识到 context 中
 	// 必须在 SetClaudeCodeClientContext 之前设置，因为 ClaudeCodeValidator 需要读取此标识进行绕过判断
@@ -220,7 +199,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	// 获取订阅信息（可能为nil）- 提前获取用于后续检查
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
-	productSettlement := GetProductSettlement(c)
 
 	// 0. 检查wait队列是否已满
 	maxWait := service.CalculateMaxWait(subject.Concurrency)
@@ -265,10 +243,16 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// 2. 【新增】Wait后二次检查余额/订阅
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
 		reqLog.Info("gateway.billing_eligibility_check_failed", zap.Error(err))
-		status, code, message := billingErrorDetails(err)
+		status, code, message, retryAfter := billingErrorDetails(err)
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
+
+	// 设置请求所属分组 ID（用于渠道级功能判断，如 WebSearch 模拟）
+	parsedReq.GroupID = apiKey.GroupID
 
 	// 计算粘性会话hash
 	parsedReq.SessionContext = &service.SessionContext{
@@ -277,6 +261,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		APIKeyID:  apiKey.ID,
 	}
 	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
+
+	// [DEBUG-STICKY] 打印会话 hash 生成结果
+	reqLog.Info("sticky.session_hash_generated",
+		zap.String("session_hash", sessionHash),
+		zap.String("metadata_user_id_raw", parsedReq.MetadataUserID),
+	)
 
 	// 获取平台：优先使用强制平台（/antigravity 路由，中间件已设置 request.Context），否则使用分组平台
 	platform := ""
@@ -294,6 +284,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	var sessionBoundAccountID int64
 	if sessionKey != "" {
 		sessionBoundAccountID, _ = h.gatewayService.GetCachedSessionAccountID(c.Request.Context(), apiKey.GroupID, sessionKey)
+		// [DEBUG-STICKY] 打印粘性会话查询结果
+		reqLog.Info("sticky.cache_lookup",
+			zap.String("session_key", sessionKey),
+			zap.Int64("bound_account_id", sessionBoundAccountID),
+		)
 		if sessionBoundAccountID > 0 {
 			prefetchedGroupID := int64(0)
 			if apiKey.GroupID != nil {
@@ -302,6 +297,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			ctx := service.WithPrefetchedStickySession(c.Request.Context(), sessionBoundAccountID, prefetchedGroupID, h.metadataBridgeEnabled())
 			c.Request = c.Request.WithContext(ctx)
 		}
+	} else {
+		reqLog.Info("sticky.no_session_key", zap.String("session_hash", sessionHash))
 	}
 	// 判断是否真的绑定了粘性会话：有 sessionKey 且已经绑定到某个账号
 	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
@@ -317,9 +314,15 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		}
 
 		for {
-			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, "") // Gemini 不使用会话限制
+			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, "", int64(0)) // Gemini 不使用会话限制
 			if err != nil {
 				if len(fs.FailedAccountIDs) == 0 {
+					reqLog.Warn("gateway.select_account_no_available",
+						zap.String("model", reqModel),
+						zap.Int64p("group_id", apiKey.GroupID),
+						zap.String("platform", platform),
+						zap.Error(err),
+					)
 					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
 					return
 				}
@@ -363,6 +366,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			accountReleaseFunc := selection.ReleaseFunc
 			if !selection.Acquired {
 				if selection.WaitPlan == nil {
+					reqLog.Warn("gateway.select_account_no_slot_no_wait_plan",
+						zap.Int64("account_id", account.ID),
+						zap.String("model", reqModel),
+						zap.String("platform", platform),
+					)
 					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
 					return
 				}
@@ -492,11 +500,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			h.submitUsageRecordTask(func(ctx context.Context) {
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
+					ParsedRequest:      parsedReq,
 					APIKey:             apiKey,
 					User:               apiKey.User,
 					Account:            account,
 					Subscription:       subscription,
-					ProductSettlement:  productSettlement,
 					InboundEndpoint:    inboundEndpoint,
 					UpstreamEndpoint:   upstreamEndpoint,
 					UserAgent:          userAgent,
@@ -522,7 +530,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	currentAPIKey := apiKey
 	currentSubscription := subscription
-	currentProductSettlement := productSettlement
 	var fallbackGroupID *int64
 	if apiKey.Group != nil {
 		fallbackGroupID = apiKey.Group.FallbackGroupIDOnInvalidRequest
@@ -542,9 +549,22 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 		for {
 			// 选择支持该模型的账号
-			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), currentAPIKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, parsedReq.MetadataUserID)
+			reqLog.Info("sticky.selecting_account",
+				zap.String("session_key", sessionKey),
+				zap.Int64("sticky_bound_account_id", sessionBoundAccountID),
+				zap.Bool("has_bound_session", hasBoundSession),
+				zap.Int("failed_account_count", len(fs.FailedAccountIDs)),
+			)
+			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), currentAPIKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, parsedReq.MetadataUserID, subject.UserID)
 			if err != nil {
 				if len(fs.FailedAccountIDs) == 0 {
+					reqLog.Warn("gateway.select_account_no_available",
+						zap.String("model", reqModel),
+						zap.Int64p("group_id", currentAPIKey.GroupID),
+						zap.String("platform", platform),
+						zap.Bool("fallback_used", fallbackUsed),
+						zap.Error(err),
+					)
 					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
 					return
 				}
@@ -568,6 +588,16 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			account := selection.Account
 			setOpsSelectedAccount(c, account.ID, account.Platform)
 
+			// [DEBUG-STICKY] 打印账号选择结果
+			reqLog.Info("sticky.account_selected",
+				zap.Int64("selected_account_id", account.ID),
+				zap.String("account_name", account.Name),
+				zap.Bool("slot_acquired", selection.Acquired),
+				zap.Bool("has_wait_plan", selection.WaitPlan != nil),
+				zap.Int64("sticky_bound_account_id", sessionBoundAccountID),
+				zap.Bool("sticky_honored", sessionBoundAccountID > 0 && sessionBoundAccountID == account.ID),
+			)
+
 			// 检查请求拦截（预热请求、SUGGESTION MODE等）
 			if account.IsInterceptWarmupEnabled() {
 				interceptType := detectInterceptType(body, reqModel, parsedReq.MaxTokens, reqStream, isClaudeCodeClient)
@@ -588,6 +618,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			accountReleaseFunc := selection.ReleaseFunc
 			if !selection.Acquired {
 				if selection.WaitPlan == nil {
+					reqLog.Warn("gateway.select_account_no_slot_no_wait_plan",
+						zap.Int64("account_id", account.ID),
+						zap.String("model", reqModel),
+						zap.String("platform", platform),
+					)
 					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
 					return
 				}
@@ -629,6 +664,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 				// Slot acquired: no longer waiting in queue.
 				releaseWait()
+				reqLog.Info("sticky.bind_after_wait",
+					zap.String("session_key", sessionKey),
+					zap.Int64("account_id", account.ID),
+				)
 				if err := h.gatewayService.BindStickySession(c.Request.Context(), currentAPIKey.GroupID, sessionKey, account.ID); err != nil {
 					reqLog.Warn("gateway.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 				}
@@ -696,6 +735,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 
 			// 转发请求 - 根据账号平台分流
+			c.Set("parsed_request", parsedReq)
 			var result *service.ForwardResult
 			requestCtx := c.Request.Context()
 			if fs.SwitchCount > 0 {
@@ -754,7 +794,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						}
 						fallbackAPIKey := cloneAPIKeyWithGroup(apiKey, fallbackGroup)
 						if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), fallbackAPIKey.User, fallbackAPIKey, fallbackGroup, nil); err != nil {
-							status, code, message := billingErrorDetails(err)
+							status, code, message, retryAfter := billingErrorDetails(err)
+							if retryAfter > 0 {
+								c.Header("Retry-After", strconv.Itoa(retryAfter))
+							}
 							h.handleStreamingAwareError(c, status, code, message, streamStarted)
 							return
 						}
@@ -763,7 +806,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						c.Request = c.Request.WithContext(ctx)
 						currentAPIKey = fallbackAPIKey
 						currentSubscription = nil
-						currentProductSettlement = nil
 						fallbackUsed = true
 						retryWithFallback = true
 						break
@@ -820,6 +862,17 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 			}
 
+			// 绑定粘性会话（成功转发后绑定/刷新）
+			// - 无现有绑定（首次请求）：创建绑定
+			// - 选中账号与粘性账号一致：刷新 TTL
+			// - 粘性账号因负载/RPM 被跳过、选中了其他账号：不覆盖原绑定，
+			//   下次请求粘性账号恢复后仍可命中
+			if sessionKey != "" && (sessionBoundAccountID == 0 || sessionBoundAccountID == account.ID) {
+				if err := h.gatewayService.BindStickySession(c.Request.Context(), currentAPIKey.GroupID, sessionKey, account.ID); err != nil {
+					reqLog.Warn("gateway.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+				}
+			}
+
 			// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
@@ -835,11 +888,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			h.submitUsageRecordTask(func(ctx context.Context) {
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
+					ParsedRequest:      parsedReq,
 					APIKey:             currentAPIKey,
 					User:               currentAPIKey.User,
 					Account:            account,
 					Subscription:       currentSubscription,
-					ProductSettlement:  currentProductSettlement,
 					InboundEndpoint:    inboundEndpoint,
 					UpstreamEndpoint:   upstreamEndpoint,
 					UserAgent:          userAgent,
@@ -875,31 +928,20 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	apiKey, _ := middleware2.GetAPIKeyFromContext(c)
 
 	var groupID *int64
-	var group *service.Group
 	var platform string
 
 	if apiKey != nil && apiKey.Group != nil {
 		groupID = &apiKey.Group.ID
-		group = apiKey.Group
 		platform = apiKey.Group.Platform
 	}
 	if forcedPlatform, ok := middleware2.GetForcePlatformFromContext(c); ok && strings.TrimSpace(forcedPlatform) != "" {
 		platform = forcedPlatform
 	}
 
-	if platform == service.PlatformSora {
-		c.JSON(http.StatusOK, gin.H{
-			"object": "list",
-			"data":   service.DefaultSoraModels(h.cfg),
-		})
-		return
-	}
-
 	// Get available models from account configurations (without platform filter)
 	availableModels := h.gatewayService.GetAvailableModels(c.Request.Context(), groupID, "")
 
 	if len(availableModels) > 0 {
-		availableModels = filterOpenAIModelIDsForGroup(group, availableModels)
 		// Build model list from whitelist
 		models := make([]claude.Model, 0, len(availableModels))
 		for _, modelID := range availableModels {
@@ -921,7 +963,7 @@ func (h *GatewayHandler) Models(c *gin.Context) {
 	if platform == "openai" {
 		c.JSON(http.StatusOK, gin.H{
 			"object": "list",
-			"data":   filterOpenAIModelsForGroup(group, openai.DefaultModels),
+			"data":   openai.DefaultModels,
 		})
 		return
 	}
@@ -1154,16 +1196,20 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 			"unit":     "USD",
 		}
 
-		// 订阅信息可能不在 context 中（/v1/usage 路径跳过了中间件的计费检查）。
-		if productSettlement := GetProductSettlement(c); productSettlement != nil && productSettlement.Subscription != nil {
-			product := productSettlement.Binding.Product()
-			remaining := h.calculateProductSubscriptionRemaining(product, productSettlement.Subscription)
-			resp["remaining"] = remaining
-			resp["subscription"] = h.productSubscriptionUsagePayload(productSettlement, product)
-		} else if subscription, ok := middleware2.GetSubscriptionFromContext(c); ok {
+		// 订阅信息可能不在 context 中（/v1/usage 路径跳过了中间件的计费检查）
+		subscription, ok := middleware2.GetSubscriptionFromContext(c)
+		if ok {
 			remaining := h.calculateSubscriptionRemaining(apiKey.Group, subscription)
 			resp["remaining"] = remaining
-			resp["subscription"] = h.subscriptionUsagePayload(apiKey.Group, subscription)
+			resp["subscription"] = gin.H{
+				"daily_usage_usd":   subscription.DailyUsageUSD,
+				"weekly_usage_usd":  subscription.WeeklyUsageUSD,
+				"monthly_usage_usd": subscription.MonthlyUsageUSD,
+				"daily_limit_usd":   apiKey.Group.DailyLimitUSD,
+				"weekly_limit_usd":  apiKey.Group.WeeklyLimitUSD,
+				"monthly_limit_usd": apiKey.Group.MonthlyLimitUSD,
+				"expires_at":        subscription.ExpiresAt,
+			}
 		}
 
 		if usageData != nil {
@@ -1209,7 +1255,7 @@ func (h *GatewayHandler) calculateSubscriptionRemaining(group *service.Group, su
 
 	// 检查日限额
 	if group.HasDailyLimit() {
-		remaining := sub.DailyRemainingTotal(group)
+		remaining := *group.DailyLimitUSD - sub.DailyUsageUSD
 		if remaining <= 0 {
 			return 0
 		}
@@ -1247,98 +1293,6 @@ func (h *GatewayHandler) calculateSubscriptionRemaining(group *service.Group, su
 		}
 	}
 	return min
-}
-
-func (h *GatewayHandler) calculateProductSubscriptionRemaining(product *service.SubscriptionProduct, sub *service.UserProductSubscription) float64 {
-	if sub == nil {
-		return 0
-	}
-
-	var remainingValues []float64
-
-	if product.HasDailyLimit() {
-		remaining := sub.DailyRemainingTotal(product)
-		if remaining <= 0 {
-			return 0
-		}
-		remainingValues = append(remainingValues, remaining)
-	}
-
-	if product.HasWeeklyLimit() {
-		remaining := product.WeeklyLimitUSD - sub.WeeklyUsageUSD
-		if remaining <= 0 {
-			return 0
-		}
-		remainingValues = append(remainingValues, remaining)
-	}
-
-	if product.HasMonthlyLimit() {
-		remaining := product.MonthlyLimitUSD - sub.MonthlyUsageUSD
-		if remaining <= 0 {
-			return 0
-		}
-		remainingValues = append(remainingValues, remaining)
-	}
-
-	if len(remainingValues) == 0 {
-		return -1
-	}
-
-	min := remainingValues[0]
-	for _, v := range remainingValues[1:] {
-		if v < min {
-			min = v
-		}
-	}
-	return min
-}
-
-func (h *GatewayHandler) subscriptionUsagePayload(group *service.Group, subscription *service.UserSubscription) gin.H {
-	return gin.H{
-		"daily_usage_usd":               subscription.DailyUsageUSD,
-		"weekly_usage_usd":              subscription.WeeklyUsageUSD,
-		"monthly_usage_usd":             subscription.MonthlyUsageUSD,
-		"daily_limit_usd":               group.DailyLimitUSD,
-		"weekly_limit_usd":              group.WeeklyLimitUSD,
-		"monthly_limit_usd":             group.MonthlyLimitUSD,
-		"daily_carryover_in_usd":        0,
-		"daily_effective_limit_usd":     subscription.DailyEffectiveLimit(group),
-		"daily_remaining_total_usd":     subscription.DailyRemainingTotal(group),
-		"daily_remaining_carryover_usd": 0,
-		"expires_at":                    subscription.ExpiresAt,
-	}
-}
-
-func (h *GatewayHandler) productSubscriptionUsagePayload(productSettlement *service.ProductSettlementContext, product *service.SubscriptionProduct) gin.H {
-	subscription := productSettlement.Subscription
-	var dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD float64
-	if product != nil {
-		dailyLimitUSD = product.DailyLimitUSD
-		weeklyLimitUSD = product.WeeklyLimitUSD
-		monthlyLimitUSD = product.MonthlyLimitUSD
-	}
-	payload := gin.H{
-		"daily_usage_usd":               subscription.DailyUsageUSD,
-		"weekly_usage_usd":              subscription.WeeklyUsageUSD,
-		"monthly_usage_usd":             subscription.MonthlyUsageUSD,
-		"daily_limit_usd":               dailyLimitUSD,
-		"weekly_limit_usd":              weeklyLimitUSD,
-		"monthly_limit_usd":             monthlyLimitUSD,
-		"daily_carryover_in_usd":        subscription.DailyCarryoverInUSD,
-		"daily_carryover_remaining_usd": subscription.DailyCarryoverRemainingUSD,
-		"daily_effective_limit_usd":     subscription.DailyEffectiveLimit(product),
-		"daily_remaining_total_usd":     subscription.DailyRemainingTotal(product),
-		"daily_remaining_carryover_usd": subscription.DailyRemainingCarryover(),
-		"expires_at":                    subscription.ExpiresAt,
-	}
-
-	if productSettlement.Binding != nil {
-		payload["product_id"] = productSettlement.Binding.ProductID
-		payload["product_code"] = productSettlement.Binding.ProductCode
-		payload["product_name"] = productSettlement.Binding.ProductName
-	}
-
-	return payload
 }
 
 // handleConcurrencyError handles concurrency-related errors with proper 429 response
@@ -1380,24 +1334,19 @@ func (h *GatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *se
 	service.SetOpsUpstreamError(c, statusCode, upstreamMsg, "")
 
 	// 使用默认的错误映射
-	status, errType, errMsg := h.mapUpstreamError(statusCode, upstreamMsg)
+	status, errType, errMsg := h.mapUpstreamError(statusCode)
 	h.handleStreamingAwareError(c, status, errType, errMsg, streamStarted)
 }
 
 // handleFailoverExhaustedSimple 简化版本，用于没有响应体的情况
 func (h *GatewayHandler) handleFailoverExhaustedSimple(c *gin.Context, statusCode int, streamStarted bool) {
-	status, errType, errMsg := h.mapUpstreamError(statusCode, "")
+	status, errType, errMsg := h.mapUpstreamError(statusCode)
 	service.SetOpsUpstreamError(c, statusCode, errMsg, "")
 	h.handleStreamingAwareError(c, status, errType, errMsg, streamStarted)
 }
 
-func (h *GatewayHandler) mapUpstreamError(statusCode int, upstreamMsg string) (int, string, string) {
+func (h *GatewayHandler) mapUpstreamError(statusCode int) (int, string, string) {
 	switch statusCode {
-	case 400:
-		if msg := strings.TrimSpace(upstreamMsg); msg != "" {
-			return http.StatusBadRequest, "invalid_request_error", msg
-		}
-		return http.StatusBadRequest, "invalid_request_error", "Upstream rejected the request as invalid"
 	case 401:
 		return http.StatusBadGateway, "upstream_error", "Upstream authentication failed, please contact administrator"
 	case 403:
@@ -1438,37 +1387,8 @@ func (h *GatewayHandler) ensureForwardErrorResponse(c *gin.Context, streamStarte
 	if c == nil || c.Writer == nil || c.Writer.Written() {
 		return false
 	}
-	status := http.StatusBadGateway
-	errType := "upstream_error"
-	message := "Upstream request failed"
-	if upstreamStatusCode, upstreamMsg := getGatewayUpstreamErrorContext(c); upstreamStatusCode > 0 {
-		status, errType, message = h.mapUpstreamError(upstreamStatusCode, upstreamMsg)
-	}
-	h.handleStreamingAwareError(c, status, errType, message, streamStarted)
+	h.handleStreamingAwareError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed", streamStarted)
 	return true
-}
-
-func getGatewayUpstreamErrorContext(c *gin.Context) (int, string) {
-	if c == nil {
-		return 0, ""
-	}
-	upstreamStatusCode := 0
-	if v, ok := c.Get(service.OpsUpstreamStatusCodeKey); ok {
-		switch t := v.(type) {
-		case int:
-			upstreamStatusCode = t
-		case int64:
-			upstreamStatusCode = int(t)
-		}
-	}
-
-	upstreamMsg := ""
-	if v, ok := c.Get(service.OpsUpstreamErrorMessageKey); ok {
-		if s, ok := v.(string); ok {
-			upstreamMsg = strings.TrimSpace(s)
-		}
-	}
-	return upstreamStatusCode, upstreamMsg
 }
 
 // checkClaudeCodeVersion 检查 Claude Code 客户端版本是否满足版本要求
@@ -1594,7 +1514,10 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	// 校验 billing eligibility（订阅/余额）
 	// 【注意】不计算并发，但需要校验订阅/余额
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
-		status, code, message := billingErrorDetails(err)
+		status, code, message, retryAfter := billingErrorDetails(err)
+		if retryAfter > 0 {
+			c.Header("Retry-After", strconv.Itoa(retryAfter))
+		}
 		h.errorResponse(c, status, code, message)
 		return
 	}
@@ -1837,25 +1760,32 @@ func sendMockInterceptResponse(c *gin.Context, model string, interceptType Inter
 	c.JSON(http.StatusOK, response)
 }
 
-func billingErrorDetails(err error) (status int, code, message string) {
+func billingErrorDetails(err error) (status int, code, message string, retryAfter int) {
 	if errors.Is(err, service.ErrBillingServiceUnavailable) {
 		msg := pkgerrors.Message(err)
 		if msg == "" {
 			msg = "Billing service temporarily unavailable. Please retry later."
 		}
-		return http.StatusServiceUnavailable, "billing_service_error", msg
+		return http.StatusServiceUnavailable, "billing_service_error", msg, 0
 	}
 	if errors.Is(err, service.ErrAPIKeyRateLimit5hExceeded) {
 		msg := pkgerrors.Message(err)
-		return http.StatusTooManyRequests, "rate_limit_exceeded", msg
+		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, 0
 	}
 	if errors.Is(err, service.ErrAPIKeyRateLimit1dExceeded) {
 		msg := pkgerrors.Message(err)
-		return http.StatusTooManyRequests, "rate_limit_exceeded", msg
+		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, 0
 	}
 	if errors.Is(err, service.ErrAPIKeyRateLimit7dExceeded) {
 		msg := pkgerrors.Message(err)
-		return http.StatusTooManyRequests, "rate_limit_exceeded", msg
+		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, 0
+	}
+	// 用户/分组 RPM 超限统一映射为 HTTP 429；保留与其它 rate_limit 一致的错误码便于客户端分类。
+	// 返回 Retry-After 秒数（当前分钟剩余秒数），让 SDK 自动退避。
+	if errors.Is(err, service.ErrGroupRPMExceeded) || errors.Is(err, service.ErrUserRPMExceeded) {
+		msg := pkgerrors.Message(err)
+		retrySeconds := 60 - int(time.Now().Unix()%60)
+		return http.StatusTooManyRequests, "rate_limit_exceeded", msg, retrySeconds
 	}
 	msg := pkgerrors.Message(err)
 	if msg == "" {
@@ -1865,7 +1795,7 @@ func billingErrorDetails(err error) (status int, code, message string) {
 		).Warn("gateway.billing_error_missing_message")
 		msg = "Billing error"
 	}
-	return http.StatusForbidden, "billing_error", msg
+	return http.StatusForbidden, "billing_error", msg, 0
 }
 
 func (h *GatewayHandler) metadataBridgeEnabled() bool {

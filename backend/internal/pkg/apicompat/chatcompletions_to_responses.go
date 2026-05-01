@@ -27,13 +27,14 @@ func ChatCompletionsToResponses(req *ChatCompletionsRequest) (*ResponsesRequest,
 	}
 
 	out := &ResponsesRequest{
-		Model:       req.Model,
-		Input:       inputJSON,
-		Temperature: req.Temperature,
-		TopP:        req.TopP,
-		Stream:      true, // upstream always streams
-		Include:     []string{"reasoning.encrypted_content"},
-		ServiceTier: req.ServiceTier,
+		Model:        req.Model,
+		Instructions: req.Instructions,
+		Input:        inputJSON,
+		Temperature:  req.Temperature,
+		TopP:         req.TopP,
+		Stream:       true, // upstream always streams
+		Include:      []string{"reasoning.encrypted_content"},
+		ServiceTier:  req.ServiceTier,
 	}
 
 	storeFalse := false
@@ -55,10 +56,12 @@ func ChatCompletionsToResponses(req *ChatCompletionsRequest) (*ResponsesRequest,
 		out.MaxOutputTokens = &v
 	}
 
-	// Chat Completions compat should preserve mapped model suffix semantics
-	// (e.g. gpt-5.1-high) and request a displayable reasoning summary.
-	if reasoning := resolveChatCompletionsReasoning(req.Model, req.ReasoningEffort); reasoning != nil {
-		out.Reasoning = reasoning
+	// reasoning_effort → reasoning.effort + reasoning.summary="auto"
+	if req.ReasoningEffort != "" {
+		out.Reasoning = &ResponsesReasoning{
+			Effort:  req.ReasoningEffort,
+			Summary: "auto",
+		}
 	}
 
 	// tools[] and legacy functions[] → ResponsesTool[]
@@ -79,94 +82,6 @@ func ChatCompletionsToResponses(req *ChatCompletionsRequest) (*ResponsesRequest,
 	}
 
 	return out, nil
-}
-
-func resolveChatCompletionsReasoning(model, explicitEffort string) *ResponsesReasoning {
-	if strings.TrimSpace(explicitEffort) != "" {
-		return &ResponsesReasoning{
-			Effort:  explicitEffort,
-			Summary: "auto",
-		}
-	}
-
-	if effort, present := deriveChatCompletionsReasoningEffortFromModel(model); present {
-		if effort == "" {
-			return nil
-		}
-		return &ResponsesReasoning{
-			Effort:  effort,
-			Summary: "auto",
-		}
-	}
-
-	if shouldDefaultChatCompletionsReasoning(model) {
-		return &ResponsesReasoning{
-			Effort:  "medium",
-			Summary: "auto",
-		}
-	}
-
-	return nil
-}
-
-func deriveChatCompletionsReasoningEffortFromModel(model string) (string, bool) {
-	modelID := strings.TrimSpace(model)
-	if modelID == "" {
-		return "", false
-	}
-
-	if strings.Contains(modelID, "/") {
-		parts := strings.Split(modelID, "/")
-		modelID = parts[len(parts)-1]
-	}
-
-	parts := strings.FieldsFunc(strings.ToLower(modelID), func(r rune) bool {
-		switch r {
-		case '-', '_', ' ':
-			return true
-		default:
-			return false
-		}
-	})
-	if len(parts) == 0 {
-		return "", false
-	}
-
-	return normalizeChatCompletionsReasoningToken(parts[len(parts)-1])
-}
-
-func normalizeChatCompletionsReasoningToken(raw string) (string, bool) {
-	value := strings.ToLower(strings.TrimSpace(raw))
-	if value == "" {
-		return "", false
-	}
-
-	value = strings.NewReplacer("-", "", "_", "", " ", "").Replace(value)
-
-	switch value {
-	case "none", "minimal":
-		return "", true
-	case "low", "medium", "high":
-		return value, true
-	case "xhigh", "extrahigh":
-		return "xhigh", true
-	default:
-		return "", false
-	}
-}
-
-func shouldDefaultChatCompletionsReasoning(model string) bool {
-	modelID := strings.ToLower(strings.TrimSpace(model))
-	if modelID == "" {
-		return false
-	}
-
-	if strings.Contains(modelID, "/") {
-		parts := strings.Split(modelID, "/")
-		modelID = parts[len(parts)-1]
-	}
-
-	return strings.HasPrefix(modelID, "gpt-5") || strings.Contains(modelID, "codex")
 }
 
 // convertChatMessagesToResponsesInput converts the Chat Completions messages
@@ -472,33 +387,26 @@ func convertChatToolsToResponses(tools []ChatTool, functions []ChatFunction) []R
 	var out []ResponsesTool
 
 	for _, t := range tools {
-		if strings.TrimSpace(t.Type) != "function" {
-			continue
-		}
-		f := chatToolFunctionDefinition(t)
-		if strings.TrimSpace(f.Name) == "" {
+		if t.Type != "function" || t.Function == nil {
 			continue
 		}
 		rt := ResponsesTool{
 			Type:        "function",
-			Name:        f.Name,
-			Description: f.Description,
-			Parameters:  normalizeToolParameters(f.Parameters),
-			Strict:      f.Strict,
+			Name:        t.Function.Name,
+			Description: t.Function.Description,
+			Parameters:  t.Function.Parameters,
+			Strict:      t.Function.Strict,
 		}
 		out = append(out, rt)
 	}
 
 	// Legacy functions[] are treated as function-type tools.
 	for _, f := range functions {
-		if strings.TrimSpace(f.Name) == "" {
-			continue
-		}
 		rt := ResponsesTool{
 			Type:        "function",
 			Name:        f.Name,
 			Description: f.Description,
-			Parameters:  normalizeToolParameters(f.Parameters),
+			Parameters:  f.Parameters,
 			Strict:      f.Strict,
 		}
 		out = append(out, rt)
@@ -507,28 +415,12 @@ func convertChatToolsToResponses(tools []ChatTool, functions []ChatFunction) []R
 	return out
 }
 
-func chatToolFunctionDefinition(t ChatTool) ChatFunction {
-	if t.Function != nil {
-		return *t.Function
-	}
-	name := strings.TrimSpace(t.Name)
-	if name == "" {
-		name = strings.TrimSpace(t.FunctionName)
-	}
-	return ChatFunction{
-		Name:        name,
-		Description: t.Description,
-		Parameters:  t.Parameters,
-		Strict:      t.Strict,
-	}
-}
-
 // convertChatFunctionCallToToolChoice maps the legacy function_call field to a
 // Responses API tool_choice value.
 //
 //	"auto" → "auto"
 //	"none" → "none"
-//	{"name":"X"} → {"type":"function","function":{"name":"X"}}
+//	{"name":"X"} → {"type":"function","name":"X"}
 func convertChatFunctionCallToToolChoice(raw json.RawMessage) (json.RawMessage, error) {
 	// Try string first ("auto", "none", etc.) — pass through as-is.
 	var s string
@@ -544,7 +436,7 @@ func convertChatFunctionCallToToolChoice(raw json.RawMessage) (json.RawMessage, 
 		return nil, err
 	}
 	return json.Marshal(map[string]any{
-		"type":     "function",
-		"function": map[string]string{"name": obj.Name},
+		"type": "function",
+		"name": obj.Name,
 	})
 }

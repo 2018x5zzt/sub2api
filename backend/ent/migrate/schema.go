@@ -17,7 +17,6 @@ var (
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "key", Type: field.TypeString, Unique: true, Size: 128},
 		{Name: "name", Type: field.TypeString, Size: 100},
-		{Name: "budget_multiplier", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
 		{Name: "last_used_at", Type: field.TypeTime, Nullable: true},
 		{Name: "ip_whitelist", Type: field.TypeJSON, Nullable: true},
@@ -45,13 +44,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "api_keys_groups_api_keys",
-				Columns:    []*schema.Column{APIKeysColumns[23]},
+				Columns:    []*schema.Column{APIKeysColumns[22]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "api_keys_users_api_keys",
-				Columns:    []*schema.Column{APIKeysColumns[24]},
+				Columns:    []*schema.Column{APIKeysColumns[23]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -60,17 +59,17 @@ var (
 			{
 				Name:    "apikey_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[24]},
+				Columns: []*schema.Column{APIKeysColumns[23]},
 			},
 			{
 				Name:    "apikey_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[23]},
+				Columns: []*schema.Column{APIKeysColumns[22]},
 			},
 			{
 				Name:    "apikey_status",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[7]},
+				Columns: []*schema.Column{APIKeysColumns[6]},
 			},
 			{
 				Name:    "apikey_deleted_at",
@@ -80,17 +79,17 @@ var (
 			{
 				Name:    "apikey_last_used_at",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[8]},
+				Columns: []*schema.Column{APIKeysColumns[7]},
 			},
 			{
 				Name:    "apikey_quota_quota_used",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[11], APIKeysColumns[12]},
+				Columns: []*schema.Column{APIKeysColumns[10], APIKeysColumns[11]},
 			},
 			{
 				Name:    "apikey_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{APIKeysColumns[13]},
+				Columns: []*schema.Column{APIKeysColumns[12]},
 			},
 		},
 	}
@@ -339,6 +338,252 @@ var (
 			},
 		},
 	}
+	// AuthIdentitiesColumns holds the columns for the "auth_identities" table.
+	AuthIdentitiesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "provider_type", Type: field.TypeString, Size: 20},
+		{Name: "provider_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "provider_subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "verified_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "issuer", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "metadata", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// AuthIdentitiesTable holds the schema information for the "auth_identities" table.
+	AuthIdentitiesTable = &schema.Table{
+		Name:       "auth_identities",
+		Columns:    AuthIdentitiesColumns,
+		PrimaryKey: []*schema.Column{AuthIdentitiesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "auth_identities_users_auth_identities",
+				Columns:    []*schema.Column{AuthIdentitiesColumns[9]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "authidentity_provider_type_provider_key_provider_subject",
+				Unique:  true,
+				Columns: []*schema.Column{AuthIdentitiesColumns[3], AuthIdentitiesColumns[4], AuthIdentitiesColumns[5]},
+			},
+			{
+				Name:    "authidentity_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuthIdentitiesColumns[9]},
+			},
+			{
+				Name:    "authidentity_user_id_provider_type",
+				Unique:  false,
+				Columns: []*schema.Column{AuthIdentitiesColumns[9], AuthIdentitiesColumns[3]},
+			},
+		},
+	}
+	// AuthIdentityChannelsColumns holds the columns for the "auth_identity_channels" table.
+	AuthIdentityChannelsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "provider_type", Type: field.TypeString, Size: 20},
+		{Name: "provider_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "channel", Type: field.TypeString, Size: 20},
+		{Name: "channel_app_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "channel_subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "metadata", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "identity_id", Type: field.TypeInt64},
+	}
+	// AuthIdentityChannelsTable holds the schema information for the "auth_identity_channels" table.
+	AuthIdentityChannelsTable = &schema.Table{
+		Name:       "auth_identity_channels",
+		Columns:    AuthIdentityChannelsColumns,
+		PrimaryKey: []*schema.Column{AuthIdentityChannelsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "auth_identity_channels_auth_identities_channels",
+				Columns:    []*schema.Column{AuthIdentityChannelsColumns[9]},
+				RefColumns: []*schema.Column{AuthIdentitiesColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "authidentitychannel_provider_type_provider_key_channel_channel_app_id_channel_subject",
+				Unique:  true,
+				Columns: []*schema.Column{AuthIdentityChannelsColumns[3], AuthIdentityChannelsColumns[4], AuthIdentityChannelsColumns[5], AuthIdentityChannelsColumns[6], AuthIdentityChannelsColumns[7]},
+			},
+			{
+				Name:    "authidentitychannel_identity_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuthIdentityChannelsColumns[9]},
+			},
+		},
+	}
+	// ChannelMonitorsColumns holds the columns for the "channel_monitors" table.
+	ChannelMonitorsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "provider", Type: field.TypeEnum, Enums: []string{"openai", "anthropic", "gemini"}},
+		{Name: "endpoint", Type: field.TypeString, Size: 500},
+		{Name: "api_key_encrypted", Type: field.TypeString},
+		{Name: "primary_model", Type: field.TypeString, Size: 200},
+		{Name: "extra_models", Type: field.TypeJSON},
+		{Name: "group_name", Type: field.TypeString, Nullable: true, Size: 100, Default: ""},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "interval_seconds", Type: field.TypeInt},
+		{Name: "last_checked_at", Type: field.TypeTime, Nullable: true},
+		{Name: "created_by", Type: field.TypeInt64},
+		{Name: "extra_headers", Type: field.TypeJSON},
+		{Name: "body_override_mode", Type: field.TypeString, Size: 10, Default: "off"},
+		{Name: "body_override", Type: field.TypeJSON, Nullable: true},
+		{Name: "template_id", Type: field.TypeInt64, Nullable: true},
+	}
+	// ChannelMonitorsTable holds the schema information for the "channel_monitors" table.
+	ChannelMonitorsTable = &schema.Table{
+		Name:       "channel_monitors",
+		Columns:    ChannelMonitorsColumns,
+		PrimaryKey: []*schema.Column{ChannelMonitorsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "channel_monitors_channel_monitor_request_templates_request_template",
+				Columns:    []*schema.Column{ChannelMonitorsColumns[17]},
+				RefColumns: []*schema.Column{ChannelMonitorRequestTemplatesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "channelmonitor_enabled_last_checked_at",
+				Unique:  false,
+				Columns: []*schema.Column{ChannelMonitorsColumns[10], ChannelMonitorsColumns[12]},
+			},
+			{
+				Name:    "channelmonitor_provider",
+				Unique:  false,
+				Columns: []*schema.Column{ChannelMonitorsColumns[4]},
+			},
+			{
+				Name:    "channelmonitor_group_name",
+				Unique:  false,
+				Columns: []*schema.Column{ChannelMonitorsColumns[9]},
+			},
+			{
+				Name:    "channelmonitor_template_id",
+				Unique:  false,
+				Columns: []*schema.Column{ChannelMonitorsColumns[17]},
+			},
+		},
+	}
+	// ChannelMonitorDailyRollupsColumns holds the columns for the "channel_monitor_daily_rollups" table.
+	ChannelMonitorDailyRollupsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "model", Type: field.TypeString, Size: 200},
+		{Name: "bucket_date", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "date"}},
+		{Name: "total_checks", Type: field.TypeInt, Default: 0},
+		{Name: "ok_count", Type: field.TypeInt, Default: 0},
+		{Name: "operational_count", Type: field.TypeInt, Default: 0},
+		{Name: "degraded_count", Type: field.TypeInt, Default: 0},
+		{Name: "failed_count", Type: field.TypeInt, Default: 0},
+		{Name: "error_count", Type: field.TypeInt, Default: 0},
+		{Name: "sum_latency_ms", Type: field.TypeInt64, Default: 0},
+		{Name: "count_latency", Type: field.TypeInt, Default: 0},
+		{Name: "sum_ping_latency_ms", Type: field.TypeInt64, Default: 0},
+		{Name: "count_ping_latency", Type: field.TypeInt, Default: 0},
+		{Name: "computed_at", Type: field.TypeTime},
+		{Name: "monitor_id", Type: field.TypeInt64},
+	}
+	// ChannelMonitorDailyRollupsTable holds the schema information for the "channel_monitor_daily_rollups" table.
+	ChannelMonitorDailyRollupsTable = &schema.Table{
+		Name:       "channel_monitor_daily_rollups",
+		Columns:    ChannelMonitorDailyRollupsColumns,
+		PrimaryKey: []*schema.Column{ChannelMonitorDailyRollupsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "channel_monitor_daily_rollups_channel_monitors_daily_rollups",
+				Columns:    []*schema.Column{ChannelMonitorDailyRollupsColumns[14]},
+				RefColumns: []*schema.Column{ChannelMonitorsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "channelmonitordailyrollup_monitor_id_model_bucket_date",
+				Unique:  true,
+				Columns: []*schema.Column{ChannelMonitorDailyRollupsColumns[14], ChannelMonitorDailyRollupsColumns[1], ChannelMonitorDailyRollupsColumns[2]},
+			},
+			{
+				Name:    "channelmonitordailyrollup_bucket_date",
+				Unique:  false,
+				Columns: []*schema.Column{ChannelMonitorDailyRollupsColumns[2]},
+			},
+		},
+	}
+	// ChannelMonitorHistoriesColumns holds the columns for the "channel_monitor_histories" table.
+	ChannelMonitorHistoriesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "model", Type: field.TypeString, Size: 200},
+		{Name: "status", Type: field.TypeEnum, Enums: []string{"operational", "degraded", "failed", "error"}},
+		{Name: "latency_ms", Type: field.TypeInt, Nullable: true},
+		{Name: "ping_latency_ms", Type: field.TypeInt, Nullable: true},
+		{Name: "message", Type: field.TypeString, Nullable: true, Size: 500, Default: ""},
+		{Name: "checked_at", Type: field.TypeTime},
+		{Name: "monitor_id", Type: field.TypeInt64},
+	}
+	// ChannelMonitorHistoriesTable holds the schema information for the "channel_monitor_histories" table.
+	ChannelMonitorHistoriesTable = &schema.Table{
+		Name:       "channel_monitor_histories",
+		Columns:    ChannelMonitorHistoriesColumns,
+		PrimaryKey: []*schema.Column{ChannelMonitorHistoriesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "channel_monitor_histories_channel_monitors_history",
+				Columns:    []*schema.Column{ChannelMonitorHistoriesColumns[7]},
+				RefColumns: []*schema.Column{ChannelMonitorsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "channelmonitorhistory_monitor_id_model_checked_at",
+				Unique:  false,
+				Columns: []*schema.Column{ChannelMonitorHistoriesColumns[7], ChannelMonitorHistoriesColumns[1], ChannelMonitorHistoriesColumns[6]},
+			},
+			{
+				Name:    "channelmonitorhistory_checked_at",
+				Unique:  false,
+				Columns: []*schema.Column{ChannelMonitorHistoriesColumns[6]},
+			},
+		},
+	}
+	// ChannelMonitorRequestTemplatesColumns holds the columns for the "channel_monitor_request_templates" table.
+	ChannelMonitorRequestTemplatesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "provider", Type: field.TypeEnum, Enums: []string{"openai", "anthropic", "gemini"}},
+		{Name: "description", Type: field.TypeString, Nullable: true, Size: 500, Default: ""},
+		{Name: "extra_headers", Type: field.TypeJSON},
+		{Name: "body_override_mode", Type: field.TypeString, Size: 10, Default: "off"},
+		{Name: "body_override", Type: field.TypeJSON, Nullable: true},
+	}
+	// ChannelMonitorRequestTemplatesTable holds the schema information for the "channel_monitor_request_templates" table.
+	ChannelMonitorRequestTemplatesTable = &schema.Table{
+		Name:       "channel_monitor_request_templates",
+		Columns:    ChannelMonitorRequestTemplatesColumns,
+		PrimaryKey: []*schema.Column{ChannelMonitorRequestTemplatesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "channelmonitorrequesttemplate_provider_name",
+				Unique:  true,
+				Columns: []*schema.Column{ChannelMonitorRequestTemplatesColumns[4], ChannelMonitorRequestTemplatesColumns[3]},
+			},
+		},
+	}
 	// ErrorPassthroughRulesColumns holds the columns for the "error_passthrough_rules" table.
 	ErrorPassthroughRulesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -385,8 +630,6 @@ var (
 		{Name: "name", Type: field.TypeString, Size: 100},
 		{Name: "description", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "rate_multiplier", Type: field.TypeFloat64, Default: 1, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
-		{Name: "pricing_mode", Type: field.TypeString, Size: 20, Default: "fixed"},
-		{Name: "default_budget_multiplier", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
 		{Name: "is_exclusive", Type: field.TypeBool, Default: false},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
 		{Name: "platform", Type: field.TypeString, Size: 50, Default: "anthropic"},
@@ -398,11 +641,6 @@ var (
 		{Name: "image_price_1k", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "image_price_2k", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "image_price_4k", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "sora_image_price_360", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "sora_image_price_540", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "sora_video_price_per_request", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "sora_video_price_per_request_hd", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "sora_storage_quota_bytes", Type: field.TypeInt64, Default: 0},
 		{Name: "claude_code_only", Type: field.TypeBool, Default: false},
 		{Name: "fallback_group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "fallback_group_id_on_invalid_request", Type: field.TypeInt64, Nullable: true},
@@ -412,7 +650,11 @@ var (
 		{Name: "supported_model_scopes", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
 		{Name: "allow_messages_dispatch", Type: field.TypeBool, Default: false},
+		{Name: "require_oauth_only", Type: field.TypeBool, Default: false},
+		{Name: "require_privacy_set", Type: field.TypeBool, Default: false},
 		{Name: "default_mapped_model", Type: field.TypeString, Size: 100, Default: ""},
+		{Name: "messages_dispatch_model_config", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "rpm_limit", Type: field.TypeInt, Default: 0},
 	}
 	// GroupsTable holds the schema information for the "groups" table.
 	GroupsTable = &schema.Table{
@@ -423,22 +665,22 @@ var (
 			{
 				Name:    "group_status",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[10]},
+				Columns: []*schema.Column{GroupsColumns[8]},
 			},
 			{
 				Name:    "group_platform",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[11]},
+				Columns: []*schema.Column{GroupsColumns[9]},
 			},
 			{
 				Name:    "group_subscription_type",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[12]},
+				Columns: []*schema.Column{GroupsColumns[10]},
 			},
 			{
 				Name:    "group_is_exclusive",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[9]},
+				Columns: []*schema.Column{GroupsColumns[7]},
 			},
 			{
 				Name:    "group_deleted_at",
@@ -448,33 +690,7 @@ var (
 			{
 				Name:    "group_sort_order",
 				Unique:  false,
-				Columns: []*schema.Column{GroupsColumns[32]},
-			},
-		},
-	}
-	// GroupHealthSnapshotsColumns holds the columns for the "group_health_snapshots" table.
-	GroupHealthSnapshotsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "group_id", Type: field.TypeInt64},
-		{Name: "bucket_time", Type: field.TypeTime},
-		{Name: "health_percent", Type: field.TypeInt},
-		{Name: "health_state", Type: field.TypeEnum, Enums: []string{"healthy", "degraded", "down"}},
-	}
-	// GroupHealthSnapshotsTable holds the schema information for the "group_health_snapshots" table.
-	GroupHealthSnapshotsTable = &schema.Table{
-		Name:       "group_health_snapshots",
-		Columns:    GroupHealthSnapshotsColumns,
-		PrimaryKey: []*schema.Column{GroupHealthSnapshotsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "grouphealthsnapshot_group_id_bucket_time",
-				Unique:  true,
-				Columns: []*schema.Column{GroupHealthSnapshotsColumns[1], GroupHealthSnapshotsColumns[2]},
-			},
-			{
-				Name:    "grouphealthsnapshot_bucket_time",
-				Unique:  false,
-				Columns: []*schema.Column{GroupHealthSnapshotsColumns[2]},
+				Columns: []*schema.Column{GroupsColumns[25]},
 			},
 		},
 	}
@@ -516,138 +732,270 @@ var (
 			},
 		},
 	}
-	// InviteAdminActionsColumns holds the columns for the "invite_admin_actions" table.
-	InviteAdminActionsColumns = []*schema.Column{
+	// IdentityAdoptionDecisionsColumns holds the columns for the "identity_adoption_decisions" table.
+	IdentityAdoptionDecisionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "action_type", Type: field.TypeString, Size: 32},
-		{Name: "operator_user_id", Type: field.TypeInt64},
-		{Name: "target_user_id", Type: field.TypeInt64},
-		{Name: "reason", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "request_snapshot_json", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
-		{Name: "result_snapshot_json", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "adopt_display_name", Type: field.TypeBool, Default: false},
+		{Name: "adopt_avatar", Type: field.TypeBool, Default: false},
+		{Name: "decided_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "identity_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "pending_auth_session_id", Type: field.TypeInt64, Unique: true},
 	}
-	// InviteAdminActionsTable holds the schema information for the "invite_admin_actions" table.
-	InviteAdminActionsTable = &schema.Table{
-		Name:       "invite_admin_actions",
-		Columns:    InviteAdminActionsColumns,
-		PrimaryKey: []*schema.Column{InviteAdminActionsColumns[0]},
-	}
-	// InviteRelationshipEventsColumns holds the columns for the "invite_relationship_events" table.
-	InviteRelationshipEventsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "invitee_user_id", Type: field.TypeInt64},
-		{Name: "previous_inviter_user_id", Type: field.TypeInt64, Nullable: true},
-		{Name: "new_inviter_user_id", Type: field.TypeInt64, Nullable: true},
-		{Name: "event_type", Type: field.TypeString, Size: 32},
-		{Name: "effective_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "operator_user_id", Type: field.TypeInt64, Nullable: true},
-		{Name: "reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-	}
-	// InviteRelationshipEventsTable holds the schema information for the "invite_relationship_events" table.
-	InviteRelationshipEventsTable = &schema.Table{
-		Name:       "invite_relationship_events",
-		Columns:    InviteRelationshipEventsColumns,
-		PrimaryKey: []*schema.Column{InviteRelationshipEventsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "inviterelationshipevent_invitee_user_id_effective_at_id",
-				Unique:  false,
-				Columns: []*schema.Column{InviteRelationshipEventsColumns[1], InviteRelationshipEventsColumns[5], InviteRelationshipEventsColumns[0]},
-			},
-		},
-	}
-	// InviteRewardRecordsColumns holds the columns for the "invite_reward_records" table.
-	InviteRewardRecordsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "inviter_user_id", Type: field.TypeInt64},
-		{Name: "invitee_user_id", Type: field.TypeInt64},
-		{Name: "trigger_redeem_code_id", Type: field.TypeInt64, Nullable: true},
-		{Name: "trigger_redeem_code_value", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "reward_target_user_id", Type: field.TypeInt64},
-		{Name: "reward_role", Type: field.TypeString, Size: 32},
-		{Name: "reward_type", Type: field.TypeString, Size: 64},
-		{Name: "reward_rate", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,8)"}},
-		{Name: "reward_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "status", Type: field.TypeString, Size: 32, Default: "applied"},
-		{Name: "notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "admin_action_id", Type: field.TypeInt64, Nullable: true},
-		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-	}
-	// InviteRewardRecordsTable holds the schema information for the "invite_reward_records" table.
-	InviteRewardRecordsTable = &schema.Table{
-		Name:       "invite_reward_records",
-		Columns:    InviteRewardRecordsColumns,
-		PrimaryKey: []*schema.Column{InviteRewardRecordsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "inviterewardrecord_reward_target_user_id_created_at",
-				Unique:  false,
-				Columns: []*schema.Column{InviteRewardRecordsColumns[5], InviteRewardRecordsColumns[13]},
-			},
-			{
-				Name:    "inviterewardrecord_admin_action_id",
-				Unique:  false,
-				Columns: []*schema.Column{InviteRewardRecordsColumns[12]},
-			},
-			{
-				Name:    "inviterewardrecord_trigger_redeem_code_id_reward_role_reward_type",
-				Unique:  true,
-				Columns: []*schema.Column{InviteRewardRecordsColumns[3], InviteRewardRecordsColumns[6], InviteRewardRecordsColumns[7]},
-			},
-		},
-	}
-	// ProductSubscriptionMigrationSourcesColumns holds the columns for the "product_subscription_migration_sources" table.
-	ProductSubscriptionMigrationSourcesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "legacy_user_subscription_id", Type: field.TypeInt64},
-		{Name: "migration_batch", Type: field.TypeString, Size: 128},
-		{Name: "legacy_group_id", Type: field.TypeInt64},
-		{Name: "legacy_status", Type: field.TypeString, Size: 20},
-		{Name: "legacy_starts_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "legacy_expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "legacy_daily_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "legacy_weekly_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "legacy_monthly_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "legacy_daily_carryover_in_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "legacy_daily_carryover_remaining_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "product_subscription_id", Type: field.TypeInt64},
-	}
-	// ProductSubscriptionMigrationSourcesTable holds the schema information for the "product_subscription_migration_sources" table.
-	ProductSubscriptionMigrationSourcesTable = &schema.Table{
-		Name:       "product_subscription_migration_sources",
-		Columns:    ProductSubscriptionMigrationSourcesColumns,
-		PrimaryKey: []*schema.Column{ProductSubscriptionMigrationSourcesColumns[0]},
+	// IdentityAdoptionDecisionsTable holds the schema information for the "identity_adoption_decisions" table.
+	IdentityAdoptionDecisionsTable = &schema.Table{
+		Name:       "identity_adoption_decisions",
+		Columns:    IdentityAdoptionDecisionsColumns,
+		PrimaryKey: []*schema.Column{IdentityAdoptionDecisionsColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "product_subscription_migration_sources_user_product_subscriptions_migration_sources",
-				Columns:    []*schema.Column{ProductSubscriptionMigrationSourcesColumns[13]},
-				RefColumns: []*schema.Column{UserProductSubscriptionsColumns[0]},
+				Symbol:     "identity_adoption_decisions_auth_identities_adoption_decisions",
+				Columns:    []*schema.Column{IdentityAdoptionDecisionsColumns[6]},
+				RefColumns: []*schema.Column{AuthIdentitiesColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "identity_adoption_decisions_pending_auth_sessions_adoption_decision",
+				Columns:    []*schema.Column{IdentityAdoptionDecisionsColumns[7]},
+				RefColumns: []*schema.Column{PendingAuthSessionsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "identityadoptiondecision_pending_auth_session_id",
+				Unique:  true,
+				Columns: []*schema.Column{IdentityAdoptionDecisionsColumns[7]},
+			},
+			{
+				Name:    "identityadoptiondecision_identity_id",
+				Unique:  false,
+				Columns: []*schema.Column{IdentityAdoptionDecisionsColumns[6]},
+			},
+		},
+	}
+	// PaymentAuditLogsColumns holds the columns for the "payment_audit_logs" table.
+	PaymentAuditLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "order_id", Type: field.TypeString, Size: 64},
+		{Name: "action", Type: field.TypeString, Size: 50},
+		{Name: "detail", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "operator", Type: field.TypeString, Size: 100, Default: "system"},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// PaymentAuditLogsTable holds the schema information for the "payment_audit_logs" table.
+	PaymentAuditLogsTable = &schema.Table{
+		Name:       "payment_audit_logs",
+		Columns:    PaymentAuditLogsColumns,
+		PrimaryKey: []*schema.Column{PaymentAuditLogsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "paymentauditlog_order_id",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentAuditLogsColumns[1]},
+			},
+		},
+	}
+	// PaymentOrdersColumns holds the columns for the "payment_orders" table.
+	PaymentOrdersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "user_email", Type: field.TypeString, Size: 255},
+		{Name: "user_name", Type: field.TypeString, Size: 100},
+		{Name: "user_notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
+		{Name: "pay_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
+		{Name: "fee_rate", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
+		{Name: "recharge_code", Type: field.TypeString, Size: 64},
+		{Name: "out_trade_no", Type: field.TypeString, Size: 64, Default: ""},
+		{Name: "payment_type", Type: field.TypeString, Size: 30},
+		{Name: "payment_trade_no", Type: field.TypeString, Size: 128},
+		{Name: "pay_url", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "qr_code", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "qr_code_img", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "order_type", Type: field.TypeString, Size: 20, Default: "balance"},
+		{Name: "plan_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "subscription_group_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "subscription_days", Type: field.TypeInt, Nullable: true},
+		{Name: "provider_instance_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "provider_key", Type: field.TypeString, Nullable: true, Size: 30},
+		{Name: "provider_snapshot", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "status", Type: field.TypeString, Size: 30, Default: "PENDING"},
+		{Name: "refund_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
+		{Name: "refund_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "refund_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "force_refund", Type: field.TypeBool, Default: false},
+		{Name: "refund_requested_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "refund_request_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "refund_requested_by", Type: field.TypeString, Nullable: true, Size: 20},
+		{Name: "expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "paid_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "failed_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "failed_reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "client_ip", Type: field.TypeString, Size: 50},
+		{Name: "src_host", Type: field.TypeString, Size: 255},
+		{Name: "src_url", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// PaymentOrdersTable holds the schema information for the "payment_orders" table.
+	PaymentOrdersTable = &schema.Table{
+		Name:       "payment_orders",
+		Columns:    PaymentOrdersColumns,
+		PrimaryKey: []*schema.Column{PaymentOrdersColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "payment_orders_users_payment_orders",
+				Columns:    []*schema.Column{PaymentOrdersColumns[39]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "productsubscriptionmigrationsource_product_subscription_id",
-				Unique:  false,
-				Columns: []*schema.Column{ProductSubscriptionMigrationSourcesColumns[13]},
+				Name:    "paymentorder_out_trade_no",
+				Unique:  true,
+				Columns: []*schema.Column{PaymentOrdersColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "out_trade_no <> ''",
+				},
 			},
 			{
-				Name:    "productsubscriptionmigrationsource_legacy_user_subscription_id",
+				Name:    "paymentorder_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProductSubscriptionMigrationSourcesColumns[1]},
+				Columns: []*schema.Column{PaymentOrdersColumns[39]},
 			},
 			{
-				Name:    "productsubscriptionmigrationsource_migration_batch",
+				Name:    "paymentorder_status",
 				Unique:  false,
-				Columns: []*schema.Column{ProductSubscriptionMigrationSourcesColumns[2]},
+				Columns: []*schema.Column{PaymentOrdersColumns[21]},
 			},
 			{
-				Name:    "productsubscriptionmigrationsource_legacy_group_id",
+				Name:    "paymentorder_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{ProductSubscriptionMigrationSourcesColumns[3]},
+				Columns: []*schema.Column{PaymentOrdersColumns[29]},
+			},
+			{
+				Name:    "paymentorder_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentOrdersColumns[37]},
+			},
+			{
+				Name:    "paymentorder_paid_at",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentOrdersColumns[30]},
+			},
+			{
+				Name:    "paymentorder_payment_type_paid_at",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentOrdersColumns[9], PaymentOrdersColumns[30]},
+			},
+			{
+				Name:    "paymentorder_order_type",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentOrdersColumns[14]},
+			},
+		},
+	}
+	// PaymentProviderInstancesColumns holds the columns for the "payment_provider_instances" table.
+	PaymentProviderInstancesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "provider_key", Type: field.TypeString, Size: 30},
+		{Name: "name", Type: field.TypeString, Size: 100, Default: ""},
+		{Name: "config", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "supported_types", Type: field.TypeString, Size: 200, Default: ""},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "payment_mode", Type: field.TypeString, Size: 20, Default: ""},
+		{Name: "sort_order", Type: field.TypeInt, Default: 0},
+		{Name: "limits", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "refund_enabled", Type: field.TypeBool, Default: false},
+		{Name: "allow_user_refund", Type: field.TypeBool, Default: false},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// PaymentProviderInstancesTable holds the schema information for the "payment_provider_instances" table.
+	PaymentProviderInstancesTable = &schema.Table{
+		Name:       "payment_provider_instances",
+		Columns:    PaymentProviderInstancesColumns,
+		PrimaryKey: []*schema.Column{PaymentProviderInstancesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "paymentproviderinstance_provider_key",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentProviderInstancesColumns[1]},
+			},
+			{
+				Name:    "paymentproviderinstance_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentProviderInstancesColumns[5]},
+			},
+		},
+	}
+	// PendingAuthSessionsColumns holds the columns for the "pending_auth_sessions" table.
+	PendingAuthSessionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "session_token", Type: field.TypeString, Size: 255},
+		{Name: "intent", Type: field.TypeString, Size: 40},
+		{Name: "provider_type", Type: field.TypeString, Size: 20},
+		{Name: "provider_key", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "provider_subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "redirect_to", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "resolved_email", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "registration_password_hash", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "upstream_identity_claims", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "local_flow_state", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "browser_session_key", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "completion_code_hash", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "completion_code_expires_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "email_verified_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "password_verified_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "totp_verified_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "consumed_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "target_user_id", Type: field.TypeInt64, Nullable: true},
+	}
+	// PendingAuthSessionsTable holds the schema information for the "pending_auth_sessions" table.
+	PendingAuthSessionsTable = &schema.Table{
+		Name:       "pending_auth_sessions",
+		Columns:    PendingAuthSessionsColumns,
+		PrimaryKey: []*schema.Column{PendingAuthSessionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "pending_auth_sessions_users_pending_auth_sessions",
+				Columns:    []*schema.Column{PendingAuthSessionsColumns[21]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "pendingauthsession_session_token",
+				Unique:  true,
+				Columns: []*schema.Column{PendingAuthSessionsColumns[3]},
+			},
+			{
+				Name:    "pendingauthsession_target_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{PendingAuthSessionsColumns[21]},
+			},
+			{
+				Name:    "pendingauthsession_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{PendingAuthSessionsColumns[19]},
+			},
+			{
+				Name:    "pendingauthsession_provider_type_provider_key_provider_subject",
+				Unique:  false,
+				Columns: []*schema.Column{PendingAuthSessionsColumns[5], PendingAuthSessionsColumns[6], PendingAuthSessionsColumns[7]},
+			},
+			{
+				Name:    "pendingauthsession_completion_code_hash",
+				Unique:  false,
+				Columns: []*schema.Column{PendingAuthSessionsColumns[14]},
 			},
 		},
 	}
@@ -655,16 +1003,11 @@ var (
 	PromoCodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "code", Type: field.TypeString, Unique: true, Size: 32},
-		{Name: "scene", Type: field.TypeString, Size: 20, Default: "register"},
 		{Name: "bonus_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "random_bonus_pool_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "random_bonus_remaining", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "max_uses", Type: field.TypeInt, Default: 0},
 		{Name: "used_count", Type: field.TypeInt, Default: 0},
-		{Name: "leaderboard_enabled", Type: field.TypeBool, Default: false},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
 		{Name: "expires_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "success_message", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
@@ -676,19 +1019,14 @@ var (
 		PrimaryKey: []*schema.Column{PromoCodesColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "promocode_scene",
-				Unique:  false,
-				Columns: []*schema.Column{PromoCodesColumns[2]},
-			},
-			{
 				Name:    "promocode_status",
 				Unique:  false,
-				Columns: []*schema.Column{PromoCodesColumns[9]},
+				Columns: []*schema.Column{PromoCodesColumns[5]},
 			},
 			{
 				Name:    "promocode_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{PromoCodesColumns[10]},
+				Columns: []*schema.Column{PromoCodesColumns[6]},
 			},
 		},
 	}
@@ -696,8 +1034,6 @@ var (
 	PromoCodeUsagesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "bonus_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "fixed_bonus_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
-		{Name: "random_bonus_amount", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "used_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "promo_code_id", Type: field.TypeInt64},
 		{Name: "user_id", Type: field.TypeInt64},
@@ -710,13 +1046,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "promo_code_usages_promo_codes_usage_records",
-				Columns:    []*schema.Column{PromoCodeUsagesColumns[5]},
+				Columns:    []*schema.Column{PromoCodeUsagesColumns[3]},
 				RefColumns: []*schema.Column{PromoCodesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "promo_code_usages_users_promo_code_usages",
-				Columns:    []*schema.Column{PromoCodeUsagesColumns[6]},
+				Columns:    []*schema.Column{PromoCodeUsagesColumns[4]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -725,17 +1061,17 @@ var (
 			{
 				Name:    "promocodeusage_promo_code_id",
 				Unique:  false,
-				Columns: []*schema.Column{PromoCodeUsagesColumns[5]},
+				Columns: []*schema.Column{PromoCodeUsagesColumns[3]},
 			},
 			{
 				Name:    "promocodeusage_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{PromoCodeUsagesColumns[6]},
+				Columns: []*schema.Column{PromoCodeUsagesColumns[4]},
 			},
 			{
 				Name:    "promocodeusage_promo_code_id_user_id",
 				Unique:  true,
-				Columns: []*schema.Column{PromoCodeUsagesColumns[5], PromoCodeUsagesColumns[6]},
+				Columns: []*schema.Column{PromoCodeUsagesColumns[3], PromoCodeUsagesColumns[4]},
 			},
 		},
 	}
@@ -778,11 +1114,9 @@ var (
 		{Name: "type", Type: field.TypeString, Size: 20, Default: "balance"},
 		{Name: "value", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "unused"},
-		{Name: "source_type", Type: field.TypeString, Size: 32, Default: "system_grant"},
 		{Name: "used_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "product_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "validity_days", Type: field.TypeInt, Default: 30},
 		{Name: "group_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "used_by", Type: field.TypeInt64, Nullable: true},
@@ -795,13 +1129,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "redeem_codes_groups_redeem_codes",
-				Columns:    []*schema.Column{RedeemCodesColumns[11]},
+				Columns:    []*schema.Column{RedeemCodesColumns[9]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "redeem_codes_users_redeem_codes",
-				Columns:    []*schema.Column{RedeemCodesColumns[12]},
+				Columns:    []*schema.Column{RedeemCodesColumns[10]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -815,15 +1149,10 @@ var (
 			{
 				Name:    "redeemcode_used_by",
 				Unique:  false,
-				Columns: []*schema.Column{RedeemCodesColumns[12]},
+				Columns: []*schema.Column{RedeemCodesColumns[10]},
 			},
 			{
 				Name:    "redeemcode_group_id",
-				Unique:  false,
-				Columns: []*schema.Column{RedeemCodesColumns[11]},
-			},
-			{
-				Name:    "redeemcode_product_id",
 				Unique:  false,
 				Columns: []*schema.Column{RedeemCodesColumns[9]},
 			},
@@ -856,105 +1185,38 @@ var (
 		Columns:    SettingsColumns,
 		PrimaryKey: []*schema.Column{SettingsColumns[0]},
 	}
-	// SubscriptionProductsColumns holds the columns for the "subscription_products" table.
-	SubscriptionProductsColumns = []*schema.Column{
+	// SubscriptionPlansColumns holds the columns for the "subscription_plans" table.
+	SubscriptionPlansColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "code", Type: field.TypeString, Size: 64},
-		{Name: "name", Type: field.TypeString, Size: 255},
-		{Name: "description", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "status", Type: field.TypeString, Size: 20, Default: "draft"},
-		{Name: "default_validity_days", Type: field.TypeInt, Default: 30},
-		{Name: "daily_limit_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "weekly_limit_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "monthly_limit_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "sort_order", Type: field.TypeInt, Default: 0},
-	}
-	// SubscriptionProductsTable holds the schema information for the "subscription_products" table.
-	SubscriptionProductsTable = &schema.Table{
-		Name:       "subscription_products",
-		Columns:    SubscriptionProductsColumns,
-		PrimaryKey: []*schema.Column{SubscriptionProductsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "subscriptionproduct_code",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionProductsColumns[4]},
-			},
-			{
-				Name:    "subscriptionproduct_status",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionProductsColumns[7]},
-			},
-			{
-				Name:    "subscriptionproduct_sort_order",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionProductsColumns[12]},
-			},
-			{
-				Name:    "subscriptionproduct_deleted_at",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionProductsColumns[3]},
-			},
-		},
-	}
-	// SubscriptionProductGroupsColumns holds the columns for the "subscription_product_groups" table.
-	SubscriptionProductGroupsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "group_id", Type: field.TypeInt64},
-		{Name: "debit_multiplier", Type: field.TypeFloat64, Default: 1, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
-		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "name", Type: field.TypeString, Size: 100},
+		{Name: "description", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "price", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
+		{Name: "original_price", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
+		{Name: "validity_days", Type: field.TypeInt, Default: 30},
+		{Name: "validity_unit", Type: field.TypeString, Size: 10, Default: "day"},
+		{Name: "features", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "product_name", Type: field.TypeString, Size: 100, Default: ""},
+		{Name: "for_sale", Type: field.TypeBool, Default: true},
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
-		{Name: "product_id", Type: field.TypeInt64},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 	}
-	// SubscriptionProductGroupsTable holds the schema information for the "subscription_product_groups" table.
-	SubscriptionProductGroupsTable = &schema.Table{
-		Name:       "subscription_product_groups",
-		Columns:    SubscriptionProductGroupsColumns,
-		PrimaryKey: []*schema.Column{SubscriptionProductGroupsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "subscription_product_groups_subscription_products_group_bindings",
-				Columns:    []*schema.Column{SubscriptionProductGroupsColumns[8]},
-				RefColumns: []*schema.Column{SubscriptionProductsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
+	// SubscriptionPlansTable holds the schema information for the "subscription_plans" table.
+	SubscriptionPlansTable = &schema.Table{
+		Name:       "subscription_plans",
+		Columns:    SubscriptionPlansColumns,
+		PrimaryKey: []*schema.Column{SubscriptionPlansColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "subscriptionproductgroup_product_id",
+				Name:    "subscriptionplan_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionProductGroupsColumns[8]},
+				Columns: []*schema.Column{SubscriptionPlansColumns[1]},
 			},
 			{
-				Name:    "subscriptionproductgroup_group_id",
+				Name:    "subscriptionplan_for_sale",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionProductGroupsColumns[4]},
-			},
-			{
-				Name:    "subscriptionproductgroup_status",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionProductGroupsColumns[6]},
-			},
-			{
-				Name:    "subscriptionproductgroup_sort_order",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionProductGroupsColumns[7]},
-			},
-			{
-				Name:    "subscriptionproductgroup_deleted_at",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionProductGroupsColumns[3]},
-			},
-			{
-				Name:    "subscriptionproductgroup_product_id_group_id",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionProductGroupsColumns[8], SubscriptionProductGroupsColumns[4]},
+				Columns: []*schema.Column{SubscriptionPlansColumns[10]},
 			},
 		},
 	}
@@ -1031,8 +1293,6 @@ var (
 		{Name: "model_mapping_chain", Type: field.TypeString, Nullable: true, Size: 500},
 		{Name: "billing_tier", Type: field.TypeString, Nullable: true, Size: 50},
 		{Name: "billing_mode", Type: field.TypeString, Nullable: true, Size: 20},
-		{Name: "product_id", Type: field.TypeInt64, Nullable: true},
-		{Name: "product_subscription_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "input_tokens", Type: field.TypeInt, Default: 0},
 		{Name: "output_tokens", Type: field.TypeInt, Default: 0},
 		{Name: "cache_creation_tokens", Type: field.TypeInt, Default: 0},
@@ -1047,8 +1307,6 @@ var (
 		{Name: "actual_cost", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "rate_multiplier", Type: field.TypeFloat64, Default: 1, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
 		{Name: "account_rate_multiplier", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
-		{Name: "group_debit_multiplier", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,4)"}},
-		{Name: "product_debit_cost", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "billing_type", Type: field.TypeInt8, Default: 0},
 		{Name: "stream", Type: field.TypeBool, Default: false},
 		{Name: "duration_ms", Type: field.TypeInt, Nullable: true},
@@ -1057,7 +1315,6 @@ var (
 		{Name: "ip_address", Type: field.TypeString, Nullable: true, Size: 45},
 		{Name: "image_count", Type: field.TypeInt, Default: 0},
 		{Name: "image_size", Type: field.TypeString, Nullable: true, Size: 10},
-		{Name: "media_type", Type: field.TypeString, Nullable: true, Size: 16},
 		{Name: "cache_ttl_overridden", Type: field.TypeBool, Default: false},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "api_key_id", Type: field.TypeInt64},
@@ -1074,31 +1331,31 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "usage_logs_api_keys_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[38]},
+				Columns:    []*schema.Column{UsageLogsColumns[33]},
 				RefColumns: []*schema.Column{APIKeysColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "usage_logs_accounts_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[39]},
+				Columns:    []*schema.Column{UsageLogsColumns[34]},
 				RefColumns: []*schema.Column{AccountsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "usage_logs_groups_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[40]},
+				Columns:    []*schema.Column{UsageLogsColumns[35]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "usage_logs_users_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[41]},
+				Columns:    []*schema.Column{UsageLogsColumns[36]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "usage_logs_user_subscriptions_usage_logs",
-				Columns:    []*schema.Column{UsageLogsColumns[42]},
+				Columns:    []*schema.Column{UsageLogsColumns[37]},
 				RefColumns: []*schema.Column{UserSubscriptionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1107,42 +1364,32 @@ var (
 			{
 				Name:    "usagelog_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[41]},
+				Columns: []*schema.Column{UsageLogsColumns[36]},
 			},
 			{
 				Name:    "usagelog_api_key_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[38]},
+				Columns: []*schema.Column{UsageLogsColumns[33]},
 			},
 			{
 				Name:    "usagelog_account_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[39]},
+				Columns: []*schema.Column{UsageLogsColumns[34]},
 			},
 			{
 				Name:    "usagelog_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[40]},
+				Columns: []*schema.Column{UsageLogsColumns[35]},
 			},
 			{
 				Name:    "usagelog_subscription_id",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[42]},
-			},
-			{
-				Name:    "usagelog_product_id",
-				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[9]},
-			},
-			{
-				Name:    "usagelog_product_subscription_id",
-				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[10]},
+				Columns: []*schema.Column{UsageLogsColumns[37]},
 			},
 			{
 				Name:    "usagelog_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[37]},
+				Columns: []*schema.Column{UsageLogsColumns[32]},
 			},
 			{
 				Name:    "usagelog_model",
@@ -1162,27 +1409,17 @@ var (
 			{
 				Name:    "usagelog_user_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[41], UsageLogsColumns[37]},
+				Columns: []*schema.Column{UsageLogsColumns[36], UsageLogsColumns[32]},
 			},
 			{
 				Name:    "usagelog_api_key_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[38], UsageLogsColumns[37]},
+				Columns: []*schema.Column{UsageLogsColumns[33], UsageLogsColumns[32]},
 			},
 			{
 				Name:    "usagelog_group_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[40], UsageLogsColumns[37]},
-			},
-			{
-				Name:    "usagelog_product_id_created_at",
-				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[9], UsageLogsColumns[37]},
-			},
-			{
-				Name:    "usagelog_product_subscription_id_created_at",
-				Unique:  false,
-				Columns: []*schema.Column{UsageLogsColumns[10], UsageLogsColumns[37]},
+				Columns: []*schema.Column{UsageLogsColumns[35], UsageLogsColumns[32]},
 			},
 		},
 	}
@@ -1198,16 +1435,20 @@ var (
 		{Name: "balance", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "concurrency", Type: field.TypeInt, Default: 5},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
-		{Name: "invite_code", Type: field.TypeString, Unique: true, Nullable: true, Size: 32},
-		{Name: "invited_by_user_id", Type: field.TypeInt64, Nullable: true},
-		{Name: "invite_bound_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "username", Type: field.TypeString, Size: 100, Default: ""},
 		{Name: "notes", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "totp_secret_encrypted", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "totp_enabled", Type: field.TypeBool, Default: false},
 		{Name: "totp_enabled_at", Type: field.TypeTime, Nullable: true},
-		{Name: "sora_storage_quota_bytes", Type: field.TypeInt64, Default: 0},
-		{Name: "sora_storage_used_bytes", Type: field.TypeInt64, Default: 0},
+		{Name: "signup_source", Type: field.TypeString, Default: "email"},
+		{Name: "last_login_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "last_active_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "balance_notify_enabled", Type: field.TypeBool, Default: true},
+		{Name: "balance_notify_threshold_type", Type: field.TypeString, Default: "fixed"},
+		{Name: "balance_notify_threshold", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "balance_notify_extra_emails", Type: field.TypeString, Default: "[]", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "total_recharged", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "rpm_limit", Type: field.TypeInt, Default: 0},
 	}
 	// UsersTable holds the schema information for the "users" table.
 	UsersTable = &schema.Table{
@@ -1215,16 +1456,6 @@ var (
 		Columns:    UsersColumns,
 		PrimaryKey: []*schema.Column{UsersColumns[0]},
 		Indexes: []*schema.Index{
-			{
-				Name:    "user_invite_code",
-				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[10]},
-			},
-			{
-				Name:    "user_invited_by_user_id",
-				Unique:  false,
-				Columns: []*schema.Column{UsersColumns[11]},
-			},
 			{
 				Name:    "user_status",
 				Unique:  false,
@@ -1356,85 +1587,6 @@ var (
 			},
 		},
 	}
-	// UserProductSubscriptionsColumns holds the columns for the "user_product_subscriptions" table.
-	UserProductSubscriptionsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "user_id", Type: field.TypeInt64},
-		{Name: "starts_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
-		{Name: "daily_window_start", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "weekly_window_start", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "monthly_window_start", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "daily_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "weekly_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "monthly_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "daily_carryover_in_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "daily_carryover_remaining_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "assigned_by", Type: field.TypeInt64, Nullable: true},
-		{Name: "assigned_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
-		{Name: "product_id", Type: field.TypeInt64},
-	}
-	// UserProductSubscriptionsTable holds the schema information for the "user_product_subscriptions" table.
-	UserProductSubscriptionsTable = &schema.Table{
-		Name:       "user_product_subscriptions",
-		Columns:    UserProductSubscriptionsColumns,
-		PrimaryKey: []*schema.Column{UserProductSubscriptionsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "user_product_subscriptions_subscription_products_user_subscriptions",
-				Columns:    []*schema.Column{UserProductSubscriptionsColumns[19]},
-				RefColumns: []*schema.Column{SubscriptionProductsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-		Indexes: []*schema.Index{
-			{
-				Name:    "userproductsubscription_user_id",
-				Unique:  false,
-				Columns: []*schema.Column{UserProductSubscriptionsColumns[4]},
-			},
-			{
-				Name:    "userproductsubscription_product_id",
-				Unique:  false,
-				Columns: []*schema.Column{UserProductSubscriptionsColumns[19]},
-			},
-			{
-				Name:    "userproductsubscription_status",
-				Unique:  false,
-				Columns: []*schema.Column{UserProductSubscriptionsColumns[7]},
-			},
-			{
-				Name:    "userproductsubscription_expires_at",
-				Unique:  false,
-				Columns: []*schema.Column{UserProductSubscriptionsColumns[6]},
-			},
-			{
-				Name:    "userproductsubscription_user_id_status_expires_at",
-				Unique:  false,
-				Columns: []*schema.Column{UserProductSubscriptionsColumns[4], UserProductSubscriptionsColumns[7], UserProductSubscriptionsColumns[6]},
-			},
-			{
-				Name:    "userproductsubscription_assigned_by",
-				Unique:  false,
-				Columns: []*schema.Column{UserProductSubscriptionsColumns[16]},
-			},
-			{
-				Name:    "userproductsubscription_deleted_at",
-				Unique:  false,
-				Columns: []*schema.Column{UserProductSubscriptionsColumns[3]},
-			},
-			{
-				Name:    "userproductsubscription_user_id_product_id",
-				Unique:  false,
-				Columns: []*schema.Column{UserProductSubscriptionsColumns[4], UserProductSubscriptionsColumns[19]},
-			},
-		},
-	}
 	// UserSubscriptionsColumns holds the columns for the "user_subscriptions" table.
 	UserSubscriptionsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1450,8 +1602,6 @@ var (
 		{Name: "daily_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "weekly_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "monthly_usage_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "daily_carryover_in_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
-		{Name: "daily_carryover_remaining_usd", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,10)"}},
 		{Name: "assigned_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "group_id", Type: field.TypeInt64},
@@ -1466,19 +1616,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "user_subscriptions_groups_subscriptions",
-				Columns:    []*schema.Column{UserSubscriptionsColumns[17]},
+				Columns:    []*schema.Column{UserSubscriptionsColumns[15]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "user_subscriptions_users_subscriptions",
-				Columns:    []*schema.Column{UserSubscriptionsColumns[18]},
+				Columns:    []*schema.Column{UserSubscriptionsColumns[16]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "user_subscriptions_users_assigned_subscriptions",
-				Columns:    []*schema.Column{UserSubscriptionsColumns[19]},
+				Columns:    []*schema.Column{UserSubscriptionsColumns[17]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1487,12 +1637,12 @@ var (
 			{
 				Name:    "usersubscription_user_id",
 				Unique:  false,
-				Columns: []*schema.Column{UserSubscriptionsColumns[18]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[16]},
 			},
 			{
 				Name:    "usersubscription_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{UserSubscriptionsColumns[17]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[15]},
 			},
 			{
 				Name:    "usersubscription_status",
@@ -1507,17 +1657,17 @@ var (
 			{
 				Name:    "usersubscription_user_id_status_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{UserSubscriptionsColumns[18], UserSubscriptionsColumns[6], UserSubscriptionsColumns[5]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[16], UserSubscriptionsColumns[6], UserSubscriptionsColumns[5]},
 			},
 			{
 				Name:    "usersubscription_assigned_by",
 				Unique:  false,
-				Columns: []*schema.Column{UserSubscriptionsColumns[19]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[17]},
 			},
 			{
 				Name:    "usersubscription_user_id_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{UserSubscriptionsColumns[18], UserSubscriptionsColumns[17]},
+				Columns: []*schema.Column{UserSubscriptionsColumns[16], UserSubscriptionsColumns[15]},
 			},
 			{
 				Name:    "usersubscription_deleted_at",
@@ -1533,22 +1683,27 @@ var (
 		AccountGroupsTable,
 		AnnouncementsTable,
 		AnnouncementReadsTable,
+		AuthIdentitiesTable,
+		AuthIdentityChannelsTable,
+		ChannelMonitorsTable,
+		ChannelMonitorDailyRollupsTable,
+		ChannelMonitorHistoriesTable,
+		ChannelMonitorRequestTemplatesTable,
 		ErrorPassthroughRulesTable,
 		GroupsTable,
-		GroupHealthSnapshotsTable,
 		IdempotencyRecordsTable,
-		InviteAdminActionsTable,
-		InviteRelationshipEventsTable,
-		InviteRewardRecordsTable,
-		ProductSubscriptionMigrationSourcesTable,
+		IdentityAdoptionDecisionsTable,
+		PaymentAuditLogsTable,
+		PaymentOrdersTable,
+		PaymentProviderInstancesTable,
+		PendingAuthSessionsTable,
 		PromoCodesTable,
 		PromoCodeUsagesTable,
 		ProxiesTable,
 		RedeemCodesTable,
 		SecuritySecretsTable,
 		SettingsTable,
-		SubscriptionProductsTable,
-		SubscriptionProductGroupsTable,
+		SubscriptionPlansTable,
 		TLSFingerprintProfilesTable,
 		UsageCleanupTasksTable,
 		UsageLogsTable,
@@ -1556,7 +1711,6 @@ var (
 		UserAllowedGroupsTable,
 		UserAttributeDefinitionsTable,
 		UserAttributeValuesTable,
-		UserProductSubscriptionsTable,
 		UserSubscriptionsTable,
 	}
 )
@@ -1584,30 +1738,56 @@ func init() {
 	AnnouncementReadsTable.Annotation = &entsql.Annotation{
 		Table: "announcement_reads",
 	}
+	AuthIdentitiesTable.ForeignKeys[0].RefTable = UsersTable
+	AuthIdentitiesTable.Annotation = &entsql.Annotation{
+		Table: "auth_identities",
+	}
+	AuthIdentityChannelsTable.ForeignKeys[0].RefTable = AuthIdentitiesTable
+	AuthIdentityChannelsTable.Annotation = &entsql.Annotation{
+		Table: "auth_identity_channels",
+	}
+	ChannelMonitorsTable.ForeignKeys[0].RefTable = ChannelMonitorRequestTemplatesTable
+	ChannelMonitorsTable.Annotation = &entsql.Annotation{
+		Table: "channel_monitors",
+	}
+	ChannelMonitorDailyRollupsTable.ForeignKeys[0].RefTable = ChannelMonitorsTable
+	ChannelMonitorDailyRollupsTable.Annotation = &entsql.Annotation{
+		Table: "channel_monitor_daily_rollups",
+	}
+	ChannelMonitorHistoriesTable.ForeignKeys[0].RefTable = ChannelMonitorsTable
+	ChannelMonitorHistoriesTable.Annotation = &entsql.Annotation{
+		Table: "channel_monitor_histories",
+	}
+	ChannelMonitorRequestTemplatesTable.Annotation = &entsql.Annotation{
+		Table: "channel_monitor_request_templates",
+	}
 	ErrorPassthroughRulesTable.Annotation = &entsql.Annotation{
 		Table: "error_passthrough_rules",
 	}
 	GroupsTable.Annotation = &entsql.Annotation{
 		Table: "groups",
 	}
-	GroupHealthSnapshotsTable.Annotation = &entsql.Annotation{
-		Table: "group_health_snapshots",
-	}
 	IdempotencyRecordsTable.Annotation = &entsql.Annotation{
 		Table: "idempotency_records",
 	}
-	InviteAdminActionsTable.Annotation = &entsql.Annotation{
-		Table: "invite_admin_actions",
+	IdentityAdoptionDecisionsTable.ForeignKeys[0].RefTable = AuthIdentitiesTable
+	IdentityAdoptionDecisionsTable.ForeignKeys[1].RefTable = PendingAuthSessionsTable
+	IdentityAdoptionDecisionsTable.Annotation = &entsql.Annotation{
+		Table: "identity_adoption_decisions",
 	}
-	InviteRelationshipEventsTable.Annotation = &entsql.Annotation{
-		Table: "invite_relationship_events",
+	PaymentAuditLogsTable.Annotation = &entsql.Annotation{
+		Table: "payment_audit_logs",
 	}
-	InviteRewardRecordsTable.Annotation = &entsql.Annotation{
-		Table: "invite_reward_records",
+	PaymentOrdersTable.ForeignKeys[0].RefTable = UsersTable
+	PaymentOrdersTable.Annotation = &entsql.Annotation{
+		Table: "payment_orders",
 	}
-	ProductSubscriptionMigrationSourcesTable.ForeignKeys[0].RefTable = UserProductSubscriptionsTable
-	ProductSubscriptionMigrationSourcesTable.Annotation = &entsql.Annotation{
-		Table: "product_subscription_migration_sources",
+	PaymentProviderInstancesTable.Annotation = &entsql.Annotation{
+		Table: "payment_provider_instances",
+	}
+	PendingAuthSessionsTable.ForeignKeys[0].RefTable = UsersTable
+	PendingAuthSessionsTable.Annotation = &entsql.Annotation{
+		Table: "pending_auth_sessions",
 	}
 	PromoCodesTable.Annotation = &entsql.Annotation{
 		Table: "promo_codes",
@@ -1631,12 +1811,8 @@ func init() {
 	SettingsTable.Annotation = &entsql.Annotation{
 		Table: "settings",
 	}
-	SubscriptionProductsTable.Annotation = &entsql.Annotation{
-		Table: "subscription_products",
-	}
-	SubscriptionProductGroupsTable.ForeignKeys[0].RefTable = SubscriptionProductsTable
-	SubscriptionProductGroupsTable.Annotation = &entsql.Annotation{
-		Table: "subscription_product_groups",
+	SubscriptionPlansTable.Annotation = &entsql.Annotation{
+		Table: "subscription_plans",
 	}
 	TLSFingerprintProfilesTable.Annotation = &entsql.Annotation{
 		Table: "tls_fingerprint_profiles",
@@ -1667,10 +1843,6 @@ func init() {
 	UserAttributeValuesTable.ForeignKeys[1].RefTable = UserAttributeDefinitionsTable
 	UserAttributeValuesTable.Annotation = &entsql.Annotation{
 		Table: "user_attribute_values",
-	}
-	UserProductSubscriptionsTable.ForeignKeys[0].RefTable = SubscriptionProductsTable
-	UserProductSubscriptionsTable.Annotation = &entsql.Annotation{
-		Table: "user_product_subscriptions",
 	}
 	UserSubscriptionsTable.ForeignKeys[0].RefTable = GroupsTable
 	UserSubscriptionsTable.ForeignKeys[1].RefTable = UsersTable

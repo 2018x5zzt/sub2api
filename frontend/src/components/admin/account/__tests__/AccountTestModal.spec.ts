@@ -2,17 +2,15 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AccountTestModal from '../AccountTestModal.vue'
 
-const { getAvailableModels, getById, copyToClipboard } = vi.hoisted(() => ({
+const { getAvailableModels, copyToClipboard } = vi.hoisted(() => ({
   getAvailableModels: vi.fn(),
-  getById: vi.fn(),
   copyToClipboard: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {
-      getAvailableModels,
-      getById
+      getAvailableModels
     }
   }
 }))
@@ -26,13 +24,13 @@ vi.mock('@/composables/useClipboard', () => ({
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')
   const messages: Record<string, string> = {
-    'admin.accounts.geminiImagePromptDefault': 'Generate a cute orange cat astronaut sticker on a clean pastel background.'
+    'admin.accounts.imagePromptDefault': 'Generate a cute orange cat astronaut sticker on a clean pastel background.'
   }
   return {
     ...actual,
     useI18n: () => ({
       t: (key: string, params?: Record<string, string | number>) => {
-        if (key === 'admin.accounts.geminiImageReceived' && params?.count) {
+        if (key === 'admin.accounts.imageReceived' && params?.count) {
           return `received-${params.count}`
         }
         return messages[key] || key
@@ -61,17 +59,17 @@ function createStreamResponse(lines: string[]) {
   } as Response
 }
 
-function mountModal(account: Record<string, unknown> = {
-  id: 42,
-  name: 'Gemini Image Test',
-  platform: 'gemini',
-  type: 'apikey',
-  status: 'active'
-}) {
+function mountModal() {
   return mount(AccountTestModal, {
     props: {
       show: false,
-      account
+      account: {
+        id: 42,
+        name: 'Gemini Image Test',
+        platform: 'gemini',
+        type: 'apikey',
+        status: 'active'
+      }
     } as any,
     global: {
       stubs: {
@@ -96,7 +94,6 @@ describe('AccountTestModal', () => {
       { id: 'gemini-3.1-flash-image', display_name: 'Gemini 3.1 Flash Image' }
     ])
     copyToClipboard.mockReset()
-    getById.mockResolvedValue({})
     Object.defineProperty(globalThis, 'localStorage', {
       value: {
         getItem: vi.fn((key: string) => (key === 'auth_token' ? 'test-token' : null)),
@@ -143,55 +140,8 @@ describe('AccountTestModal', () => {
       prompt: 'draw a tiny orange cat astronaut'
     })
 
-    const preview = wrapper.find('img[alt="gemini-test-image-1"]')
+    const preview = wrapper.find('img[alt="test-image-1"]')
     expect(preview.exists()).toBe(true)
     expect(preview.attributes('src')).toBe('data:image/png;base64,QUJD')
-  })
-
-  it('openai 图片模型测试会携带提示词并渲染图片预览', async () => {
-    getAvailableModels.mockResolvedValue([
-      { id: 'gpt-image-2', display_name: 'GPT Image 2' },
-      { id: 'gpt-5.4', display_name: 'GPT-5.4' }
-    ])
-    global.fetch = vi.fn().mockResolvedValue(
-      createStreamResponse([
-        'data: {"type":"test_start","model":"gpt-image-2"}\n',
-        'data: {"type":"image","image_url":"data:image/png;base64,REVG","mime_type":"image/png"}\n',
-        'data: {"type":"test_complete","success":true}\n'
-      ])
-    ) as any
-
-    const wrapper = mountModal({
-      id: 43,
-      name: 'OpenAI Image Test',
-      platform: 'openai',
-      type: 'oauth',
-      status: 'active'
-    })
-    await wrapper.setProps({ show: true })
-    await flushPromises()
-
-    const promptInput = wrapper.find('textarea.textarea-stub')
-    expect(promptInput.exists()).toBe(true)
-    await promptInput.setValue('draw a tiny orange cat astronaut')
-
-    const buttons = wrapper.findAll('button')
-    const startButton = buttons.find((button) => button.text().includes('admin.accounts.startTest'))
-    expect(startButton).toBeTruthy()
-
-    await startButton!.trigger('click')
-    await flushPromises()
-    await flushPromises()
-
-    expect(global.fetch).toHaveBeenCalledTimes(1)
-    const [, request] = (global.fetch as any).mock.calls[0]
-    expect(JSON.parse(request.body)).toEqual({
-      model_id: 'gpt-image-2',
-      prompt: 'draw a tiny orange cat astronaut'
-    })
-
-    const preview = wrapper.find('img[alt="gemini-test-image-1"]')
-    expect(preview.exists()).toBe(true)
-    expect(preview.attributes('src')).toBe('data:image/png;base64,REVG')
   })
 })

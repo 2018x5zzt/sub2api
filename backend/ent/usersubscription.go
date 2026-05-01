@@ -47,10 +47,6 @@ type UserSubscription struct {
 	WeeklyUsageUsd float64 `json:"weekly_usage_usd,omitempty"`
 	// MonthlyUsageUsd holds the value of the "monthly_usage_usd" field.
 	MonthlyUsageUsd float64 `json:"monthly_usage_usd,omitempty"`
-	// DailyCarryoverInUsd holds the value of the "daily_carryover_in_usd" field.
-	DailyCarryoverInUsd float64 `json:"daily_carryover_in_usd,omitempty"`
-	// DailyCarryoverRemainingUsd holds the value of the "daily_carryover_remaining_usd" field.
-	DailyCarryoverRemainingUsd float64 `json:"daily_carryover_remaining_usd,omitempty"`
 	// AssignedBy holds the value of the "assigned_by" field.
 	AssignedBy *int64 `json:"assigned_by,omitempty"`
 	// AssignedAt holds the value of the "assigned_at" field.
@@ -125,7 +121,7 @@ func (*UserSubscription) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case usersubscription.FieldDailyUsageUsd, usersubscription.FieldWeeklyUsageUsd, usersubscription.FieldMonthlyUsageUsd, usersubscription.FieldDailyCarryoverInUsd, usersubscription.FieldDailyCarryoverRemainingUsd:
+		case usersubscription.FieldDailyUsageUsd, usersubscription.FieldWeeklyUsageUsd, usersubscription.FieldMonthlyUsageUsd:
 			values[i] = new(sql.NullFloat64)
 		case usersubscription.FieldID, usersubscription.FieldUserID, usersubscription.FieldGroupID, usersubscription.FieldAssignedBy:
 			values[i] = new(sql.NullInt64)
@@ -241,18 +237,6 @@ func (_m *UserSubscription) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field monthly_usage_usd", values[i])
 			} else if value.Valid {
 				_m.MonthlyUsageUsd = value.Float64
-			}
-		case usersubscription.FieldDailyCarryoverInUsd:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field daily_carryover_in_usd", values[i])
-			} else if value.Valid {
-				_m.DailyCarryoverInUsd = value.Float64
-			}
-		case usersubscription.FieldDailyCarryoverRemainingUsd:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field daily_carryover_remaining_usd", values[i])
-			} else if value.Valid {
-				_m.DailyCarryoverRemainingUsd = value.Float64
 			}
 		case usersubscription.FieldAssignedBy:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -379,12 +363,6 @@ func (_m *UserSubscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("monthly_usage_usd=")
 	builder.WriteString(fmt.Sprintf("%v", _m.MonthlyUsageUsd))
-	builder.WriteString(", ")
-	builder.WriteString("daily_carryover_in_usd=")
-	builder.WriteString(fmt.Sprintf("%v", _m.DailyCarryoverInUsd))
-	builder.WriteString(", ")
-	builder.WriteString("daily_carryover_remaining_usd=")
-	builder.WriteString(fmt.Sprintf("%v", _m.DailyCarryoverRemainingUsd))
 	builder.WriteString(", ")
 	if v := _m.AssignedBy; v != nil {
 		builder.WriteString("assigned_by=")

@@ -1,4 +1,4 @@
-import type { BillingMode, ChannelModelPricing, PricingInterval } from '@/api/admin/channels'
+import type { BillingMode, PricingInterval } from '@/api/admin/channels'
 
 export interface IntervalFormEntry {
   min_tokens: number
@@ -36,13 +36,14 @@ export function toNullableNumber(val: number | string | null | undefined): numbe
 /** 前端显示值($/MTok) → 后端存储值(per-token) */
 export function mTokToPerToken(val: number | string | null | undefined): number | null {
   const num = toNullableNumber(val)
-  return num === null ? null : num / MTOK
+  return num === null ? null : parseFloat((num / MTOK).toPrecision(10))
 }
 
 /** 后端存储值(per-token) → 前端显示值($/MTok) */
 export function perTokenToMTok(val: number | null | undefined): number | null {
   if (val === null || val === undefined) return null
-  return val * MTOK
+  // toPrecision(10) 消除 IEEE 754 浮点乘法精度误差，如 5e-8 * 1e6 = 0.04999...96 → 0.05
+  return parseFloat((val * MTOK).toPrecision(10))
 }
 
 export function apiIntervalsToForm(intervals: PricingInterval[]): IntervalFormEntry[] {
@@ -71,43 +72,6 @@ export function formIntervalsToAPI(intervals: IntervalFormEntry[]): PricingInter
     per_request_price: toNullableNumber(iv.per_request_price),
     sort_order: iv.sort_order
   }))
-}
-
-export function apiPricingToFormEntry(pricing: ChannelModelPricing): PricingFormEntry {
-  const isImageMode = pricing.billing_mode === 'image'
-  const imageDefaultPrice = pricing.per_request_price ?? pricing.image_output_price ?? null
-
-  return {
-    models: pricing.models || [],
-    billing_mode: pricing.billing_mode,
-    input_price: perTokenToMTok(pricing.input_price),
-    output_price: perTokenToMTok(pricing.output_price),
-    cache_write_price: perTokenToMTok(pricing.cache_write_price),
-    cache_read_price: perTokenToMTok(pricing.cache_read_price),
-    image_output_price: isImageMode
-      ? pricing.image_output_price ?? imageDefaultPrice
-      : perTokenToMTok(pricing.image_output_price),
-    per_request_price: isImageMode ? imageDefaultPrice : pricing.per_request_price,
-    intervals: apiIntervalsToForm(pricing.intervals || [])
-  }
-}
-
-export function formPricingToAPI(platform: string, entry: PricingFormEntry): ChannelModelPricing {
-  const isImageMode = entry.billing_mode === 'image'
-  const defaultPerRequestPrice = toNullableNumber(entry.per_request_price)
-
-  return {
-    platform,
-    models: entry.models,
-    billing_mode: entry.billing_mode,
-    input_price: mTokToPerToken(entry.input_price),
-    output_price: mTokToPerToken(entry.output_price),
-    cache_write_price: mTokToPerToken(entry.cache_write_price),
-    cache_read_price: mTokToPerToken(entry.cache_read_price),
-    image_output_price: isImageMode ? defaultPerRequestPrice : mTokToPerToken(entry.image_output_price),
-    per_request_price: defaultPerRequestPrice,
-    intervals: formIntervalsToAPI(entry.intervals || [])
-  }
 }
 
 // ── 模型模式冲突检测 ──────────────────────────────────────
@@ -149,6 +113,70 @@ export function findModelConflict(models: string[]): [string, string] | null {
   return null
 }
 
+// ── 区间校验 ──────────────────────────────────────────────
+
+/** 校验区间列表的合法性，返回错误消息；通过则返回 null */
+export function validateIntervals(intervals: IntervalFormEntry[]): string | null {
+  if (!intervals || intervals.length === 0) return null
+
+  // 按 min_tokens 排序（不修改原数组）
+  const sorted = [...intervals].sort((a, b) => a.min_tokens - b.min_tokens)
+
+  for (let i = 0; i < sorted.length; i++) {
+    const err = validateSingleInterval(sorted[i], i)
+    if (err) return err
+  }
+  return checkIntervalOverlap(sorted)
+}
+
+function validateSingleInterval(iv: IntervalFormEntry, idx: number): string | null {
+  if (iv.min_tokens < 0) {
+    return `区间 #${idx + 1}: 最小 token 数 (${iv.min_tokens}) 不能为负数`
+  }
+  if (iv.max_tokens != null) {
+    if (iv.max_tokens <= 0) {
+      return `区间 #${idx + 1}: 最大 token 数 (${iv.max_tokens}) 必须大于 0`
+    }
+    if (iv.max_tokens <= iv.min_tokens) {
+      return `区间 #${idx + 1}: 最大 token 数 (${iv.max_tokens}) 必须大于最小 token 数 (${iv.min_tokens})`
+    }
+  }
+  return validateIntervalPrices(iv, idx)
+}
+
+function validateIntervalPrices(iv: IntervalFormEntry, idx: number): string | null {
+  const prices: [string, number | string | null][] = [
+    ['输入价格', iv.input_price],
+    ['输出价格', iv.output_price],
+    ['缓存写入价格', iv.cache_write_price],
+    ['缓存读取价格', iv.cache_read_price],
+    ['单次价格', iv.per_request_price],
+  ]
+  for (const [name, val] of prices) {
+    if (val != null && val !== '' && Number(val) < 0) {
+      return `区间 #${idx + 1}: ${name}不能为负数`
+    }
+  }
+  return null
+}
+
+function checkIntervalOverlap(sorted: IntervalFormEntry[]): string | null {
+  for (let i = 0; i < sorted.length; i++) {
+    // 无上限区间必须是最后一个
+    if (sorted[i].max_tokens == null && i < sorted.length - 1) {
+      return `区间 #${i + 1}: 无上限区间（最大 token 数为空）只能是最后一个`
+    }
+    if (i === 0) continue
+    const prev = sorted[i - 1]
+    // (min, max] 语义：前一个区间上界 > 当前区间下界则重叠
+    if (prev.max_tokens == null || prev.max_tokens > sorted[i].min_tokens) {
+      const prevMax = prev.max_tokens == null ? '∞' : String(prev.max_tokens)
+      return `区间 #${i} 和 #${i + 1} 重叠：前一个区间上界 (${prevMax}) 大于当前区间下界 (${sorted[i].min_tokens})`
+    }
+  }
+  return null
+}
+
 /** 平台对应的模型 tag 样式（背景+文字） */
 export function getPlatformTagClass(platform: string): string {
   switch (platform) {
@@ -156,7 +184,17 @@ export function getPlatformTagClass(platform: string): string {
     case 'openai': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
     case 'gemini': return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
     case 'antigravity': return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-    case 'sora': return 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
     default: return 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400'
+  }
+}
+
+/** 平台对应的模型文字色（仅 text-*，用于 input/text 场景）— 与 getPlatformTagClass 同色系 */
+export function getPlatformTextClass(platform: string): string {
+  switch (platform) {
+    case 'anthropic': return 'text-orange-700 dark:text-orange-400'
+    case 'openai': return 'text-emerald-700 dark:text-emerald-400'
+    case 'gemini': return 'text-blue-700 dark:text-blue-400'
+    case 'antigravity': return 'text-purple-700 dark:text-purple-400'
+    default: return ''
   }
 }

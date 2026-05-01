@@ -29,20 +29,6 @@ func (_c *PromoCodeCreate) SetCode(v string) *PromoCodeCreate {
 	return _c
 }
 
-// SetScene sets the "scene" field.
-func (_c *PromoCodeCreate) SetScene(v string) *PromoCodeCreate {
-	_c.mutation.SetScene(v)
-	return _c
-}
-
-// SetNillableScene sets the "scene" field if the given value is not nil.
-func (_c *PromoCodeCreate) SetNillableScene(v *string) *PromoCodeCreate {
-	if v != nil {
-		_c.SetScene(*v)
-	}
-	return _c
-}
-
 // SetBonusAmount sets the "bonus_amount" field.
 func (_c *PromoCodeCreate) SetBonusAmount(v float64) *PromoCodeCreate {
 	_c.mutation.SetBonusAmount(v)
@@ -53,34 +39,6 @@ func (_c *PromoCodeCreate) SetBonusAmount(v float64) *PromoCodeCreate {
 func (_c *PromoCodeCreate) SetNillableBonusAmount(v *float64) *PromoCodeCreate {
 	if v != nil {
 		_c.SetBonusAmount(*v)
-	}
-	return _c
-}
-
-// SetRandomBonusPoolAmount sets the "random_bonus_pool_amount" field.
-func (_c *PromoCodeCreate) SetRandomBonusPoolAmount(v float64) *PromoCodeCreate {
-	_c.mutation.SetRandomBonusPoolAmount(v)
-	return _c
-}
-
-// SetNillableRandomBonusPoolAmount sets the "random_bonus_pool_amount" field if the given value is not nil.
-func (_c *PromoCodeCreate) SetNillableRandomBonusPoolAmount(v *float64) *PromoCodeCreate {
-	if v != nil {
-		_c.SetRandomBonusPoolAmount(*v)
-	}
-	return _c
-}
-
-// SetRandomBonusRemaining sets the "random_bonus_remaining" field.
-func (_c *PromoCodeCreate) SetRandomBonusRemaining(v float64) *PromoCodeCreate {
-	_c.mutation.SetRandomBonusRemaining(v)
-	return _c
-}
-
-// SetNillableRandomBonusRemaining sets the "random_bonus_remaining" field if the given value is not nil.
-func (_c *PromoCodeCreate) SetNillableRandomBonusRemaining(v *float64) *PromoCodeCreate {
-	if v != nil {
-		_c.SetRandomBonusRemaining(*v)
 	}
 	return _c
 }
@@ -113,20 +71,6 @@ func (_c *PromoCodeCreate) SetNillableUsedCount(v *int) *PromoCodeCreate {
 	return _c
 }
 
-// SetLeaderboardEnabled sets the "leaderboard_enabled" field.
-func (_c *PromoCodeCreate) SetLeaderboardEnabled(v bool) *PromoCodeCreate {
-	_c.mutation.SetLeaderboardEnabled(v)
-	return _c
-}
-
-// SetNillableLeaderboardEnabled sets the "leaderboard_enabled" field if the given value is not nil.
-func (_c *PromoCodeCreate) SetNillableLeaderboardEnabled(v *bool) *PromoCodeCreate {
-	if v != nil {
-		_c.SetLeaderboardEnabled(*v)
-	}
-	return _c
-}
-
 // SetStatus sets the "status" field.
 func (_c *PromoCodeCreate) SetStatus(v string) *PromoCodeCreate {
 	_c.mutation.SetStatus(v)
@@ -151,20 +95,6 @@ func (_c *PromoCodeCreate) SetExpiresAt(v time.Time) *PromoCodeCreate {
 func (_c *PromoCodeCreate) SetNillableExpiresAt(v *time.Time) *PromoCodeCreate {
 	if v != nil {
 		_c.SetExpiresAt(*v)
-	}
-	return _c
-}
-
-// SetSuccessMessage sets the "success_message" field.
-func (_c *PromoCodeCreate) SetSuccessMessage(v string) *PromoCodeCreate {
-	_c.mutation.SetSuccessMessage(v)
-	return _c
-}
-
-// SetNillableSuccessMessage sets the "success_message" field if the given value is not nil.
-func (_c *PromoCodeCreate) SetNillableSuccessMessage(v *string) *PromoCodeCreate {
-	if v != nil {
-		_c.SetSuccessMessage(*v)
 	}
 	return _c
 }
@@ -261,21 +191,9 @@ func (_c *PromoCodeCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *PromoCodeCreate) defaults() {
-	if _, ok := _c.mutation.Scene(); !ok {
-		v := promocode.DefaultScene
-		_c.mutation.SetScene(v)
-	}
 	if _, ok := _c.mutation.BonusAmount(); !ok {
 		v := promocode.DefaultBonusAmount
 		_c.mutation.SetBonusAmount(v)
-	}
-	if _, ok := _c.mutation.RandomBonusPoolAmount(); !ok {
-		v := promocode.DefaultRandomBonusPoolAmount
-		_c.mutation.SetRandomBonusPoolAmount(v)
-	}
-	if _, ok := _c.mutation.RandomBonusRemaining(); !ok {
-		v := promocode.DefaultRandomBonusRemaining
-		_c.mutation.SetRandomBonusRemaining(v)
 	}
 	if _, ok := _c.mutation.MaxUses(); !ok {
 		v := promocode.DefaultMaxUses
@@ -284,10 +202,6 @@ func (_c *PromoCodeCreate) defaults() {
 	if _, ok := _c.mutation.UsedCount(); !ok {
 		v := promocode.DefaultUsedCount
 		_c.mutation.SetUsedCount(v)
-	}
-	if _, ok := _c.mutation.LeaderboardEnabled(); !ok {
-		v := promocode.DefaultLeaderboardEnabled
-		_c.mutation.SetLeaderboardEnabled(v)
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := promocode.DefaultStatus
@@ -313,31 +227,14 @@ func (_c *PromoCodeCreate) check() error {
 			return &ValidationError{Name: "code", err: fmt.Errorf(`ent: validator failed for field "PromoCode.code": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.Scene(); !ok {
-		return &ValidationError{Name: "scene", err: errors.New(`ent: missing required field "PromoCode.scene"`)}
-	}
-	if v, ok := _c.mutation.Scene(); ok {
-		if err := promocode.SceneValidator(v); err != nil {
-			return &ValidationError{Name: "scene", err: fmt.Errorf(`ent: validator failed for field "PromoCode.scene": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.BonusAmount(); !ok {
 		return &ValidationError{Name: "bonus_amount", err: errors.New(`ent: missing required field "PromoCode.bonus_amount"`)}
-	}
-	if _, ok := _c.mutation.RandomBonusPoolAmount(); !ok {
-		return &ValidationError{Name: "random_bonus_pool_amount", err: errors.New(`ent: missing required field "PromoCode.random_bonus_pool_amount"`)}
-	}
-	if _, ok := _c.mutation.RandomBonusRemaining(); !ok {
-		return &ValidationError{Name: "random_bonus_remaining", err: errors.New(`ent: missing required field "PromoCode.random_bonus_remaining"`)}
 	}
 	if _, ok := _c.mutation.MaxUses(); !ok {
 		return &ValidationError{Name: "max_uses", err: errors.New(`ent: missing required field "PromoCode.max_uses"`)}
 	}
 	if _, ok := _c.mutation.UsedCount(); !ok {
 		return &ValidationError{Name: "used_count", err: errors.New(`ent: missing required field "PromoCode.used_count"`)}
-	}
-	if _, ok := _c.mutation.LeaderboardEnabled(); !ok {
-		return &ValidationError{Name: "leaderboard_enabled", err: errors.New(`ent: missing required field "PromoCode.leaderboard_enabled"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "PromoCode.status"`)}
@@ -384,21 +281,9 @@ func (_c *PromoCodeCreate) createSpec() (*PromoCode, *sqlgraph.CreateSpec) {
 		_spec.SetField(promocode.FieldCode, field.TypeString, value)
 		_node.Code = value
 	}
-	if value, ok := _c.mutation.Scene(); ok {
-		_spec.SetField(promocode.FieldScene, field.TypeString, value)
-		_node.Scene = value
-	}
 	if value, ok := _c.mutation.BonusAmount(); ok {
 		_spec.SetField(promocode.FieldBonusAmount, field.TypeFloat64, value)
 		_node.BonusAmount = value
-	}
-	if value, ok := _c.mutation.RandomBonusPoolAmount(); ok {
-		_spec.SetField(promocode.FieldRandomBonusPoolAmount, field.TypeFloat64, value)
-		_node.RandomBonusPoolAmount = value
-	}
-	if value, ok := _c.mutation.RandomBonusRemaining(); ok {
-		_spec.SetField(promocode.FieldRandomBonusRemaining, field.TypeFloat64, value)
-		_node.RandomBonusRemaining = value
 	}
 	if value, ok := _c.mutation.MaxUses(); ok {
 		_spec.SetField(promocode.FieldMaxUses, field.TypeInt, value)
@@ -408,10 +293,6 @@ func (_c *PromoCodeCreate) createSpec() (*PromoCode, *sqlgraph.CreateSpec) {
 		_spec.SetField(promocode.FieldUsedCount, field.TypeInt, value)
 		_node.UsedCount = value
 	}
-	if value, ok := _c.mutation.LeaderboardEnabled(); ok {
-		_spec.SetField(promocode.FieldLeaderboardEnabled, field.TypeBool, value)
-		_node.LeaderboardEnabled = value
-	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(promocode.FieldStatus, field.TypeString, value)
 		_node.Status = value
@@ -419,10 +300,6 @@ func (_c *PromoCodeCreate) createSpec() (*PromoCode, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(promocode.FieldExpiresAt, field.TypeTime, value)
 		_node.ExpiresAt = &value
-	}
-	if value, ok := _c.mutation.SuccessMessage(); ok {
-		_spec.SetField(promocode.FieldSuccessMessage, field.TypeString, value)
-		_node.SuccessMessage = &value
 	}
 	if value, ok := _c.mutation.Notes(); ok {
 		_spec.SetField(promocode.FieldNotes, field.TypeString, value)
@@ -516,18 +393,6 @@ func (u *PromoCodeUpsert) UpdateCode() *PromoCodeUpsert {
 	return u
 }
 
-// SetScene sets the "scene" field.
-func (u *PromoCodeUpsert) SetScene(v string) *PromoCodeUpsert {
-	u.Set(promocode.FieldScene, v)
-	return u
-}
-
-// UpdateScene sets the "scene" field to the value that was provided on create.
-func (u *PromoCodeUpsert) UpdateScene() *PromoCodeUpsert {
-	u.SetExcluded(promocode.FieldScene)
-	return u
-}
-
 // SetBonusAmount sets the "bonus_amount" field.
 func (u *PromoCodeUpsert) SetBonusAmount(v float64) *PromoCodeUpsert {
 	u.Set(promocode.FieldBonusAmount, v)
@@ -543,42 +408,6 @@ func (u *PromoCodeUpsert) UpdateBonusAmount() *PromoCodeUpsert {
 // AddBonusAmount adds v to the "bonus_amount" field.
 func (u *PromoCodeUpsert) AddBonusAmount(v float64) *PromoCodeUpsert {
 	u.Add(promocode.FieldBonusAmount, v)
-	return u
-}
-
-// SetRandomBonusPoolAmount sets the "random_bonus_pool_amount" field.
-func (u *PromoCodeUpsert) SetRandomBonusPoolAmount(v float64) *PromoCodeUpsert {
-	u.Set(promocode.FieldRandomBonusPoolAmount, v)
-	return u
-}
-
-// UpdateRandomBonusPoolAmount sets the "random_bonus_pool_amount" field to the value that was provided on create.
-func (u *PromoCodeUpsert) UpdateRandomBonusPoolAmount() *PromoCodeUpsert {
-	u.SetExcluded(promocode.FieldRandomBonusPoolAmount)
-	return u
-}
-
-// AddRandomBonusPoolAmount adds v to the "random_bonus_pool_amount" field.
-func (u *PromoCodeUpsert) AddRandomBonusPoolAmount(v float64) *PromoCodeUpsert {
-	u.Add(promocode.FieldRandomBonusPoolAmount, v)
-	return u
-}
-
-// SetRandomBonusRemaining sets the "random_bonus_remaining" field.
-func (u *PromoCodeUpsert) SetRandomBonusRemaining(v float64) *PromoCodeUpsert {
-	u.Set(promocode.FieldRandomBonusRemaining, v)
-	return u
-}
-
-// UpdateRandomBonusRemaining sets the "random_bonus_remaining" field to the value that was provided on create.
-func (u *PromoCodeUpsert) UpdateRandomBonusRemaining() *PromoCodeUpsert {
-	u.SetExcluded(promocode.FieldRandomBonusRemaining)
-	return u
-}
-
-// AddRandomBonusRemaining adds v to the "random_bonus_remaining" field.
-func (u *PromoCodeUpsert) AddRandomBonusRemaining(v float64) *PromoCodeUpsert {
-	u.Add(promocode.FieldRandomBonusRemaining, v)
 	return u
 }
 
@@ -618,18 +447,6 @@ func (u *PromoCodeUpsert) AddUsedCount(v int) *PromoCodeUpsert {
 	return u
 }
 
-// SetLeaderboardEnabled sets the "leaderboard_enabled" field.
-func (u *PromoCodeUpsert) SetLeaderboardEnabled(v bool) *PromoCodeUpsert {
-	u.Set(promocode.FieldLeaderboardEnabled, v)
-	return u
-}
-
-// UpdateLeaderboardEnabled sets the "leaderboard_enabled" field to the value that was provided on create.
-func (u *PromoCodeUpsert) UpdateLeaderboardEnabled() *PromoCodeUpsert {
-	u.SetExcluded(promocode.FieldLeaderboardEnabled)
-	return u
-}
-
 // SetStatus sets the "status" field.
 func (u *PromoCodeUpsert) SetStatus(v string) *PromoCodeUpsert {
 	u.Set(promocode.FieldStatus, v)
@@ -657,24 +474,6 @@ func (u *PromoCodeUpsert) UpdateExpiresAt() *PromoCodeUpsert {
 // ClearExpiresAt clears the value of the "expires_at" field.
 func (u *PromoCodeUpsert) ClearExpiresAt() *PromoCodeUpsert {
 	u.SetNull(promocode.FieldExpiresAt)
-	return u
-}
-
-// SetSuccessMessage sets the "success_message" field.
-func (u *PromoCodeUpsert) SetSuccessMessage(v string) *PromoCodeUpsert {
-	u.Set(promocode.FieldSuccessMessage, v)
-	return u
-}
-
-// UpdateSuccessMessage sets the "success_message" field to the value that was provided on create.
-func (u *PromoCodeUpsert) UpdateSuccessMessage() *PromoCodeUpsert {
-	u.SetExcluded(promocode.FieldSuccessMessage)
-	return u
-}
-
-// ClearSuccessMessage clears the value of the "success_message" field.
-func (u *PromoCodeUpsert) ClearSuccessMessage() *PromoCodeUpsert {
-	u.SetNull(promocode.FieldSuccessMessage)
 	return u
 }
 
@@ -767,20 +566,6 @@ func (u *PromoCodeUpsertOne) UpdateCode() *PromoCodeUpsertOne {
 	})
 }
 
-// SetScene sets the "scene" field.
-func (u *PromoCodeUpsertOne) SetScene(v string) *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.SetScene(v)
-	})
-}
-
-// UpdateScene sets the "scene" field to the value that was provided on create.
-func (u *PromoCodeUpsertOne) UpdateScene() *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.UpdateScene()
-	})
-}
-
 // SetBonusAmount sets the "bonus_amount" field.
 func (u *PromoCodeUpsertOne) SetBonusAmount(v float64) *PromoCodeUpsertOne {
 	return u.Update(func(s *PromoCodeUpsert) {
@@ -799,48 +584,6 @@ func (u *PromoCodeUpsertOne) AddBonusAmount(v float64) *PromoCodeUpsertOne {
 func (u *PromoCodeUpsertOne) UpdateBonusAmount() *PromoCodeUpsertOne {
 	return u.Update(func(s *PromoCodeUpsert) {
 		s.UpdateBonusAmount()
-	})
-}
-
-// SetRandomBonusPoolAmount sets the "random_bonus_pool_amount" field.
-func (u *PromoCodeUpsertOne) SetRandomBonusPoolAmount(v float64) *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.SetRandomBonusPoolAmount(v)
-	})
-}
-
-// AddRandomBonusPoolAmount adds v to the "random_bonus_pool_amount" field.
-func (u *PromoCodeUpsertOne) AddRandomBonusPoolAmount(v float64) *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.AddRandomBonusPoolAmount(v)
-	})
-}
-
-// UpdateRandomBonusPoolAmount sets the "random_bonus_pool_amount" field to the value that was provided on create.
-func (u *PromoCodeUpsertOne) UpdateRandomBonusPoolAmount() *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.UpdateRandomBonusPoolAmount()
-	})
-}
-
-// SetRandomBonusRemaining sets the "random_bonus_remaining" field.
-func (u *PromoCodeUpsertOne) SetRandomBonusRemaining(v float64) *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.SetRandomBonusRemaining(v)
-	})
-}
-
-// AddRandomBonusRemaining adds v to the "random_bonus_remaining" field.
-func (u *PromoCodeUpsertOne) AddRandomBonusRemaining(v float64) *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.AddRandomBonusRemaining(v)
-	})
-}
-
-// UpdateRandomBonusRemaining sets the "random_bonus_remaining" field to the value that was provided on create.
-func (u *PromoCodeUpsertOne) UpdateRandomBonusRemaining() *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.UpdateRandomBonusRemaining()
 	})
 }
 
@@ -886,20 +629,6 @@ func (u *PromoCodeUpsertOne) UpdateUsedCount() *PromoCodeUpsertOne {
 	})
 }
 
-// SetLeaderboardEnabled sets the "leaderboard_enabled" field.
-func (u *PromoCodeUpsertOne) SetLeaderboardEnabled(v bool) *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.SetLeaderboardEnabled(v)
-	})
-}
-
-// UpdateLeaderboardEnabled sets the "leaderboard_enabled" field to the value that was provided on create.
-func (u *PromoCodeUpsertOne) UpdateLeaderboardEnabled() *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.UpdateLeaderboardEnabled()
-	})
-}
-
 // SetStatus sets the "status" field.
 func (u *PromoCodeUpsertOne) SetStatus(v string) *PromoCodeUpsertOne {
 	return u.Update(func(s *PromoCodeUpsert) {
@@ -932,27 +661,6 @@ func (u *PromoCodeUpsertOne) UpdateExpiresAt() *PromoCodeUpsertOne {
 func (u *PromoCodeUpsertOne) ClearExpiresAt() *PromoCodeUpsertOne {
 	return u.Update(func(s *PromoCodeUpsert) {
 		s.ClearExpiresAt()
-	})
-}
-
-// SetSuccessMessage sets the "success_message" field.
-func (u *PromoCodeUpsertOne) SetSuccessMessage(v string) *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.SetSuccessMessage(v)
-	})
-}
-
-// UpdateSuccessMessage sets the "success_message" field to the value that was provided on create.
-func (u *PromoCodeUpsertOne) UpdateSuccessMessage() *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.UpdateSuccessMessage()
-	})
-}
-
-// ClearSuccessMessage clears the value of the "success_message" field.
-func (u *PromoCodeUpsertOne) ClearSuccessMessage() *PromoCodeUpsertOne {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.ClearSuccessMessage()
 	})
 }
 
@@ -1216,20 +924,6 @@ func (u *PromoCodeUpsertBulk) UpdateCode() *PromoCodeUpsertBulk {
 	})
 }
 
-// SetScene sets the "scene" field.
-func (u *PromoCodeUpsertBulk) SetScene(v string) *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.SetScene(v)
-	})
-}
-
-// UpdateScene sets the "scene" field to the value that was provided on create.
-func (u *PromoCodeUpsertBulk) UpdateScene() *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.UpdateScene()
-	})
-}
-
 // SetBonusAmount sets the "bonus_amount" field.
 func (u *PromoCodeUpsertBulk) SetBonusAmount(v float64) *PromoCodeUpsertBulk {
 	return u.Update(func(s *PromoCodeUpsert) {
@@ -1248,48 +942,6 @@ func (u *PromoCodeUpsertBulk) AddBonusAmount(v float64) *PromoCodeUpsertBulk {
 func (u *PromoCodeUpsertBulk) UpdateBonusAmount() *PromoCodeUpsertBulk {
 	return u.Update(func(s *PromoCodeUpsert) {
 		s.UpdateBonusAmount()
-	})
-}
-
-// SetRandomBonusPoolAmount sets the "random_bonus_pool_amount" field.
-func (u *PromoCodeUpsertBulk) SetRandomBonusPoolAmount(v float64) *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.SetRandomBonusPoolAmount(v)
-	})
-}
-
-// AddRandomBonusPoolAmount adds v to the "random_bonus_pool_amount" field.
-func (u *PromoCodeUpsertBulk) AddRandomBonusPoolAmount(v float64) *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.AddRandomBonusPoolAmount(v)
-	})
-}
-
-// UpdateRandomBonusPoolAmount sets the "random_bonus_pool_amount" field to the value that was provided on create.
-func (u *PromoCodeUpsertBulk) UpdateRandomBonusPoolAmount() *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.UpdateRandomBonusPoolAmount()
-	})
-}
-
-// SetRandomBonusRemaining sets the "random_bonus_remaining" field.
-func (u *PromoCodeUpsertBulk) SetRandomBonusRemaining(v float64) *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.SetRandomBonusRemaining(v)
-	})
-}
-
-// AddRandomBonusRemaining adds v to the "random_bonus_remaining" field.
-func (u *PromoCodeUpsertBulk) AddRandomBonusRemaining(v float64) *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.AddRandomBonusRemaining(v)
-	})
-}
-
-// UpdateRandomBonusRemaining sets the "random_bonus_remaining" field to the value that was provided on create.
-func (u *PromoCodeUpsertBulk) UpdateRandomBonusRemaining() *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.UpdateRandomBonusRemaining()
 	})
 }
 
@@ -1335,20 +987,6 @@ func (u *PromoCodeUpsertBulk) UpdateUsedCount() *PromoCodeUpsertBulk {
 	})
 }
 
-// SetLeaderboardEnabled sets the "leaderboard_enabled" field.
-func (u *PromoCodeUpsertBulk) SetLeaderboardEnabled(v bool) *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.SetLeaderboardEnabled(v)
-	})
-}
-
-// UpdateLeaderboardEnabled sets the "leaderboard_enabled" field to the value that was provided on create.
-func (u *PromoCodeUpsertBulk) UpdateLeaderboardEnabled() *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.UpdateLeaderboardEnabled()
-	})
-}
-
 // SetStatus sets the "status" field.
 func (u *PromoCodeUpsertBulk) SetStatus(v string) *PromoCodeUpsertBulk {
 	return u.Update(func(s *PromoCodeUpsert) {
@@ -1381,27 +1019,6 @@ func (u *PromoCodeUpsertBulk) UpdateExpiresAt() *PromoCodeUpsertBulk {
 func (u *PromoCodeUpsertBulk) ClearExpiresAt() *PromoCodeUpsertBulk {
 	return u.Update(func(s *PromoCodeUpsert) {
 		s.ClearExpiresAt()
-	})
-}
-
-// SetSuccessMessage sets the "success_message" field.
-func (u *PromoCodeUpsertBulk) SetSuccessMessage(v string) *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.SetSuccessMessage(v)
-	})
-}
-
-// UpdateSuccessMessage sets the "success_message" field to the value that was provided on create.
-func (u *PromoCodeUpsertBulk) UpdateSuccessMessage() *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.UpdateSuccessMessage()
-	})
-}
-
-// ClearSuccessMessage clears the value of the "success_message" field.
-func (u *PromoCodeUpsertBulk) ClearSuccessMessage() *PromoCodeUpsertBulk {
-	return u.Update(func(s *PromoCodeUpsert) {
-		s.ClearSuccessMessage()
 	})
 }
 

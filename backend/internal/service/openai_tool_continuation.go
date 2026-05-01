@@ -21,8 +21,8 @@ type FunctionCallOutputValidation struct {
 }
 
 // NeedsToolContinuation 判定请求是否需要工具调用续链处理。
-// 满足以下任一信号即视为续链：previous_response_id、input 内包含工具调用历史/
-// 工具输出/item_reference，或显式声明 tools/tool_choice。
+// 满足以下任一信号即视为续链：previous_response_id、input 内包含工具输出/item_reference、
+// 或显式声明 tools/tool_choice。
 func NeedsToolContinuation(reqBody map[string]any) bool {
 	if reqBody == nil {
 		return false
@@ -46,23 +46,11 @@ func NeedsToolContinuation(reqBody map[string]any) bool {
 			continue
 		}
 		itemType, _ := itemMap["type"].(string)
-		if isResponsesToolContinuationItemType(itemType) {
+		if isCodexToolCallItemType(itemType) || itemType == "item_reference" {
 			return true
 		}
 	}
 	return false
-}
-
-func isResponsesToolContinuationItemType(itemType string) bool {
-	itemType = strings.TrimSpace(itemType)
-	if itemType == "" {
-		return false
-	}
-	switch itemType {
-	case "item_reference", "function_call", "tool_call", "function_call_output", "tool_search_output":
-		return true
-	}
-	return strings.HasSuffix(itemType, "_call") || strings.HasSuffix(itemType, "_call_output")
 }
 
 // AnalyzeToolContinuationSignals 单次遍历 input，提取 function_call_output/tool_call/item_reference 相关信号。
@@ -211,46 +199,6 @@ func ValidateFunctionCallOutputContext(reqBody map[string]any) FunctionCallOutpu
 	}
 	result.HasItemReferenceForAllCallIDs = allReferenced
 	return result
-}
-
-// NeedsFunctionCallOutputHistoryInference 判断请求是否依赖“上一轮响应”来关联 function_call_output。
-// 该场景的典型特征是：
-// 1) input 中存在 function_call_output
-// 2) 请求本身未携带 previous_response_id
-// 3) input 内没有可直接关联的 tool_call/function_call 上下文
-// 4) item_reference 未完整覆盖所有 call_id
-// 5) function_call_output 已携带 call_id（缺失 call_id 仍应直接报错）
-func NeedsFunctionCallOutputHistoryInference(reqBody map[string]any) bool {
-	if reqBody == nil {
-		return false
-	}
-
-	validation := ValidateFunctionCallOutputContext(reqBody)
-	if !validation.HasFunctionCallOutput {
-		return false
-	}
-	if validation.HasFunctionCallOutputMissingCallID {
-		return false
-	}
-	if validation.HasToolCallContext || validation.HasItemReferenceForAllCallIDs {
-		return false
-	}
-
-	previousResponseID, _ := reqBody["previous_response_id"].(string)
-	return strings.TrimSpace(previousResponseID) == ""
-}
-
-// ResolveOpenAIResponsesRequiredTransport 为 HTTP /v1/responses 请求推导所需上游传输。
-// 当 function_call_output 只能依赖会话历史续链，且当前请求携带稳定会话锚点时，
-// 需要强制路由到 WS v2，以便利用上下文池自动补齐 previous_response_id。
-func ResolveOpenAIResponsesRequiredTransport(reqBody map[string]any, sessionHash string) OpenAIUpstreamTransport {
-	if strings.TrimSpace(sessionHash) == "" {
-		return OpenAIUpstreamTransportAny
-	}
-	if NeedsFunctionCallOutputHistoryInference(reqBody) {
-		return OpenAIUpstreamTransportResponsesWebsocketV2
-	}
-	return OpenAIUpstreamTransportAny
 }
 
 // HasFunctionCallOutput 判断 input 是否包含 function_call_output，用于触发续链校验。

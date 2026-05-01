@@ -15,15 +15,21 @@ export function normalizeOAuthAffiliateCode(value?: unknown): string {
 export function pickOAuthAffiliateCode(...values: unknown[]): string {
   for (const value of values) {
     const code = normalizeOAuthAffiliateCode(value)
-    if (code) return code
+    if (code) {
+      return code
+    }
   }
   return ''
 }
 
 export function storeAffiliateReferralCode(value?: unknown, now = Date.now()): void {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined') {
+    return
+  }
   const code = normalizeOAuthAffiliateCode(value)
-  if (!code) return
+  if (!code) {
+    return
+  }
   try {
     const payload: StoredAffiliateReferralCode = {
       code,
@@ -31,15 +37,19 @@ export function storeAffiliateReferralCode(value?: unknown, now = Date.now()): v
     }
     window.localStorage.setItem(AFFILIATE_REFERRAL_CODE_KEY, JSON.stringify(payload))
   } catch {
-    // Browser storage can be unavailable in private or restricted contexts.
+    // 忽略浏览器存储异常。
   }
 }
 
 export function loadAffiliateReferralCode(now = Date.now()): string {
-  if (typeof window === 'undefined') return ''
+  if (typeof window === 'undefined') {
+    return ''
+  }
   try {
     const raw = window.localStorage.getItem(AFFILIATE_REFERRAL_CODE_KEY)
-    if (!raw) return ''
+    if (!raw) {
+      return ''
+    }
     const parsed = JSON.parse(raw) as Partial<StoredAffiliateReferralCode>
     const code = normalizeOAuthAffiliateCode(parsed.code)
     const expiresAt = Number(parsed.expiresAt) || 0
@@ -55,11 +65,13 @@ export function loadAffiliateReferralCode(now = Date.now()): string {
 }
 
 export function clearAffiliateReferralCode(): void {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined') {
+    return
+  }
   try {
     window.localStorage.removeItem(AFFILIATE_REFERRAL_CODE_KEY)
   } catch {
-    // Ignore storage errors.
+    // 忽略浏览器存储异常。
   }
 }
 
@@ -73,7 +85,9 @@ export function resolveAffiliateReferralCode(...values: unknown[]): string {
 }
 
 export function storeOAuthAffiliateCode(value?: unknown): void {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined') {
+    return
+  }
   const code = normalizeOAuthAffiliateCode(value)
   try {
     if (code) {
@@ -82,12 +96,14 @@ export function storeOAuthAffiliateCode(value?: unknown): void {
       window.sessionStorage.removeItem(OAUTH_AFFILIATE_CODE_KEY)
     }
   } catch {
-    // Ignore storage errors.
+    // 忽略浏览器存储异常。
   }
 }
 
 export function loadOAuthAffiliateCode(): string {
-  if (typeof window === 'undefined') return ''
+  if (typeof window === 'undefined') {
+    return ''
+  }
   try {
     return normalizeOAuthAffiliateCode(window.sessionStorage.getItem(OAUTH_AFFILIATE_CODE_KEY))
   } catch {
@@ -96,11 +112,13 @@ export function loadOAuthAffiliateCode(): string {
 }
 
 export function clearOAuthAffiliateCode(): void {
-  if (typeof window === 'undefined') return
+  if (typeof window === 'undefined') {
+    return
+  }
   try {
     window.sessionStorage.removeItem(OAUTH_AFFILIATE_CODE_KEY)
   } catch {
-    // Ignore storage errors.
+    // 忽略浏览器存储异常。
   }
 }
 

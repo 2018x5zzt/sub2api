@@ -20,7 +20,6 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/gemini"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -138,7 +137,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForModelWithExclusions(ctx co
 		_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), cacheKey, selected.ID, geminiStickySessionTTL)
 	}
 
-	return selected, nil
+	return s.hydrateSelectedAccount(ctx, selected)
 }
 
 // resolvePlatformAndSchedulingMode 解析目标平台和调度模式。
@@ -417,6 +416,20 @@ func (s *GeminiMessagesCompatService) getSchedulableAccount(ctx context.Context,
 	return s.accountRepo.GetByID(ctx, accountID)
 }
 
+func (s *GeminiMessagesCompatService) hydrateSelectedAccount(ctx context.Context, account *Account) (*Account, error) {
+	if account == nil || s.schedulerSnapshot == nil {
+		return account, nil
+	}
+	hydrated, err := s.schedulerSnapshot.GetAccount(ctx, account.ID)
+	if err != nil {
+		return nil, err
+	}
+	if hydrated == nil {
+		return nil, fmt.Errorf("selected gemini account %d not found during hydration", account.ID)
+	}
+	return hydrated, nil
+}
+
 func (s *GeminiMessagesCompatService) listSchedulableAccountsOnce(ctx context.Context, groupID *int64, platform string, hasForcePlatform bool) ([]Account, error) {
 	if s.schedulerSnapshot != nil {
 		accounts, _, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, hasForcePlatform)
@@ -502,6 +515,10 @@ func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx cont
 			}
 			// Code Assist OAuth tokens often lack AI Studio scopes for models listing.
 			return 3
+		case AccountTypeServiceAccount:
+			// Vertex service accounts use aiplatform.googleapis.com, not the AI Studio
+			// endpoint (generativelanguage.googleapis.com), so they cannot serve these requests.
+			return 999
 		default:
 			return 10
 		}
@@ -547,7 +564,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx cont
 	if selected == nil {
 		return nil, errors.New("no available Gemini accounts")
 	}
-	return selected, nil
+	return s.hydrateSelectedAccount(ctx, selected)
 }
 
 func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*ForwardResult, error) {
@@ -566,7 +583,7 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 
 	originalModel := req.Model
 	mappedModel := req.Model
-	if account.Type == AccountTypeAPIKey {
+	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 		mappedModel = account.GetMappedModel(req.Model)
 	}
 
@@ -608,26 +625,18 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 			if req.Stream {
 				action = "streamGenerateContent"
 			}
-			fullURL := normalizedBaseURL
-			requestBody := geminiReq
-			if account.ShouldAppendAPIPath() {
-				fullURL = fmt.Sprintf("%s/v1beta/models/%s:%s", strings.TrimRight(normalizedBaseURL, "/"), mappedModel, action)
-				if req.Stream {
-					fullURL += "?alt=sse"
-				}
-			} else {
-				requestBody = buildGeminiDirectEndpointPayload(originalClaudeBody, mappedModel, req.Stream)
+			fullURL := fmt.Sprintf("%s/v1beta/models/%s:%s", strings.TrimRight(normalizedBaseURL, "/"), mappedModel, action)
+			if req.Stream {
+				fullURL += "?alt=sse"
 			}
 
-			upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(requestBody))
+			restGeminiReq := normalizeGeminiRequestForAIStudio(geminiReq)
+			upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(restGeminiReq))
 			if err != nil {
 				return nil, "", err
 			}
 			upstreamReq.Header.Set("Content-Type", "application/json")
 			upstreamReq.Header.Set("x-goog-api-key", apiKey)
-			if account.UseDirectEndpointMode() {
-				upstreamReq.Header.Set("Authorization", "Bearer "+apiKey)
-			}
 			return upstreamReq, "x-request-id", nil
 		}
 		requestIDHeader = "x-request-id"
@@ -695,7 +704,8 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 					fullURL += "?alt=sse"
 				}
 
-				upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(geminiReq))
+				restGeminiReq := normalizeGeminiRequestForAIStudio(geminiReq)
+				upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(restGeminiReq))
 				if err != nil {
 					return nil, "", err
 				}
@@ -703,6 +713,36 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 				upstreamReq.Header.Set("Authorization", "Bearer "+accessToken)
 				return upstreamReq, "x-request-id", nil
 			}
+		}
+		requestIDHeader = "x-request-id"
+
+	case AccountTypeServiceAccount:
+		buildReq = func(ctx context.Context) (*http.Request, string, error) {
+			if s.tokenProvider == nil {
+				return nil, "", errors.New("gemini token provider not configured")
+			}
+			accessToken, err := s.tokenProvider.GetAccessToken(ctx, account)
+			if err != nil {
+				return nil, "", err
+			}
+
+			action := "generateContent"
+			if req.Stream {
+				action = "streamGenerateContent"
+			}
+			fullURL, err := buildVertexGeminiURL(account.VertexProjectID(), account.VertexLocation(mappedModel), mappedModel, action, req.Stream)
+			if err != nil {
+				return nil, "", err
+			}
+
+			restGeminiReq := normalizeGeminiRequestForAIStudio(geminiReq)
+			upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(restGeminiReq))
+			if err != nil {
+				return nil, "", err
+			}
+			upstreamReq.Header.Set("Content-Type", "application/json")
+			upstreamReq.Header.Set("Authorization", "Bearer "+accessToken)
+			return upstreamReq, "x-request-id", nil
 		}
 		requestIDHeader = "x-request-id"
 
@@ -1088,7 +1128,7 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	body = ensureGeminiFunctionCallThoughtSignatures(body)
 
 	mappedModel := originalModel
-	if account.Type == AccountTypeAPIKey {
+	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeServiceAccount {
 		mappedModel = account.GetMappedModel(originalModel)
 	}
 
@@ -1123,26 +1163,17 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 				return nil, "", err
 			}
 
-			fullURL := normalizedBaseURL
-			requestBody := body
-			if account.ShouldAppendAPIPath() {
-				fullURL = fmt.Sprintf("%s/v1beta/models/%s:%s", strings.TrimRight(normalizedBaseURL, "/"), mappedModel, upstreamAction)
-				if useUpstreamStream {
-					fullURL += "?alt=sse"
-				}
-			} else {
-				requestBody = buildGeminiDirectEndpointPayload(body, mappedModel, useUpstreamStream)
+			fullURL := fmt.Sprintf("%s/v1beta/models/%s:%s", strings.TrimRight(normalizedBaseURL, "/"), mappedModel, upstreamAction)
+			if useUpstreamStream {
+				fullURL += "?alt=sse"
 			}
 
-			upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(requestBody))
+			upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(body))
 			if err != nil {
 				return nil, "", err
 			}
 			upstreamReq.Header.Set("Content-Type", "application/json")
 			upstreamReq.Header.Set("x-goog-api-key", apiKey)
-			if account.UseDirectEndpointMode() {
-				upstreamReq.Header.Set("Authorization", "Bearer "+apiKey)
-			}
 			return upstreamReq, "x-request-id", nil
 		}
 		requestIDHeader = "x-request-id"
@@ -1213,6 +1244,31 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 				upstreamReq.Header.Set("Authorization", "Bearer "+accessToken)
 				return upstreamReq, "x-request-id", nil
 			}
+		}
+		requestIDHeader = "x-request-id"
+
+	case AccountTypeServiceAccount:
+		buildReq = func(ctx context.Context) (*http.Request, string, error) {
+			if s.tokenProvider == nil {
+				return nil, "", errors.New("gemini token provider not configured")
+			}
+			accessToken, err := s.tokenProvider.GetAccessToken(ctx, account)
+			if err != nil {
+				return nil, "", err
+			}
+
+			fullURL, err := buildVertexGeminiURL(account.VertexProjectID(), account.VertexLocation(mappedModel), mappedModel, upstreamAction, useUpstreamStream)
+			if err != nil {
+				return nil, "", err
+			}
+
+			upstreamReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fullURL, bytes.NewReader(body))
+			if err != nil {
+				return nil, "", err
+			}
+			upstreamReq.Header.Set("Content-Type", "application/json")
+			upstreamReq.Header.Set("Authorization", "Bearer "+accessToken)
+			return upstreamReq, "x-request-id", nil
 		}
 		requestIDHeader = "x-request-id"
 
@@ -2560,9 +2616,6 @@ func (s *GeminiMessagesCompatService) ForwardAIStudioGET(ctx context.Context, ac
 	if path == "" || !strings.HasPrefix(path, "/") {
 		return nil, errors.New("invalid path")
 	}
-	if account.UseDirectEndpointMode() {
-		return buildGeminiDirectEndpointMetadata(path)
-	}
 
 	baseURL := account.GetGeminiBaseURL(geminicli.AIStudioBaseURL)
 	normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
@@ -2616,53 +2669,6 @@ func (s *GeminiMessagesCompatService) ForwardAIStudioGET(ctx context.Context, ac
 	return &UpstreamHTTPResult{
 		StatusCode: resp.StatusCode,
 		Headers:    filteredHeaders,
-		Body:       body,
-	}, nil
-}
-
-func buildGeminiDirectEndpointPayload(payload []byte, model string, stream bool) []byte {
-	var body map[string]any
-	if err := json.Unmarshal(payload, &body); err != nil {
-		return payload
-	}
-	if strings.TrimSpace(model) != "" {
-		body["model"] = model
-	}
-	if stream {
-		body["stream"] = true
-	}
-	encoded, err := json.Marshal(body)
-	if err != nil {
-		return payload
-	}
-	return encoded
-}
-
-func buildGeminiDirectEndpointMetadata(path string) (*UpstreamHTTPResult, error) {
-	headers := http.Header{}
-	headers.Set("Content-Type", "application/json")
-
-	var payload any
-	switch {
-	case path == "/v1beta/models":
-		payload = gemini.FallbackModelsList()
-	case strings.HasPrefix(path, "/v1beta/models/"):
-		modelName := strings.TrimPrefix(path, "/v1beta/models/")
-		if strings.TrimSpace(modelName) == "" {
-			return nil, errors.New("invalid model path")
-		}
-		payload = gemini.FallbackModel(modelName)
-	default:
-		return nil, errors.New("unsupported direct endpoint metadata path")
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	return &UpstreamHTTPResult{
-		StatusCode: http.StatusOK,
-		Headers:    headers,
 		Body:       body,
 	}, nil
 }
@@ -2751,12 +2757,27 @@ func extractGeminiUsage(data []byte) *ClaudeUsage {
 	cand := int(usage.Get("candidatesTokenCount").Int())
 	cached := int(usage.Get("cachedContentTokenCount").Int())
 	thoughts := int(usage.Get("thoughtsTokenCount").Int())
+
+	// 从 candidatesTokensDetails 提取 IMAGE 模态 token 数
+	imageTokens := 0
+	candidateDetails := usage.Get("candidatesTokensDetails")
+	if candidateDetails.Exists() {
+		candidateDetails.ForEach(func(_, detail gjson.Result) bool {
+			if detail.Get("modality").String() == "IMAGE" {
+				imageTokens = int(detail.Get("tokenCount").Int())
+				return false
+			}
+			return true
+		})
+	}
+
 	// 注意：Gemini 的 promptTokenCount 包含 cachedContentTokenCount，
 	// 但 Claude 的 input_tokens 不包含 cache_read_input_tokens，需要减去
 	return &ClaudeUsage{
 		InputTokens:          prompt - cached,
 		OutputTokens:         cand + thoughts,
 		CacheReadInputTokens: cached,
+		ImageOutputTokens:    imageTokens,
 	}
 }
 
@@ -3228,10 +3249,15 @@ func convertClaudeToolsToGeminiTools(tools any) []any {
 		return nil
 	}
 
+	hasWebSearch := false
 	funcDecls := make([]any, 0, len(arr))
 	for _, t := range arr {
 		tm, ok := t.(map[string]any)
 		if !ok {
+			continue
+		}
+		if isClaudeWebSearchToolMap(tm) {
+			hasWebSearch = true
 			continue
 		}
 
@@ -3277,13 +3303,75 @@ func convertClaudeToolsToGeminiTools(tools any) []any {
 		})
 	}
 
-	if len(funcDecls) == 0 {
+	out := make([]any, 0, 2)
+	if len(funcDecls) > 0 {
+		out = append(out, map[string]any{
+			"functionDeclarations": funcDecls,
+		})
+	}
+	if hasWebSearch {
+		out = append(out, map[string]any{
+			"googleSearch": map[string]any{},
+		})
+	}
+	if len(out) == 0 {
 		return nil
 	}
-	return []any{
-		map[string]any{
-			"functionDeclarations": funcDecls,
-		},
+	return out
+}
+
+func normalizeGeminiRequestForAIStudio(body []byte) []byte {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return body
+	}
+
+	tools, ok := payload["tools"].([]any)
+	if !ok || len(tools) == 0 {
+		return body
+	}
+
+	modified := false
+	for _, rawTool := range tools {
+		tool, ok := rawTool.(map[string]any)
+		if !ok {
+			continue
+		}
+		googleSearch, ok := tool["googleSearch"]
+		if !ok {
+			continue
+		}
+		if _, exists := tool["google_search"]; exists {
+			continue
+		}
+		tool["google_search"] = googleSearch
+		delete(tool, "googleSearch")
+		modified = true
+	}
+
+	if !modified {
+		return body
+	}
+
+	normalized, err := json.Marshal(payload)
+	if err != nil {
+		return body
+	}
+	return normalized
+}
+
+func isClaudeWebSearchToolMap(tool map[string]any) bool {
+	toolType, _ := tool["type"].(string)
+	if strings.HasPrefix(toolType, "web_search") || toolType == "google_search" {
+		return true
+	}
+
+	name, _ := tool["name"].(string)
+	switch strings.TrimSpace(name) {
+	case "web_search", "google_search", "web_search_20250305":
+		return true
+	default:
+		return false
 	}
 }
 

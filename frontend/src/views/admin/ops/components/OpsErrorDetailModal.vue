@@ -65,8 +65,22 @@
               <span class="font-mono text-primary-600 dark:text-primary-400">{{ detail.upstream_model }}</span>
             </template>
             <template v-else>
-              <span class="font-mono">{{ displayModel(detail) || '—' }}</span>
+              {{ displayModel(detail) || '—' }}
             </template>
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.inboundEndpoint') }}</div>
+          <div class="mt-1 break-all font-mono text-sm font-medium text-gray-900 dark:text-white">
+            {{ detail.inbound_endpoint || '—' }}
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.upstreamEndpoint') }}</div>
+          <div class="mt-1 break-all font-mono text-sm font-medium text-gray-900 dark:text-white">
+            {{ detail.upstream_endpoint || '—' }}
           </div>
         </div>
 
@@ -76,6 +90,13 @@
             <span :class="['inline-flex items-center rounded-lg px-2 py-1 text-xs font-black ring-1 ring-inset shadow-sm', statusClass]">
               {{ detail.status_code }}
             </span>
+          </div>
+        </div>
+
+        <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.requestType') }}</div>
+          <div class="mt-1 text-sm font-medium text-gray-900 dark:text-white">
+            {{ formatRequestTypeLabel(detail.request_type) }}
           </div>
         </div>
 
@@ -220,6 +241,15 @@ function isUpstreamError(d: OpsErrorDetail | null): boolean {
   return phase === 'upstream' && owner === 'provider'
 }
 
+function formatRequestTypeLabel(type: number | null | undefined): string {
+  switch (type) {
+    case 1: return t('admin.ops.errorDetail.requestTypeSync')
+    case 2: return t('admin.ops.errorDetail.requestTypeStream')
+    case 3: return t('admin.ops.errorDetail.requestTypeWs')
+    default: return t('admin.ops.errorDetail.requestTypeUnknown')
+  }
+}
+
 function hasModelMapping(d: OpsErrorDetail | null): boolean {
   if (!d) return false
   const requested = String(d.requested_model || '').trim()
@@ -235,6 +265,7 @@ function displayModel(d: OpsErrorDetail | null): string {
   if (requested) return requested
   return String(d.model || '').trim()
 }
+
 const correlatedUpstream = ref<OpsErrorDetail[]>([])
 const correlatedUpstreamLoading = ref(false)
 

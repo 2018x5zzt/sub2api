@@ -11,7 +11,6 @@ import (
 
 	coderws "github.com/coder/websocket"
 	"github.com/stretchr/testify/require"
-	"github.com/tidwall/gjson"
 )
 
 type passthroughTestFrame struct {
@@ -192,48 +191,12 @@ func TestRelay_BasicRelayAndUsage(t *testing.T) {
 	upstreamWrites := upstreamConn.Writes()
 	require.Len(t, upstreamWrites, 1)
 	require.Equal(t, coderws.MessageText, upstreamWrites[0].msgType)
-	require.JSONEq(t, `{"type":"response.create","model":"gpt-5.3-codex","instructions":"You are a helpful coding assistant.","input":[{"type":"input_text","text":"hello"}]}`, string(upstreamWrites[0].payload))
+	require.JSONEq(t, string(firstPayload), string(upstreamWrites[0].payload))
 
 	clientWrites := clientConn.Writes()
 	require.Len(t, clientWrites, 1)
 	require.Equal(t, coderws.MessageText, clientWrites[0].msgType)
 	require.JSONEq(t, `{"type":"response.completed","response":{"id":"resp_123","usage":{"input_tokens":7,"output_tokens":3,"input_tokens_details":{"cached_tokens":2}}}}`, string(clientWrites[0].payload))
-}
-
-func TestRelay_ResponseCreateMissingInstructionsInjectedForAllClientTurns(t *testing.T) {
-	t.Parallel()
-
-	clientConn := newPassthroughTestFrameConn([]passthroughTestFrame{
-		{
-			msgType: coderws.MessageText,
-			payload: []byte(`{"type":"response.create","model":"gpt-5.5","previous_response_id":"resp_turn_1","input":[{"type":"input_text","text":"follow up"}]}`),
-		},
-	}, true)
-	upstreamConn := newPassthroughTestFrameConn([]passthroughTestFrame{
-		{
-			msgType: coderws.MessageText,
-			payload: []byte(`{"type":"response.completed","response":{"id":"resp_turn_1","usage":{"input_tokens":1,"output_tokens":1}}}`),
-		},
-		{
-			msgType: coderws.MessageText,
-			payload: []byte(`{"type":"response.completed","response":{"id":"resp_turn_2","usage":{"input_tokens":1,"output_tokens":1}}}`),
-		},
-	}, false)
-
-	firstPayload := []byte(`{"type":"response.create","model":"gpt-5.5","input":[{"type":"input_text","text":"hello"}]}`)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	result, relayExit := Relay(ctx, clientConn, upstreamConn, firstPayload, RelayOptions{})
-	require.Equal(t, "gpt-5.5", result.RequestModel)
-	require.NotNil(t, relayExit)
-	require.Equal(t, "client_disconnected", relayExit.Stage)
-
-	upstreamWrites := upstreamConn.Writes()
-	require.Len(t, upstreamWrites, 2)
-	for _, write := range upstreamWrites {
-		require.Equal(t, "You are a helpful coding assistant.", gjson.GetBytes(write.payload, "instructions").String())
-	}
 }
 
 func TestRelay_FunctionCallOutputBytesPreserved(t *testing.T) {
@@ -257,11 +220,7 @@ func TestRelay_FunctionCallOutputBytesPreserved(t *testing.T) {
 	upstreamWrites := upstreamConn.Writes()
 	require.Len(t, upstreamWrites, 1)
 	require.Equal(t, coderws.MessageText, upstreamWrites[0].msgType)
-	require.Equal(t, "You are a helpful coding assistant.", gjson.GetBytes(upstreamWrites[0].payload, "instructions").String())
-	require.Equal(t, "gpt-5.3-codex", gjson.GetBytes(upstreamWrites[0].payload, "model").String())
-	require.Equal(t, "function_call_output", gjson.GetBytes(upstreamWrites[0].payload, "input.0.type").String())
-	require.Equal(t, "call_abc123", gjson.GetBytes(upstreamWrites[0].payload, "input.0.call_id").String())
-	require.Equal(t, `{"ok":true}`, gjson.GetBytes(upstreamWrites[0].payload, "input.0.output").String())
+	require.Equal(t, firstPayload, upstreamWrites[0].payload)
 }
 
 func TestRelay_UpstreamDisconnect(t *testing.T) {
@@ -634,7 +593,7 @@ func TestRelay_PreservesFirstMessageType(t *testing.T) {
 	upstreamWrites := upstreamConn.Writes()
 	require.Len(t, upstreamWrites, 1)
 	require.Equal(t, coderws.MessageBinary, upstreamWrites[0].msgType)
-	require.JSONEq(t, `{"type":"response.create","model":"gpt-4o","instructions":"You are a helpful coding assistant.","input":[]}`, string(upstreamWrites[0].payload))
+	require.Equal(t, firstPayload, upstreamWrites[0].payload)
 }
 
 func TestRelay_UsageParseFailureDoesNotBlockRelay(t *testing.T) {

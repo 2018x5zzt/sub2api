@@ -4,8 +4,9 @@
  */
 
 import { apiClient } from '../client'
+import type { BillingMode, ChannelStatus, BillingModelSource } from '@/constants/channel'
 
-export type BillingMode = 'token' | 'per_request' | 'image'
+export type { BillingMode } from '@/constants/channel'
 
 export interface PricingInterval {
   id?: number
@@ -22,7 +23,7 @@ export interface PricingInterval {
 
 export interface ChannelModelPricing {
   id?: number
-  platform?: string
+  platform: string
   models: string[]
   billing_mode: BillingMode
   input_price: number | null
@@ -34,16 +35,27 @@ export interface ChannelModelPricing {
   intervals: PricingInterval[]
 }
 
+export interface AccountStatsPricingRule {
+  id?: number
+  name: string
+  group_ids: number[]
+  account_ids: number[]
+  pricing: ChannelModelPricing[]
+}
+
 export interface Channel {
   id: number
   name: string
   description: string
-  status: string
-  billing_model_source: string // "requested" | "upstream"
+  status: ChannelStatus
+  billing_model_source: BillingModelSource
   restrict_models: boolean
+  features_config?: Record<string, unknown>
   group_ids: number[]
   model_pricing: ChannelModelPricing[]
-  model_mapping: Record<string, Record<string, string>>
+  model_mapping: Record<string, Record<string, string>> // platform → {src→dst}
+  apply_pricing_to_account_stats: boolean
+  account_stats_pricing_rules: AccountStatsPricingRule[]
   created_at: string
   updated_at: string
 }
@@ -56,6 +68,9 @@ export interface CreateChannelRequest {
   model_mapping?: Record<string, Record<string, string>>
   billing_model_source?: string
   restrict_models?: boolean
+  features_config?: Record<string, unknown>
+  apply_pricing_to_account_stats?: boolean
+  account_stats_pricing_rules?: AccountStatsPricingRule[]
 }
 
 export interface UpdateChannelRequest {
@@ -67,6 +82,9 @@ export interface UpdateChannelRequest {
   model_mapping?: Record<string, Record<string, string>>
   billing_model_source?: string
   restrict_models?: boolean
+  features_config?: Record<string, unknown>
+  apply_pricing_to_account_stats?: boolean
+  account_stats_pricing_rules?: AccountStatsPricingRule[]
 }
 
 interface PaginatedResponse<T> {
@@ -83,6 +101,8 @@ export async function list(
   filters?: {
     status?: string
     search?: string
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
   },
   options?: { signal?: AbortSignal }
 ): Promise<PaginatedResponse<Channel>> {
@@ -128,5 +148,21 @@ export async function remove(id: number): Promise<void> {
   await apiClient.delete(`/admin/channels/${id}`)
 }
 
-const channelsAPI = { list, getById, create, update, remove }
+export interface ModelDefaultPricing {
+  found: boolean
+  input_price?: number    // per-token price
+  output_price?: number
+  cache_write_price?: number
+  cache_read_price?: number
+  image_output_price?: number
+}
+
+export async function getModelDefaultPricing(model: string): Promise<ModelDefaultPricing> {
+  const { data } = await apiClient.get<ModelDefaultPricing>('/admin/channels/model-pricing', {
+    params: { model }
+  })
+  return data
+}
+
+const channelsAPI = { list, getById, create, update, remove, getModelDefaultPricing }
 export default channelsAPI

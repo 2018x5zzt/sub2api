@@ -10,7 +10,6 @@ import accountsAPI from './accounts'
 import proxiesAPI from './proxies'
 import redeemAPI from './redeem'
 import promoAPI from './promo'
-import affiliatesAPI from './affiliates'
 import announcementsAPI from './announcements'
 import settingsAPI from './settings'
 import systemAPI from './system'
@@ -27,7 +26,10 @@ import scheduledTestsAPI from './scheduledTests'
 import backupAPI from './backup'
 import tlsFingerprintProfileAPI from './tlsFingerprintProfile'
 import channelsAPI from './channels'
-import subscriptionProductsAPI from './subscriptionProducts'
+import channelMonitorAPI from './channelMonitor'
+import channelMonitorTemplateAPI from './channelMonitorTemplate'
+import adminPaymentAPI from './payment'
+import affiliatesAPI from './affiliates'
 
 /**
  * Unified admin API object for convenient access
@@ -40,7 +42,6 @@ export const adminAPI = {
   proxies: proxiesAPI,
   redeem: redeemAPI,
   promo: promoAPI,
-  affiliates: affiliatesAPI,
   announcements: announcementsAPI,
   settings: settingsAPI,
   system: systemAPI,
@@ -57,7 +58,10 @@ export const adminAPI = {
   backup: backupAPI,
   tlsFingerprintProfiles: tlsFingerprintProfileAPI,
   channels: channelsAPI,
-  subscriptionProducts: subscriptionProductsAPI
+  channelMonitor: channelMonitorAPI,
+  channelMonitorTemplate: channelMonitorTemplateAPI,
+  payment: adminPaymentAPI,
+  affiliates: affiliatesAPI
 }
 
 export {
@@ -68,7 +72,6 @@ export {
   proxiesAPI,
   redeemAPI,
   promoAPI,
-  affiliatesAPI,
   announcementsAPI,
   settingsAPI,
   systemAPI,
@@ -85,7 +88,10 @@ export {
   backupAPI,
   tlsFingerprintProfileAPI,
   channelsAPI,
-  subscriptionProductsAPI
+  channelMonitorAPI,
+  channelMonitorTemplateAPI,
+  adminPaymentAPI,
+  affiliatesAPI
 }
 
 export default adminAPI

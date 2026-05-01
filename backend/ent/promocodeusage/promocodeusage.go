@@ -20,10 +20,6 @@ const (
 	FieldUserID = "user_id"
 	// FieldBonusAmount holds the string denoting the bonus_amount field in the database.
 	FieldBonusAmount = "bonus_amount"
-	// FieldFixedBonusAmount holds the string denoting the fixed_bonus_amount field in the database.
-	FieldFixedBonusAmount = "fixed_bonus_amount"
-	// FieldRandomBonusAmount holds the string denoting the random_bonus_amount field in the database.
-	FieldRandomBonusAmount = "random_bonus_amount"
 	// FieldUsedAt holds the string denoting the used_at field in the database.
 	FieldUsedAt = "used_at"
 	// EdgePromoCode holds the string denoting the promo_code edge name in mutations.
@@ -54,8 +50,6 @@ var Columns = []string{
 	FieldPromoCodeID,
 	FieldUserID,
 	FieldBonusAmount,
-	FieldFixedBonusAmount,
-	FieldRandomBonusAmount,
 	FieldUsedAt,
 }
 
@@ -70,10 +64,6 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// DefaultFixedBonusAmount holds the default value on creation for the "fixed_bonus_amount" field.
-	DefaultFixedBonusAmount float64
-	// DefaultRandomBonusAmount holds the default value on creation for the "random_bonus_amount" field.
-	DefaultRandomBonusAmount float64
 	// DefaultUsedAt holds the default value on creation for the "used_at" field.
 	DefaultUsedAt func() time.Time
 )
@@ -99,16 +89,6 @@ func ByUserID(opts ...sql.OrderTermOption) OrderOption {
 // ByBonusAmount orders the results by the bonus_amount field.
 func ByBonusAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBonusAmount, opts...).ToFunc()
-}
-
-// ByFixedBonusAmount orders the results by the fixed_bonus_amount field.
-func ByFixedBonusAmount(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldFixedBonusAmount, opts...).ToFunc()
-}
-
-// ByRandomBonusAmount orders the results by the random_bonus_amount field.
-func ByRandomBonusAmount(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldRandomBonusAmount, opts...).ToFunc()
 }
 
 // ByUsedAt orders the results by the used_at field.

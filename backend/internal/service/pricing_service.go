@@ -15,12 +15,14 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"go.uber.org/zap"
 )
 
 var (
 	openAIModelDatePattern     = regexp.MustCompile(`-\d{8}$`)
+	openAIModelBasePattern     = regexp.MustCompile(`^(gpt-\d+(?:\.\d+)?)(?:-|$)`)
 	openAIGPT54FallbackPricing = &LiteLLMModelPricing{
 		InputCostPerToken:               2.5e-06, // $2.5 per MTok
 		OutputCostPerToken:              1.5e-05, // $15 per MTok
@@ -32,34 +34,18 @@ var (
 		Mode:                            "chat",
 		SupportsPromptCaching:           true,
 	}
-	openAIGPT55FallbackPricing = &LiteLLMModelPricing{
-		InputCostPerToken:               5e-06, // $5 per MTok
-		OutputCostPerToken:              3e-05, // $30 per MTok
-		CacheReadInputTokenCost:         5e-07, // $0.50 per MTok
-		LongContextInputTokenThreshold:  272000,
-		LongContextInputCostMultiplier:  2.0,
-		LongContextOutputCostMultiplier: 1.5,
-		LiteLLMProvider:                 "openai",
-		Mode:                            "chat",
-		SupportsPromptCaching:           true,
-	}
 	openAIGPT54MiniFallbackPricing = &LiteLLMModelPricing{
-		InputCostPerToken:               7.5e-07, // $0.75 per MTok
-		InputCostPerTokenPriority:       1.5e-06,
-		OutputCostPerToken:              4.5e-06, // $4.5 per MTok
-		OutputCostPerTokenPriority:      9e-06,
-		CacheReadInputTokenCost:         7.5e-08,
-		CacheReadInputTokenCostPriority: 1.5e-07,
-		SupportsServiceTier:             true,
-		LiteLLMProvider:                 "openai",
-		Mode:                            "chat",
-		SupportsPromptCaching:           true,
+		InputCostPerToken:       7.5e-07,
+		OutputCostPerToken:      4.5e-06,
+		CacheReadInputTokenCost: 7.5e-08,
+		LiteLLMProvider:         "openai",
+		Mode:                    "chat",
+		SupportsPromptCaching:   true,
 	}
 	openAIGPT54NanoFallbackPricing = &LiteLLMModelPricing{
 		InputCostPerToken:       2e-07,
 		OutputCostPerToken:      1.25e-06,
 		CacheReadInputTokenCost: 2e-08,
-		SupportsServiceTier:     true,
 		LiteLLMProvider:         "openai",
 		Mode:                    "chat",
 		SupportsPromptCaching:   true,
@@ -84,7 +70,8 @@ type LiteLLMModelPricing struct {
 	LiteLLMProvider                     string  `json:"litellm_provider"`
 	Mode                                string  `json:"mode"`
 	SupportsPromptCaching               bool    `json:"supports_prompt_caching"`
-	OutputCostPerImage                  float64 `json:"output_cost_per_image"` // 图片生成模型每张图片价格
+	OutputCostPerImage                  float64 `json:"output_cost_per_image"`       // 图片生成模型每张图片价格
+	OutputCostPerImageToken             float64 `json:"output_cost_per_image_token"` // 图片输出 token 价格
 }
 
 // PricingRemoteClient 远程价格数据获取接口
@@ -108,6 +95,7 @@ type LiteLLMRawEntry struct {
 	Mode                                string   `json:"mode"`
 	SupportsPromptCaching               bool     `json:"supports_prompt_caching"`
 	OutputCostPerImage                  *float64 `json:"output_cost_per_image"`
+	OutputCostPerImageToken             *float64 `json:"output_cost_per_image_token"`
 }
 
 // PricingService 动态价格服务
@@ -422,6 +410,9 @@ func (s *PricingService) parsePricingData(body []byte) (map[string]*LiteLLMModel
 		if entry.OutputCostPerImage != nil {
 			pricing.OutputCostPerImage = *entry.OutputCostPerImage
 		}
+		if entry.OutputCostPerImageToken != nil {
+			pricing.OutputCostPerImageToken = *entry.OutputCostPerImageToken
+		}
 
 		result[modelName] = pricing
 	}
@@ -665,70 +656,95 @@ func (s *PricingService) extractBaseName(model string) string {
 
 // matchByModelFamily 基于模型系列匹配
 func (s *PricingService) matchByModelFamily(model string) *LiteLLMModelPricing {
-	// Claude模型系列匹配规则
-	familyPatterns := map[string][]string{
-		"opus-4.7":   {"claude-opus-4.7", "claude-opus-4-7", "claude-opus-4.6", "claude-opus-4-6"},
-		"opus-4.6":   {"claude-opus-4.6", "claude-opus-4-6"},
-		"opus-4.5":   {"claude-opus-4.5", "claude-opus-4-5"},
-		"opus-4":     {"claude-opus-4"},
-		"sonnet-4.5": {"claude-sonnet-4.5", "claude-sonnet-4-5"},
-		"sonnet-4":   {"claude-sonnet-4", "claude-3-5-sonnet"},
-		"sonnet-3.5": {"claude-3-5-sonnet", "claude-3.5-sonnet"},
-		"sonnet-3":   {"claude-3-sonnet"},
-		"haiku-3.5":  {"claude-3-5-haiku", "claude-3.5-haiku"},
-		"haiku-3":    {"claude-3-haiku"},
+	// modelFamily 定义一个模型系列的匹配和定价查找规则。
+	type modelFamily struct {
+		name    string   // 系列名称
+		match   []string // 用于将模型归类到此系列的模式（strings.Contains 匹配）
+		pricing []string // 用于在定价数据中查找价格的模式（nil 则复用 match；可包含低版本 fallback）
 	}
 
-	// 确定模型属于哪个系列
-	var matchedFamily string
-	for family, patterns := range familyPatterns {
-		for _, pattern := range patterns {
+	// 按特异性降序排列：高版本号在前，避免 "claude-opus-4"（opus-4 系列）
+	// 因子串关系误匹配 "claude-opus-4-7"（opus-4.7 系列）。
+	// 注意：原 map 实现存在 Go map 迭代随机性导致的同类 bug，此处改为有序切片修复。
+	families := []modelFamily{
+		{name: "opus-4.7", match: []string{"claude-opus-4-7", "claude-opus-4.7"}, pricing: []string{"claude-opus-4-7", "claude-opus-4.7", "claude-opus-4-6"}},
+		{name: "opus-4.6", match: []string{"claude-opus-4-6", "claude-opus-4.6"}},
+		{name: "opus-4.5", match: []string{"claude-opus-4-5", "claude-opus-4.5"}},
+		{name: "opus-4", match: []string{"claude-opus-4", "claude-3-opus"}},
+		{name: "sonnet-4.5", match: []string{"claude-sonnet-4-5", "claude-sonnet-4.5"}},
+		{name: "sonnet-4", match: []string{"claude-sonnet-4", "claude-3-5-sonnet"}},
+		{name: "sonnet-3.5", match: []string{"claude-3-5-sonnet", "claude-3.5-sonnet"}},
+		{name: "sonnet-3", match: []string{"claude-3-sonnet"}},
+		{name: "haiku-3.5", match: []string{"claude-3-5-haiku", "claude-3.5-haiku"}},
+		{name: "haiku-3", match: []string{"claude-3-haiku"}},
+	}
+
+	// Phase 1: 按有序切片归类（最具体的系列优先匹配）
+	var matched *modelFamily
+	for i := range families {
+		for _, pattern := range families[i].match {
 			if strings.Contains(model, pattern) || strings.Contains(model, strings.ReplaceAll(pattern, "-", "")) {
-				matchedFamily = family
+				matched = &families[i]
 				break
 			}
 		}
-		if matchedFamily != "" {
+		if matched != nil {
 			break
 		}
 	}
 
-	if matchedFamily == "" {
-		// 简单的系列匹配
-		if strings.Contains(model, "opus") {
-			if strings.Contains(model, "4.7") || strings.Contains(model, "4-7") {
-				matchedFamily = "opus-4.7"
-			} else if strings.Contains(model, "4.6") || strings.Contains(model, "4-6") {
-				matchedFamily = "opus-4.6"
-			} else if strings.Contains(model, "4.5") || strings.Contains(model, "4-5") {
-				matchedFamily = "opus-4.5"
-			} else {
-				matchedFamily = "opus-4"
+	// Phase 2: 二次兜底——当模型 ID 不含已知模式串时，按关键字粗分
+	if matched == nil {
+		var fallbackName string
+		switch {
+		case strings.Contains(model, "opus"):
+			switch {
+			case strings.Contains(model, "4.7") || strings.Contains(model, "4-7"):
+				fallbackName = "opus-4.7"
+			case strings.Contains(model, "4.6") || strings.Contains(model, "4-6"):
+				fallbackName = "opus-4.6"
+			case strings.Contains(model, "4.5") || strings.Contains(model, "4-5"):
+				fallbackName = "opus-4.5"
+			default:
+				fallbackName = "opus-4"
 			}
-		} else if strings.Contains(model, "sonnet") {
-			if strings.Contains(model, "4.5") || strings.Contains(model, "4-5") {
-				matchedFamily = "sonnet-4.5"
-			} else if strings.Contains(model, "3-5") || strings.Contains(model, "3.5") {
-				matchedFamily = "sonnet-3.5"
-			} else {
-				matchedFamily = "sonnet-4"
+		case strings.Contains(model, "sonnet"):
+			switch {
+			case strings.Contains(model, "4.5") || strings.Contains(model, "4-5"):
+				fallbackName = "sonnet-4.5"
+			case strings.Contains(model, "3-5") || strings.Contains(model, "3.5"):
+				fallbackName = "sonnet-3.5"
+			default:
+				fallbackName = "sonnet-4"
 			}
-		} else if strings.Contains(model, "haiku") {
-			if strings.Contains(model, "3-5") || strings.Contains(model, "3.5") {
-				matchedFamily = "haiku-3.5"
-			} else {
-				matchedFamily = "haiku-3"
+		case strings.Contains(model, "haiku"):
+			switch {
+			case strings.Contains(model, "3-5") || strings.Contains(model, "3.5"):
+				fallbackName = "haiku-3.5"
+			default:
+				fallbackName = "haiku-3"
+			}
+		}
+		if fallbackName != "" {
+			for i := range families {
+				if families[i].name == fallbackName {
+					matched = &families[i]
+					break
+				}
 			}
 		}
 	}
 
-	if matchedFamily == "" {
+	if matched == nil {
 		return nil
 	}
 
-	// 在价格数据中查找该系列的模型
-	patterns := familyPatterns[matchedFamily]
-	for _, pattern := range patterns {
+	// Phase 3: 在定价数据中查找该系列的价格
+	lookups := matched.pricing
+	if lookups == nil {
+		lookups = matched.match
+	}
+	for _, pattern := range lookups {
 		for key, pricing := range s.pricingData {
 			keyLower := strings.ToLower(key)
 			if strings.Contains(keyLower, pattern) {
@@ -743,13 +759,24 @@ func (s *PricingService) matchByModelFamily(model string) *LiteLLMModelPricing {
 
 // matchOpenAIModel OpenAI 模型回退匹配策略
 // 回退顺序：
-// 1. 先把 sub2api 暴露给用户的别名规范化为真实上游基础模型。
-// 2. 再尝试日期快照、基础版本、业务兼容 alias 的回退。
-// 3. gpt-5.4 / gpt-5.4-mini / gpt-5.4-nano 在本地兜底静态价格不可缺失。
-// 4. 未命中时返回 nil，避免把不支持的模型误计到默认模型上。
+// 1. gpt-5.3-codex-spark* -> gpt-5.1-codex（按业务要求固定计费）
+// 2. gpt-5.2-codex -> gpt-5.2（去掉后缀如 -codex, -mini, -max 等）
+// 3. gpt-5.2-20251222 -> gpt-5.2（去掉日期版本号）
+// 4. gpt-5.3-codex -> gpt-5.2-codex
+// 5. gpt-5.4* -> 业务静态兜底价
+// 6. 最终回退到 DefaultTestModel (gpt-5.1-codex)
 func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
-	normalizedModel := normalizeCodexModel(model)
-	variants := s.generateOpenAIModelVariants(model, normalizedModel, openAIModelDatePattern)
+	if strings.HasPrefix(model, "gpt-5.3-codex-spark") {
+		if pricing, ok := s.pricingData["gpt-5.1-codex"]; ok {
+			logger.LegacyPrintf("service.pricing", "[Pricing][SparkBilling] %s -> %s billing", model, "gpt-5.1-codex")
+			logger.With(zap.String("component", "service.pricing")).
+				Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.1-codex"))
+			return pricing
+		}
+	}
+
+	// 尝试的回退变体
+	variants := s.generateOpenAIModelVariants(model, openAIModelDatePattern)
 
 	for _, variant := range variants {
 		if pricing, ok := s.pricingData[variant]; ok {
@@ -759,65 +786,88 @@ func (s *PricingService) matchOpenAIModel(model string) *LiteLLMModelPricing {
 		}
 	}
 
-	switch normalizedModel {
-	case "gpt-5.5":
-		logger.With(zap.String("component", "service.pricing")).
-			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.5(static)"))
-		return openAIGPT55FallbackPricing
-	case "gpt-5.4":
+	if strings.HasPrefix(model, "gpt-5.3-codex") {
+		if pricing, ok := s.pricingData["gpt-5.2-codex"]; ok {
+			logger.With(zap.String("component", "service.pricing")).
+				Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.2-codex"))
+			return pricing
+		}
+	}
+
+	// GPT-5.5 回退到 GPT-5.4 定价
+	if strings.HasPrefix(model, "gpt-5.5") {
 		logger.With(zap.String("component", "service.pricing")).
 			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.4(static)"))
 		return openAIGPT54FallbackPricing
-	case "gpt-5.4-mini":
+	}
+
+	if strings.HasPrefix(model, "gpt-5.4-mini") {
 		logger.With(zap.String("component", "service.pricing")).
 			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.4-mini(static)"))
 		return openAIGPT54MiniFallbackPricing
-	case "gpt-5.4-nano":
+	}
+
+	if strings.HasPrefix(model, "gpt-5.4-nano") {
 		logger.With(zap.String("component", "service.pricing")).
 			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.4-nano(static)"))
 		return openAIGPT54NanoFallbackPricing
 	}
 
+	if strings.HasPrefix(model, "gpt-5.4") {
+		logger.With(zap.String("component", "service.pricing")).
+			Info(fmt.Sprintf("[Pricing] OpenAI fallback matched %s -> %s", model, "gpt-5.4(static)"))
+		return openAIGPT54FallbackPricing
+	}
+
 	if isOpenAIImageGenerationModel(model) {
 		for _, candidate := range []string{"gpt-image-2", "gpt-image-1.5", "gpt-image-1"} {
 			if pricing, ok := s.pricingData[candidate]; ok {
-				logger.With(zap.String("component", "service.pricing")).
-					Info(fmt.Sprintf("[Pricing] OpenAI image fallback matched %s -> %s", model, candidate))
+				logger.LegacyPrintf("service.pricing", "[Pricing] OpenAI image fallback matched %s -> %s", model, candidate)
 				return pricing
 			}
 		}
+		return nil
+	}
+
+	// 最终回退到 DefaultTestModel
+	defaultModel := strings.ToLower(openai.DefaultTestModel)
+	if pricing, ok := s.pricingData[defaultModel]; ok {
+		logger.LegacyPrintf("service.pricing", "[Pricing] OpenAI fallback to default model %s -> %s", model, defaultModel)
+		return pricing
 	}
 
 	return nil
 }
 
 // generateOpenAIModelVariants 生成 OpenAI 模型的回退变体列表
-func (s *PricingService) generateOpenAIModelVariants(model string, normalizedModel string, datePattern *regexp.Regexp) []string {
+func (s *PricingService) generateOpenAIModelVariants(model string, datePattern *regexp.Regexp) []string {
 	seen := make(map[string]bool)
 	var variants []string
 
 	addVariant := func(v string) {
-		if v != "" && v != model && !seen[v] {
+		if v != model && !seen[v] {
 			seen[v] = true
 			variants = append(variants, v)
 		}
 	}
 
-	addVariant(normalizedModel)
-
 	// 1. 去掉日期版本号: gpt-5.2-20251222 -> gpt-5.2
 	withoutDate := datePattern.ReplaceAllString(model, "")
-	addVariant(withoutDate)
+	if withoutDate != model {
+		addVariant(withoutDate)
+	}
 
-	normalizedWithoutDate := datePattern.ReplaceAllString(normalizedModel, "")
-	addVariant(normalizedWithoutDate)
+	// 2. 提取基础版本号: gpt-5.2-codex -> gpt-5.2
+	// 只匹配纯数字版本号格式 gpt-X 或 gpt-X.Y，不匹配 gpt-4o 这种带字母后缀的
+	if matches := openAIModelBasePattern.FindStringSubmatch(model); len(matches) > 1 {
+		addVariant(matches[1])
+	}
 
-	// 2. 业务兼容 alias。
-	switch normalizedModel {
-	case "gpt-5-codex-mini":
-		addVariant("gpt-5.1-codex-mini")
-	case "gpt-5.3-codex":
-		addVariant("gpt-5.2-codex")
+	// 3. 同时去掉日期后再提取基础版本号
+	if withoutDate != model {
+		if matches := openAIModelBasePattern.FindStringSubmatch(withoutDate); len(matches) > 1 {
+			addVariant(matches[1])
+		}
 	}
 
 	return variants

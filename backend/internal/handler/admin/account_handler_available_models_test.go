@@ -101,43 +101,5 @@ func TestAccountHandlerGetAvailableModels_OpenAIOAuthPassthroughFallsBackToDefau
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.NotEmpty(t, resp.Data)
-	require.Greater(t, len(resp.Data), 1)
-}
-
-func TestAccountHandlerGetAvailableModels_OpenAIUnknownMappingsAreIncluded(t *testing.T) {
-	svc := &availableModelsAdminService{
-		stubAdminService: newStubAdminService(),
-		account: service.Account{
-			ID:       44,
-			Name:     "openai-filtered",
-			Platform: service.PlatformOpenAI,
-			Type:     service.AccountTypeAPIKey,
-			Status:   service.StatusActive,
-			Credentials: map[string]any{
-				"model_mapping": map[string]any{
-					"legacy-gpt-5-preview": "gpt-5.4",
-					"gpt-5.4":              "gpt-5.4",
-				},
-			},
-		},
-	}
-	router := setupAvailableModelsRouter(svc)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/accounts/44/models", nil)
-	router.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-
-	var resp struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	ids := make([]string, 0, len(resp.Data))
-	for _, model := range resp.Data {
-		ids = append(ids, model.ID)
-	}
-	require.ElementsMatch(t, []string{"legacy-gpt-5-preview", "gpt-5.4"}, ids)
+	require.NotEqual(t, "gpt-5", resp.Data[0].ID)
 }

@@ -223,7 +223,6 @@ const formatScopeName = (scope: string): string => {
     'claude-opus-4-6': 'COpus46',
     'claude-opus-4-6-thinking': 'COpus46T',
     'claude-sonnet-4-6': 'CSon46',
-    'claude-sonnet-4-6-thinking': 'CSon46T',
     'claude-sonnet-4-5': 'CSon45',
     'claude-sonnet-4-5-thinking': 'CSon45T',
     // Gemini 2.5 系列
@@ -285,6 +284,16 @@ const hasError = computed(() => {
   return props.account.status === 'error'
 })
 
+const isQuotaExceeded = computed(() => {
+  const exceeded = (used?: number | null, limit?: number | null) =>
+    typeof limit === 'number' && limit > 0 && typeof used === 'number' && used >= limit
+  return (
+    exceeded(props.account.quota_used, props.account.quota_limit) ||
+    exceeded(props.account.quota_daily_used, props.account.quota_daily_limit) ||
+    exceeded(props.account.quota_weekly_used, props.account.quota_weekly_limit)
+  )
+})
+
 // Computed: countdown text for rate limit (429)
 const rateLimitCountdown = computed(() => {
   return formatCountdown(props.account.rate_limit_reset_at)
@@ -308,19 +317,16 @@ const statusClass = computed(() => {
   if (isTempUnschedulable.value) {
     return 'badge-warning'
   }
+  if (props.account.status !== 'active') {
+    return props.account.status === 'error' ? 'badge-danger' : 'badge-gray'
+  }
+  if (isQuotaExceeded.value) {
+    return 'badge-warning'
+  }
   if (!props.account.schedulable) {
     return 'badge-gray'
   }
-  switch (props.account.status) {
-    case 'active':
-      return 'badge-success'
-    case 'inactive':
-      return 'badge-gray'
-    case 'error':
-      return 'badge-danger'
-    default:
-      return 'badge-gray'
-  }
+  return 'badge-success'
 })
 
 // Computed: status text
@@ -330,6 +336,12 @@ const statusText = computed(() => {
   }
   if (isTempUnschedulable.value) {
     return t('admin.accounts.status.tempUnschedulable')
+  }
+  if (props.account.status !== 'active') {
+    return t(`admin.accounts.status.${props.account.status}`)
+  }
+  if (isQuotaExceeded.value) {
+    return t('admin.accounts.status.quotaExceeded')
   }
   if (!props.account.schedulable) {
     return t('admin.accounts.status.paused')

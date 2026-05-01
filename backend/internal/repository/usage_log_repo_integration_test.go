@@ -753,8 +753,11 @@ func (s *UsageLogRepoSuite) TestDashboardStats_TodayTotalsAndPerformance() {
 	s.Require().Equal(baseStats.TotalTokens+int64(51), stats.TotalTokens, "TotalTokens mismatch")
 	s.Require().Equal(baseStats.TotalCost+2.3, stats.TotalCost, "TotalCost mismatch")
 	s.Require().Equal(baseStats.TotalActualCost+2.0, stats.TotalActualCost, "TotalActualCost mismatch")
+	// account_cost falls back to total_cost when account_stats_cost is NULL
+	s.Require().Equal(baseStats.TotalAccountCost+2.3, stats.TotalAccountCost, "TotalAccountCost mismatch")
 	s.Require().GreaterOrEqual(stats.TodayRequests, int64(1), "expected TodayRequests >= 1")
 	s.Require().GreaterOrEqual(stats.TodayCost, 0.0, "expected TodayCost >= 0")
+	s.Require().GreaterOrEqual(stats.TodayAccountCost, 0.0, "expected TodayAccountCost >= 0")
 
 	wantRpm, wantTpm, err := s.repo.getPerformanceStats(s.ctx, 0)
 	s.Require().NoError(err, "getPerformanceStats")
@@ -775,8 +778,6 @@ func (s *UsageLogRepoSuite) TestDashboardStatsWithRange_Fallback() {
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-range"})
 
 	d1, d2, d3 := 100, 200, 300
-	accountRate1 := 1.5
-	accountRate2 := 2.0
 	logOutside := &service.UsageLog{
 		UserID:       user1.ID,
 		APIKeyID:     apiKey1.ID,
@@ -803,7 +804,6 @@ func (s *UsageLogRepoSuite) TestDashboardStatsWithRange_Fallback() {
 		CacheReadTokens:     2,
 		TotalCost:           1.0,
 		ActualCost:          0.9,
-		AccountRateMultiplier: &accountRate1,
 		DurationMs:          &d1,
 		CreatedAt:           rangeStart.Add(2 * time.Hour),
 	}
@@ -820,7 +820,6 @@ func (s *UsageLogRepoSuite) TestDashboardStatsWithRange_Fallback() {
 		CacheReadTokens: 1,
 		TotalCost:       0.5,
 		ActualCost:      0.5,
-		AccountRateMultiplier: &accountRate2,
 		DurationMs:      &d2,
 		CreatedAt:       now,
 	}
@@ -837,8 +836,8 @@ func (s *UsageLogRepoSuite) TestDashboardStatsWithRange_Fallback() {
 	s.Require().Equal(int64(45), stats.TotalTokens)
 	s.Require().Equal(1.5, stats.TotalCost)
 	s.Require().Equal(1.4, stats.TotalActualCost)
-	s.Require().InEpsilon(2.5, stats.TotalAccountCost, 0.0001)
-	s.Require().InEpsilon(1.0, stats.TodayAccountCost, 0.0001)
+	// account_cost = COALESCE(account_stats_cost, total_cost) * COALESCE(account_rate_multiplier, 1) = total_cost
+	s.Require().Equal(1.5, stats.TotalAccountCost)
 	s.Require().InEpsilon(150.0, stats.AverageDurationMs, 0.0001)
 }
 
@@ -930,9 +929,6 @@ func (s *UsageLogRepoSuite) TestDashboardAggregationConsistency() {
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-agg"})
 
 	d1, d2, d3 := 100, 200, 150
-	accountRate1 := 2.0
-	accountRate2 := 0.0
-	accountRate3 := 1.5
 	log1 := &service.UsageLog{
 		UserID:              user1.ID,
 		APIKeyID:            apiKey1.ID,
@@ -944,7 +940,6 @@ func (s *UsageLogRepoSuite) TestDashboardAggregationConsistency() {
 		CacheReadTokens:     1,
 		TotalCost:           1.0,
 		ActualCost:          0.9,
-		AccountRateMultiplier: &accountRate1,
 		DurationMs:          &d1,
 		CreatedAt:           hour1.Add(5 * time.Minute),
 	}
@@ -960,7 +955,6 @@ func (s *UsageLogRepoSuite) TestDashboardAggregationConsistency() {
 		OutputTokens: 5,
 		TotalCost:    0.5,
 		ActualCost:   0.5,
-		AccountRateMultiplier: &accountRate2,
 		DurationMs:   &d2,
 		CreatedAt:    hour1.Add(20 * time.Minute),
 	}
@@ -976,7 +970,6 @@ func (s *UsageLogRepoSuite) TestDashboardAggregationConsistency() {
 		OutputTokens: 8,
 		TotalCost:    0.7,
 		ActualCost:   0.7,
-		AccountRateMultiplier: &accountRate3,
 		DurationMs:   &d3,
 		CreatedAt:    hour2.Add(10 * time.Minute),
 	}
@@ -996,7 +989,6 @@ func (s *UsageLogRepoSuite) TestDashboardAggregationConsistency() {
 		cacheReadTokens     int64
 		totalCost           float64
 		actualCost          float64
-		accountCost         float64
 		totalDurationMs     int64
 		activeUsers         int64
 	}
@@ -1004,11 +996,11 @@ func (s *UsageLogRepoSuite) TestDashboardAggregationConsistency() {
 		var row hourlyRow
 		err := scanSingleRow(s.ctx, s.tx, `
 			SELECT total_requests, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-			       total_cost, actual_cost, account_cost, total_duration_ms, active_users
+			       total_cost, actual_cost, total_duration_ms, active_users
 			FROM usage_dashboard_hourly
 			WHERE bucket_start = $1
 		`, []any{bucketStart}, &row.totalRequests, &row.inputTokens, &row.outputTokens,
-			&row.cacheCreationTokens, &row.cacheReadTokens, &row.totalCost, &row.actualCost, &row.accountCost,
+			&row.cacheCreationTokens, &row.cacheReadTokens, &row.totalCost, &row.actualCost,
 			&row.totalDurationMs, &row.activeUsers,
 		)
 		s.Require().NoError(err)
@@ -1023,7 +1015,6 @@ func (s *UsageLogRepoSuite) TestDashboardAggregationConsistency() {
 	s.Require().Equal(int64(1), hour1Row.cacheReadTokens)
 	s.Require().Equal(1.5, hour1Row.totalCost)
 	s.Require().Equal(1.4, hour1Row.actualCost)
-	s.Require().InEpsilon(2.0, hour1Row.accountCost, 0.0001)
 	s.Require().Equal(int64(300), hour1Row.totalDurationMs)
 	s.Require().Equal(int64(1), hour1Row.activeUsers)
 
@@ -1035,7 +1026,6 @@ func (s *UsageLogRepoSuite) TestDashboardAggregationConsistency() {
 	s.Require().Equal(int64(0), hour2Row.cacheReadTokens)
 	s.Require().Equal(0.7, hour2Row.totalCost)
 	s.Require().Equal(0.7, hour2Row.actualCost)
-	s.Require().InEpsilon(1.05, hour2Row.accountCost, 0.0001)
 	s.Require().Equal(int64(150), hour2Row.totalDurationMs)
 	s.Require().Equal(int64(1), hour2Row.activeUsers)
 
@@ -1047,17 +1037,16 @@ func (s *UsageLogRepoSuite) TestDashboardAggregationConsistency() {
 		cacheReadTokens     int64
 		totalCost           float64
 		actualCost          float64
-		accountCost         float64
 		totalDurationMs     int64
 		activeUsers         int64
 	}
 	err = scanSingleRow(s.ctx, s.tx, `
 		SELECT total_requests, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens,
-		       total_cost, actual_cost, account_cost, total_duration_ms, active_users
+		       total_cost, actual_cost, total_duration_ms, active_users
 		FROM usage_dashboard_daily
 		WHERE bucket_date = $1::date
 	`, []any{dayStart}, &daily.totalRequests, &daily.inputTokens, &daily.outputTokens,
-		&daily.cacheCreationTokens, &daily.cacheReadTokens, &daily.totalCost, &daily.actualCost, &daily.accountCost,
+		&daily.cacheCreationTokens, &daily.cacheReadTokens, &daily.totalCost, &daily.actualCost,
 		&daily.totalDurationMs, &daily.activeUsers,
 	)
 	s.Require().NoError(err)
@@ -1068,7 +1057,6 @@ func (s *UsageLogRepoSuite) TestDashboardAggregationConsistency() {
 	s.Require().Equal(int64(1), daily.cacheReadTokens)
 	s.Require().Equal(2.2, daily.totalCost)
 	s.Require().Equal(2.1, daily.actualCost)
-	s.Require().InEpsilon(3.05, daily.accountCost, 0.0001)
 	s.Require().Equal(int64(450), daily.totalDurationMs)
 	s.Require().Equal(int64(2), daily.activeUsers)
 }

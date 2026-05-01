@@ -48,9 +48,6 @@ func (RedeemCode) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusUnused),
-		field.String("source_type").
-			MaxLen(32).
-			Default(domain.RedeemSourceSystemGrant),
 		field.Int64("used_by").
 			Optional().
 			Nillable(),
@@ -67,9 +64,6 @@ func (RedeemCode) Fields() []ent.Field {
 			Default(time.Now).
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 		field.Int64("group_id").
-			Optional().
-			Nillable(),
-		field.Int64("product_id").
 			Optional().
 			Nillable(),
 		field.Int("validity_days").
@@ -96,6 +90,5 @@ func (RedeemCode) Indexes() []ent.Index {
 		index.Fields("status"),
 		index.Fields("used_by"),
 		index.Fields("group_id"),
-		index.Fields("product_id"),
 	}
 }

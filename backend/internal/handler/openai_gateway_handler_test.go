@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,7 +19,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
-	"go.uber.org/zap"
 )
 
 func TestOpenAIHandleStreamingAwareError_JSONEscaping(t *testing.T) {
@@ -156,28 +154,6 @@ func TestOpenAIEnsureForwardErrorResponse_WritesFallbackWhenNotWritten(t *testin
 	assert.Equal(t, "Upstream request failed", errorObj["message"])
 }
 
-func TestOpenAIEnsureForwardErrorResponse_UsesUpstreamBadRequestMessage(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
-	service.SetOpsUpstreamError(c, http.StatusBadRequest, "Missing required parameter: 'tools[15].tools'.", "")
-
-	h := &OpenAIGatewayHandler{}
-	wrote := h.ensureForwardErrorResponse(c, false)
-
-	require.True(t, wrote)
-	require.Equal(t, http.StatusBadRequest, w.Code)
-
-	var parsed map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &parsed)
-	require.NoError(t, err)
-	errorObj, ok := parsed["error"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "invalid_request_error", errorObj["type"])
-	assert.Equal(t, "Missing required parameter: 'tools[15].tools'.", errorObj["message"])
-}
-
 func TestOpenAIEnsureForwardErrorResponse_DoesNotOverrideWrittenResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
@@ -191,36 +167,6 @@ func TestOpenAIEnsureForwardErrorResponse_DoesNotOverrideWrittenResponse(t *test
 	require.False(t, wrote)
 	require.Equal(t, http.StatusTeapot, w.Code)
 	assert.Equal(t, "already written", w.Body.String())
-}
-
-func TestOpenAIHandleFailoverExhausted_UsesUpstreamBadRequestMessage(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
-
-	h := &OpenAIGatewayHandler{}
-	failoverErr := &service.UpstreamFailoverError{
-		StatusCode: http.StatusBadRequest,
-		ResponseBody: []byte(`{
-			"error": {
-				"type": "invalid_request_error",
-				"message": "Missing required parameter: 'tools[15].tools'."
-			}
-		}`),
-	}
-
-	h.handleFailoverExhausted(c, failoverErr, false)
-
-	require.Equal(t, http.StatusBadRequest, w.Code)
-
-	var parsed map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &parsed)
-	require.NoError(t, err)
-	errorObj, ok := parsed["error"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, "invalid_request_error", errorObj["type"])
-	assert.Equal(t, "Missing required parameter: 'tools[15].tools'.", errorObj["message"])
 }
 
 func TestShouldLogOpenAIForwardFailureAsWarn(t *testing.T) {
@@ -414,7 +360,7 @@ func TestResolveOpenAIForwardDefaultMappedModel(t *testing.T) {
 		require.Equal(t, "gpt-5.2", resolveOpenAIForwardDefaultMappedModel(apiKey, " gpt-5.2 "))
 	})
 
-	t.Run("uses_group_default_on_normal_path", func(t *testing.T) {
+	t.Run("uses_group_default_when_explicit_fallback_absent", func(t *testing.T) {
 		apiKey := &service.APIKey{
 			Group: &service.Group{DefaultMappedModel: "gpt-5.4"},
 		}
@@ -427,6 +373,45 @@ func TestResolveOpenAIForwardDefaultMappedModel(t *testing.T) {
 		require.Empty(t, resolveOpenAIForwardDefaultMappedModel(&service.APIKey{
 			Group: &service.Group{},
 		}, ""))
+	})
+}
+
+func TestResolveOpenAIMessagesDispatchMappedModel(t *testing.T) {
+	t.Run("exact_claude_model_override_wins", func(t *testing.T) {
+		apiKey := &service.APIKey{
+			Group: &service.Group{
+				MessagesDispatchModelConfig: service.OpenAIMessagesDispatchModelConfig{
+					SonnetMappedModel: "gpt-5.2",
+					ExactModelMappings: map[string]string{
+						"claude-sonnet-4-5-20250929": "gpt-5.4-mini-high",
+					},
+				},
+			},
+		}
+		require.Equal(t, "gpt-5.4-mini", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-sonnet-4-5-20250929"))
+	})
+
+	t.Run("uses_family_default_when_no_override", func(t *testing.T) {
+		apiKey := &service.APIKey{Group: &service.Group{}}
+		require.Equal(t, "gpt-5.4", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-opus-4-6"))
+		require.Equal(t, "gpt-5.3-codex", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-sonnet-4-5-20250929"))
+		require.Equal(t, "gpt-5.4-mini", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-haiku-4-5-20251001"))
+	})
+
+	t.Run("returns_empty_for_non_claude_or_missing_group", func(t *testing.T) {
+		require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(nil, "claude-sonnet-4-5-20250929"))
+		require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(&service.APIKey{}, "claude-sonnet-4-5-20250929"))
+		require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(&service.APIKey{Group: &service.Group{}}, "gpt-5.4"))
+	})
+
+	t.Run("does_not_fall_back_to_group_default_mapped_model", func(t *testing.T) {
+		apiKey := &service.APIKey{
+			Group: &service.Group{
+				DefaultMappedModel: "gpt-5.4",
+			},
+		}
+		require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(apiKey, "gpt-5.4"))
+		require.Equal(t, "gpt-5.3-codex", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-sonnet-4-5-20250929"))
 	})
 }
 
@@ -509,13 +494,13 @@ func TestOpenAIResponses_RejectsMessageIDAsPreviousResponseID(t *testing.T) {
 	require.Contains(t, w.Body.String(), "previous_response_id must be a response.id")
 }
 
-func TestOpenAIResponses_RejectsNativeItemReferenceContinuationOnHTTP(t *testing.T) {
+func TestOpenAIResponses_RejectsHTTPContinuationPreviousResponseID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", strings.NewReader(
-		`{"model":"gpt-5.3-codex","stream":false,"input":[{"type":"item_reference","id":"rs_123"}]}`,
+		`{"model":"gpt-5.1","stream":false,"previous_response_id":"resp_123456","input":[{"type":"input_text","text":"hello"}]}`,
 	))
 	c.Request.Header.Set("Content-Type", "application/json")
 
@@ -534,37 +519,25 @@ func TestOpenAIResponses_RejectsNativeItemReferenceContinuationOnHTTP(t *testing
 	h.Responses(c)
 
 	require.Equal(t, http.StatusBadRequest, w.Code)
-
-	var parsed map[string]any
-	err := json.Unmarshal(w.Body.Bytes(), &parsed)
-	require.NoError(t, err)
-
-	errorObj, ok := parsed["error"].(map[string]any)
-	require.True(t, ok)
-	require.Equal(t, "invalid_request_error", errorObj["type"])
-	require.Contains(t, errorObj["message"], "item_reference ids like rs_* are not supported on HTTP /v1/responses")
+	require.Contains(t, w.Body.String(), "Responses WebSocket v2")
+	require.Contains(t, w.Body.String(), "previous_response_id")
 }
 
-func TestOpenAIResponses_RejectsNonImageModelForGPTImageGroup(t *testing.T) {
+func TestOpenAIResponses_FunctionCallOutputHTTPGuidanceDoesNotSuggestPreviousResponseReuse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", strings.NewReader(
-		`{"model":"gpt-5","stream":false,"input":[{"type":"input_text","text":"hello"}]}`,
+		`{"model":"gpt-5.1","stream":false,"input":[{"type":"function_call_output","output":"{}"}]}`,
 	))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	groupID := int64(30)
+	groupID := int64(2)
 	c.Set(string(middleware.ContextKeyAPIKey), &service.APIKey{
 		ID:      101,
 		GroupID: &groupID,
-		Group: &service.Group{
-			ID:       groupID,
-			Name:     "gpt-image",
-			Platform: service.PlatformOpenAI,
-		},
-		User: &service.User{ID: 1},
+		User:    &service.User{ID: 1},
 	})
 	c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{
 		UserID:      1,
@@ -574,43 +547,9 @@ func TestOpenAIResponses_RejectsNonImageModelForGPTImageGroup(t *testing.T) {
 	h := newOpenAIHandlerForPreviousResponseIDValidation(t, nil)
 	h.Responses(c)
 
-	require.Equal(t, http.StatusServiceUnavailable, w.Code)
-	require.Contains(t, w.Body.String(), "The requested model is not available for this API key")
-}
-
-func TestValidateFunctionCallOutputRequest_RejectsMissingReferenceWithoutSessionAnchor(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	body := []byte(`{"model":"gpt-5.1","input":[{"type":"function_call_output","call_id":"call_1","output":"ok"}]}`)
-
-	h := &OpenAIGatewayHandler{}
-	ok := h.validateFunctionCallOutputRequest(c, body, "", zap.NewNop())
-
-	require.False(t, ok)
 	require.Equal(t, http.StatusBadRequest, w.Code)
-	require.Contains(t, w.Body.String(), "function_call_output requires item_reference ids matching each call_id")
-}
-
-func TestValidateFunctionCallOutputRequest_AllowsHistoryInferenceWithSessionAnchor(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	body := []byte(`{"model":"gpt-5.1","prompt_cache_key":"session-1","input":[{"type":"function_call_output","call_id":"call_1","output":"ok"}]}`)
-
-	h := &OpenAIGatewayHandler{}
-	ok := h.validateFunctionCallOutputRequest(c, body, "session_hash_1", zap.NewNop())
-
-	require.True(t, ok)
-	require.Equal(t, http.StatusOK, w.Code)
-
-	cachedReqBody, exists := c.Get(service.OpenAIParsedRequestBodyKey)
-	require.True(t, exists)
-	reqBody, okCast := cachedReqBody.(map[string]any)
-	require.True(t, okCast)
-	require.True(t, service.NeedsFunctionCallOutputHistoryInference(reqBody))
+	require.Contains(t, w.Body.String(), "Responses WebSocket v2")
+	require.NotContains(t, w.Body.String(), "reuse previous_response_id")
 }
 
 func TestOpenAIResponsesWebSocket_SetsClientTransportWSWhenUpgradeValid(t *testing.T) {
@@ -760,100 +699,6 @@ func TestOpenAIHandler_GjsonExtraction(t *testing.T) {
 	}
 }
 
-func TestAcquireResponsesAccountSlot_SkipsQueueWaitAfter429Failover(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
-
-	cache := &concurrencyCacheMock{
-		acquireAccountSlotFn: func(ctx context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error) {
-			return false, nil
-		},
-	}
-	h := &OpenAIGatewayHandler{
-		gatewayService:    &service.OpenAIGatewayService{},
-		concurrencyHelper: NewConcurrencyHelper(service.NewConcurrencyService(cache), SSEPingFormatNone, time.Second),
-	}
-	selection := &service.AccountSelectionResult{
-		Account: &service.Account{ID: 42, Concurrency: 1},
-		WaitPlan: &service.AccountWaitPlan{
-			AccountID:      42,
-			MaxConcurrency: 1,
-			Timeout:        10 * time.Second,
-			MaxWaiting:     3,
-		},
-	}
-
-	streamStarted := false
-	release, acquired, waitSkipped := h.acquireResponsesAccountSlot(c, nil, "", selection, false, &streamStarted, false, zap.NewNop())
-	require.Nil(t, release)
-	require.False(t, acquired)
-	require.True(t, waitSkipped)
-	require.Zero(t, w.Body.Len())
-	require.Equal(t, int32(0), cache.incrementAccountWaitCalled)
-}
-
-func TestShouldRetrySameOpenAIAccount(t *testing.T) {
-	t.Run("429 switches accounts immediately", func(t *testing.T) {
-		require.False(t, shouldRetrySameOpenAIAccount(&service.UpstreamFailoverError{
-			StatusCode:             http.StatusTooManyRequests,
-			RetryableOnSameAccount: true,
-		}))
-	})
-
-	t.Run("other retryable statuses keep same-account retry", func(t *testing.T) {
-		require.True(t, shouldRetrySameOpenAIAccount(&service.UpstreamFailoverError{
-			StatusCode:             http.StatusForbidden,
-			RetryableOnSameAccount: true,
-		}))
-	})
-
-	t.Run("non retryable stays disabled", func(t *testing.T) {
-		require.False(t, shouldRetrySameOpenAIAccount(&service.UpstreamFailoverError{
-			StatusCode:             http.StatusServiceUnavailable,
-			RetryableOnSameAccount: false,
-		}))
-	})
-}
-
-func TestOpenAI429SilentFailoverState(t *testing.T) {
-	now := time.Unix(1_700_000_000, 0)
-
-	var state openAI429SilentFailoverState
-	require.False(t, state.noteSwitch(&service.UpstreamFailoverError{StatusCode: http.StatusServiceUnavailable}, now))
-	require.Zero(t, state.remaining(now))
-	require.Zero(t, state.nextWaitDuration(now))
-	require.Zero(t, state.switchCount())
-
-	require.True(t, state.noteSwitch(&service.UpstreamFailoverError{StatusCode: http.StatusTooManyRequests}, now))
-	require.Equal(t, openAI429SilentFailoverBudget, state.remaining(now))
-	require.Equal(t, openAI429SilentFailoverPollInterval, state.nextWaitDuration(now))
-	require.Equal(t, 1, state.switchCount())
-
-	require.True(t, state.noteSwitch(&service.UpstreamFailoverError{StatusCode: http.StatusTooManyRequests}, now.Add(time.Second)))
-	require.Equal(t, 2, state.switchCount())
-
-	nearDeadline := now.Add(openAI429SilentFailoverBudget - 50*time.Millisecond)
-	require.Equal(t, 50*time.Millisecond, state.remaining(nearDeadline))
-	require.Equal(t, 50*time.Millisecond, state.nextWaitDuration(nearDeadline))
-
-	expiredAt := now.Add(openAI429SilentFailoverBudget + time.Millisecond)
-	require.Zero(t, state.remaining(expiredAt))
-	require.Zero(t, state.nextWaitDuration(expiredAt))
-}
-
-func TestClearOpenAI429ExcludedAccounts(t *testing.T) {
-	failedAccountIDs := map[int64]struct{}{
-		11: {},
-		22: {},
-	}
-
-	require.Equal(t, 2, clearOpenAI429ExcludedAccounts(failedAccountIDs))
-	require.Empty(t, failedAccountIDs)
-	require.Zero(t, clearOpenAI429ExcludedAccounts(failedAccountIDs))
-}
-
 // TestOpenAIHandler_GjsonValidation 验证修复后的 JSON 合法性和类型校验
 func TestOpenAIHandler_GjsonValidation(t *testing.T) {
 	// 非法 JSON 被 gjson.ValidBytes 拦截
@@ -949,12 +794,5 @@ func newOpenAIWSHandlerTestServer(t *testing.T, h *OpenAIGatewayHandler, subject
 		c.Next()
 	})
 	router.GET("/openai/v1/responses", h.ResponsesWebSocket)
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
-	require.NoError(t, err)
-	server := &httptest.Server{
-		Listener: listener,
-		Config:   &http.Server{Handler: router},
-	}
-	server.Start()
-	return server
+	return httptest.NewServer(router)
 }

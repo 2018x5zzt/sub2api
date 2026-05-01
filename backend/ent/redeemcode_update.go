@@ -93,20 +93,6 @@ func (_u *RedeemCodeUpdate) SetNillableStatus(v *string) *RedeemCodeUpdate {
 	return _u
 }
 
-// SetSourceType sets the "source_type" field.
-func (_u *RedeemCodeUpdate) SetSourceType(v string) *RedeemCodeUpdate {
-	_u.mutation.SetSourceType(v)
-	return _u
-}
-
-// SetNillableSourceType sets the "source_type" field if the given value is not nil.
-func (_u *RedeemCodeUpdate) SetNillableSourceType(v *string) *RedeemCodeUpdate {
-	if v != nil {
-		_u.SetSourceType(*v)
-	}
-	return _u
-}
-
 // SetUsedBy sets the "used_by" field.
 func (_u *RedeemCodeUpdate) SetUsedBy(v int64) *RedeemCodeUpdate {
 	_u.mutation.SetUsedBy(v)
@@ -184,33 +170,6 @@ func (_u *RedeemCodeUpdate) SetNillableGroupID(v *int64) *RedeemCodeUpdate {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *RedeemCodeUpdate) ClearGroupID() *RedeemCodeUpdate {
 	_u.mutation.ClearGroupID()
-	return _u
-}
-
-// SetProductID sets the "product_id" field.
-func (_u *RedeemCodeUpdate) SetProductID(v int64) *RedeemCodeUpdate {
-	_u.mutation.ResetProductID()
-	_u.mutation.SetProductID(v)
-	return _u
-}
-
-// SetNillableProductID sets the "product_id" field if the given value is not nil.
-func (_u *RedeemCodeUpdate) SetNillableProductID(v *int64) *RedeemCodeUpdate {
-	if v != nil {
-		_u.SetProductID(*v)
-	}
-	return _u
-}
-
-// AddProductID adds value to the "product_id" field.
-func (_u *RedeemCodeUpdate) AddProductID(v int64) *RedeemCodeUpdate {
-	_u.mutation.AddProductID(v)
-	return _u
-}
-
-// ClearProductID clears the value of the "product_id" field.
-func (_u *RedeemCodeUpdate) ClearProductID() *RedeemCodeUpdate {
-	_u.mutation.ClearProductID()
 	return _u
 }
 
@@ -320,11 +279,6 @@ func (_u *RedeemCodeUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.status": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.SourceType(); ok {
-		if err := redeemcode.SourceTypeValidator(v); err != nil {
-			return &ValidationError{Name: "source_type", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.source_type": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -355,9 +309,6 @@ func (_u *RedeemCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(redeemcode.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.SourceType(); ok {
-		_spec.SetField(redeemcode.FieldSourceType, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.UsedAt(); ok {
 		_spec.SetField(redeemcode.FieldUsedAt, field.TypeTime, value)
 	}
@@ -369,15 +320,6 @@ func (_u *RedeemCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.NotesCleared() {
 		_spec.ClearField(redeemcode.FieldNotes, field.TypeString)
-	}
-	if value, ok := _u.mutation.ProductID(); ok {
-		_spec.SetField(redeemcode.FieldProductID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedProductID(); ok {
-		_spec.AddField(redeemcode.FieldProductID, field.TypeInt64, value)
-	}
-	if _u.mutation.ProductIDCleared() {
-		_spec.ClearField(redeemcode.FieldProductID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ValidityDays(); ok {
 		_spec.SetField(redeemcode.FieldValidityDays, field.TypeInt, value)
@@ -526,20 +468,6 @@ func (_u *RedeemCodeUpdateOne) SetNillableStatus(v *string) *RedeemCodeUpdateOne
 	return _u
 }
 
-// SetSourceType sets the "source_type" field.
-func (_u *RedeemCodeUpdateOne) SetSourceType(v string) *RedeemCodeUpdateOne {
-	_u.mutation.SetSourceType(v)
-	return _u
-}
-
-// SetNillableSourceType sets the "source_type" field if the given value is not nil.
-func (_u *RedeemCodeUpdateOne) SetNillableSourceType(v *string) *RedeemCodeUpdateOne {
-	if v != nil {
-		_u.SetSourceType(*v)
-	}
-	return _u
-}
-
 // SetUsedBy sets the "used_by" field.
 func (_u *RedeemCodeUpdateOne) SetUsedBy(v int64) *RedeemCodeUpdateOne {
 	_u.mutation.SetUsedBy(v)
@@ -617,33 +545,6 @@ func (_u *RedeemCodeUpdateOne) SetNillableGroupID(v *int64) *RedeemCodeUpdateOne
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *RedeemCodeUpdateOne) ClearGroupID() *RedeemCodeUpdateOne {
 	_u.mutation.ClearGroupID()
-	return _u
-}
-
-// SetProductID sets the "product_id" field.
-func (_u *RedeemCodeUpdateOne) SetProductID(v int64) *RedeemCodeUpdateOne {
-	_u.mutation.ResetProductID()
-	_u.mutation.SetProductID(v)
-	return _u
-}
-
-// SetNillableProductID sets the "product_id" field if the given value is not nil.
-func (_u *RedeemCodeUpdateOne) SetNillableProductID(v *int64) *RedeemCodeUpdateOne {
-	if v != nil {
-		_u.SetProductID(*v)
-	}
-	return _u
-}
-
-// AddProductID adds value to the "product_id" field.
-func (_u *RedeemCodeUpdateOne) AddProductID(v int64) *RedeemCodeUpdateOne {
-	_u.mutation.AddProductID(v)
-	return _u
-}
-
-// ClearProductID clears the value of the "product_id" field.
-func (_u *RedeemCodeUpdateOne) ClearProductID() *RedeemCodeUpdateOne {
-	_u.mutation.ClearProductID()
 	return _u
 }
 
@@ -766,11 +667,6 @@ func (_u *RedeemCodeUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.status": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.SourceType(); ok {
-		if err := redeemcode.SourceTypeValidator(v); err != nil {
-			return &ValidationError{Name: "source_type", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.source_type": %w`, err)}
-		}
-	}
 	return nil
 }
 
@@ -818,9 +714,6 @@ func (_u *RedeemCodeUpdateOne) sqlSave(ctx context.Context) (_node *RedeemCode, 
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(redeemcode.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.SourceType(); ok {
-		_spec.SetField(redeemcode.FieldSourceType, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.UsedAt(); ok {
 		_spec.SetField(redeemcode.FieldUsedAt, field.TypeTime, value)
 	}
@@ -832,15 +725,6 @@ func (_u *RedeemCodeUpdateOne) sqlSave(ctx context.Context) (_node *RedeemCode, 
 	}
 	if _u.mutation.NotesCleared() {
 		_spec.ClearField(redeemcode.FieldNotes, field.TypeString)
-	}
-	if value, ok := _u.mutation.ProductID(); ok {
-		_spec.SetField(redeemcode.FieldProductID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedProductID(); ok {
-		_spec.AddField(redeemcode.FieldProductID, field.TypeInt64, value)
-	}
-	if _u.mutation.ProductIDCleared() {
-		_spec.ClearField(redeemcode.FieldProductID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ValidityDays(); ok {
 		_spec.SetField(redeemcode.FieldValidityDays, field.TypeInt, value)

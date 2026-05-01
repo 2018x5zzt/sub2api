@@ -51,10 +51,6 @@ type accountRepository struct {
 	schedulerCache service.SchedulerCache
 }
 
-type sqlTxBeginner interface {
-	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
-}
-
 var schedulerNeutralExtraKeyPrefixes = []string{
 	"codex_primary_",
 	"codex_secondary_",
@@ -442,6 +438,9 @@ func (r *accountRepository) Delete(ctx context.Context, id int64) error {
 	if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(id)).Exec(ctx); err != nil {
 		return err
 	}
+	if _, err := txClient.ExecContext(ctx, "DELETE FROM scheduled_test_plans WHERE account_id = $1", id); err != nil {
+		return err
+	}
 	if _, err := txClient.Account.Delete().Where(dbaccount.IDEQ(id)).Exec(ctx); err != nil {
 		return err
 	}
@@ -472,16 +471,61 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 	}
 	if status != "" {
 		switch status {
+		case service.StatusActive:
+			q = q.Where(
+				dbaccount.StatusEQ(status),
+				dbaccount.SchedulableEQ(true),
+				dbaccount.Or(
+					dbaccount.RateLimitResetAtIsNil(),
+					dbaccount.RateLimitResetAtLTE(time.Now()),
+				),
+				dbpredicate.Account(func(s *entsql.Selector) {
+					col := s.C("temp_unschedulable_until")
+					s.Where(entsql.Or(
+						entsql.IsNull(col),
+						entsql.LTE(col, entsql.Expr("NOW()")),
+					))
+				}),
+			)
 		case "rate_limited":
-			q = q.Where(dbaccount.RateLimitResetAtGT(time.Now()))
+			q = q.Where(
+				dbaccount.StatusEQ(service.StatusActive),
+				dbaccount.RateLimitResetAtGT(time.Now()),
+				dbpredicate.Account(func(s *entsql.Selector) {
+					col := s.C("temp_unschedulable_until")
+					s.Where(entsql.Or(
+						entsql.IsNull(col),
+						entsql.LTE(col, entsql.Expr("NOW()")),
+					))
+				}),
+			)
 		case "temp_unschedulable":
-			q = q.Where(dbpredicate.Account(func(s *entsql.Selector) {
-				col := s.C("temp_unschedulable_until")
-				s.Where(entsql.And(
-					entsql.Not(entsql.IsNull(col)),
-					entsql.GT(col, entsql.Expr("NOW()")),
-				))
-			}))
+			q = q.Where(
+				dbaccount.StatusEQ(service.StatusActive),
+				dbpredicate.Account(func(s *entsql.Selector) {
+					col := s.C("temp_unschedulable_until")
+					s.Where(entsql.And(
+						entsql.Not(entsql.IsNull(col)),
+						entsql.GT(col, entsql.Expr("NOW()")),
+					))
+				}),
+			)
+		case "unschedulable":
+			q = q.Where(
+				dbaccount.StatusEQ(service.StatusActive),
+				dbaccount.SchedulableEQ(false),
+				dbaccount.Or(
+					dbaccount.RateLimitResetAtIsNil(),
+					dbaccount.RateLimitResetAtLTE(time.Now()),
+				),
+				dbpredicate.Account(func(s *entsql.Selector) {
+					col := s.C("temp_unschedulable_until")
+					s.Where(entsql.Or(
+						entsql.IsNull(col),
+						entsql.LTE(col, entsql.Expr("NOW()")),
+					))
+				}),
+			)
 		default:
 			q = q.Where(dbaccount.StatusEQ(status))
 		}
@@ -514,11 +558,14 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 		return nil, nil, err
 	}
 
-	accounts, err := q.
+	accountsQuery := q.
 		Offset(params.Offset()).
-		Limit(params.Limit()).
-		Order(dbent.Desc(dbaccount.FieldID)).
-		All(ctx)
+		Limit(params.Limit())
+	for _, order := range accountListOrder(params) {
+		accountsQuery = accountsQuery.Order(order)
+	}
+
+	accounts, err := accountsQuery.All(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -528,6 +575,50 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 		return nil, nil, err
 	}
 	return outAccounts, paginationResultFromTotal(int64(total), params), nil
+}
+
+func accountListOrder(params pagination.PaginationParams) []func(*entsql.Selector) {
+	sortBy := strings.ToLower(strings.TrimSpace(params.SortBy))
+	sortOrder := params.NormalizedSortOrder(pagination.SortOrderAsc)
+
+	field := dbaccount.FieldName
+	defaultOrder := true
+	switch sortBy {
+	case "", "name":
+		field = dbaccount.FieldName
+	case "id":
+		field = dbaccount.FieldID
+		defaultOrder = false
+	case "status":
+		field = dbaccount.FieldStatus
+		defaultOrder = false
+	case "schedulable":
+		field = dbaccount.FieldSchedulable
+		defaultOrder = false
+	case "priority":
+		field = dbaccount.FieldPriority
+		defaultOrder = false
+	case "rate_multiplier":
+		field = dbaccount.FieldRateMultiplier
+		defaultOrder = false
+	case "last_used_at":
+		field = dbaccount.FieldLastUsedAt
+		defaultOrder = false
+	case "expires_at":
+		field = dbaccount.FieldExpiresAt
+		defaultOrder = false
+	case "created_at":
+		field = dbaccount.FieldCreatedAt
+		defaultOrder = false
+	}
+
+	if sortOrder == pagination.SortOrderDesc {
+		return []func(*entsql.Selector){dbent.Desc(field), dbent.Desc(dbaccount.FieldID)}
+	}
+	if defaultOrder {
+		return []func(*entsql.Selector){dbent.Asc(dbaccount.FieldName), dbent.Asc(dbaccount.FieldID)}
+	}
+	return []func(*entsql.Selector){dbent.Asc(field), dbent.Asc(dbaccount.FieldID)}
 }
 
 func (r *accountRepository) ListByGroup(ctx context.Context, groupID int64) ([]service.Account, error) {
@@ -762,51 +853,47 @@ func (r *accountRepository) GetGroups(ctx context.Context, accountID int64) ([]s
 }
 
 func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
-	bindings := make([]service.AccountGroupBindingInput, 0, len(groupIDs))
-	for _, groupID := range groupIDs {
-		bindings = append(bindings, service.AccountGroupBindingInput{GroupID: groupID})
-	}
-	return r.BindGroupBindings(ctx, accountID, bindings)
-}
-
-func (r *accountRepository) BindGroupBindings(ctx context.Context, accountID int64, bindings []service.AccountGroupBindingInput) error {
 	existingGroupIDs, err := r.loadAccountGroupIDs(ctx, accountID)
 	if err != nil {
 		return err
 	}
-	normalizedBindings := normalizeAccountGroupBindings(bindings)
-	groupIDs := make([]int64, 0, len(normalizedBindings))
-	for _, binding := range normalizedBindings {
-		groupIDs = append(groupIDs, binding.GroupID)
-	}
-
-	exec := r.sql
-	var tx *sql.Tx
-	if beginner, ok := r.sql.(sqlTxBeginner); ok {
-		sqlTx, txErr := beginner.BeginTx(ctx, nil)
-		if txErr != nil {
-			return txErr
-		}
-		tx = sqlTx
-		exec = sqlTx
-		defer func() { _ = tx.Rollback() }()
-	}
-
-	if _, err := exec.ExecContext(ctx, "DELETE FROM account_groups WHERE account_id = $1", accountID); err != nil {
+	// 使用事务保证删除旧绑定与创建新绑定的原子性
+	tx, err := r.client.Tx(ctx)
+	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
 		return err
 	}
 
-	for i, binding := range normalizedBindings {
-		if _, err := exec.ExecContext(ctx,
-			`INSERT INTO account_groups (account_id, group_id, priority, billing_multiplier, created_at)
-			 VALUES ($1, $2, $3, $4, NOW())`,
-			accountID,
-			binding.GroupID,
-			i+1,
-			binding.EffectiveBillingMultiplier(),
-		); err != nil {
-			return err
+	var txClient *dbent.Client
+	if err == nil {
+		defer func() { _ = tx.Rollback() }()
+		txClient = tx.Client()
+	} else {
+		// 已处于外部事务中（ErrTxStarted），复用当前 client
+		txClient = r.client
+	}
+
+	if _, err := txClient.AccountGroup.Delete().Where(dbaccountgroup.AccountIDEQ(accountID)).Exec(ctx); err != nil {
+		return err
+	}
+
+	if len(groupIDs) == 0 {
+		if tx != nil {
+			return tx.Commit()
 		}
+		return nil
+	}
+
+	builders := make([]*dbent.AccountGroupCreate, 0, len(groupIDs))
+	for i, groupID := range groupIDs {
+		builders = append(builders, txClient.AccountGroup.Create().
+			SetAccountID(accountID).
+			SetGroupID(groupID).
+			SetPriority(i+1),
+		)
+	}
+
+	if _, err := txClient.AccountGroup.CreateBulk(builders...).Save(ctx); err != nil {
+		return err
 	}
 
 	if tx != nil {
@@ -1551,62 +1638,23 @@ func (r *accountRepository) loadAccountGroups(ctx context.Context, accountIDs []
 		return groupsByAccount, groupIDsByAccount, accountGroupsByAccount, nil
 	}
 
-	rows, err := r.sql.QueryContext(ctx, `
-		SELECT account_id, group_id, priority, billing_multiplier, created_at
-		FROM account_groups
-		WHERE account_id = ANY($1)
-		ORDER BY account_id, priority
-	`, pq.Array(accountIDs))
+	entries, err := r.client.AccountGroup.Query().
+		Where(dbaccountgroup.AccountIDIn(accountIDs...)).
+		WithGroup().
+		Order(dbaccountgroup.ByAccountID(), dbaccountgroup.ByPriority()).
+		All(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	defer rows.Close()
 
-	type accountGroupRow struct {
-		AccountID         int64
-		GroupID           int64
-		Priority          int
-		BillingMultiplier float64
-		CreatedAt         time.Time
-	}
-	rowsData := make([]accountGroupRow, 0)
-	groupIDSet := make(map[int64]struct{})
-	for rows.Next() {
-		var row accountGroupRow
-		if err := rows.Scan(&row.AccountID, &row.GroupID, &row.Priority, &row.BillingMultiplier, &row.CreatedAt); err != nil {
-			return nil, nil, nil, err
-		}
-		rowsData = append(rowsData, row)
-		groupIDSet[row.GroupID] = struct{}{}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, nil, nil, err
-	}
-
-	groupIDs := make([]int64, 0, len(groupIDSet))
-	for groupID := range groupIDSet {
-		groupIDs = append(groupIDs, groupID)
-	}
-	groupByID := make(map[int64]*service.Group, len(groupIDs))
-	if len(groupIDs) > 0 {
-		groupEntities, err := r.client.Group.Query().Where(dbgroup.IDIn(groupIDs...)).All(ctx)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		for _, groupEntity := range groupEntities {
-			groupByID[groupEntity.ID] = groupEntityToService(groupEntity)
-		}
-	}
-
-	for _, ag := range rowsData {
-		groupSvc := groupByID[ag.GroupID]
+	for _, ag := range entries {
+		groupSvc := groupEntityToService(ag.Edges.Group)
 		agSvc := service.AccountGroup{
-			AccountID:         ag.AccountID,
-			GroupID:           ag.GroupID,
-			Priority:          ag.Priority,
-			BillingMultiplier: ag.BillingMultiplier,
-			CreatedAt:         ag.CreatedAt,
-			Group:             groupSvc,
+			AccountID: ag.AccountID,
+			GroupID:   ag.GroupID,
+			Priority:  ag.Priority,
+			CreatedAt: ag.CreatedAt,
+			Group:     groupSvc,
 		}
 		accountGroupsByAccount[ag.AccountID] = append(accountGroupsByAccount[ag.AccountID], agSvc)
 		groupIDsByAccount[ag.AccountID] = append(groupIDsByAccount[ag.AccountID], ag.GroupID)
@@ -1631,26 +1679,6 @@ func (r *accountRepository) loadAccountGroupIDs(ctx context.Context, accountID i
 		ids = append(ids, entry.GroupID)
 	}
 	return ids, nil
-}
-
-func normalizeAccountGroupBindings(bindings []service.AccountGroupBindingInput) []service.AccountGroupBindingInput {
-	if len(bindings) == 0 {
-		return nil
-	}
-	normalized := make([]service.AccountGroupBindingInput, 0, len(bindings))
-	indexByGroupID := make(map[int64]int, len(bindings))
-	for _, binding := range bindings {
-		if binding.GroupID <= 0 {
-			continue
-		}
-		if idx, exists := indexByGroupID[binding.GroupID]; exists {
-			normalized[idx].BillingMultiplier = binding.BillingMultiplier
-			continue
-		}
-		indexByGroupID[binding.GroupID] = len(normalized)
-		normalized = append(normalized, binding)
-	}
-	return normalized
 }
 
 func mergeGroupIDs(a []int64, b []int64) []int64 {
@@ -1759,20 +1787,13 @@ func itoa(v int) string {
 }
 
 // FindByExtraField 根据 extra 字段中的键值对查找账号。
-// 该方法限定 platform='sora'，避免误查询其他平台的账号。
 // 使用 PostgreSQL JSONB @> 操作符进行高效查询（需要 GIN 索引支持）。
 //
-// 应用场景：查找通过 linked_openai_account_id 关联的 Sora 账号。
-//
 // FindByExtraField finds accounts by key-value pairs in the extra field.
-// Limited to platform='sora' to avoid querying accounts from other platforms.
 // Uses PostgreSQL JSONB @> operator for efficient queries (requires GIN index).
-//
-// Use case: Finding Sora accounts linked via linked_openai_account_id.
 func (r *accountRepository) FindByExtraField(ctx context.Context, key string, value any) ([]service.Account, error) {
 	accounts, err := r.client.Account.Query().
 		Where(
-			dbaccount.PlatformEQ("sora"), // 限定平台为 sora
 			dbaccount.DeletedAtIsNil(),
 			func(s *entsql.Selector) {
 				path := sqljson.Path(key)

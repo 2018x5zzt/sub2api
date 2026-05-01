@@ -22,16 +22,16 @@ const (
 	PlatformOpenAI      = "openai"
 	PlatformGemini      = "gemini"
 	PlatformAntigravity = "antigravity"
-	PlatformSora        = "sora"
 )
 
 // Account type constants
 const (
-	AccountTypeOAuth      = "oauth"       // OAuth类型账号（full scope: profile + inference）
-	AccountTypeSetupToken = "setup-token" // Setup Token类型账号（inference only scope）
-	AccountTypeAPIKey     = "apikey"      // API Key类型账号
-	AccountTypeUpstream   = "upstream"    // 上游透传类型账号（通过 Base URL + API Key 连接上游）
-	AccountTypeBedrock    = "bedrock"     // AWS Bedrock 类型账号（通过 SigV4 签名或 API Key 连接 Bedrock，由 credentials.auth_mode 区分）
+	AccountTypeOAuth          = "oauth"           // OAuth类型账号（full scope: profile + inference）
+	AccountTypeSetupToken     = "setup-token"     // Setup Token类型账号（inference only scope）
+	AccountTypeAPIKey         = "apikey"          // API Key类型账号
+	AccountTypeUpstream       = "upstream"        // 上游透传类型账号（通过 Base URL + API Key 连接上游）
+	AccountTypeBedrock        = "bedrock"         // AWS Bedrock 类型账号（通过 SigV4 签名或 API Key 连接 Bedrock，由 credentials.auth_mode 区分）
+	AccountTypeServiceAccount = "service_account" // Google Service Account 类型账号（用于 Vertex AI）
 )
 
 // Redeem type constants
@@ -42,24 +42,10 @@ const (
 	RedeemTypeInvitation   = "invitation"
 )
 
-// Redeem source type constants
-const (
-	RedeemSourceCommercial   = "commercial"
-	RedeemSourceBenefit      = "benefit"
-	RedeemSourceCompensation = "compensation"
-	RedeemSourceSystemGrant  = "system_grant"
-)
-
 // PromoCode status constants
 const (
 	PromoCodeStatusActive   = "active"
 	PromoCodeStatusDisabled = "disabled"
-)
-
-// PromoCode scene constants
-const (
-	PromoCodeSceneRegister = "register"
-	PromoCodeSceneBenefit  = "benefit"
 )
 
 // Admin adjustment type constants
@@ -91,7 +77,6 @@ var DefaultAntigravityModelMapping = map[string]string{
 	"claude-opus-4-6":            "claude-opus-4-6-thinking", // 简称映射
 	"claude-opus-4-5-thinking":   "claude-opus-4-6-thinking", // 迁移旧模型
 	"claude-sonnet-4-6":          "claude-sonnet-4-6",
-	"claude-sonnet-4-6-thinking": "claude-sonnet-4-6-thinking",
 	"claude-sonnet-4-5":          "claude-sonnet-4-5",
 	"claude-sonnet-4-5-thinking": "claude-sonnet-4-5-thinking",
 	// Claude 详细版本 ID 映射

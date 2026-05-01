@@ -5,7 +5,6 @@
 import { apiClient } from '../client'
 import type {
   PromoCode,
-  PromoCodeScene,
   PromoCodeUsage,
   CreatePromoCodeRequest,
   UpdatePromoCodeRequest,
@@ -16,13 +15,18 @@ export async function list(
   page: number = 1,
   pageSize: number = 20,
   filters?: {
-    scene?: PromoCodeScene
     status?: string
     search?: string
+    sort_by?: string
+    sort_order?: 'asc' | 'desc'
+  },
+  options?: {
+    signal?: AbortSignal
   }
 ): Promise<BasePaginationResponse<PromoCode>> {
   const { data } = await apiClient.get<BasePaginationResponse<PromoCode>>('/admin/promo-codes', {
-    params: { page, page_size: pageSize, ...filters }
+    params: { page, page_size: pageSize, ...filters },
+    signal: options?.signal
   })
   return data
 }

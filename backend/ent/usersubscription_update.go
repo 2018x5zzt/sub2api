@@ -250,48 +250,6 @@ func (_u *UserSubscriptionUpdate) AddMonthlyUsageUsd(v float64) *UserSubscriptio
 	return _u
 }
 
-// SetDailyCarryoverInUsd sets the "daily_carryover_in_usd" field.
-func (_u *UserSubscriptionUpdate) SetDailyCarryoverInUsd(v float64) *UserSubscriptionUpdate {
-	_u.mutation.ResetDailyCarryoverInUsd()
-	_u.mutation.SetDailyCarryoverInUsd(v)
-	return _u
-}
-
-// SetNillableDailyCarryoverInUsd sets the "daily_carryover_in_usd" field if the given value is not nil.
-func (_u *UserSubscriptionUpdate) SetNillableDailyCarryoverInUsd(v *float64) *UserSubscriptionUpdate {
-	if v != nil {
-		_u.SetDailyCarryoverInUsd(*v)
-	}
-	return _u
-}
-
-// AddDailyCarryoverInUsd adds value to the "daily_carryover_in_usd" field.
-func (_u *UserSubscriptionUpdate) AddDailyCarryoverInUsd(v float64) *UserSubscriptionUpdate {
-	_u.mutation.AddDailyCarryoverInUsd(v)
-	return _u
-}
-
-// SetDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field.
-func (_u *UserSubscriptionUpdate) SetDailyCarryoverRemainingUsd(v float64) *UserSubscriptionUpdate {
-	_u.mutation.ResetDailyCarryoverRemainingUsd()
-	_u.mutation.SetDailyCarryoverRemainingUsd(v)
-	return _u
-}
-
-// SetNillableDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field if the given value is not nil.
-func (_u *UserSubscriptionUpdate) SetNillableDailyCarryoverRemainingUsd(v *float64) *UserSubscriptionUpdate {
-	if v != nil {
-		_u.SetDailyCarryoverRemainingUsd(*v)
-	}
-	return _u
-}
-
-// AddDailyCarryoverRemainingUsd adds value to the "daily_carryover_remaining_usd" field.
-func (_u *UserSubscriptionUpdate) AddDailyCarryoverRemainingUsd(v float64) *UserSubscriptionUpdate {
-	_u.mutation.AddDailyCarryoverRemainingUsd(v)
-	return _u
-}
-
 // SetAssignedBy sets the "assigned_by" field.
 func (_u *UserSubscriptionUpdate) SetAssignedBy(v int64) *UserSubscriptionUpdate {
 	_u.mutation.SetAssignedBy(v)
@@ -557,18 +515,6 @@ func (_u *UserSubscriptionUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if value, ok := _u.mutation.AddedMonthlyUsageUsd(); ok {
 		_spec.AddField(usersubscription.FieldMonthlyUsageUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.DailyCarryoverInUsd(); ok {
-		_spec.SetField(usersubscription.FieldDailyCarryoverInUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedDailyCarryoverInUsd(); ok {
-		_spec.AddField(usersubscription.FieldDailyCarryoverInUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.DailyCarryoverRemainingUsd(); ok {
-		_spec.SetField(usersubscription.FieldDailyCarryoverRemainingUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedDailyCarryoverRemainingUsd(); ok {
-		_spec.AddField(usersubscription.FieldDailyCarryoverRemainingUsd, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)
@@ -950,48 +896,6 @@ func (_u *UserSubscriptionUpdateOne) AddMonthlyUsageUsd(v float64) *UserSubscrip
 	return _u
 }
 
-// SetDailyCarryoverInUsd sets the "daily_carryover_in_usd" field.
-func (_u *UserSubscriptionUpdateOne) SetDailyCarryoverInUsd(v float64) *UserSubscriptionUpdateOne {
-	_u.mutation.ResetDailyCarryoverInUsd()
-	_u.mutation.SetDailyCarryoverInUsd(v)
-	return _u
-}
-
-// SetNillableDailyCarryoverInUsd sets the "daily_carryover_in_usd" field if the given value is not nil.
-func (_u *UserSubscriptionUpdateOne) SetNillableDailyCarryoverInUsd(v *float64) *UserSubscriptionUpdateOne {
-	if v != nil {
-		_u.SetDailyCarryoverInUsd(*v)
-	}
-	return _u
-}
-
-// AddDailyCarryoverInUsd adds value to the "daily_carryover_in_usd" field.
-func (_u *UserSubscriptionUpdateOne) AddDailyCarryoverInUsd(v float64) *UserSubscriptionUpdateOne {
-	_u.mutation.AddDailyCarryoverInUsd(v)
-	return _u
-}
-
-// SetDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field.
-func (_u *UserSubscriptionUpdateOne) SetDailyCarryoverRemainingUsd(v float64) *UserSubscriptionUpdateOne {
-	_u.mutation.ResetDailyCarryoverRemainingUsd()
-	_u.mutation.SetDailyCarryoverRemainingUsd(v)
-	return _u
-}
-
-// SetNillableDailyCarryoverRemainingUsd sets the "daily_carryover_remaining_usd" field if the given value is not nil.
-func (_u *UserSubscriptionUpdateOne) SetNillableDailyCarryoverRemainingUsd(v *float64) *UserSubscriptionUpdateOne {
-	if v != nil {
-		_u.SetDailyCarryoverRemainingUsd(*v)
-	}
-	return _u
-}
-
-// AddDailyCarryoverRemainingUsd adds value to the "daily_carryover_remaining_usd" field.
-func (_u *UserSubscriptionUpdateOne) AddDailyCarryoverRemainingUsd(v float64) *UserSubscriptionUpdateOne {
-	_u.mutation.AddDailyCarryoverRemainingUsd(v)
-	return _u
-}
-
 // SetAssignedBy sets the "assigned_by" field.
 func (_u *UserSubscriptionUpdateOne) SetAssignedBy(v int64) *UserSubscriptionUpdateOne {
 	_u.mutation.SetAssignedBy(v)
@@ -1287,18 +1191,6 @@ func (_u *UserSubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *UserSu
 	}
 	if value, ok := _u.mutation.AddedMonthlyUsageUsd(); ok {
 		_spec.AddField(usersubscription.FieldMonthlyUsageUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.DailyCarryoverInUsd(); ok {
-		_spec.SetField(usersubscription.FieldDailyCarryoverInUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedDailyCarryoverInUsd(); ok {
-		_spec.AddField(usersubscription.FieldDailyCarryoverInUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.DailyCarryoverRemainingUsd(); ok {
-		_spec.SetField(usersubscription.FieldDailyCarryoverRemainingUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedDailyCarryoverRemainingUsd(); ok {
-		_spec.AddField(usersubscription.FieldDailyCarryoverRemainingUsd, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)

@@ -72,20 +72,6 @@ func (_c *RedeemCodeCreate) SetNillableStatus(v *string) *RedeemCodeCreate {
 	return _c
 }
 
-// SetSourceType sets the "source_type" field.
-func (_c *RedeemCodeCreate) SetSourceType(v string) *RedeemCodeCreate {
-	_c.mutation.SetSourceType(v)
-	return _c
-}
-
-// SetNillableSourceType sets the "source_type" field if the given value is not nil.
-func (_c *RedeemCodeCreate) SetNillableSourceType(v *string) *RedeemCodeCreate {
-	if v != nil {
-		_c.SetSourceType(*v)
-	}
-	return _c
-}
-
 // SetUsedBy sets the "used_by" field.
 func (_c *RedeemCodeCreate) SetUsedBy(v int64) *RedeemCodeCreate {
 	_c.mutation.SetUsedBy(v)
@@ -152,20 +138,6 @@ func (_c *RedeemCodeCreate) SetGroupID(v int64) *RedeemCodeCreate {
 func (_c *RedeemCodeCreate) SetNillableGroupID(v *int64) *RedeemCodeCreate {
 	if v != nil {
 		_c.SetGroupID(*v)
-	}
-	return _c
-}
-
-// SetProductID sets the "product_id" field.
-func (_c *RedeemCodeCreate) SetProductID(v int64) *RedeemCodeCreate {
-	_c.mutation.SetProductID(v)
-	return _c
-}
-
-// SetNillableProductID sets the "product_id" field if the given value is not nil.
-func (_c *RedeemCodeCreate) SetNillableProductID(v *int64) *RedeemCodeCreate {
-	if v != nil {
-		_c.SetProductID(*v)
 	}
 	return _c
 }
@@ -255,10 +227,6 @@ func (_c *RedeemCodeCreate) defaults() {
 		v := redeemcode.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
-	if _, ok := _c.mutation.SourceType(); !ok {
-		v := redeemcode.DefaultSourceType
-		_c.mutation.SetSourceType(v)
-	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := redeemcode.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -296,14 +264,6 @@ func (_c *RedeemCodeCreate) check() error {
 	if v, ok := _c.mutation.Status(); ok {
 		if err := redeemcode.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.status": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.SourceType(); !ok {
-		return &ValidationError{Name: "source_type", err: errors.New(`ent: missing required field "RedeemCode.source_type"`)}
-	}
-	if v, ok := _c.mutation.SourceType(); ok {
-		if err := redeemcode.SourceTypeValidator(v); err != nil {
-			return &ValidationError{Name: "source_type", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.source_type": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
@@ -355,10 +315,6 @@ func (_c *RedeemCodeCreate) createSpec() (*RedeemCode, *sqlgraph.CreateSpec) {
 		_spec.SetField(redeemcode.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := _c.mutation.SourceType(); ok {
-		_spec.SetField(redeemcode.FieldSourceType, field.TypeString, value)
-		_node.SourceType = value
-	}
 	if value, ok := _c.mutation.UsedAt(); ok {
 		_spec.SetField(redeemcode.FieldUsedAt, field.TypeTime, value)
 		_node.UsedAt = &value
@@ -370,10 +326,6 @@ func (_c *RedeemCodeCreate) createSpec() (*RedeemCode, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(redeemcode.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
-	}
-	if value, ok := _c.mutation.ProductID(); ok {
-		_spec.SetField(redeemcode.FieldProductID, field.TypeInt64, value)
-		_node.ProductID = &value
 	}
 	if value, ok := _c.mutation.ValidityDays(); ok {
 		_spec.SetField(redeemcode.FieldValidityDays, field.TypeInt, value)
@@ -519,18 +471,6 @@ func (u *RedeemCodeUpsert) UpdateStatus() *RedeemCodeUpsert {
 	return u
 }
 
-// SetSourceType sets the "source_type" field.
-func (u *RedeemCodeUpsert) SetSourceType(v string) *RedeemCodeUpsert {
-	u.Set(redeemcode.FieldSourceType, v)
-	return u
-}
-
-// UpdateSourceType sets the "source_type" field to the value that was provided on create.
-func (u *RedeemCodeUpsert) UpdateSourceType() *RedeemCodeUpsert {
-	u.SetExcluded(redeemcode.FieldSourceType)
-	return u
-}
-
 // SetUsedBy sets the "used_by" field.
 func (u *RedeemCodeUpsert) SetUsedBy(v int64) *RedeemCodeUpsert {
 	u.Set(redeemcode.FieldUsedBy, v)
@@ -600,30 +540,6 @@ func (u *RedeemCodeUpsert) UpdateGroupID() *RedeemCodeUpsert {
 // ClearGroupID clears the value of the "group_id" field.
 func (u *RedeemCodeUpsert) ClearGroupID() *RedeemCodeUpsert {
 	u.SetNull(redeemcode.FieldGroupID)
-	return u
-}
-
-// SetProductID sets the "product_id" field.
-func (u *RedeemCodeUpsert) SetProductID(v int64) *RedeemCodeUpsert {
-	u.Set(redeemcode.FieldProductID, v)
-	return u
-}
-
-// UpdateProductID sets the "product_id" field to the value that was provided on create.
-func (u *RedeemCodeUpsert) UpdateProductID() *RedeemCodeUpsert {
-	u.SetExcluded(redeemcode.FieldProductID)
-	return u
-}
-
-// AddProductID adds v to the "product_id" field.
-func (u *RedeemCodeUpsert) AddProductID(v int64) *RedeemCodeUpsert {
-	u.Add(redeemcode.FieldProductID, v)
-	return u
-}
-
-// ClearProductID clears the value of the "product_id" field.
-func (u *RedeemCodeUpsert) ClearProductID() *RedeemCodeUpsert {
-	u.SetNull(redeemcode.FieldProductID)
 	return u
 }
 
@@ -753,20 +669,6 @@ func (u *RedeemCodeUpsertOne) UpdateStatus() *RedeemCodeUpsertOne {
 	})
 }
 
-// SetSourceType sets the "source_type" field.
-func (u *RedeemCodeUpsertOne) SetSourceType(v string) *RedeemCodeUpsertOne {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.SetSourceType(v)
-	})
-}
-
-// UpdateSourceType sets the "source_type" field to the value that was provided on create.
-func (u *RedeemCodeUpsertOne) UpdateSourceType() *RedeemCodeUpsertOne {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.UpdateSourceType()
-	})
-}
-
 // SetUsedBy sets the "used_by" field.
 func (u *RedeemCodeUpsertOne) SetUsedBy(v int64) *RedeemCodeUpsertOne {
 	return u.Update(func(s *RedeemCodeUpsert) {
@@ -848,34 +750,6 @@ func (u *RedeemCodeUpsertOne) UpdateGroupID() *RedeemCodeUpsertOne {
 func (u *RedeemCodeUpsertOne) ClearGroupID() *RedeemCodeUpsertOne {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.ClearGroupID()
-	})
-}
-
-// SetProductID sets the "product_id" field.
-func (u *RedeemCodeUpsertOne) SetProductID(v int64) *RedeemCodeUpsertOne {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.SetProductID(v)
-	})
-}
-
-// AddProductID adds v to the "product_id" field.
-func (u *RedeemCodeUpsertOne) AddProductID(v int64) *RedeemCodeUpsertOne {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.AddProductID(v)
-	})
-}
-
-// UpdateProductID sets the "product_id" field to the value that was provided on create.
-func (u *RedeemCodeUpsertOne) UpdateProductID() *RedeemCodeUpsertOne {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.UpdateProductID()
-	})
-}
-
-// ClearProductID clears the value of the "product_id" field.
-func (u *RedeemCodeUpsertOne) ClearProductID() *RedeemCodeUpsertOne {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.ClearProductID()
 	})
 }
 
@@ -1174,20 +1048,6 @@ func (u *RedeemCodeUpsertBulk) UpdateStatus() *RedeemCodeUpsertBulk {
 	})
 }
 
-// SetSourceType sets the "source_type" field.
-func (u *RedeemCodeUpsertBulk) SetSourceType(v string) *RedeemCodeUpsertBulk {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.SetSourceType(v)
-	})
-}
-
-// UpdateSourceType sets the "source_type" field to the value that was provided on create.
-func (u *RedeemCodeUpsertBulk) UpdateSourceType() *RedeemCodeUpsertBulk {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.UpdateSourceType()
-	})
-}
-
 // SetUsedBy sets the "used_by" field.
 func (u *RedeemCodeUpsertBulk) SetUsedBy(v int64) *RedeemCodeUpsertBulk {
 	return u.Update(func(s *RedeemCodeUpsert) {
@@ -1269,34 +1129,6 @@ func (u *RedeemCodeUpsertBulk) UpdateGroupID() *RedeemCodeUpsertBulk {
 func (u *RedeemCodeUpsertBulk) ClearGroupID() *RedeemCodeUpsertBulk {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.ClearGroupID()
-	})
-}
-
-// SetProductID sets the "product_id" field.
-func (u *RedeemCodeUpsertBulk) SetProductID(v int64) *RedeemCodeUpsertBulk {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.SetProductID(v)
-	})
-}
-
-// AddProductID adds v to the "product_id" field.
-func (u *RedeemCodeUpsertBulk) AddProductID(v int64) *RedeemCodeUpsertBulk {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.AddProductID(v)
-	})
-}
-
-// UpdateProductID sets the "product_id" field to the value that was provided on create.
-func (u *RedeemCodeUpsertBulk) UpdateProductID() *RedeemCodeUpsertBulk {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.UpdateProductID()
-	})
-}
-
-// ClearProductID clears the value of the "product_id" field.
-func (u *RedeemCodeUpsertBulk) ClearProductID() *RedeemCodeUpsertBulk {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.ClearProductID()
 	})
 }
 

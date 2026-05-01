@@ -521,31 +521,6 @@ func TestTokenRefreshService_RefreshWithRetry_NoRefreshTokenDoesNotTempUnschedul
 	require.Equal(t, 1, repo.setErrorCalls, "missing refresh token should be treated as a non-retryable credential state")
 }
 
-func TestTokenRefreshService_RefreshWithRetry_RefreshTokenReusedDoesNotTempUnschedule(t *testing.T) {
-	repo := &tokenRefreshAccountRepo{}
-	cfg := &config.Config{
-		TokenRefresh: config.TokenRefreshConfig{
-			MaxRetries:          2,
-			RetryBackoffSeconds: 0,
-		},
-	}
-	service := NewTokenRefreshService(repo, nil, nil, nil, nil, nil, nil, cfg, nil)
-	account := &Account{
-		ID:       19,
-		Platform: PlatformOpenAI,
-		Type:     AccountTypeOAuth,
-	}
-	refresher := &tokenRefresherStub{
-		err: errors.New("token refresh failed: status 401, body: {\"error\":{\"code\":\"refresh_token_reused\"}}"),
-	}
-
-	err := service.refreshWithRetry(context.Background(), account, refresher, refresher, time.Hour)
-	require.Error(t, err)
-	require.Equal(t, 0, repo.updateCalls)
-	require.Equal(t, 0, repo.setTempUnschedCalls, "refresh_token_reused should not mark the account temp unschedulable")
-	require.Equal(t, 1, repo.setErrorCalls, "refresh_token_reused should be treated as a non-retryable credential state")
-}
-
 // TestIsNonRetryableRefreshError 测试不可重试错误判断
 func TestIsNonRetryableRefreshError(t *testing.T) {
 	tests := []struct {
@@ -560,7 +535,6 @@ func TestIsNonRetryableRefreshError(t *testing.T) {
 		{name: "unauthorized_client", err: errors.New("unauthorized_client"), expected: true},
 		{name: "access_denied", err: errors.New("access_denied"), expected: true},
 		{name: "no_refresh_token", err: errors.New("no refresh token available"), expected: true},
-		{name: "refresh_token_reused", err: errors.New("token refresh failed: status 401, body: {\"error\":{\"code\":\"refresh_token_reused\"}}"), expected: true},
 		{name: "invalid_grant_with_desc", err: errors.New("Error: invalid_grant - token revoked"), expected: true},
 		{name: "case_insensitive", err: errors.New("INVALID_GRANT"), expected: true},
 	}

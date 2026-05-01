@@ -91,6 +91,7 @@ type AntigravityTokenInfo struct {
 	ProjectID        string `json:"project_id,omitempty"`
 	ProjectIDMissing bool   `json:"-"`
 	PlanType         string `json:"-"`
+	PrivacyMode      string `json:"-"`
 }
 
 // ExchangeCode 用 authorization code 交换 token
@@ -158,6 +159,9 @@ func (s *AntigravityOAuthService) ExchangeCode(ctx context.Context, input *Antig
 			result.PlanType = loadResult.Subscription.PlanType
 		}
 	}
+
+	// 令牌刚获取，立即设置隐私（不依赖后续账号创建流程）
+	result.PrivacyMode = setAntigravityPrivacy(ctx, result.AccessToken, result.ProjectID, proxyURL)
 
 	return result, nil
 }
@@ -248,6 +252,9 @@ func (s *AntigravityOAuthService) ValidateRefreshToken(ctx context.Context, refr
 		}
 	}
 
+	// 令牌刚获取，立即设置隐私
+	tokenInfo.PrivacyMode = setAntigravityPrivacy(ctx, tokenInfo.AccessToken, tokenInfo.ProjectID, proxyURL)
+
 	return tokenInfo, nil
 }
 
@@ -322,7 +329,7 @@ func (s *AntigravityOAuthService) RefreshAccountToken(ctx context.Context, accou
 // loadCodeAssistResult 封装 loadProjectIDWithRetry 的返回结果，
 // 同时携带从 LoadCodeAssist 响应中提取的 plan_type 信息。
 type loadCodeAssistResult struct {
-	ProjectID string
+	ProjectID    string
 	Subscription *AntigravitySubscriptionResult
 }
 

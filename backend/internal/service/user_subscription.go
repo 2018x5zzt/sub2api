@@ -19,9 +19,6 @@ type UserSubscription struct {
 	WeeklyUsageUSD  float64
 	MonthlyUsageUSD float64
 
-	DailyCarryoverInUSD        float64
-	DailyCarryoverRemainingUSD float64
-
 	AssignedBy *int64
 	AssignedAt time.Time
 	Notes      string
@@ -98,26 +95,11 @@ func (s *UserSubscription) MonthlyResetTime() *time.Time {
 	return &t
 }
 
-func (s *UserSubscription) DailyEffectiveLimit(group *Group) float64 {
-	if group == nil || !group.HasDailyLimit() {
-		return 0
-	}
-	return *group.DailyLimitUSD
-}
-
-func (s *UserSubscription) DailyRemainingTotal(group *Group) float64 {
-	remaining := s.DailyEffectiveLimit(group) - s.DailyUsageUSD
-	if remaining < 0 {
-		return 0
-	}
-	return remaining
-}
-
 func (s *UserSubscription) CheckDailyLimit(group *Group, additionalCost float64) bool {
 	if !group.HasDailyLimit() {
 		return true
 	}
-	return s.DailyUsageUSD+additionalCost <= s.DailyEffectiveLimit(group)
+	return s.DailyUsageUSD+additionalCost <= *group.DailyLimitUSD
 }
 
 func (s *UserSubscription) CheckWeeklyLimit(group *Group, additionalCost float64) bool {

@@ -63,12 +63,6 @@ func (UsageLog) Fields() []ent.Field {
 		field.Int64("subscription_id").
 			Optional().
 			Nillable(),
-		field.Int64("product_id").
-			Optional().
-			Nillable(),
-		field.Int64("product_subscription_id").
-			Optional().
-			Nillable(),
 
 		// Token 计数字段
 		field.Int("input_tokens").
@@ -112,14 +106,6 @@ func (UsageLog) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}),
-		field.Float("group_debit_multiplier").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}),
-		field.Float("product_debit_cost").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,10)"}),
 
 		// 其他字段
 		field.Int8("billing_type").
@@ -148,12 +134,6 @@ func (UsageLog) Fields() []ent.Field {
 			MaxLen(10).
 			Optional().
 			Nillable(),
-		// 媒体类型字段（sora 使用）
-		field.String("media_type").
-			MaxLen(16).
-			Optional().
-			Nillable(),
-
 		// Cache TTL Override 标记（管理员强制替换了缓存 TTL 计费）
 		field.Bool("cache_ttl_overridden").
 			Default(false),
@@ -203,8 +183,6 @@ func (UsageLog) Indexes() []ent.Index {
 		index.Fields("account_id"),
 		index.Fields("group_id"),
 		index.Fields("subscription_id"),
-		index.Fields("product_id"),
-		index.Fields("product_subscription_id"),
 		index.Fields("created_at"),
 		index.Fields("model"),
 		index.Fields("requested_model"),
@@ -214,7 +192,5 @@ func (UsageLog) Indexes() []ent.Index {
 		index.Fields("api_key_id", "created_at"),
 		// 分组维度时间范围查询（线上由 SQL 迁移创建 group_id IS NOT NULL 的部分索引）
 		index.Fields("group_id", "created_at"),
-		index.Fields("product_id", "created_at"),
-		index.Fields("product_subscription_id", "created_at"),
 	}
 }

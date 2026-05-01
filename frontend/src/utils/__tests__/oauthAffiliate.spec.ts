@@ -1,41 +1,48 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearAffiliateReferralCode,
+  clearOAuthAffiliateCode,
   loadAffiliateReferralCode,
-  normalizeOAuthAffiliateCode,
-  pickOAuthAffiliateCode,
+  loadOAuthAffiliateCode,
   resolveAffiliateReferralCode,
-  storeAffiliateReferralCode
+  storeAffiliateReferralCode,
+  storeOAuthAffiliateCode
 } from '@/utils/oauthAffiliate'
 
 describe('oauthAffiliate', () => {
   beforeEach(() => {
     localStorage.clear()
     sessionStorage.clear()
+    vi.useRealTimers()
   })
 
-  it('normalizes string and array query values without changing code case', () => {
-    expect(normalizeOAuthAffiliateCode('  Aff-Code_2026  ')).toBe('Aff-Code_2026')
-    expect(normalizeOAuthAffiliateCode(['FIRST', 'SECOND'])).toBe('FIRST')
-    expect(normalizeOAuthAffiliateCode(undefined)).toBe('')
+  it('persists affiliate referral code across pages', () => {
+    expect(resolveAffiliateReferralCode(' 5579J7CFG9PF ')).toBe('5579J7CFG9PF')
+    expect(loadAffiliateReferralCode()).toBe('5579J7CFG9PF')
+    expect(resolveAffiliateReferralCode()).toBe('5579J7CFG9PF')
   })
 
-  it('prefers aff values before legacy invite values', () => {
-    expect(pickOAuthAffiliateCode('', 'AFF2026', 'INVITE2025')).toBe('AFF2026')
-    expect(pickOAuthAffiliateCode('', '', 'INVITE2025')).toBe('INVITE2025')
+  it('expires stale affiliate referral code', () => {
+    const now = Date.UTC(2026, 0, 1)
+    storeAffiliateReferralCode('AFF123', now)
+
+    expect(loadAffiliateReferralCode(now + 30 * 24 * 60 * 60 * 1000 - 1)).toBe('AFF123')
+    expect(loadAffiliateReferralCode(now + 30 * 24 * 60 * 60 * 1000 + 1)).toBe('')
+    expect(localStorage.getItem('affiliate_referral_code')).toBeNull()
   })
 
-  it('stores referral codes and ignores expired stored codes', () => {
-    storeAffiliateReferralCode('AFF2026', 1000)
-    expect(loadAffiliateReferralCode(1000)).toBe('AFF2026')
-    expect(loadAffiliateReferralCode(1000 + 31 * 24 * 60 * 60 * 1000)).toBe('')
-  })
+  it('keeps oauth transient code separate from persistent referral code', () => {
+    storeAffiliateReferralCode('PERSISTED')
+    storeOAuthAffiliateCode('OAUTH')
 
-  it('resolves explicit codes before stored codes for compatibility redirects', () => {
-    storeAffiliateReferralCode('STORED')
-    expect(resolveAffiliateReferralCode('', 'CURRENT')).toBe('CURRENT')
-    expect(loadAffiliateReferralCode()).toBe('CURRENT')
+    expect(loadAffiliateReferralCode()).toBe('PERSISTED')
+    expect(loadOAuthAffiliateCode()).toBe('OAUTH')
+
+    clearOAuthAffiliateCode()
+    expect(loadOAuthAffiliateCode()).toBe('')
+    expect(loadAffiliateReferralCode()).toBe('PERSISTED')
+
     clearAffiliateReferralCode()
-    expect(resolveAffiliateReferralCode('', '')).toBe('')
+    expect(loadAffiliateReferralCode()).toBe('')
   })
 })

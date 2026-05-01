@@ -96,18 +96,10 @@
                   {{ t('redeem.redeemSuccess') }}
                 </h3>
                 <div class="mt-2 text-sm text-emerald-700 dark:text-emerald-400">
-                  <p>{{ getRedeemResultMessage(redeemResult) }}</p>
+                  <p>{{ redeemResult.message }}</p>
                   <div class="mt-3 space-y-1">
                     <p v-if="redeemResult.type === 'balance'" class="font-medium">
                       {{ t('redeem.added') }}: ${{ redeemResult.value.toFixed(2) }}
-                    </p>
-                    <p
-                      v-if="redeemResult.type === 'balance' && showBenefitBreakdown"
-                      class="text-xs text-emerald-700 dark:text-emerald-300"
-                    >
-                      {{ t('redeem.fixedAmount') }}: ${{ redeemResult.fixed_value?.toFixed(2) || '0.00' }}
-                      <span class="mx-1">+</span>
-                      {{ t('redeem.luckyAmount') }}: ${{ redeemResult.random_value?.toFixed(2) || '0.00' }}
                     </p>
                     <p v-else-if="redeemResult.type === 'concurrency'" class="font-medium">
                       {{ t('redeem.added') }}: {{ redeemResult.value }}
@@ -139,152 +131,6 @@
           </div>
         </div>
       </transition>
-
-      <BaseDialog
-        :show="showBenefitDialog"
-        :title="t(benefitDialogTitleKey)"
-        width="normal"
-        @close="showBenefitDialog = false"
-      >
-        <div class="space-y-3 text-sm text-gray-700 dark:text-gray-300">
-          <p class="font-medium text-gray-900 dark:text-white">
-            {{ t(benefitDialogSubtitleKey) }}
-          </p>
-          <p class="whitespace-pre-wrap leading-6">
-            {{ benefitDialogMessage }}
-          </p>
-        </div>
-        <template #footer>
-          <div class="flex justify-end gap-3">
-            <button
-              v-if="canShowLeaderboardFromDialog"
-              type="button"
-              class="btn btn-secondary"
-              :disabled="leaderboardLoading"
-              @click="handleOpenLeaderboard"
-            >
-              {{ t('redeem.viewLuckyLeaderboard') }}
-            </button>
-            <button type="button" class="btn btn-primary" @click="showBenefitDialog = false">
-              {{ t('common.confirm') }}
-            </button>
-          </div>
-        </template>
-      </BaseDialog>
-
-      <BaseDialog
-        :show="showLeaderboardDialog"
-        :title="t('redeem.luckyLeaderboardTitle')"
-        width="wide"
-        @close="showLeaderboardDialog = false"
-      >
-        <div v-if="leaderboard" class="space-y-5">
-          <div class="rounded-xl bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-900/20 dark:text-amber-100">
-            <p class="font-semibold">{{ t('redeem.luckyLeaderboardSummary') }}</p>
-            <p class="mt-1">
-              {{ t('redeem.fixedAmount') }}: ${{ leaderboard.fixed_value.toFixed(2) }}
-              <span class="mx-2">|</span>
-              {{ t('redeem.randomPoolAmount') }}: ${{ leaderboard.random_pool_value.toFixed(2) }}
-              <span class="mx-2">|</span>
-              {{ t('redeem.remainingRandomPoolAmount') }}: ${{ leaderboard.random_remaining_value.toFixed(2) }}
-            </p>
-            <p class="mt-1">
-              {{ t('redeem.leaderboardClaimProgress', {
-                used: leaderboard.used_count,
-                total: leaderboard.max_uses || '∞'
-              }) }}
-            </p>
-            <p v-if="leaderboard.current_user_rank" class="mt-2 font-medium">
-              {{ t('redeem.yourLuckyRank', {
-                rank: leaderboard.current_user_rank,
-                amount: `$${(leaderboard.current_user_random_value || 0).toFixed(2)}`,
-                total: `$${(leaderboard.current_user_total_value || 0).toFixed(2)}`
-              }) }}
-            </p>
-          </div>
-
-          <div v-if="leaderboard.entries.length > 0" class="space-y-3">
-            <div
-              v-for="entry in leaderboard.entries"
-              :key="`${entry.rank}-${entry.display_name}`"
-              :class="[
-                'flex items-center justify-between rounded-xl border p-4',
-                entry.is_current_user
-                  ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20'
-                  : 'border-gray-200 dark:border-dark-600'
-              ]"
-            >
-              <div class="flex items-center gap-4">
-                <div
-                  :class="[
-                    'flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold',
-                    entry.rank <= 3
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                      : 'bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-300'
-                  ]"
-                >
-                  #{{ entry.rank }}
-                </div>
-                <div>
-                  <p class="text-sm font-medium text-gray-900 dark:text-white">
-                    {{ entry.display_name }}
-                    <span
-                      v-if="entry.is_current_user"
-                      class="ml-2 rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-                    >
-                      {{ t('redeem.you') }}
-                    </span>
-                  </p>
-                  <p class="text-xs text-gray-500 dark:text-dark-400">
-                    {{ formatDateTime(entry.used_at) }}
-                  </p>
-                </div>
-              </div>
-              <div class="text-right">
-                <p class="text-sm font-semibold text-amber-700 dark:text-amber-300">
-                  ${{ entry.random_value.toFixed(2) }}
-                </p>
-                <p class="text-xs text-gray-500 dark:text-dark-400">
-                  {{ t('redeem.totalAmount') }}: ${{ entry.total_value.toFixed(2) }}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <template #footer>
-          <div class="flex justify-end">
-            <button type="button" class="btn btn-primary" @click="showLeaderboardDialog = false">
-              {{ t('common.close') }}
-            </button>
-          </div>
-        </template>
-      </BaseDialog>
-
-      <BaseDialog
-        :show="showUsernameRequiredDialog"
-        :title="t('redeem.usernameRequiredTitle')"
-        width="normal"
-        @close="showUsernameRequiredDialog = false"
-      >
-        <div class="space-y-3 text-sm text-gray-700 dark:text-gray-300">
-          <p class="font-medium text-gray-900 dark:text-white">
-            {{ t('redeem.usernameRequiredSubtitle') }}
-          </p>
-          <p class="leading-6">
-            {{ t('redeem.usernameRequiredBody') }}
-          </p>
-        </div>
-        <template #footer>
-          <div class="flex justify-end gap-3">
-            <button type="button" class="btn btn-secondary" @click="showUsernameRequiredDialog = false">
-              {{ t('common.cancel') }}
-            </button>
-            <button type="button" class="btn btn-primary" @click="goToProfile">
-              {{ t('redeem.goSetUsername') }}
-            </button>
-          </div>
-        </template>
-      </BaseDialog>
 
       <!-- Error Message -->
       <transition name="fade">
@@ -497,20 +343,16 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useSubscriptionStore } from '@/stores/subscriptions'
 import { redeemAPI, authAPI, type RedeemHistoryItem } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateTime } from '@/utils/format'
-import type { BenefitLeaderboard } from '@/types'
 
 const { t } = useI18n()
-const router = useRouter()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 const subscriptionStore = useSubscriptionStore()
@@ -523,40 +365,17 @@ const redeemResult = ref<{
   message: string
   type: string
   value: number
-  fixed_value?: number
-  random_value?: number
-  total_value?: number
-  scene?: 'register' | 'benefit'
-  success_message?: string
-  leaderboard_enabled?: boolean
   new_balance?: number
   new_concurrency?: number
   group_name?: string
   validity_days?: number
 } | null>(null)
 const errorMessage = ref('')
-const showBenefitDialog = ref(false)
-const benefitDialogMessage = ref('')
-const benefitDialogTitleKey = ref('redeem.benefitDialogTitle')
-const benefitDialogSubtitleKey = ref('redeem.benefitDialogSubtitle')
-const benefitDialogAllowLeaderboard = ref(false)
-const lastBenefitCode = ref('')
-const leaderboardLoading = ref(false)
-const showLeaderboardDialog = ref(false)
-const showUsernameRequiredDialog = ref(false)
-const leaderboard = ref<BenefitLeaderboard | null>(null)
 
 // History data
 const history = ref<RedeemHistoryItem[]>([])
 const loadingHistory = ref(false)
 const contactInfo = ref('')
-const showBenefitBreakdown = computed(() =>
-  redeemResult.value?.scene === 'benefit' &&
-  (redeemResult.value?.fixed_value !== undefined || redeemResult.value?.random_value !== undefined)
-)
-const canShowLeaderboardFromDialog = computed(() =>
-  benefitDialogAllowLeaderboard.value && !!lastBenefitCode.value
-)
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {
@@ -601,48 +420,6 @@ const formatHistoryValue = (item: RedeemHistoryItem) => {
   }
 }
 
-const getRedeemResultMessage = (result: { message?: string; type: string }) => {
-  if (result.type === 'subscription') {
-    return t('redeem.subscriptionRedeemSuccess')
-  }
-  return result.message || t('redeem.codeRedeemSuccess')
-}
-
-const getApiErrorReason = (error: any): string | undefined =>
-  error?.reason || error?.response?.data?.reason
-
-const getApiErrorDetail = (error: any): string | undefined =>
-  error?.detail || error?.response?.data?.detail || error?.message || error?.response?.data?.message
-
-const resetBenefitDialog = () => {
-  showBenefitDialog.value = false
-  benefitDialogMessage.value = ''
-  benefitDialogTitleKey.value = 'redeem.benefitDialogTitle'
-  benefitDialogSubtitleKey.value = 'redeem.benefitDialogSubtitle'
-  benefitDialogAllowLeaderboard.value = false
-}
-
-const maybeShowRepeatRedeemLeaderboardDialog = async (code: string) => {
-  try {
-    await redeemAPI.getBenefitLeaderboard(code)
-    lastBenefitCode.value = code
-    benefitDialogTitleKey.value = 'redeem.repeatRedeemDialogTitle'
-    benefitDialogSubtitleKey.value = 'redeem.repeatRedeemDialogSubtitle'
-    benefitDialogMessage.value = t('redeem.repeatRedeemLeaderboardBody')
-    benefitDialogAllowLeaderboard.value = true
-    showBenefitDialog.value = true
-    errorMessage.value = ''
-    return true
-  } catch (error: any) {
-    const reason = getApiErrorReason(error)
-    if (reason === 'PROMO_CODE_USERNAME_REQUIRED') {
-      showUsernameRequiredDialog.value = true
-      return true
-    }
-    return false
-  }
-}
-
 const fetchHistory = async () => {
   loadingHistory.value = true
   try {
@@ -654,38 +431,6 @@ const fetchHistory = async () => {
   }
 }
 
-const openLeaderboard = async (code: string) => {
-  leaderboardLoading.value = true
-  try {
-    leaderboard.value = await redeemAPI.getBenefitLeaderboard(code)
-    showLeaderboardDialog.value = true
-  } catch (error: any) {
-    const reason = getApiErrorReason(error)
-    const detail = getApiErrorDetail(error)
-    if (reason === 'PROMO_CODE_USERNAME_REQUIRED') {
-      showUsernameRequiredDialog.value = true
-      return
-    }
-    appStore.showError(detail || t('redeem.failedToLoadLeaderboard'))
-  } finally {
-    leaderboardLoading.value = false
-  }
-}
-
-const handleOpenLeaderboard = async () => {
-  const code = redeemCode.value.trim() || lastBenefitCode.value.trim()
-  if (!code) {
-    appStore.showError(t('redeem.pleaseEnterCode'))
-    return
-  }
-  await openLeaderboard(code)
-}
-
-const goToProfile = () => {
-  showUsernameRequiredDialog.value = false
-  router.push({ path: '/profile' })
-}
-
 const handleRedeem = async () => {
   if (!redeemCode.value.trim()) {
     appStore.showError(t('redeem.pleaseEnterCode'))
@@ -695,17 +440,11 @@ const handleRedeem = async () => {
   submitting.value = true
   errorMessage.value = ''
   redeemResult.value = null
-  resetBenefitDialog()
 
   try {
-    const submittedCode = redeemCode.value.trim()
-    const result = await redeemAPI.redeem(submittedCode)
+    const result = await redeemAPI.redeem(redeemCode.value.trim())
 
     redeemResult.value = result
-    if (result.scene === 'benefit') {
-      lastBenefitCode.value = submittedCode
-      benefitDialogAllowLeaderboard.value = !!result.leaderboard_enabled
-    }
 
     // Refresh user data to get updated balance/concurrency
     await authStore.refreshUser()
@@ -723,37 +462,13 @@ const handleRedeem = async () => {
     // Clear the input
     redeemCode.value = ''
 
-    if (result.scene === 'benefit' && result.success_message) {
-      benefitDialogMessage.value = result.success_message
-      showBenefitDialog.value = true
-    }
-
     // Refresh history
     await fetchHistory()
 
     // Show success toast
-    appStore.showSuccess(getRedeemResultMessage(result))
+    appStore.showSuccess(t('redeem.codeRedeemSuccess'))
   } catch (error: any) {
-    const reason = getApiErrorReason(error)
-
-    if (reason === 'PROMO_CODE_USERNAME_REQUIRED') {
-      showUsernameRequiredDialog.value = true
-      return
-    }
-
-    if (reason === 'PROMO_CODE_ALREADY_USED' || reason === 'PROMO_CODE_MAX_USED') {
-      const submittedCode = redeemCode.value.trim()
-      if (submittedCode && await maybeShowRepeatRedeemLeaderboardDialog(submittedCode)) {
-        return
-      }
-    }
-
-    errorMessage.value = getApiErrorDetail(error) || t('redeem.failedToRedeem')
-
-    if (reason === 'PROMO_CODE_USERNAME_REQUIRED') {
-      showUsernameRequiredDialog.value = true
-      return
-    }
+    errorMessage.value = error.response?.data?.detail || t('redeem.failedToRedeem')
 
     appStore.showError(t('redeem.redeemFailed'))
   } finally {

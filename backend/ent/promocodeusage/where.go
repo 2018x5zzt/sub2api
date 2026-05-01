@@ -70,16 +70,6 @@ func BonusAmount(v float64) predicate.PromoCodeUsage {
 	return predicate.PromoCodeUsage(sql.FieldEQ(FieldBonusAmount, v))
 }
 
-// FixedBonusAmount applies equality check predicate on the "fixed_bonus_amount" field. It's identical to FixedBonusAmountEQ.
-func FixedBonusAmount(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldEQ(FieldFixedBonusAmount, v))
-}
-
-// RandomBonusAmount applies equality check predicate on the "random_bonus_amount" field. It's identical to RandomBonusAmountEQ.
-func RandomBonusAmount(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldEQ(FieldRandomBonusAmount, v))
-}
-
 // UsedAt applies equality check predicate on the "used_at" field. It's identical to UsedAtEQ.
 func UsedAt(v time.Time) predicate.PromoCodeUsage {
 	return predicate.PromoCodeUsage(sql.FieldEQ(FieldUsedAt, v))
@@ -163,86 +153,6 @@ func BonusAmountLT(v float64) predicate.PromoCodeUsage {
 // BonusAmountLTE applies the LTE predicate on the "bonus_amount" field.
 func BonusAmountLTE(v float64) predicate.PromoCodeUsage {
 	return predicate.PromoCodeUsage(sql.FieldLTE(FieldBonusAmount, v))
-}
-
-// FixedBonusAmountEQ applies the EQ predicate on the "fixed_bonus_amount" field.
-func FixedBonusAmountEQ(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldEQ(FieldFixedBonusAmount, v))
-}
-
-// FixedBonusAmountNEQ applies the NEQ predicate on the "fixed_bonus_amount" field.
-func FixedBonusAmountNEQ(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldNEQ(FieldFixedBonusAmount, v))
-}
-
-// FixedBonusAmountIn applies the In predicate on the "fixed_bonus_amount" field.
-func FixedBonusAmountIn(vs ...float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldIn(FieldFixedBonusAmount, vs...))
-}
-
-// FixedBonusAmountNotIn applies the NotIn predicate on the "fixed_bonus_amount" field.
-func FixedBonusAmountNotIn(vs ...float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldNotIn(FieldFixedBonusAmount, vs...))
-}
-
-// FixedBonusAmountGT applies the GT predicate on the "fixed_bonus_amount" field.
-func FixedBonusAmountGT(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldGT(FieldFixedBonusAmount, v))
-}
-
-// FixedBonusAmountGTE applies the GTE predicate on the "fixed_bonus_amount" field.
-func FixedBonusAmountGTE(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldGTE(FieldFixedBonusAmount, v))
-}
-
-// FixedBonusAmountLT applies the LT predicate on the "fixed_bonus_amount" field.
-func FixedBonusAmountLT(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldLT(FieldFixedBonusAmount, v))
-}
-
-// FixedBonusAmountLTE applies the LTE predicate on the "fixed_bonus_amount" field.
-func FixedBonusAmountLTE(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldLTE(FieldFixedBonusAmount, v))
-}
-
-// RandomBonusAmountEQ applies the EQ predicate on the "random_bonus_amount" field.
-func RandomBonusAmountEQ(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldEQ(FieldRandomBonusAmount, v))
-}
-
-// RandomBonusAmountNEQ applies the NEQ predicate on the "random_bonus_amount" field.
-func RandomBonusAmountNEQ(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldNEQ(FieldRandomBonusAmount, v))
-}
-
-// RandomBonusAmountIn applies the In predicate on the "random_bonus_amount" field.
-func RandomBonusAmountIn(vs ...float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldIn(FieldRandomBonusAmount, vs...))
-}
-
-// RandomBonusAmountNotIn applies the NotIn predicate on the "random_bonus_amount" field.
-func RandomBonusAmountNotIn(vs ...float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldNotIn(FieldRandomBonusAmount, vs...))
-}
-
-// RandomBonusAmountGT applies the GT predicate on the "random_bonus_amount" field.
-func RandomBonusAmountGT(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldGT(FieldRandomBonusAmount, v))
-}
-
-// RandomBonusAmountGTE applies the GTE predicate on the "random_bonus_amount" field.
-func RandomBonusAmountGTE(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldGTE(FieldRandomBonusAmount, v))
-}
-
-// RandomBonusAmountLT applies the LT predicate on the "random_bonus_amount" field.
-func RandomBonusAmountLT(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldLT(FieldRandomBonusAmount, v))
-}
-
-// RandomBonusAmountLTE applies the LTE predicate on the "random_bonus_amount" field.
-func RandomBonusAmountLTE(v float64) predicate.PromoCodeUsage {
-	return predicate.PromoCodeUsage(sql.FieldLTE(FieldRandomBonusAmount, v))
 }
 
 // UsedAtEQ applies the EQ predicate on the "used_at" field.

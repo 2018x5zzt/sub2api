@@ -1,4 +1,5 @@
 docs/claude-relay-service/
+.codex
 
 # ===================
 # Go 后端
@@ -30,9 +31,7 @@ backend/.gocache/
 # ===================
 # Node.js / Vue 前端
 # ===================
-node_modules
 node_modules/
-frontend/node_modules
 frontend/node_modules/
 frontend/dist/
 *.local
@@ -123,19 +122,17 @@ scripts
 .code-review-state
 #openspec/
 code-reviews/
-#AGENTS.md
+AGENTS.md
 backend/cmd/server/server
 deploy/docker-compose.override.yml
 .gocache/
 vite.config.js
 docs/*
-!docs/superpowers/
-!docs/superpowers/plans/
-!docs/superpowers/plans/2026-04-25-subscription-daily-carryover-rollout.md
+!docs/PAYMENT.md
+!docs/PAYMENT_CN.md
+!docs/ADMIN_PAYMENT_INTEGRATION_API.md
 .serena/
 .codex/
-.codex
-.worktrees/
 frontend/coverage/
 aicodex
 output/

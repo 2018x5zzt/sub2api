@@ -269,60 +269,6 @@ func (_u *UsageLogUpdate) ClearSubscriptionID() *UsageLogUpdate {
 	return _u
 }
 
-// SetProductID sets the "product_id" field.
-func (_u *UsageLogUpdate) SetProductID(v int64) *UsageLogUpdate {
-	_u.mutation.ResetProductID()
-	_u.mutation.SetProductID(v)
-	return _u
-}
-
-// SetNillableProductID sets the "product_id" field if the given value is not nil.
-func (_u *UsageLogUpdate) SetNillableProductID(v *int64) *UsageLogUpdate {
-	if v != nil {
-		_u.SetProductID(*v)
-	}
-	return _u
-}
-
-// AddProductID adds value to the "product_id" field.
-func (_u *UsageLogUpdate) AddProductID(v int64) *UsageLogUpdate {
-	_u.mutation.AddProductID(v)
-	return _u
-}
-
-// ClearProductID clears the value of the "product_id" field.
-func (_u *UsageLogUpdate) ClearProductID() *UsageLogUpdate {
-	_u.mutation.ClearProductID()
-	return _u
-}
-
-// SetProductSubscriptionID sets the "product_subscription_id" field.
-func (_u *UsageLogUpdate) SetProductSubscriptionID(v int64) *UsageLogUpdate {
-	_u.mutation.ResetProductSubscriptionID()
-	_u.mutation.SetProductSubscriptionID(v)
-	return _u
-}
-
-// SetNillableProductSubscriptionID sets the "product_subscription_id" field if the given value is not nil.
-func (_u *UsageLogUpdate) SetNillableProductSubscriptionID(v *int64) *UsageLogUpdate {
-	if v != nil {
-		_u.SetProductSubscriptionID(*v)
-	}
-	return _u
-}
-
-// AddProductSubscriptionID adds value to the "product_subscription_id" field.
-func (_u *UsageLogUpdate) AddProductSubscriptionID(v int64) *UsageLogUpdate {
-	_u.mutation.AddProductSubscriptionID(v)
-	return _u
-}
-
-// ClearProductSubscriptionID clears the value of the "product_subscription_id" field.
-func (_u *UsageLogUpdate) ClearProductSubscriptionID() *UsageLogUpdate {
-	_u.mutation.ClearProductSubscriptionID()
-	return _u
-}
-
 // SetInputTokens sets the "input_tokens" field.
 func (_u *UsageLogUpdate) SetInputTokens(v int) *UsageLogUpdate {
 	_u.mutation.ResetInputTokens()
@@ -623,60 +569,6 @@ func (_u *UsageLogUpdate) ClearAccountRateMultiplier() *UsageLogUpdate {
 	return _u
 }
 
-// SetGroupDebitMultiplier sets the "group_debit_multiplier" field.
-func (_u *UsageLogUpdate) SetGroupDebitMultiplier(v float64) *UsageLogUpdate {
-	_u.mutation.ResetGroupDebitMultiplier()
-	_u.mutation.SetGroupDebitMultiplier(v)
-	return _u
-}
-
-// SetNillableGroupDebitMultiplier sets the "group_debit_multiplier" field if the given value is not nil.
-func (_u *UsageLogUpdate) SetNillableGroupDebitMultiplier(v *float64) *UsageLogUpdate {
-	if v != nil {
-		_u.SetGroupDebitMultiplier(*v)
-	}
-	return _u
-}
-
-// AddGroupDebitMultiplier adds value to the "group_debit_multiplier" field.
-func (_u *UsageLogUpdate) AddGroupDebitMultiplier(v float64) *UsageLogUpdate {
-	_u.mutation.AddGroupDebitMultiplier(v)
-	return _u
-}
-
-// ClearGroupDebitMultiplier clears the value of the "group_debit_multiplier" field.
-func (_u *UsageLogUpdate) ClearGroupDebitMultiplier() *UsageLogUpdate {
-	_u.mutation.ClearGroupDebitMultiplier()
-	return _u
-}
-
-// SetProductDebitCost sets the "product_debit_cost" field.
-func (_u *UsageLogUpdate) SetProductDebitCost(v float64) *UsageLogUpdate {
-	_u.mutation.ResetProductDebitCost()
-	_u.mutation.SetProductDebitCost(v)
-	return _u
-}
-
-// SetNillableProductDebitCost sets the "product_debit_cost" field if the given value is not nil.
-func (_u *UsageLogUpdate) SetNillableProductDebitCost(v *float64) *UsageLogUpdate {
-	if v != nil {
-		_u.SetProductDebitCost(*v)
-	}
-	return _u
-}
-
-// AddProductDebitCost adds value to the "product_debit_cost" field.
-func (_u *UsageLogUpdate) AddProductDebitCost(v float64) *UsageLogUpdate {
-	_u.mutation.AddProductDebitCost(v)
-	return _u
-}
-
-// ClearProductDebitCost clears the value of the "product_debit_cost" field.
-func (_u *UsageLogUpdate) ClearProductDebitCost() *UsageLogUpdate {
-	_u.mutation.ClearProductDebitCost()
-	return _u
-}
-
 // SetBillingType sets the "billing_type" field.
 func (_u *UsageLogUpdate) SetBillingType(v int8) *UsageLogUpdate {
 	_u.mutation.ResetBillingType()
@@ -847,26 +739,6 @@ func (_u *UsageLogUpdate) ClearImageSize() *UsageLogUpdate {
 	return _u
 }
 
-// SetMediaType sets the "media_type" field.
-func (_u *UsageLogUpdate) SetMediaType(v string) *UsageLogUpdate {
-	_u.mutation.SetMediaType(v)
-	return _u
-}
-
-// SetNillableMediaType sets the "media_type" field if the given value is not nil.
-func (_u *UsageLogUpdate) SetNillableMediaType(v *string) *UsageLogUpdate {
-	if v != nil {
-		_u.SetMediaType(*v)
-	}
-	return _u
-}
-
-// ClearMediaType clears the value of the "media_type" field.
-func (_u *UsageLogUpdate) ClearMediaType() *UsageLogUpdate {
-	_u.mutation.ClearMediaType()
-	return _u
-}
-
 // SetCacheTTLOverridden sets the "cache_ttl_overridden" field.
 func (_u *UsageLogUpdate) SetCacheTTLOverridden(v bool) *UsageLogUpdate {
 	_u.mutation.SetCacheTTLOverridden(v)
@@ -1020,11 +892,6 @@ func (_u *UsageLogUpdate) check() error {
 			return &ValidationError{Name: "image_size", err: fmt.Errorf(`ent: validator failed for field "UsageLog.image_size": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.MediaType(); ok {
-		if err := usagelog.MediaTypeValidator(v); err != nil {
-			return &ValidationError{Name: "media_type", err: fmt.Errorf(`ent: validator failed for field "UsageLog.media_type": %w`, err)}
-		}
-	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "UsageLog.user"`)
 	}
@@ -1093,24 +960,6 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.BillingModeCleared() {
 		_spec.ClearField(usagelog.FieldBillingMode, field.TypeString)
-	}
-	if value, ok := _u.mutation.ProductID(); ok {
-		_spec.SetField(usagelog.FieldProductID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedProductID(); ok {
-		_spec.AddField(usagelog.FieldProductID, field.TypeInt64, value)
-	}
-	if _u.mutation.ProductIDCleared() {
-		_spec.ClearField(usagelog.FieldProductID, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.ProductSubscriptionID(); ok {
-		_spec.SetField(usagelog.FieldProductSubscriptionID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedProductSubscriptionID(); ok {
-		_spec.AddField(usagelog.FieldProductSubscriptionID, field.TypeInt64, value)
-	}
-	if _u.mutation.ProductSubscriptionIDCleared() {
-		_spec.ClearField(usagelog.FieldProductSubscriptionID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
@@ -1199,24 +1048,6 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.AccountRateMultiplierCleared() {
 		_spec.ClearField(usagelog.FieldAccountRateMultiplier, field.TypeFloat64)
 	}
-	if value, ok := _u.mutation.GroupDebitMultiplier(); ok {
-		_spec.SetField(usagelog.FieldGroupDebitMultiplier, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedGroupDebitMultiplier(); ok {
-		_spec.AddField(usagelog.FieldGroupDebitMultiplier, field.TypeFloat64, value)
-	}
-	if _u.mutation.GroupDebitMultiplierCleared() {
-		_spec.ClearField(usagelog.FieldGroupDebitMultiplier, field.TypeFloat64)
-	}
-	if value, ok := _u.mutation.ProductDebitCost(); ok {
-		_spec.SetField(usagelog.FieldProductDebitCost, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedProductDebitCost(); ok {
-		_spec.AddField(usagelog.FieldProductDebitCost, field.TypeFloat64, value)
-	}
-	if _u.mutation.ProductDebitCostCleared() {
-		_spec.ClearField(usagelog.FieldProductDebitCost, field.TypeFloat64)
-	}
 	if value, ok := _u.mutation.BillingType(); ok {
 		_spec.SetField(usagelog.FieldBillingType, field.TypeInt8, value)
 	}
@@ -1267,12 +1098,6 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ImageSizeCleared() {
 		_spec.ClearField(usagelog.FieldImageSize, field.TypeString)
-	}
-	if value, ok := _u.mutation.MediaType(); ok {
-		_spec.SetField(usagelog.FieldMediaType, field.TypeString, value)
-	}
-	if _u.mutation.MediaTypeCleared() {
-		_spec.ClearField(usagelog.FieldMediaType, field.TypeString)
 	}
 	if value, ok := _u.mutation.CacheTTLOverridden(); ok {
 		_spec.SetField(usagelog.FieldCacheTTLOverridden, field.TypeBool, value)
@@ -1679,60 +1504,6 @@ func (_u *UsageLogUpdateOne) ClearSubscriptionID() *UsageLogUpdateOne {
 	return _u
 }
 
-// SetProductID sets the "product_id" field.
-func (_u *UsageLogUpdateOne) SetProductID(v int64) *UsageLogUpdateOne {
-	_u.mutation.ResetProductID()
-	_u.mutation.SetProductID(v)
-	return _u
-}
-
-// SetNillableProductID sets the "product_id" field if the given value is not nil.
-func (_u *UsageLogUpdateOne) SetNillableProductID(v *int64) *UsageLogUpdateOne {
-	if v != nil {
-		_u.SetProductID(*v)
-	}
-	return _u
-}
-
-// AddProductID adds value to the "product_id" field.
-func (_u *UsageLogUpdateOne) AddProductID(v int64) *UsageLogUpdateOne {
-	_u.mutation.AddProductID(v)
-	return _u
-}
-
-// ClearProductID clears the value of the "product_id" field.
-func (_u *UsageLogUpdateOne) ClearProductID() *UsageLogUpdateOne {
-	_u.mutation.ClearProductID()
-	return _u
-}
-
-// SetProductSubscriptionID sets the "product_subscription_id" field.
-func (_u *UsageLogUpdateOne) SetProductSubscriptionID(v int64) *UsageLogUpdateOne {
-	_u.mutation.ResetProductSubscriptionID()
-	_u.mutation.SetProductSubscriptionID(v)
-	return _u
-}
-
-// SetNillableProductSubscriptionID sets the "product_subscription_id" field if the given value is not nil.
-func (_u *UsageLogUpdateOne) SetNillableProductSubscriptionID(v *int64) *UsageLogUpdateOne {
-	if v != nil {
-		_u.SetProductSubscriptionID(*v)
-	}
-	return _u
-}
-
-// AddProductSubscriptionID adds value to the "product_subscription_id" field.
-func (_u *UsageLogUpdateOne) AddProductSubscriptionID(v int64) *UsageLogUpdateOne {
-	_u.mutation.AddProductSubscriptionID(v)
-	return _u
-}
-
-// ClearProductSubscriptionID clears the value of the "product_subscription_id" field.
-func (_u *UsageLogUpdateOne) ClearProductSubscriptionID() *UsageLogUpdateOne {
-	_u.mutation.ClearProductSubscriptionID()
-	return _u
-}
-
 // SetInputTokens sets the "input_tokens" field.
 func (_u *UsageLogUpdateOne) SetInputTokens(v int) *UsageLogUpdateOne {
 	_u.mutation.ResetInputTokens()
@@ -2033,60 +1804,6 @@ func (_u *UsageLogUpdateOne) ClearAccountRateMultiplier() *UsageLogUpdateOne {
 	return _u
 }
 
-// SetGroupDebitMultiplier sets the "group_debit_multiplier" field.
-func (_u *UsageLogUpdateOne) SetGroupDebitMultiplier(v float64) *UsageLogUpdateOne {
-	_u.mutation.ResetGroupDebitMultiplier()
-	_u.mutation.SetGroupDebitMultiplier(v)
-	return _u
-}
-
-// SetNillableGroupDebitMultiplier sets the "group_debit_multiplier" field if the given value is not nil.
-func (_u *UsageLogUpdateOne) SetNillableGroupDebitMultiplier(v *float64) *UsageLogUpdateOne {
-	if v != nil {
-		_u.SetGroupDebitMultiplier(*v)
-	}
-	return _u
-}
-
-// AddGroupDebitMultiplier adds value to the "group_debit_multiplier" field.
-func (_u *UsageLogUpdateOne) AddGroupDebitMultiplier(v float64) *UsageLogUpdateOne {
-	_u.mutation.AddGroupDebitMultiplier(v)
-	return _u
-}
-
-// ClearGroupDebitMultiplier clears the value of the "group_debit_multiplier" field.
-func (_u *UsageLogUpdateOne) ClearGroupDebitMultiplier() *UsageLogUpdateOne {
-	_u.mutation.ClearGroupDebitMultiplier()
-	return _u
-}
-
-// SetProductDebitCost sets the "product_debit_cost" field.
-func (_u *UsageLogUpdateOne) SetProductDebitCost(v float64) *UsageLogUpdateOne {
-	_u.mutation.ResetProductDebitCost()
-	_u.mutation.SetProductDebitCost(v)
-	return _u
-}
-
-// SetNillableProductDebitCost sets the "product_debit_cost" field if the given value is not nil.
-func (_u *UsageLogUpdateOne) SetNillableProductDebitCost(v *float64) *UsageLogUpdateOne {
-	if v != nil {
-		_u.SetProductDebitCost(*v)
-	}
-	return _u
-}
-
-// AddProductDebitCost adds value to the "product_debit_cost" field.
-func (_u *UsageLogUpdateOne) AddProductDebitCost(v float64) *UsageLogUpdateOne {
-	_u.mutation.AddProductDebitCost(v)
-	return _u
-}
-
-// ClearProductDebitCost clears the value of the "product_debit_cost" field.
-func (_u *UsageLogUpdateOne) ClearProductDebitCost() *UsageLogUpdateOne {
-	_u.mutation.ClearProductDebitCost()
-	return _u
-}
-
 // SetBillingType sets the "billing_type" field.
 func (_u *UsageLogUpdateOne) SetBillingType(v int8) *UsageLogUpdateOne {
 	_u.mutation.ResetBillingType()
@@ -2257,26 +1974,6 @@ func (_u *UsageLogUpdateOne) ClearImageSize() *UsageLogUpdateOne {
 	return _u
 }
 
-// SetMediaType sets the "media_type" field.
-func (_u *UsageLogUpdateOne) SetMediaType(v string) *UsageLogUpdateOne {
-	_u.mutation.SetMediaType(v)
-	return _u
-}
-
-// SetNillableMediaType sets the "media_type" field if the given value is not nil.
-func (_u *UsageLogUpdateOne) SetNillableMediaType(v *string) *UsageLogUpdateOne {
-	if v != nil {
-		_u.SetMediaType(*v)
-	}
-	return _u
-}
-
-// ClearMediaType clears the value of the "media_type" field.
-func (_u *UsageLogUpdateOne) ClearMediaType() *UsageLogUpdateOne {
-	_u.mutation.ClearMediaType()
-	return _u
-}
-
 // SetCacheTTLOverridden sets the "cache_ttl_overridden" field.
 func (_u *UsageLogUpdateOne) SetCacheTTLOverridden(v bool) *UsageLogUpdateOne {
 	_u.mutation.SetCacheTTLOverridden(v)
@@ -2443,11 +2140,6 @@ func (_u *UsageLogUpdateOne) check() error {
 			return &ValidationError{Name: "image_size", err: fmt.Errorf(`ent: validator failed for field "UsageLog.image_size": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.MediaType(); ok {
-		if err := usagelog.MediaTypeValidator(v); err != nil {
-			return &ValidationError{Name: "media_type", err: fmt.Errorf(`ent: validator failed for field "UsageLog.media_type": %w`, err)}
-		}
-	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "UsageLog.user"`)
 	}
@@ -2533,24 +2225,6 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if _u.mutation.BillingModeCleared() {
 		_spec.ClearField(usagelog.FieldBillingMode, field.TypeString)
-	}
-	if value, ok := _u.mutation.ProductID(); ok {
-		_spec.SetField(usagelog.FieldProductID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedProductID(); ok {
-		_spec.AddField(usagelog.FieldProductID, field.TypeInt64, value)
-	}
-	if _u.mutation.ProductIDCleared() {
-		_spec.ClearField(usagelog.FieldProductID, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.ProductSubscriptionID(); ok {
-		_spec.SetField(usagelog.FieldProductSubscriptionID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedProductSubscriptionID(); ok {
-		_spec.AddField(usagelog.FieldProductSubscriptionID, field.TypeInt64, value)
-	}
-	if _u.mutation.ProductSubscriptionIDCleared() {
-		_spec.ClearField(usagelog.FieldProductSubscriptionID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
@@ -2639,24 +2313,6 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	if _u.mutation.AccountRateMultiplierCleared() {
 		_spec.ClearField(usagelog.FieldAccountRateMultiplier, field.TypeFloat64)
 	}
-	if value, ok := _u.mutation.GroupDebitMultiplier(); ok {
-		_spec.SetField(usagelog.FieldGroupDebitMultiplier, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedGroupDebitMultiplier(); ok {
-		_spec.AddField(usagelog.FieldGroupDebitMultiplier, field.TypeFloat64, value)
-	}
-	if _u.mutation.GroupDebitMultiplierCleared() {
-		_spec.ClearField(usagelog.FieldGroupDebitMultiplier, field.TypeFloat64)
-	}
-	if value, ok := _u.mutation.ProductDebitCost(); ok {
-		_spec.SetField(usagelog.FieldProductDebitCost, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedProductDebitCost(); ok {
-		_spec.AddField(usagelog.FieldProductDebitCost, field.TypeFloat64, value)
-	}
-	if _u.mutation.ProductDebitCostCleared() {
-		_spec.ClearField(usagelog.FieldProductDebitCost, field.TypeFloat64)
-	}
 	if value, ok := _u.mutation.BillingType(); ok {
 		_spec.SetField(usagelog.FieldBillingType, field.TypeInt8, value)
 	}
@@ -2707,12 +2363,6 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if _u.mutation.ImageSizeCleared() {
 		_spec.ClearField(usagelog.FieldImageSize, field.TypeString)
-	}
-	if value, ok := _u.mutation.MediaType(); ok {
-		_spec.SetField(usagelog.FieldMediaType, field.TypeString, value)
-	}
-	if _u.mutation.MediaTypeCleared() {
-		_spec.ClearField(usagelog.FieldMediaType, field.TypeString)
 	}
 	if value, ok := _u.mutation.CacheTTLOverridden(); ok {
 		_spec.SetField(usagelog.FieldCacheTTLOverridden, field.TypeBool, value)

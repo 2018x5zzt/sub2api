@@ -6,7 +6,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { defineComponent, ref, reactive } from 'vue'
-import { buildApiKeyGroupOptions } from '@/views/user/keyGroupOptions'
 
 // Mock keysAPI
 const mockCreate = vi.fn()
@@ -181,43 +180,5 @@ describe('ApiKey 创建流程', () => {
     await flushPromises()
 
     expect(wrapper.find('button').attributes('disabled')).toBeUndefined()
-  })
-
-  it('offers product-settled groups in api key creation', () => {
-    const options = buildApiKeyGroupOptions(
-      [],
-      {},
-      [
-        {
-          product_id: 101,
-          subscription_id: 501,
-          code: 'gpt_team',
-          name: 'GPT Team',
-          description: '',
-          expires_at: '2026-05-25T12:00:00Z',
-          status: 'active',
-          daily_usage_usd: 0,
-          weekly_usage_usd: 0,
-          monthly_usage_usd: 0,
-          daily_limit_usd: 0,
-          weekly_limit_usd: 0,
-          monthly_limit_usd: 100,
-          daily_carryover_in_usd: 0,
-          daily_carryover_remaining_usd: 0,
-          groups: [
-            { group_id: 201, group_name: 'gpt-4', debit_multiplier: 1.5, status: 'active', sort_order: 1 }
-          ]
-        }
-      ]
-    )
-
-    expect(options).toEqual([
-      expect.objectContaining({
-        value: 201,
-        label: 'gpt-4',
-        sourceProductName: 'GPT Team',
-        subscriptionType: 'subscription'
-      })
-    ])
   })
 })

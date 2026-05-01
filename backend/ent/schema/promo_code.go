@@ -37,31 +37,16 @@ func (PromoCode) Fields() []ent.Field {
 			NotEmpty().
 			Unique().
 			Comment("优惠码"),
-		field.String("scene").
-			MaxLen(20).
-			Default(domain.PromoCodeSceneRegister).
-			Comment("优惠码场景: register, benefit"),
 		field.Float("bonus_amount").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0).
 			Comment("赠送余额金额"),
-		field.Float("random_bonus_pool_amount").
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Default(0).
-			Comment("随机红包总池金额，仅 benefit 场景使用"),
-		field.Float("random_bonus_remaining").
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Default(0).
-			Comment("随机红包剩余金额，仅 benefit 场景使用"),
 		field.Int("max_uses").
 			Default(0).
 			Comment("最大使用次数，0表示无限制"),
 		field.Int("used_count").
 			Default(0).
 			Comment("已使用次数"),
-		field.Bool("leaderboard_enabled").
-			Default(false).
-			Comment("是否启用手气排行榜，仅 benefit 场景使用"),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.PromoCodeStatusActive).
@@ -71,11 +56,6 @@ func (PromoCode) Fields() []ent.Field {
 			Nillable().
 			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}).
 			Comment("过期时间，null表示永不过期"),
-		field.String("success_message").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "text"}).
-			Comment("兑换成功后展示给用户的弹窗文案"),
 		field.String("notes").
 			Optional().
 			Nillable().
@@ -101,7 +81,6 @@ func (PromoCode) Edges() []ent.Edge {
 func (PromoCode) Indexes() []ent.Index {
 	return []ent.Index{
 		// code 字段已在 Fields() 中声明 Unique()，无需重复索引
-		index.Fields("scene"),
 		index.Fields("status"),
 		index.Fields("expires_at"),
 	}

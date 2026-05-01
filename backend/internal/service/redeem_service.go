@@ -26,11 +26,6 @@ const (
 	redeemMaxErrorsPerHour  = 20
 	redeemRateLimitDuration = time.Hour
 	redeemLockDuration      = 10 * time.Second // 锁超时时间，防止死锁
-
-	affiliateRebateFactorBalance = 1.0
-	affiliateRebateFactorDaily   = 1.0
-	affiliateRebateFactorWeekly  = 0.6
-	affiliateRebateFactorMonthly = 0.3
 )
 
 // RedeemCache defines cache operations for redeem service
@@ -63,10 +58,9 @@ type RedeemCodeRepository interface {
 
 // GenerateCodesRequest 生成兑换码请求
 type GenerateCodesRequest struct {
-	Count      int     `json:"count"`
-	Value      float64 `json:"value"`
-	Type       string  `json:"type"`
-	SourceType string  `json:"source_type"`
+	Count int     `json:"count"`
+	Value float64 `json:"value"`
+	Type  string  `json:"type"`
 }
 
 // RedeemCodeResponse 兑换码响应
@@ -79,47 +73,34 @@ type RedeemCodeResponse struct {
 
 // RedeemService 兑换码服务
 type RedeemService struct {
-	redeemRepo                  RedeemCodeRepository
-	userRepo                    UserRepository
-	affiliateService            *AffiliateService
-	subscriptionService         *SubscriptionService
-	cache                       RedeemCache
-	billingCacheService         *BillingCacheService
-	entClient                   *dbent.Client
-	authCacheInvalidator        APIKeyAuthCacheInvalidator
-	productSubscriptionAssigner ProductSubscriptionAssigner
+	redeemRepo           RedeemCodeRepository
+	userRepo             UserRepository
+	subscriptionService  *SubscriptionService
+	cache                RedeemCache
+	billingCacheService  *BillingCacheService
+	entClient            *dbent.Client
+	authCacheInvalidator APIKeyAuthCacheInvalidator
 }
 
 // NewRedeemService 创建兑换码服务实例
 func NewRedeemService(
 	redeemRepo RedeemCodeRepository,
 	userRepo UserRepository,
-	affiliateService *AffiliateService,
 	subscriptionService *SubscriptionService,
 	cache RedeemCache,
 	billingCacheService *BillingCacheService,
 	entClient *dbent.Client,
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
-	productSubscriptionAssigner ...ProductSubscriptionAssigner,
 ) *RedeemService {
-	svc := &RedeemService{
+	return &RedeemService{
 		redeemRepo:           redeemRepo,
 		userRepo:             userRepo,
-		affiliateService:     affiliateService,
 		subscriptionService:  subscriptionService,
 		cache:                cache,
 		billingCacheService:  billingCacheService,
 		entClient:            entClient,
 		authCacheInvalidator: authCacheInvalidator,
 	}
-	if len(productSubscriptionAssigner) > 0 {
-		svc.productSubscriptionAssigner = productSubscriptionAssigner[0]
-	}
-	return svc
-}
-
-func (s *RedeemService) SetProductSubscriptionAssigner(assigner ProductSubscriptionAssigner) {
-	s.productSubscriptionAssigner = assigner
 }
 
 // GenerateRandomCode 生成随机兑换码
@@ -150,9 +131,9 @@ func (s *RedeemService) GenerateCodes(ctx context.Context, req GenerateCodesRequ
 		return nil, errors.New("count must be greater than 0")
 	}
 
-	// 邀请码类型不需要数值，其他类型需要
-	if req.Type != RedeemTypeInvitation && req.Value <= 0 {
-		return nil, errors.New("value must be greater than 0")
+	// 邀请码类型不需要数值，其他类型需要非零值（支持负数用于退款）
+	if req.Type != RedeemTypeInvitation && req.Value == 0 {
+		return nil, errors.New("value must not be zero")
 	}
 
 	if req.Count > 1000 {
@@ -163,16 +144,12 @@ func (s *RedeemService) GenerateCodes(ctx context.Context, req GenerateCodesRequ
 	if codeType == "" {
 		codeType = RedeemTypeBalance
 	}
-	if codeType == RedeemTypeInvitation {
-		return nil, errors.New("legacy invitation redeem codes are no longer supported")
-	}
 
+	// 邀请码类型的 value 设为 0
 	value := req.Value
-	sourceFallback := RedeemSourceSystemGrant
-	if codeType == RedeemTypeBalance || codeType == RedeemTypeSubscription {
-		sourceFallback = RedeemSourceCommercial
+	if codeType == RedeemTypeInvitation {
+		value = 0
 	}
-	sourceType := NormalizeRedeemSourceType(req.SourceType, sourceFallback)
 
 	codes := make([]RedeemCode, 0, req.Count)
 	for i := 0; i < req.Count; i++ {
@@ -182,11 +159,10 @@ func (s *RedeemService) GenerateCodes(ctx context.Context, req GenerateCodesRequ
 		}
 
 		codes = append(codes, RedeemCode{
-			Code:       code,
-			Type:       codeType,
-			Value:      value,
-			Status:     StatusUnused,
-			SourceType: sourceType,
+			Code:   code,
+			Type:   codeType,
+			Value:  value,
+			Status: StatusUnused,
 		})
 	}
 
@@ -212,16 +188,12 @@ func (s *RedeemService) CreateCode(ctx context.Context, code *RedeemCode) error 
 	if code.Type == "" {
 		code.Type = RedeemTypeBalance
 	}
-	if code.Type == RedeemTypeInvitation {
-		return errors.New("legacy invitation redeem codes are no longer supported")
-	}
-	if code.Value <= 0 {
-		return errors.New("value must be greater than 0")
+	if code.Type != RedeemTypeInvitation && code.Value == 0 {
+		return errors.New("value must not be zero")
 	}
 	if code.Status == "" {
 		code.Status = StatusUnused
 	}
-	code.SourceType = NormalizeRedeemSourceType(code.SourceType, RedeemSourceSystemGrant)
 
 	if err := s.redeemRepo.Create(ctx, code); err != nil {
 		return fmt.Errorf("create redeem code: %w", err)
@@ -310,13 +282,9 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		return nil, ErrRedeemCodeUsed
 	}
 
-	if redeemCode.Type == RedeemTypeSubscription {
-		if (redeemCode.GroupID == nil) == (redeemCode.ProductID == nil) {
-			return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: exactly one of group_id or product_id is required")
-		}
-		if redeemCode.ProductID != nil && s.productSubscriptionAssigner == nil {
-			return nil, ErrProductSubscriptionAssignerUnavailable
-		}
+	// 验证兑换码类型的前置条件
+	if redeemCode.Type == RedeemTypeSubscription && redeemCode.GroupID == nil {
+		return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing group_id")
 	}
 
 	// 获取用户信息
@@ -324,7 +292,6 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
-	_ = user // 使用变量避免未使用错误
 
 	// 使用数据库事务保证兑换码标记与权益发放的原子性
 	tx, err := s.entClient.Tx(ctx)
@@ -348,39 +315,36 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	// 执行兑换逻辑（兑换码已被锁定，此时可安全操作）
 	switch redeemCode.Type {
 	case RedeemTypeBalance:
-		// 增加用户余额
-		if err := s.userRepo.UpdateBalance(txCtx, userID, redeemCode.Value); err != nil {
-			return nil, fmt.Errorf("update user balance: %w", err)
+		amount := redeemCode.Value
+		// 负数为退款扣减，余额最低为 0
+		if amount < 0 && user.Balance+amount < 0 {
+			amount = -user.Balance
 		}
-		if s.affiliateService != nil && IsCommercialRechargeRedeem(redeemCode) {
-			if _, err := s.affiliateService.AccrueInviteRebateWithFactor(txCtx, userID, redeemCode.Value, affiliateRebateFactorBalance); err != nil {
-				return nil, fmt.Errorf("apply affiliate rebate: %w", err)
-			}
+		if err := s.userRepo.UpdateBalance(txCtx, userID, amount); err != nil {
+			return nil, fmt.Errorf("update user balance: %w", err)
 		}
 
 	case RedeemTypeConcurrency:
-		// 增加用户并发数
-		if err := s.userRepo.UpdateConcurrency(txCtx, userID, int(redeemCode.Value)); err != nil {
+		delta := int(redeemCode.Value)
+		// 负数为退款扣减，并发数最低为 0
+		if delta < 0 && user.Concurrency+delta < 0 {
+			delta = -user.Concurrency
+		}
+		if err := s.userRepo.UpdateConcurrency(txCtx, userID, delta); err != nil {
 			return nil, fmt.Errorf("update user concurrency: %w", err)
 		}
 
 	case RedeemTypeSubscription:
 		validityDays := redeemCode.ValidityDays
-		if validityDays <= 0 {
-			validityDays = 30
-		}
-		if redeemCode.ProductID != nil {
-			_, _, err := s.productSubscriptionAssigner.AssignOrExtendProductSubscription(txCtx, &AssignProductSubscriptionInput{
-				UserID:       userID,
-				ProductID:    *redeemCode.ProductID,
-				ValidityDays: validityDays,
-				AssignedBy:   0, // 系统分配
-				Notes:        fmt.Sprintf("通过兑换码 %s 兑换", redeemCode.Code),
-			})
-			if err != nil {
-				return nil, fmt.Errorf("assign or extend product subscription: %w", err)
+		if validityDays < 0 {
+			// 负数天数：缩短订阅，减到 0 则取消订阅
+			if err := s.reduceOrCancelSubscription(txCtx, userID, *redeemCode.GroupID, -validityDays, redeemCode.Code); err != nil {
+				return nil, fmt.Errorf("reduce or cancel subscription: %w", err)
 			}
 		} else {
+			if validityDays == 0 {
+				validityDays = 30
+			}
 			_, _, err := s.subscriptionService.AssignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
 				UserID:       userID,
 				GroupID:      *redeemCode.GroupID,
@@ -390,17 +354,6 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 			})
 			if err != nil {
 				return nil, fmt.Errorf("assign or extend subscription: %w", err)
-			}
-		}
-		if s.affiliateService != nil && IsCommercialRechargeRedeem(redeemCode) {
-			baseQuota, skuFactor, ok, err := s.subscriptionAffiliateRebateTerms(txCtx, redeemCode, validityDays)
-			if err != nil {
-				return nil, fmt.Errorf("resolve subscription affiliate rebate terms: %w", err)
-			}
-			if ok {
-				if _, err := s.affiliateService.AccrueInviteRebateWithFactor(txCtx, userID, baseQuota, skuFactor); err != nil {
-					return nil, fmt.Errorf("apply affiliate rebate: %w", err)
-				}
 			}
 		}
 
@@ -423,54 +376,6 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	}
 
 	return redeemCode, nil
-}
-
-func (s *RedeemService) subscriptionAffiliateRebateTerms(ctx context.Context, code *RedeemCode, validityDays int) (float64, float64, bool, error) {
-	if s == nil || code == nil || s.entClient == nil {
-		return 0, 0, false, nil
-	}
-	client := productAdminClientFromContext(ctx, s.entClient)
-	if code.ProductID != nil {
-		product, err := client.SubscriptionProduct.Get(ctx, *code.ProductID)
-		if err != nil {
-			return 0, 0, false, err
-		}
-		baseQuota, skuFactor, ok := resolveSubscriptionAffiliateRebateTerms(validityDays, product.DailyLimitUsd, product.WeeklyLimitUsd, product.MonthlyLimitUsd)
-		return baseQuota, skuFactor, ok, nil
-	}
-	if code.GroupID != nil {
-		group, err := client.Group.Get(ctx, *code.GroupID)
-		if err != nil {
-			return 0, 0, false, err
-		}
-		baseQuota, skuFactor, ok := resolveSubscriptionAffiliateRebateTerms(validityDays, float64PtrValue(group.DailyLimitUsd), float64PtrValue(group.WeeklyLimitUsd), float64PtrValue(group.MonthlyLimitUsd))
-		return baseQuota, skuFactor, ok, nil
-	}
-	return 0, 0, false, nil
-}
-
-func resolveSubscriptionAffiliateRebateTerms(validityDays int, dailyLimitUSD, weeklyLimitUSD, monthlyLimitUSD float64) (float64, float64, bool) {
-	switch {
-	case validityDays >= 28 && monthlyLimitUSD > 0:
-		return monthlyLimitUSD, affiliateRebateFactorMonthly, true
-	case validityDays >= 7 && weeklyLimitUSD > 0:
-		return weeklyLimitUSD, affiliateRebateFactorWeekly, true
-	case dailyLimitUSD > 0:
-		return dailyLimitUSD, affiliateRebateFactorDaily, true
-	case monthlyLimitUSD > 0:
-		return monthlyLimitUSD, affiliateRebateFactorMonthly, true
-	case weeklyLimitUSD > 0:
-		return weeklyLimitUSD, affiliateRebateFactorWeekly, true
-	default:
-		return 0, 0, false
-	}
-}
-
-func float64PtrValue(v *float64) float64 {
-	if v == nil {
-		return 0
-	}
-	return *v
 }
 
 // invalidateRedeemCaches 失效兑换相关的缓存
@@ -583,4 +488,52 @@ func (s *RedeemService) GetUserHistory(ctx context.Context, userID int64, limit 
 		return nil, fmt.Errorf("get user redeem history: %w", err)
 	}
 	return codes, nil
+}
+
+// reduceOrCancelSubscription 缩短订阅天数，剩余天数 <= 0 时取消订阅
+func (s *RedeemService) reduceOrCancelSubscription(ctx context.Context, userID, groupID int64, reduceDays int, code string) error {
+	sub, err := s.subscriptionService.userSubRepo.GetByUserIDAndGroupID(ctx, userID, groupID)
+	if err != nil {
+		return ErrSubscriptionNotFound
+	}
+
+	now := time.Now()
+	remaining := int(sub.ExpiresAt.Sub(now).Hours() / 24)
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	notes := fmt.Sprintf("通过兑换码 %s 退款扣减 %d 天", code, reduceDays)
+
+	if remaining <= reduceDays {
+		// 剩余天数不足，直接取消订阅
+		if err := s.subscriptionService.userSubRepo.UpdateStatus(ctx, sub.ID, SubscriptionStatusExpired); err != nil {
+			return fmt.Errorf("cancel subscription: %w", err)
+		}
+		// 设置过期时间为当前时间
+		if err := s.subscriptionService.userSubRepo.ExtendExpiry(ctx, sub.ID, now); err != nil {
+			return fmt.Errorf("set subscription expiry: %w", err)
+		}
+	} else {
+		// 缩短天数
+		newExpiresAt := sub.ExpiresAt.AddDate(0, 0, -reduceDays)
+		if err := s.subscriptionService.userSubRepo.ExtendExpiry(ctx, sub.ID, newExpiresAt); err != nil {
+			return fmt.Errorf("reduce subscription: %w", err)
+		}
+	}
+
+	// 追加备注
+	newNotes := sub.Notes
+	if newNotes != "" {
+		newNotes += "\n"
+	}
+	newNotes += notes
+	if err := s.subscriptionService.userSubRepo.UpdateNotes(ctx, sub.ID, newNotes); err != nil {
+		return fmt.Errorf("update subscription notes: %w", err)
+	}
+
+	// 失效缓存
+	s.subscriptionService.InvalidateSubCache(userID, groupID)
+
+	return nil
 }

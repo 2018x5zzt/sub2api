@@ -15,11 +15,12 @@
       <!-- Summary: model tags + billing badge -->
       <div v-if="collapsed" class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
         <!-- Compact model tags (show first 3) -->
-        <div class="flex min-w-0 flex-shrink items-center gap-1 overflow-hidden">
+        <div class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
           <span
             v-for="(m, i) in entry.models.slice(0, 3)"
             :key="i"
-            class="inline-flex max-w-[120px] truncate rounded bg-gray-200 px-1.5 py-0.5 text-xs text-gray-700 dark:bg-dark-600 dark:text-gray-300"
+            class="inline-flex shrink-0 rounded px-1.5 py-0.5 text-xs"
+            :class="getPlatformTagClass(props.platform || '')"
           >
             {{ m }}
           </span>
@@ -74,7 +75,8 @@
             </label>
             <ModelTagInput
               :models="entry.models"
-              @update:models="emit('update', { ...entry, models: $event })"
+              :platform="props.platform"
+              @update:models="onModelsUpdate($event)"
               :placeholder="t('admin.channels.form.modelsPlaceholder', '输入模型名后按回车添加，支持通配符 *')"
               class="mt-1"
             />
@@ -189,7 +191,7 @@
 
         <!-- Image mode -->
         <div v-else-if="entry.billing_mode === 'image'">
-          <!-- Default image price -->
+          <!-- Default image price (per-request, same as per_request mode) -->
           <label class="mt-3 block text-xs font-medium text-gray-500 dark:text-gray-400">
             {{ t('admin.channels.form.defaultImagePrice', '默认图片价格（未命中层级时使用）') }}
             <span class="ml-1 font-normal text-gray-400">$</span>
@@ -232,12 +234,15 @@ import Icon from '@/components/icons/Icon.vue'
 import IntervalRow from './IntervalRow.vue'
 import ModelTagInput from './ModelTagInput.vue'
 import type { PricingFormEntry, IntervalFormEntry } from './types'
+import { perTokenToMTok, getPlatformTagClass } from './types'
 import type { BillingMode } from '@/api/admin/channels'
+import channelsAPI from '@/api/admin/channels'
 
 const { t } = useI18n()
 
 const props = defineProps<{
   entry: PricingFormEntry
+  platform?: string
 }>()
 
 const emit = defineEmits<{
@@ -296,6 +301,39 @@ function removeInterval(idx: number) {
   const intervals = [...(props.entry.intervals || [])]
   intervals.splice(idx, 1)
   emit('update', { ...props.entry, intervals })
+}
+
+async function onModelsUpdate(newModels: string[]) {
+  const oldModels = props.entry.models
+  emit('update', { ...props.entry, models: newModels })
+
+  // 只在新增模型且当前无价格时自动填充
+  const addedModels = newModels.filter(m => !oldModels.includes(m))
+  if (addedModels.length === 0) return
+
+  // 检查是否所有价格字段都为空
+  const e = props.entry
+  const hasPrice = e.input_price != null || e.output_price != null ||
+                   e.cache_write_price != null || e.cache_read_price != null
+  if (hasPrice) return
+
+  // 查询第一个新增模型的默认价格
+  try {
+    const result = await channelsAPI.getModelDefaultPricing(addedModels[0])
+    if (result.found) {
+      emit('update', {
+        ...props.entry,
+        models: newModels,
+        input_price: perTokenToMTok(result.input_price ?? null),
+        output_price: perTokenToMTok(result.output_price ?? null),
+        cache_write_price: perTokenToMTok(result.cache_write_price ?? null),
+        cache_read_price: perTokenToMTok(result.cache_read_price ?? null),
+        image_output_price: perTokenToMTok(result.image_output_price ?? null),
+      })
+    }
+  } catch {
+    // 查询失败不影响用户操作
+  }
 }
 </script>
 

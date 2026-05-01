@@ -7,21 +7,15 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 // NewAPIKeyAuthMiddleware 创建 API Key 认证中间件
-func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config, productServices ...*service.SubscriptionProductService) APIKeyAuthMiddleware {
-	var productService *service.SubscriptionProductService
-	if len(productServices) > 0 {
-		productService = productServices[0]
-	}
-	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, productService, cfg))
+func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) APIKeyAuthMiddleware {
+	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, cfg))
 }
 
 // apiKeyAuthWithSubscription API Key认证中间件（支持订阅验证）
@@ -31,7 +25,7 @@ func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionS
 //   - 计费执行（Billing Enforcement）：过期/配额/订阅/余额检查 —— skipBilling 时整块跳过
 //
 // /v1/usage 端点只需鉴权，不需要计费执行（允许过期/配额耗尽的 Key 查询自身用量）。
-func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, productService *service.SubscriptionProductService, cfg *config.Config) gin.HandlerFunc {
+func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// ── 1. 提取 API Key ──────────────────────────────────────────
 
@@ -119,7 +113,6 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		if cfg.RunMode == config.RunModeSimple {
 			c.Set(string(ContextKeyAPIKey), apiKey)
-			setAPIKeyContext(c, apiKey)
 			c.Set(string(ContextKeyUser), AuthSubject{
 				UserID:      apiKey.User.ID,
 				Concurrency: apiKey.User.Concurrency,
@@ -133,31 +126,13 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		// ── 5. 加载订阅（订阅模式时始终加载） ───────────────────────
 
-		// skipBilling: 查询类端点只需鉴权，跳过所有计费执行。
-		// 图片 job 轮询必须可在成功扣费后继续读取结果。
-		skipBilling := c.Request.URL.Path == "/v1/usage" ||
-			isOpenAIImageJobPollRequest(c.Request.Method, c.Request.URL.Path)
+		// skipBilling: /v1/usage 只需鉴权，跳过所有计费执行
+		skipBilling := c.Request.URL.Path == "/v1/usage"
 
 		var subscription *service.UserSubscription
-		var productCtx *service.ProductSettlementContext
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 
-		if isSubscriptionType && productService != nil {
-			resolved, productErr := productService.GetActiveProductSubscription(
-				c.Request.Context(),
-				apiKey.User.ID,
-				apiKey.Group.ID,
-			)
-			if productErr == nil {
-				productCtx = resolved
-			} else if infraerrors.Reason(productErr) != "SUBSCRIPTION_PRODUCT_NOT_FOUND" && !skipBilling {
-				response.ErrorFrom(c, productErr)
-				c.Abort()
-				return
-			}
-		}
-
-		if isSubscriptionType && productCtx == nil && subscriptionService != nil {
+		if isSubscriptionType && subscriptionService != nil {
 			sub, subErr := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,
@@ -180,7 +155,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			// Key 状态检查
 			switch apiKey.Status {
 			case service.StatusAPIKeyQuotaExhausted:
-				AbortWithError(c, 429, "API_KEY_QUOTA_EXHAUSTED", "API key 额度已用完，请访问 https://xlabapi.top 查看详情")
+				AbortWithError(c, 429, "API_KEY_QUOTA_EXHAUSTED", "API key 额度已用完")
 				return
 			case service.StatusAPIKeyExpired:
 				AbortWithError(c, 403, "API_KEY_EXPIRED", "API key 已过期")
@@ -193,19 +168,12 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				return
 			}
 			if apiKey.IsQuotaExhausted() {
-				AbortWithError(c, 429, "API_KEY_QUOTA_EXHAUSTED", "API key 额度已用完，请访问 https://xlabapi.top 查看详情")
+				AbortWithError(c, 429, "API_KEY_QUOTA_EXHAUSTED", "API key 额度已用完")
 				return
 			}
 
 			// 订阅模式：验证订阅限额
-			if productCtx != nil {
-				if validateErr := productService.CheckProductLimits(productCtx.Binding, productCtx.Subscription, 0); validateErr != nil {
-					response.ErrorFrom(c, validateErr)
-					c.Abort()
-					return
-				}
-			} else if subscription != nil {
-				maintenanceCopy := *subscription
+			if subscription != nil {
 				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
 				if validateErr != nil {
 					code := "SUBSCRIPTION_INVALID"
@@ -222,6 +190,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 				// 窗口维护异步化（不阻塞请求）
 				if needsMaintenance {
+					maintenanceCopy := *subscription
 					subscriptionService.DoWindowMaintenance(&maintenanceCopy)
 				}
 			} else {
@@ -238,13 +207,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		if subscription != nil {
 			c.Set(string(ContextKeySubscription), subscription)
 		}
-		if productCtx != nil {
-			c.Set(string(ContextKeyProductSubscription), productCtx.Subscription)
-			c.Set(string(ContextKeySubscriptionProduct), productCtx.Binding)
-			c.Request = c.Request.WithContext(service.ContextWithProductSettlement(c.Request.Context(), productCtx))
-		}
 		c.Set(string(ContextKeyAPIKey), apiKey)
-		setAPIKeyContext(c, apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{
 			UserID:      apiKey.User.ID,
 			Concurrency: apiKey.User.Concurrency,
@@ -277,11 +240,6 @@ func GetSubscriptionFromContext(c *gin.Context) (*service.UserSubscription, bool
 	return subscription, ok
 }
 
-func isOpenAIImageJobPollRequest(method string, path string) bool {
-	return strings.EqualFold(strings.TrimSpace(method), "GET") &&
-		strings.Contains(strings.TrimSpace(path), "/images/jobs/")
-}
-
 func setGroupContext(c *gin.Context, group *service.Group) {
 	if !service.IsGroupContextValid(group) {
 		return
@@ -290,16 +248,5 @@ func setGroupContext(c *gin.Context, group *service.Group) {
 		return
 	}
 	ctx := context.WithValue(c.Request.Context(), ctxkey.Group, group)
-	c.Request = c.Request.WithContext(ctx)
-}
-
-func setAPIKeyContext(c *gin.Context, apiKey *service.APIKey) {
-	if apiKey == nil {
-		return
-	}
-	if existing, ok := c.Request.Context().Value(ctxkey.APIKey).(*service.APIKey); ok && existing != nil && existing.ID == apiKey.ID {
-		return
-	}
-	ctx := context.WithValue(c.Request.Context(), ctxkey.APIKey, apiKey)
 	c.Request = c.Request.WithContext(ctx)
 }

@@ -290,32 +290,26 @@ func TestAccount_OpenAIWSExtraFlags(t *testing.T) {
 		Platform: PlatformOpenAI,
 		Type:     AccountTypeOAuth,
 		Extra: map[string]any{
-			"openai_ws_force_http":                                 true,
-			"openai_ws_allow_store_recovery":                       true,
-			"openai_oauth_drop_store_false_native_item_references": true,
+			"openai_ws_force_http":           true,
+			"openai_ws_allow_store_recovery": true,
 		},
 	}
 	require.True(t, account.IsOpenAIWSForceHTTPEnabled())
 	require.True(t, account.IsOpenAIWSAllowStoreRecoveryEnabled())
-	require.True(t, account.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled())
 
 	off := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{}}
 	require.False(t, off.IsOpenAIWSForceHTTPEnabled())
 	require.False(t, off.IsOpenAIWSAllowStoreRecoveryEnabled())
-	require.False(t, off.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled())
 
 	var nilAccount *Account
 	require.False(t, nilAccount.IsOpenAIWSAllowStoreRecoveryEnabled())
-	require.False(t, nilAccount.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled())
 
 	nonOpenAI := &Account{
 		Platform: PlatformAnthropic,
 		Type:     AccountTypeOAuth,
 		Extra: map[string]any{
-			"openai_ws_allow_store_recovery":                       true,
-			"openai_oauth_drop_store_false_native_item_references": true,
+			"openai_ws_allow_store_recovery": true,
 		},
 	}
 	require.False(t, nonOpenAI.IsOpenAIWSAllowStoreRecoveryEnabled())
-	require.False(t, nonOpenAI.IsOpenAIOAuthDropStoreFalseNativeItemReferencesEnabled())
 }

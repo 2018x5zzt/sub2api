@@ -5,7 +5,6 @@ package server_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -51,14 +50,138 @@ func TestAPIContracts(t *testing.T) {
 				"data": {
 					"id": 1,
 					"email": "alice@example.com",
+					"email_bound": true,
 					"username": "alice",
 					"role": "user",
 					"balance": 12.5,
 					"concurrency": 5,
+					"rpm_limit": 0,
 					"status": "active",
 					"allowed_groups": null,
 					"created_at": "2025-01-02T03:04:05Z",
 					"updated_at": "2025-01-02T03:04:05Z",
+					"balance_notify_enabled": false,
+					"balance_notify_threshold_type": "",
+					"balance_notify_threshold": null,
+					"balance_notify_extra_emails": null,
+					"total_recharged": 0,
+					"linuxdo_bound": false,
+					"oidc_bound": false,
+					"wechat_bound": false,
+					"identities": {
+						"email": {
+							"provider": "email",
+							"provider_key": "email",
+							"bound": true,
+							"bound_count": 1,
+							"can_bind": false,
+							"can_unbind": false,
+							"display_name": "alice@example.com",
+							"subject_hint": "a***e@example.com",
+							"note_key": "profile.authBindings.notes.emailManagedFromProfile",
+							"note": "Primary account email is managed from the profile form."
+						},
+						"linuxdo": {
+							"provider": "linuxdo",
+							"bound": false,
+							"bound_count": 0,
+							"can_bind": true,
+							"can_unbind": false,
+							"bind_start_path": "/api/v1/auth/oauth/linuxdo/bind/start?intent=bind_current_user&redirect=%2Fsettings%2Fprofile"
+						},
+						"oidc": {
+							"provider": "oidc",
+							"bound": false,
+							"bound_count": 0,
+							"can_bind": true,
+							"can_unbind": false,
+							"bind_start_path": "/api/v1/auth/oauth/oidc/bind/start?intent=bind_current_user&redirect=%2Fsettings%2Fprofile"
+						},
+						"wechat": {
+							"provider": "wechat",
+							"bound": false,
+							"bound_count": 0,
+							"can_bind": true,
+							"can_unbind": false,
+							"bind_start_path": "/api/v1/auth/oauth/wechat/bind/start?intent=bind_current_user&redirect=%2Fsettings%2Fprofile"
+						}
+					},
+					"identity_bindings": {
+						"email": {
+							"provider": "email",
+							"provider_key": "email",
+							"bound": true,
+							"bound_count": 1,
+							"can_bind": false,
+							"can_unbind": false,
+							"display_name": "alice@example.com",
+							"subject_hint": "a***e@example.com",
+							"note_key": "profile.authBindings.notes.emailManagedFromProfile",
+							"note": "Primary account email is managed from the profile form."
+						},
+						"linuxdo": {
+							"provider": "linuxdo",
+							"bound": false,
+							"bound_count": 0,
+							"can_bind": true,
+							"can_unbind": false,
+							"bind_start_path": "/api/v1/auth/oauth/linuxdo/bind/start?intent=bind_current_user&redirect=%2Fsettings%2Fprofile"
+						},
+						"oidc": {
+							"provider": "oidc",
+							"bound": false,
+							"bound_count": 0,
+							"can_bind": true,
+							"can_unbind": false,
+							"bind_start_path": "/api/v1/auth/oauth/oidc/bind/start?intent=bind_current_user&redirect=%2Fsettings%2Fprofile"
+						},
+						"wechat": {
+							"provider": "wechat",
+							"bound": false,
+							"bound_count": 0,
+							"can_bind": true,
+							"can_unbind": false,
+							"bind_start_path": "/api/v1/auth/oauth/wechat/bind/start?intent=bind_current_user&redirect=%2Fsettings%2Fprofile"
+						}
+					},
+					"auth_bindings": {
+						"email": {
+							"provider": "email",
+							"provider_key": "email",
+							"bound": true,
+							"bound_count": 1,
+							"can_bind": false,
+							"can_unbind": false,
+							"display_name": "alice@example.com",
+							"subject_hint": "a***e@example.com",
+							"note_key": "profile.authBindings.notes.emailManagedFromProfile",
+							"note": "Primary account email is managed from the profile form."
+						},
+						"linuxdo": {
+							"provider": "linuxdo",
+							"bound": false,
+							"bound_count": 0,
+							"can_bind": true,
+							"can_unbind": false,
+							"bind_start_path": "/api/v1/auth/oauth/linuxdo/bind/start?intent=bind_current_user&redirect=%2Fsettings%2Fprofile"
+						},
+						"oidc": {
+							"provider": "oidc",
+							"bound": false,
+							"bound_count": 0,
+							"can_bind": true,
+							"can_unbind": false,
+							"bind_start_path": "/api/v1/auth/oauth/oidc/bind/start?intent=bind_current_user&redirect=%2Fsettings%2Fprofile"
+						},
+						"wechat": {
+							"provider": "wechat",
+							"bound": false,
+							"bound_count": 0,
+							"can_bind": true,
+							"can_unbind": false,
+							"bind_start_path": "/api/v1/auth/oauth/wechat/bind/start?intent=bind_current_user&redirect=%2Fsettings%2Fprofile"
+						}
+					},
 					"run_mode": "standard"
 				}
 			}`,
@@ -81,7 +204,6 @@ func TestAPIContracts(t *testing.T) {
 					"key": "sk_custom_1234567890",
 					"name": "Key One",
 					"group_id": null,
-					"budget_multiplier": null,
 					"status": "active",
 					"ip_whitelist": null,
 					"ip_blacklist": null,
@@ -131,7 +253,6 @@ func TestAPIContracts(t *testing.T) {
 							"key": "sk_custom_1234567890",
 							"name": "Key One",
 							"group_id": null,
-							"budget_multiplier": null,
 							"status": "active",
 							"ip_whitelist": null,
 							"ip_blacklist": null,
@@ -197,9 +318,7 @@ func TestAPIContracts(t *testing.T) {
 						"name": "Group One",
 						"description": "desc",
 						"platform": "anthropic",
-						"pricing_mode": "fixed",
 						"rate_multiplier": 1.5,
-						"default_budget_multiplier": null,
 						"is_exclusive": false,
 						"status": "active",
 						"subscription_type": "standard",
@@ -209,16 +328,13 @@ func TestAPIContracts(t *testing.T) {
 						"image_price_1k": null,
 						"image_price_2k": null,
 						"image_price_4k": null,
-							"sora_image_price_360": null,
-							"sora_image_price_540": null,
-							"sora_storage_quota_bytes": 0,
-							"sora_video_price_per_request": null,
-							"sora_video_price_per_request_hd": null,
-							"claude_code_only": false,
+						"claude_code_only": false,
 						"allow_messages_dispatch": false,
 						"fallback_group_id": null,
 						"fallback_group_id_on_invalid_request": null,
-						"allow_messages_dispatch": false,
+						"require_oauth_only": false,
+						"require_privacy_set": false,
+						"rpm_limit": 0,
 						"created_at": "2025-01-02T03:04:05Z",
 						"updated_at": "2025-01-02T03:04:05Z"
 					}
@@ -266,10 +382,6 @@ func TestAPIContracts(t *testing.T) {
 						"daily_window_start": null,
 						"weekly_window_start": null,
 						"monthly_window_start": null,
-						"daily_carryover_in_usd": 0,
-						"daily_effective_limit_usd": 0,
-						"daily_remaining_carryover_usd": 0,
-						"daily_remaining_total_usd": 0,
 						"daily_usage_usd": 1.23,
 						"weekly_usage_usd": 2.34,
 						"monthly_usage_usd": 3.45,
@@ -312,14 +424,13 @@ func TestAPIContracts(t *testing.T) {
 						"value": 1.25,
 						"status": "used",
 						"used_by": 1,
-							"used_at": "2025-01-02T03:04:05Z",
-							"created_at": "2025-01-02T03:04:05Z",
-							"group_id": null,
-							"product_id": null,
-							"validity_days": 0
-						}
-					]
-				}`,
+						"used_at": "2025-01-02T03:04:05Z",
+						"created_at": "2025-01-02T03:04:05Z",
+						"group_id": null,
+						"validity_days": 0
+					}
+				]
+			}`,
 		},
 		{
 			name: "GET /api/v1/usage/stats",
@@ -475,6 +586,28 @@ func TestAPIContracts(t *testing.T) {
 					service.SettingKeyTurnstileSiteKey:   "site-key",
 					service.SettingKeyTurnstileSecretKey: "secret-key",
 
+					service.SettingKeyOIDCConnectEnabled:              "false",
+					service.SettingKeyOIDCConnectProviderName:         "OIDC",
+					service.SettingKeyOIDCConnectClientID:             "",
+					service.SettingKeyOIDCConnectIssuerURL:            "",
+					service.SettingKeyOIDCConnectDiscoveryURL:         "",
+					service.SettingKeyOIDCConnectAuthorizeURL:         "",
+					service.SettingKeyOIDCConnectTokenURL:             "",
+					service.SettingKeyOIDCConnectUserInfoURL:          "",
+					service.SettingKeyOIDCConnectJWKSURL:              "",
+					service.SettingKeyOIDCConnectScopes:               "openid email profile",
+					service.SettingKeyOIDCConnectRedirectURL:          "",
+					service.SettingKeyOIDCConnectFrontendRedirectURL:  "/auth/oidc/callback",
+					service.SettingKeyOIDCConnectTokenAuthMethod:      "client_secret_post",
+					service.SettingKeyOIDCConnectUsePKCE:              "true",
+					service.SettingKeyOIDCConnectValidateIDToken:      "true",
+					service.SettingKeyOIDCConnectAllowedSigningAlgs:   "RS256,ES256,PS256",
+					service.SettingKeyOIDCConnectClockSkewSeconds:     "120",
+					service.SettingKeyOIDCConnectRequireEmailVerified: "false",
+					service.SettingKeyOIDCConnectUserInfoEmailPath:    "",
+					service.SettingKeyOIDCConnectUserInfoIDPath:       "",
+					service.SettingKeyOIDCConnectUserInfoUsernamePath: "",
+
 					service.SettingKeySiteName:     "Sub2API",
 					service.SettingKeySiteLogo:     "",
 					service.SettingKeySiteSubtitle: "Subtitle",
@@ -482,13 +615,20 @@ func TestAPIContracts(t *testing.T) {
 					service.SettingKeyContactInfo:  "support",
 					service.SettingKeyDocURL:       "https://docs.example.com",
 
-					service.SettingKeyDefaultConcurrency: "5",
-					service.SettingKeyDefaultBalance:     "1.25",
+					service.SettingKeyDefaultConcurrency:   "5",
+					service.SettingKeyDefaultBalance:       "1.25",
+					service.SettingKeyTableDefaultPageSize: "20",
+					service.SettingKeyTablePageSizeOptions: "[10,20,50,100]",
 
-					service.SettingKeyOpsMonitoringEnabled:         "false",
-					service.SettingKeyOpsRealtimeMonitoringEnabled: "true",
-					service.SettingKeyOpsQueryModeDefault:          "auto",
-					service.SettingKeyOpsMetricsIntervalSeconds:    "60",
+					service.SettingKeyOpsMonitoringEnabled:           "false",
+					service.SettingKeyOpsRealtimeMonitoringEnabled:   "true",
+					service.SettingKeyOpsQueryModeDefault:            "auto",
+					service.SettingKeyOpsMetricsIntervalSeconds:      "60",
+					service.SettingPaymentVisibleMethodAlipaySource:  service.VisibleMethodSourceEasyPayAlipay,
+					service.SettingPaymentVisibleMethodWxpaySource:   service.VisibleMethodSourceOfficialWechat,
+					service.SettingPaymentVisibleMethodAlipayEnabled: "true",
+					service.SettingPaymentVisibleMethodWxpayEnabled:  "false",
+					"openai_advanced_scheduler_enabled":              "true",
 				})
 			},
 			method:     http.MethodGet,
@@ -516,10 +656,32 @@ func TestAPIContracts(t *testing.T) {
 					"turnstile_enabled": true,
 					"turnstile_site_key": "site-key",
 					"turnstile_secret_key_configured": true,
-					"linuxdo_connect_enabled": false,
+						"linuxdo_connect_enabled": false,
 						"linuxdo_connect_client_id": "",
 						"linuxdo_connect_client_secret_configured": false,
 						"linuxdo_connect_redirect_url": "",
+						"oidc_connect_enabled": false,
+						"oidc_connect_provider_name": "OIDC",
+						"oidc_connect_client_id": "",
+						"oidc_connect_client_secret_configured": false,
+						"oidc_connect_issuer_url": "",
+						"oidc_connect_discovery_url": "",
+						"oidc_connect_authorize_url": "",
+						"oidc_connect_token_url": "",
+						"oidc_connect_userinfo_url": "",
+						"oidc_connect_jwks_url": "",
+						"oidc_connect_scopes": "openid email profile",
+						"oidc_connect_redirect_url": "",
+						"oidc_connect_frontend_redirect_url": "/auth/oidc/callback",
+						"oidc_connect_token_auth_method": "client_secret_post",
+						"oidc_connect_use_pkce": true,
+						"oidc_connect_validate_id_token": true,
+						"oidc_connect_allowed_signing_algs": "RS256,ES256,PS256",
+						"oidc_connect_clock_skew_seconds": 120,
+						"oidc_connect_require_email_verified": false,
+						"oidc_connect_userinfo_email_path": "",
+						"oidc_connect_userinfo_id_path": "",
+						"oidc_connect_userinfo_username_path": "",
 						"ops_monitoring_enabled": false,
 						"ops_realtime_monitoring_enabled": true,
 						"ops_query_mode_default": "auto",
@@ -530,31 +692,332 @@ func TestAPIContracts(t *testing.T) {
 						"api_base_url": "https://api.example.com",
 					"contact_info": "support",
 					"doc_url": "https://docs.example.com",
+					"auth_source_default_email_balance": 0,
+					"auth_source_default_email_concurrency": 5,
+					"auth_source_default_email_subscriptions": [],
+					"auth_source_default_email_grant_on_signup": false,
+					"auth_source_default_email_grant_on_first_bind": false,
+					"auth_source_default_linuxdo_balance": 0,
+					"auth_source_default_linuxdo_concurrency": 5,
+					"auth_source_default_linuxdo_subscriptions": [],
+					"auth_source_default_linuxdo_grant_on_signup": false,
+					"auth_source_default_linuxdo_grant_on_first_bind": false,
+					"auth_source_default_oidc_balance": 0,
+					"auth_source_default_oidc_concurrency": 5,
+					"auth_source_default_oidc_subscriptions": [],
+					"auth_source_default_oidc_grant_on_signup": false,
+					"auth_source_default_oidc_grant_on_first_bind": false,
+					"auth_source_default_wechat_balance": 0,
+					"auth_source_default_wechat_concurrency": 5,
+					"auth_source_default_wechat_subscriptions": [],
+					"auth_source_default_wechat_grant_on_signup": false,
+					"auth_source_default_wechat_grant_on_first_bind": false,
+					"force_email_on_third_party_signup": false,
 					"default_concurrency": 5,
 					"default_balance": 1.25,
+					"affiliate_rebate_rate": 20,
+					"affiliate_rebate_freeze_hours": 0,
+					"affiliate_rebate_duration_days": 0,
+					"affiliate_rebate_per_invitee_cap": 0,
+					"default_user_rpm_limit": 0,
 					"default_subscriptions": [],
-					"default_subscription_products": [],
-					"enterprise_visible_groups": [],
 					"enable_model_fallback": false,
 					"fallback_model_anthropic": "claude-3-5-sonnet-20241022",
 					"fallback_model_antigravity": "gemini-2.5-pro",
 					"fallback_model_gemini": "gemini-2.5-pro",
-					"fallback_model_openai": "gpt-4o",
-					"enable_identity_patch": true,
-					"enable_fingerprint_unification": true,
-					"enable_metadata_passthrough": false,
-					"identity_patch_prompt": "",
-					"sora_client_enabled": false,
-					"home_content": "",
+						"fallback_model_openai": "gpt-4o",
+						"enable_identity_patch": true,
+						"identity_patch_prompt": "",
+						"invitation_code_enabled": false,
+						"home_content": "",
 					"hide_ccs_import_button": false,
 					"purchase_subscription_enabled": false,
 					"purchase_subscription_url": "",
+					"table_default_page_size": 20,
+						"table_page_size_options": [10, 20, 50, 100],
 					"min_claude_code_version": "",
 					"max_claude_code_version": "",
 					"allow_ungrouped_key_scheduling": false,
 					"backend_mode_enabled": false,
+					"enable_cch_signing": false,
+					"enable_anthropic_cache_ttl_1h_injection": false,
+					"enable_fingerprint_unification": true,
+					"enable_metadata_passthrough": false,
+					"web_search_emulation_enabled": false,
+					"payment_visible_method_alipay_source": "easypay_alipay",
+					"payment_visible_method_wxpay_source": "official_wxpay",
+					"payment_visible_method_alipay_enabled": true,
+					"payment_visible_method_wxpay_enabled": false,
+					"openai_advanced_scheduler_enabled": true,
+					"openai_fast_policy_settings": {
+						"rules": [
+							{
+								"service_tier": "priority",
+								"action": "filter",
+								"scope": "all",
+								"fallback_action": "pass"
+							}
+						]
+					},
 					"custom_menu_items": [],
-					"custom_endpoints": []
+					"custom_endpoints": [],
+					"payment_enabled": false,
+					"payment_min_amount": 0,
+					"payment_max_amount": 0,
+					"payment_daily_limit": 0,
+					"payment_order_timeout_minutes": 0,
+					"payment_max_pending_orders": 0,
+					"payment_balance_disabled": false,
+					"payment_balance_recharge_multiplier": 0,
+					"payment_recharge_fee_rate": 0,
+					"payment_load_balance_strategy": "",
+					"payment_product_name_prefix": "",
+					"payment_product_name_suffix": "",
+					"payment_help_image_url": "",
+					"payment_help_text": "",
+					"payment_enabled_types": null,
+					"payment_cancel_rate_limit_enabled": false,
+					"payment_cancel_rate_limit_max": 0,
+					"payment_cancel_rate_limit_window": 0,
+					"payment_cancel_rate_limit_unit": "",
+					"payment_cancel_rate_limit_window_mode": "",
+					"balance_low_notify_enabled": false,
+					"account_quota_notify_enabled": false,
+					"balance_low_notify_threshold": 0,
+					"balance_low_notify_recharge_url": "",
+					"account_quota_notify_emails": [],
+					"channel_monitor_enabled": true,
+					"channel_monitor_default_interval_seconds": 60,
+					"available_channels_enabled": false,
+					"affiliate_enabled": false,
+					"wechat_connect_enabled": false,
+					"wechat_connect_app_id": "",
+					"wechat_connect_app_secret_configured": false,
+					"wechat_connect_mode": "open",
+					"wechat_connect_open_enabled": false,
+					"wechat_connect_open_app_id": "",
+					"wechat_connect_open_app_secret_configured": false,
+					"wechat_connect_mp_enabled": false,
+					"wechat_connect_mp_app_id": "",
+					"wechat_connect_mp_app_secret_configured": false,
+					"wechat_connect_mobile_enabled": false,
+					"wechat_connect_mobile_app_id": "",
+					"wechat_connect_mobile_app_secret_configured": false,
+					"wechat_connect_redirect_url": "",
+					"wechat_connect_frontend_redirect_url": "/auth/wechat/callback",
+					"wechat_connect_scopes": "snsapi_login"
+				}
+			}`,
+		},
+		{
+			name: "GET /api/v1/admin/settings falls back to config oauth defaults",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				deps.cfg.OIDC = config.OIDCConnectConfig{
+					Enabled:             true,
+					ProviderName:        "ConfigOIDC",
+					ClientID:            "oidc-config-client",
+					ClientSecret:        "oidc-config-secret",
+					IssuerURL:           "https://issuer.example.com",
+					RedirectURL:         "https://api.example.com/api/v1/auth/oauth/oidc/callback",
+					FrontendRedirectURL: "/auth/oidc/callback",
+					Scopes:              "openid email profile",
+					TokenAuthMethod:     "client_secret_post",
+					UsePKCE:             true,
+					ValidateIDToken:     true,
+					AllowedSigningAlgs:  "RS256,ES256,PS256",
+					ClockSkewSeconds:    120,
+				}
+				deps.cfg.WeChat = config.WeChatConnectConfig{
+					Enabled:             true,
+					OpenEnabled:         true,
+					OpenAppID:           "wx-open-config",
+					OpenAppSecret:       "wx-open-secret",
+					Mode:                "open",
+					Scopes:              "snsapi_login",
+					FrontendRedirectURL: "/auth/wechat/callback",
+				}
+				deps.settingRepo.SetAll(map[string]string{
+					service.SettingKeyRegistrationEnabled:              "true",
+					service.SettingKeyEmailVerifyEnabled:               "false",
+					service.SettingKeyRegistrationEmailSuffixWhitelist: "[]",
+				})
+			},
+			method:     http.MethodGet,
+			path:       "/api/v1/admin/settings",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": {
+					"registration_enabled": true,
+					"email_verify_enabled": false,
+					"registration_email_suffix_whitelist": [],
+					"promo_code_enabled": true,
+					"password_reset_enabled": false,
+					"frontend_url": "",
+					"invitation_code_enabled": false,
+					"totp_enabled": false,
+					"totp_encryption_key_configured": false,
+					"smtp_host": "",
+					"smtp_port": 587,
+					"smtp_username": "",
+					"smtp_password_configured": false,
+					"smtp_from_email": "",
+					"smtp_from_name": "",
+					"smtp_use_tls": false,
+					"turnstile_enabled": false,
+					"turnstile_site_key": "",
+					"turnstile_secret_key_configured": false,
+					"linuxdo_connect_enabled": false,
+					"linuxdo_connect_client_id": "",
+					"linuxdo_connect_client_secret_configured": false,
+					"linuxdo_connect_redirect_url": "",
+					"oidc_connect_enabled": true,
+					"oidc_connect_provider_name": "ConfigOIDC",
+					"oidc_connect_client_id": "oidc-config-client",
+					"oidc_connect_client_secret_configured": true,
+					"oidc_connect_issuer_url": "https://issuer.example.com",
+					"oidc_connect_discovery_url": "",
+					"oidc_connect_authorize_url": "",
+					"oidc_connect_token_url": "",
+					"oidc_connect_userinfo_url": "",
+					"oidc_connect_jwks_url": "",
+					"oidc_connect_scopes": "openid email profile",
+					"oidc_connect_redirect_url": "https://api.example.com/api/v1/auth/oauth/oidc/callback",
+					"oidc_connect_frontend_redirect_url": "/auth/oidc/callback",
+					"oidc_connect_token_auth_method": "client_secret_post",
+					"oidc_connect_use_pkce": true,
+					"oidc_connect_validate_id_token": true,
+					"oidc_connect_allowed_signing_algs": "RS256,ES256,PS256",
+					"oidc_connect_clock_skew_seconds": 120,
+					"oidc_connect_require_email_verified": false,
+					"oidc_connect_userinfo_email_path": "",
+					"oidc_connect_userinfo_id_path": "",
+					"oidc_connect_userinfo_username_path": "",
+					"site_name": "Sub2API",
+					"site_logo": "",
+					"site_subtitle": "Subscription to API Conversion Platform",
+					"api_base_url": "",
+					"contact_info": "",
+					"doc_url": "",
+					"home_content": "",
+					"hide_ccs_import_button": false,
+					"purchase_subscription_enabled": false,
+					"purchase_subscription_url": "",
+					"table_default_page_size": 20,
+					"table_page_size_options": [10, 20, 50],
+					"custom_menu_items": [],
+					"custom_endpoints": [],
+					"default_concurrency": 0,
+					"default_balance": 0,
+					"affiliate_rebate_rate": 20,
+					"affiliate_rebate_freeze_hours": 0,
+					"affiliate_rebate_duration_days": 0,
+					"affiliate_rebate_per_invitee_cap": 0,
+					"default_user_rpm_limit": 0,
+					"default_subscriptions": [],
+					"enable_model_fallback": false,
+					"fallback_model_anthropic": "claude-3-5-sonnet-20241022",
+					"fallback_model_openai": "gpt-4o",
+					"fallback_model_gemini": "gemini-2.5-pro",
+					"fallback_model_antigravity": "gemini-2.5-pro",
+					"enable_identity_patch": true,
+					"identity_patch_prompt": "",
+					"ops_monitoring_enabled": false,
+					"ops_realtime_monitoring_enabled": true,
+					"ops_query_mode_default": "auto",
+					"ops_metrics_interval_seconds": 60,
+					"min_claude_code_version": "",
+					"max_claude_code_version": "",
+					"allow_ungrouped_key_scheduling": false,
+					"backend_mode_enabled": false,
+					"enable_fingerprint_unification": true,
+					"enable_metadata_passthrough": false,
+					"enable_cch_signing": false,
+					"enable_anthropic_cache_ttl_1h_injection": false,
+					"web_search_emulation_enabled": false,
+					"payment_visible_method_alipay_source": "",
+					"payment_visible_method_wxpay_source": "",
+					"payment_visible_method_alipay_enabled": false,
+					"payment_visible_method_wxpay_enabled": false,
+					"openai_advanced_scheduler_enabled": false,
+					"openai_fast_policy_settings": {
+						"rules": [
+							{
+								"service_tier": "priority",
+								"action": "filter",
+								"scope": "all",
+								"fallback_action": "pass"
+							}
+						]
+					},
+					"payment_enabled": false,
+					"payment_min_amount": 0,
+					"payment_max_amount": 0,
+					"payment_daily_limit": 0,
+					"payment_order_timeout_minutes": 0,
+					"payment_max_pending_orders": 0,
+					"payment_enabled_types": null,
+					"payment_balance_disabled": false,
+					"payment_balance_recharge_multiplier": 0,
+					"payment_recharge_fee_rate": 0,
+					"payment_load_balance_strategy": "",
+					"payment_product_name_prefix": "",
+					"payment_product_name_suffix": "",
+					"payment_help_image_url": "",
+					"payment_help_text": "",
+					"payment_cancel_rate_limit_enabled": false,
+					"payment_cancel_rate_limit_max": 0,
+					"payment_cancel_rate_limit_window": 0,
+					"payment_cancel_rate_limit_unit": "",
+					"payment_cancel_rate_limit_window_mode": "",
+					"balance_low_notify_enabled": false,
+					"account_quota_notify_enabled": false,
+					"balance_low_notify_threshold": 0,
+					"balance_low_notify_recharge_url": "",
+					"account_quota_notify_emails": [],
+					"channel_monitor_enabled": true,
+					"channel_monitor_default_interval_seconds": 60,
+					"available_channels_enabled": false,
+					"affiliate_enabled": false,
+					"wechat_connect_enabled": true,
+					"wechat_connect_app_id": "wx-open-config",
+					"wechat_connect_app_secret_configured": true,
+					"wechat_connect_mode": "open",
+					"wechat_connect_open_enabled": true,
+					"wechat_connect_open_app_id": "wx-open-config",
+					"wechat_connect_open_app_secret_configured": true,
+					"wechat_connect_mp_enabled": false,
+					"wechat_connect_mp_app_id": "wx-open-config",
+					"wechat_connect_mp_app_secret_configured": true,
+					"wechat_connect_mobile_enabled": false,
+					"wechat_connect_mobile_app_id": "wx-open-config",
+					"wechat_connect_mobile_app_secret_configured": true,
+					"wechat_connect_redirect_url": "",
+					"wechat_connect_frontend_redirect_url": "/auth/wechat/callback",
+					"wechat_connect_scopes": "snsapi_login",
+					"auth_source_default_email_balance": 0,
+					"auth_source_default_email_concurrency": 5,
+					"auth_source_default_email_subscriptions": [],
+					"auth_source_default_email_grant_on_signup": false,
+					"auth_source_default_email_grant_on_first_bind": false,
+					"auth_source_default_linuxdo_balance": 0,
+					"auth_source_default_linuxdo_concurrency": 5,
+					"auth_source_default_linuxdo_subscriptions": [],
+					"auth_source_default_linuxdo_grant_on_signup": false,
+					"auth_source_default_linuxdo_grant_on_first_bind": false,
+					"auth_source_default_oidc_balance": 0,
+					"auth_source_default_oidc_concurrency": 5,
+					"auth_source_default_oidc_subscriptions": [],
+					"auth_source_default_oidc_grant_on_signup": false,
+					"auth_source_default_oidc_grant_on_first_bind": false,
+					"auth_source_default_wechat_balance": 0,
+					"auth_source_default_wechat_concurrency": 5,
+					"auth_source_default_wechat_subscriptions": [],
+					"auth_source_default_wechat_grant_on_signup": false,
+					"auth_source_default_wechat_grant_on_first_bind": false,
+					"force_email_on_third_party_signup": false
 				}
 			}`,
 		},
@@ -598,267 +1061,12 @@ func TestAPIContracts(t *testing.T) {
 	}
 }
 
-func TestAPIContracts_AdminSubscriptionsResetDaily(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	deps := newContractDeps(t)
-	deps.userSubRepo.SetAdminList([]service.UserSubscription{
-		{ID: 11, UserID: 101, GroupID: 88, Status: service.SubscriptionStatusActive},
-		{ID: 12, UserID: 102, GroupID: 88, Status: service.SubscriptionStatusActive},
-	})
-
-	status, body := doRequest(t, deps.router, http.MethodPost, "/api/v1/admin/subscriptions/reset-daily", `{
-		"group_id": 88
-	}`, map[string]string{
-		"Content-Type": "application/json",
-	})
-	require.Equal(t, http.StatusOK, status)
-
-	var resp struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    struct {
-			ResetCount  int64     `json:"reset_count"`
-			WindowStart time.Time `json:"window_start"`
-		} `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(body), &resp))
-	require.Equal(t, 0, resp.Code)
-	require.Equal(t, "success", resp.Message)
-	require.Equal(t, int64(2), resp.Data.ResetCount)
-	require.False(t, resp.Data.WindowStart.IsZero())
-	require.Equal(t, 0, resp.Data.WindowStart.Hour())
-	require.Equal(t, 0, resp.Data.WindowStart.Minute())
-	require.Equal(t, 0, resp.Data.WindowStart.Second())
-	require.Equal(t, service.SubscriptionStatusActive, deps.userSubRepo.lastListStatus)
-	require.NotNil(t, deps.userSubRepo.lastListGroupID)
-	require.Equal(t, int64(88), *deps.userSubRepo.lastListGroupID)
-	require.Equal(t, []int64{11, 12}, deps.userSubRepo.resetDailyCalls)
-}
-
-func TestAPIContracts_GetAvailableGroupModels_MixedSourceIncludesCustomAnthropicMapping(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	deps := newContractDeps(t)
-	deps.groupRepo.SetActive([]service.Group{
-		{
-			ID:             42,
-			Name:           "Anthropic Mixed",
-			Platform:       service.PlatformAnthropic,
-			RateMultiplier: 1,
-			Status:         service.StatusActive,
-			CreatedAt:      deps.now,
-			UpdatedAt:      deps.now,
-		},
-	})
-	deps.userSubRepo.SetActiveByUserID(1, nil)
-	deps.accountRepo.Seed(&service.Account{
-		ID:       301,
-		Name:     "anthropic-apikey-custom-mapping",
-		Platform: service.PlatformAnthropic,
-		Type:     service.AccountTypeAPIKey,
-		Credentials: map[string]any{
-			"api_key": "sk-ant-1",
-			"model_mapping": map[string]any{
-				"claude-opus-4-7":   "upstream-opus-4-7",
-				"claude-sonnet-4-6": "claude-sonnet-4-6",
-				"claude-*":          "wildcard-ignored",
-			},
-		},
-		GroupIDs:    []int64{42},
-		Status:      service.StatusActive,
-		Schedulable: true,
-		CreatedAt:   deps.now,
-		UpdatedAt:   deps.now,
-		AccountGroups: []service.AccountGroup{
-			{AccountID: 301, GroupID: 42, Priority: 1},
-		},
-	})
-	deps.accountRepo.Seed(&service.Account{
-		ID:       302,
-		Name:     "anthropic-oauth-shadow",
-		Platform: service.PlatformAnthropic,
-		Type:     service.AccountTypeOAuth,
-		Credentials: map[string]any{
-			"access_token": "oauth-token",
-			"model_mapping": map[string]any{
-				"claude-oauth-shadow": "should-not-surface",
-			},
-		},
-		GroupIDs:    []int64{42},
-		Status:      service.StatusActive,
-		Schedulable: true,
-		CreatedAt:   deps.now,
-		UpdatedAt:   deps.now,
-		AccountGroups: []service.AccountGroup{
-			{AccountID: 302, GroupID: 42, Priority: 2},
-		},
-	})
-
-	status, body := doRequest(t, deps.router, http.MethodGet, "/api/v1/groups/models", "", nil)
-	require.Equal(t, http.StatusOK, status)
-
-	var resp struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    []struct {
-			Group struct {
-				ID int64 `json:"id"`
-			} `json:"group"`
-			Models []struct {
-				ID          string `json:"id"`
-				DisplayName string `json:"display_name"`
-			} `json:"models"`
-			Source string `json:"source"`
-		} `json:"data"`
-	}
-	require.NoError(t, json.Unmarshal([]byte(body), &resp))
-	require.Equal(t, 0, resp.Code)
-	require.Equal(t, "success", resp.Message)
-	require.Len(t, resp.Data, 1)
-	require.Equal(t, int64(42), resp.Data[0].Group.ID)
-	require.Equal(t, "mixed", resp.Data[0].Source)
-
-	modelDisplayNames := make(map[string]string, len(resp.Data[0].Models))
-	modelIDs := make([]string, 0, len(resp.Data[0].Models))
-	for _, model := range resp.Data[0].Models {
-		modelIDs = append(modelIDs, model.ID)
-		modelDisplayNames[model.ID] = model.DisplayName
-	}
-
-	require.Contains(t, modelIDs, "claude-haiku-4-5-20251001")
-	require.Contains(t, modelIDs, "claude-sonnet-4-6")
-	require.Contains(t, modelIDs, "claude-opus-4-6")
-	require.Contains(t, modelIDs, "claude-opus-4-7")
-	require.Equal(t, "Claude Opus 4.7", modelDisplayNames["claude-opus-4-7"])
-	require.NotContains(t, modelIDs, "claude-*")
-	require.NotContains(t, modelIDs, "claude-oauth-shadow")
-}
-
-func TestAdminAccountCreateUpdateContract_GroupBindings(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	t.Run("POST /api/v1/admin/accounts accepts group_bindings", func(t *testing.T) {
-		deps := newContractDeps(t)
-		deps.groupRepo.SetActive([]service.Group{
-			{
-				ID:        10,
-				Name:      "anthropic-default",
-				Platform:  service.PlatformAnthropic,
-				Status:    service.StatusActive,
-				CreatedAt: deps.now,
-				UpdatedAt: deps.now,
-			},
-		})
-
-		status, body := doRequest(t, deps.router, http.MethodPost, "/api/v1/admin/accounts", `{
-			"name": "Contract Create",
-			"platform": "anthropic",
-			"type": "apikey",
-			"credentials": {
-				"api_key": "sk-ant-contract",
-				"base_url": "https://api.anthropic.com"
-			},
-			"concurrency": 2,
-			"priority": 3,
-			"group_bindings": [
-				{"group_id": 10, "billing_multiplier": 1.25}
-			],
-			"confirm_mixed_channel_risk": true
-		}`, map[string]string{
-			"Content-Type": "application/json",
-		})
-		require.Equal(t, http.StatusOK, status)
-
-		var resp struct {
-			Code    int                    `json:"code"`
-			Message string                 `json:"message"`
-			Data    map[string]interface{} `json:"data"`
-		}
-		require.NoError(t, json.Unmarshal([]byte(body), &resp))
-		require.Equal(t, 0, resp.Code)
-		require.Equal(t, "success", resp.Message)
-		require.Equal(t, "Contract Create", resp.Data["name"])
-		require.Equal(t, "anthropic", resp.Data["platform"])
-		require.Equal(t, "apikey", resp.Data["type"])
-		require.Equal(t, float64(2), resp.Data["concurrency"])
-		require.Equal(t, float64(3), resp.Data["priority"])
-
-		stored, err := deps.accountRepo.GetByID(context.Background(), 300)
-		require.NoError(t, err)
-		require.Equal(t, []int64{10}, stored.GroupIDs)
-		require.Len(t, stored.AccountGroups, 1)
-		require.Equal(t, 1.25, stored.AccountGroups[0].BillingMultiplier)
-	})
-
-	t.Run("PUT /api/v1/admin/accounts/:id returns account_groups billing_multiplier", func(t *testing.T) {
-		deps := newContractDeps(t)
-		deps.groupRepo.SetActive([]service.Group{
-			{
-				ID:        10,
-				Name:      "anthropic-default",
-				Platform:  service.PlatformAnthropic,
-				Status:    service.StatusActive,
-				CreatedAt: deps.now,
-				UpdatedAt: deps.now,
-			},
-		})
-		deps.accountRepo.Seed(&service.Account{
-			ID:          401,
-			Name:        "Before Update",
-			Platform:    service.PlatformAnthropic,
-			Type:        service.AccountTypeAPIKey,
-			Credentials: map[string]any{"api_key": "sk-ant-old", "base_url": "https://api.anthropic.com"},
-			Concurrency: 1,
-			Priority:    1,
-			Status:      service.StatusActive,
-			Schedulable: true,
-			CreatedAt:   deps.now,
-			UpdatedAt:   deps.now,
-		})
-
-		status, body := doRequest(t, deps.router, http.MethodPut, "/api/v1/admin/accounts/401", `{
-			"name": "After Update",
-			"group_bindings": [
-				{"group_id": 10, "billing_multiplier": 1.5}
-			],
-			"confirm_mixed_channel_risk": true
-		}`, map[string]string{
-			"Content-Type": "application/json",
-		})
-		require.Equal(t, http.StatusOK, status)
-
-		var resp struct {
-			Code    int                    `json:"code"`
-			Message string                 `json:"message"`
-			Data    map[string]interface{} `json:"data"`
-		}
-		require.NoError(t, json.Unmarshal([]byte(body), &resp))
-		require.Equal(t, 0, resp.Code)
-		require.Equal(t, "success", resp.Message)
-		require.Equal(t, "After Update", resp.Data["name"])
-
-		groupIDs, ok := resp.Data["group_ids"].([]interface{})
-		require.True(t, ok)
-		require.Len(t, groupIDs, 1)
-		require.Equal(t, float64(10), groupIDs[0])
-
-		accountGroups, ok := resp.Data["account_groups"].([]interface{})
-		require.True(t, ok)
-		require.Len(t, accountGroups, 1)
-		accountGroup, ok := accountGroups[0].(map[string]interface{})
-		require.True(t, ok)
-		require.Equal(t, float64(10), accountGroup["group_id"])
-		require.Equal(t, float64(1.5), accountGroup["billing_multiplier"])
-	})
-}
-
 type contractDeps struct {
 	now         time.Time
 	router      http.Handler
+	cfg         *config.Config
 	apiKeyRepo  *stubApiKeyRepo
 	groupRepo   *stubGroupRepo
-	accountRepo *stubAccountRepo
 	userSubRepo *stubUserSubscriptionRepo
 	usageRepo   *stubUsageLogRepo
 	settingRepo *stubSettingRepo
@@ -892,7 +1100,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	apiKeyCache := stubApiKeyCache{}
 	groupRepo := &stubGroupRepo{}
 	userSubRepo := &stubUserSubscriptionRepo{}
-	accountRepo := newStubAccountRepo(now)
+	accountRepo := stubAccountRepo{}
 	proxyRepo := stubProxyRepo{}
 	redeemRepo := &stubRedeemCodeRepo{}
 
@@ -903,7 +1111,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 		RunMode: config.RunModeStandard,
 	}
 
-	userService := service.NewUserService(userRepo, nil, nil)
+	userService := service.NewUserService(userRepo, nil, nil, nil)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, nil, apiKeyCache, cfg)
 
 	usageRepo := newStubUsageLogRepo()
@@ -911,19 +1119,18 @@ func newContractDeps(t *testing.T) *contractDeps {
 
 	subscriptionService := service.NewSubscriptionService(groupRepo, userSubRepo, nil, nil, cfg)
 	subscriptionHandler := handler.NewSubscriptionHandler(subscriptionService)
-	adminSubscriptionHandler := adminhandler.NewSubscriptionHandler(subscriptionService)
 
-	redeemService := service.NewRedeemService(redeemRepo, userRepo, nil, subscriptionService, nil, nil, nil, nil)
-	redeemHandler := handler.NewRedeemHandler(redeemService, nil, nil)
+	redeemService := service.NewRedeemService(redeemRepo, userRepo, subscriptionService, nil, nil, nil, nil)
+	redeemHandler := handler.NewRedeemHandler(redeemService)
 
 	settingRepo := newStubSettingRepo()
 	settingService := service.NewSettingService(settingRepo, cfg)
 
-	adminService := service.NewAdminService(userRepo, groupRepo, accountRepo, nil, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
-	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil, nil)
-	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService, accountRepo)
+	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil)
+	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService)
-	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil, nil)
+	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil, nil, nil)
 	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	jwtAuth := func(c *gin.Context) {
@@ -956,7 +1163,6 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Keys.GET("/keys", apiKeyHandler.List)
 	v1Keys.POST("/keys", apiKeyHandler.Create)
 	v1Keys.GET("/groups/available", apiKeyHandler.GetAvailableGroups)
-	v1Keys.GET("/groups/models", apiKeyHandler.GetAvailableGroupModels)
 
 	v1Usage := v1.Group("")
 	v1Usage.Use(jwtAuth)
@@ -974,17 +1180,14 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Admin := v1.Group("/admin")
 	v1Admin.Use(adminAuth)
 	v1Admin.GET("/settings", adminSettingHandler.GetSettings)
-	v1Admin.POST("/accounts", adminAccountHandler.Create)
-	v1Admin.PUT("/accounts/:id", adminAccountHandler.Update)
 	v1Admin.POST("/accounts/bulk-update", adminAccountHandler.BulkUpdate)
-	v1Admin.POST("/subscriptions/reset-daily", adminSubscriptionHandler.ResetDailyQuota)
 
 	return &contractDeps{
 		now:         now,
 		router:      r,
+		cfg:         cfg,
 		apiKeyRepo:  apiKeyRepo,
 		groupRepo:   groupRepo,
-		accountRepo: accountRepo,
 		userSubRepo: userSubRepo,
 		usageRepo:   usageRepo,
 		settingRepo: settingRepo,
@@ -1038,16 +1241,6 @@ func (r *stubUserRepo) GetByEmail(ctx context.Context, email string) (*service.U
 	return nil, service.ErrUserNotFound
 }
 
-func (r *stubUserRepo) GetByInviteCode(ctx context.Context, code string) (*service.User, error) {
-	for _, user := range r.users {
-		if user.InviteCode == code {
-			clone := *user
-			return &clone, nil
-		}
-	}
-	return nil, service.ErrUserNotFound
-}
-
 func (r *stubUserRepo) GetFirstAdmin(ctx context.Context) (*service.User, error) {
 	for _, user := range r.users {
 		if user.Role == service.RoleAdmin && user.Status == service.StatusActive {
@@ -1063,6 +1256,18 @@ func (r *stubUserRepo) Update(ctx context.Context, user *service.User) error {
 }
 
 func (r *stubUserRepo) Delete(ctx context.Context, id int64) error {
+	return errors.New("not implemented")
+}
+
+func (r *stubUserRepo) GetUserAvatar(ctx context.Context, userID int64) (*service.UserAvatar, error) {
+	return nil, nil
+}
+
+func (r *stubUserRepo) UpsertUserAvatar(ctx context.Context, userID int64, input service.UpsertUserAvatarInput) (*service.UserAvatar, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *stubUserRepo) DeleteUserAvatar(ctx context.Context, userID int64) error {
 	return errors.New("not implemented")
 }
 
@@ -1090,10 +1295,6 @@ func (r *stubUserRepo) ExistsByEmail(ctx context.Context, email string) (bool, e
 	return false, errors.New("not implemented")
 }
 
-func (r *stubUserRepo) ExistsByInviteCode(ctx context.Context, code string) (bool, error) {
-	return false, errors.New("not implemented")
-}
-
 func (r *stubUserRepo) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {
 	return 0, errors.New("not implemented")
 }
@@ -1106,6 +1307,26 @@ func (r *stubUserRepo) AddGroupToAllowedGroups(ctx context.Context, userID int64
 	return errors.New("not implemented")
 }
 
+func (r *stubUserRepo) ListUserAuthIdentities(ctx context.Context, userID int64) ([]service.UserAuthIdentityRecord, error) {
+	return nil, nil
+}
+
+func (r *stubUserRepo) UnbindUserAuthProvider(context.Context, int64, string) error {
+	return errors.New("not implemented")
+}
+
+func (r *stubUserRepo) GetLatestUsedAtByUserIDs(ctx context.Context, userIDs []int64) (map[int64]*time.Time, error) {
+	return map[int64]*time.Time{}, nil
+}
+
+func (r *stubUserRepo) GetLatestUsedAtByUserID(ctx context.Context, userID int64) (*time.Time, error) {
+	return nil, nil
+}
+
+func (r *stubUserRepo) UpdateUserLastActiveAt(ctx context.Context, userID int64, activeAt time.Time) error {
+	return nil
+}
+
 func (r *stubUserRepo) UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error {
 	return errors.New("not implemented")
 }
@@ -1116,10 +1337,6 @@ func (r *stubUserRepo) EnableTotp(ctx context.Context, userID int64) error {
 
 func (r *stubUserRepo) DisableTotp(ctx context.Context, userID int64) error {
 	return errors.New("not implemented")
-}
-
-func (r *stubUserRepo) CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error) {
-	return 0, errors.New("not implemented")
 }
 
 type stubApiKeyCache struct{}
@@ -1176,13 +1393,7 @@ func (stubGroupRepo) Create(ctx context.Context, group *service.Group) error {
 	return errors.New("not implemented")
 }
 
-func (r *stubGroupRepo) GetByID(ctx context.Context, id int64) (*service.Group, error) {
-	for i := range r.active {
-		if r.active[i].ID == id {
-			group := r.active[i]
-			return &group, nil
-		}
-	}
+func (stubGroupRepo) GetByID(ctx context.Context, id int64) (*service.Group, error) {
 	return nil, service.ErrGroupNotFound
 }
 
@@ -1250,47 +1461,15 @@ func (stubGroupRepo) UpdateSortOrders(ctx context.Context, updates []service.Gro
 }
 
 type stubAccountRepo struct {
-	now           time.Time
-	nextID        int64
-	accounts      map[int64]*service.Account
 	bulkUpdateIDs []int64
 }
 
-func newStubAccountRepo(now time.Time) *stubAccountRepo {
-	return &stubAccountRepo{
-		now:      now,
-		nextID:   300,
-		accounts: make(map[int64]*service.Account),
-	}
-}
-
-func (s *stubAccountRepo) Seed(account *service.Account) {
-	if account == nil {
-		return
-	}
-	s.accounts[account.ID] = cloneServiceAccount(account)
-}
-
 func (s *stubAccountRepo) Create(ctx context.Context, account *service.Account) error {
-	if account == nil {
-		return service.ErrAccountNilInput
-	}
-	if account.ID == 0 {
-		account.ID = s.nextID
-		s.nextID++
-	}
-	account.CreatedAt = s.now
-	account.UpdatedAt = s.now
-	s.accounts[account.ID] = cloneServiceAccount(account)
-	return nil
+	return errors.New("not implemented")
 }
 
 func (s *stubAccountRepo) GetByID(ctx context.Context, id int64) (*service.Account, error) {
-	account, ok := s.accounts[id]
-	if !ok {
-		return nil, service.ErrAccountNotFound
-	}
-	return cloneServiceAccount(account), nil
+	return nil, service.ErrAccountNotFound
 }
 
 func (s *stubAccountRepo) GetByIDs(ctx context.Context, ids []int64) ([]*service.Account, error) {
@@ -1310,19 +1489,7 @@ func (s *stubAccountRepo) FindByExtraField(ctx context.Context, key string, valu
 }
 
 func (s *stubAccountRepo) Update(ctx context.Context, account *service.Account) error {
-	if account == nil {
-		return service.ErrAccountNilInput
-	}
-	existing, ok := s.accounts[account.ID]
-	if !ok {
-		return service.ErrAccountNotFound
-	}
-	if account.CreatedAt.IsZero() {
-		account.CreatedAt = existing.CreatedAt
-	}
-	account.UpdatedAt = s.now
-	s.accounts[account.ID] = cloneServiceAccount(account)
-	return nil
+	return errors.New("not implemented")
 }
 
 func (s *stubAccountRepo) Delete(ctx context.Context, id int64) error {
@@ -1338,16 +1505,7 @@ func (s *stubAccountRepo) ListWithFilters(ctx context.Context, params pagination
 }
 
 func (s *stubAccountRepo) ListByGroup(ctx context.Context, groupID int64) ([]service.Account, error) {
-	out := make([]service.Account, 0)
-	for _, account := range s.accounts {
-		for _, id := range account.GroupIDs {
-			if id == groupID {
-				out = append(out, *cloneServiceAccount(account))
-				break
-			}
-		}
-	}
-	return out, nil
+	return nil, errors.New("not implemented")
 }
 
 func (s *stubAccountRepo) ListActive(ctx context.Context) ([]service.Account, error) {
@@ -1383,32 +1541,7 @@ func (s *stubAccountRepo) AutoPauseExpiredAccounts(ctx context.Context, now time
 }
 
 func (s *stubAccountRepo) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
-	bindings := make([]service.AccountGroupBindingInput, 0, len(groupIDs))
-	for _, groupID := range groupIDs {
-		bindings = append(bindings, service.AccountGroupBindingInput{GroupID: groupID})
-	}
-	return s.BindGroupBindings(ctx, accountID, bindings)
-}
-
-func (s *stubAccountRepo) BindGroupBindings(ctx context.Context, accountID int64, bindings []service.AccountGroupBindingInput) error {
-	account, ok := s.accounts[accountID]
-	if !ok {
-		return service.ErrAccountNotFound
-	}
-
-	account.GroupIDs = make([]int64, 0, len(bindings))
-	account.AccountGroups = make([]service.AccountGroup, 0, len(bindings))
-	for idx, binding := range bindings {
-		account.GroupIDs = append(account.GroupIDs, binding.GroupID)
-		account.AccountGroups = append(account.AccountGroups, service.AccountGroup{
-			AccountID:         accountID,
-			GroupID:           binding.GroupID,
-			Priority:          idx + 1,
-			BillingMultiplier: binding.EffectiveBillingMultiplier(),
-			CreatedAt:         s.now,
-		})
-	}
-	return nil
+	return errors.New("not implemented")
 }
 
 func (s *stubAccountRepo) ListSchedulable(ctx context.Context) ([]service.Account, error) {
@@ -1498,35 +1631,6 @@ func (s *stubAccountRepo) BulkUpdate(ctx context.Context, ids []int64, updates s
 
 func (s *stubAccountRepo) ListCRSAccountIDs(ctx context.Context) (map[string]int64, error) {
 	return nil, errors.New("not implemented")
-}
-
-func cloneServiceAccount(account *service.Account) *service.Account {
-	if account == nil {
-		return nil
-	}
-	cloned := *account
-	if account.Credentials != nil {
-		cloned.Credentials = make(map[string]any, len(account.Credentials))
-		for k, v := range account.Credentials {
-			cloned.Credentials[k] = v
-		}
-	}
-	if account.Extra != nil {
-		cloned.Extra = make(map[string]any, len(account.Extra))
-		for k, v := range account.Extra {
-			cloned.Extra[k] = v
-		}
-	}
-	if account.GroupIDs != nil {
-		cloned.GroupIDs = append([]int64(nil), account.GroupIDs...)
-	}
-	if account.AccountGroups != nil {
-		cloned.AccountGroups = append([]service.AccountGroup(nil), account.AccountGroups...)
-	}
-	if account.Groups != nil {
-		cloned.Groups = append([]*service.Group(nil), account.Groups...)
-	}
-	return &cloned
 }
 
 type stubProxyRepo struct{}
@@ -1650,12 +1754,8 @@ func (stubRedeemCodeRepo) SumPositiveBalanceByUser(ctx context.Context, userID i
 }
 
 type stubUserSubscriptionRepo struct {
-	byUser          map[int64][]service.UserSubscription
-	activeByUser    map[int64][]service.UserSubscription
-	adminList       []service.UserSubscription
-	lastListStatus  string
-	lastListGroupID *int64
-	resetDailyCalls []int64
+	byUser       map[int64][]service.UserSubscription
+	activeByUser map[int64][]service.UserSubscription
 }
 
 func (r *stubUserSubscriptionRepo) SetByUserID(userID int64, subs []service.UserSubscription) {
@@ -1670,10 +1770,6 @@ func (r *stubUserSubscriptionRepo) SetActiveByUserID(userID int64, subs []servic
 		r.activeByUser = make(map[int64][]service.UserSubscription)
 	}
 	r.activeByUser[userID] = append([]service.UserSubscription(nil), subs...)
-}
-
-func (r *stubUserSubscriptionRepo) SetAdminList(subs []service.UserSubscription) {
-	r.adminList = append([]service.UserSubscription(nil), subs...)
 }
 
 func (stubUserSubscriptionRepo) Create(ctx context.Context, sub *service.UserSubscription) error {
@@ -1709,65 +1805,8 @@ func (r *stubUserSubscriptionRepo) ListActiveByUserID(ctx context.Context, userI
 func (stubUserSubscriptionRepo) ListByGroupID(ctx context.Context, groupID int64, params pagination.PaginationParams) ([]service.UserSubscription, *pagination.PaginationResult, error) {
 	return nil, nil, errors.New("not implemented")
 }
-func (r *stubUserSubscriptionRepo) List(ctx context.Context, params pagination.PaginationParams, userID, groupID *int64, status, platform, sortBy, sortOrder string) ([]service.UserSubscription, *pagination.PaginationResult, error) {
-	r.lastListStatus = status
-	if groupID != nil {
-		groupIDCopy := *groupID
-		r.lastListGroupID = &groupIDCopy
-	} else {
-		r.lastListGroupID = nil
-	}
-
-	filtered := make([]service.UserSubscription, 0, len(r.adminList))
-	for i := range r.adminList {
-		sub := r.adminList[i]
-		if userID != nil && sub.UserID != *userID {
-			continue
-		}
-		if groupID != nil && sub.GroupID != *groupID {
-			continue
-		}
-		if status != "" && sub.Status != status {
-			continue
-		}
-		filtered = append(filtered, sub)
-	}
-
-	page := params.Page
-	if page <= 0 {
-		page = 1
-	}
-	pageSize := params.PageSize
-	if pageSize <= 0 {
-		pageSize = len(filtered)
-		if pageSize == 0 {
-			pageSize = 1
-		}
-	}
-	start := (page - 1) * pageSize
-	pages := 1
-	if len(filtered) > 0 {
-		pages = int(math.Ceil(float64(len(filtered)) / float64(pageSize)))
-	}
-	if start >= len(filtered) {
-		return []service.UserSubscription{}, &pagination.PaginationResult{
-			Total:    int64(len(filtered)),
-			Page:     page,
-			PageSize: pageSize,
-			Pages:    pages,
-		}, nil
-	}
-	end := start + pageSize
-	if end > len(filtered) {
-		end = len(filtered)
-	}
-
-	return append([]service.UserSubscription(nil), filtered[start:end]...), &pagination.PaginationResult{
-		Total:    int64(len(filtered)),
-		Page:     page,
-		PageSize: pageSize,
-		Pages:    pages,
-	}, nil
+func (stubUserSubscriptionRepo) List(ctx context.Context, params pagination.PaginationParams, userID, groupID *int64, status, platform, sortBy, sortOrder string) ([]service.UserSubscription, *pagination.PaginationResult, error) {
+	return nil, nil, errors.New("not implemented")
 }
 func (stubUserSubscriptionRepo) ExistsByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (bool, error) {
 	return false, errors.New("not implemented")
@@ -1784,12 +1823,8 @@ func (stubUserSubscriptionRepo) UpdateNotes(ctx context.Context, subscriptionID 
 func (stubUserSubscriptionRepo) ActivateWindows(ctx context.Context, id int64, start time.Time) error {
 	return errors.New("not implemented")
 }
-func (stubUserSubscriptionRepo) AdvanceDailyWindow(ctx context.Context, id int64, newWindowStart time.Time, carryoverIn, carryoverRemaining float64) error {
+func (stubUserSubscriptionRepo) ResetDailyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
 	return errors.New("not implemented")
-}
-func (r *stubUserSubscriptionRepo) ResetDailyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
-	r.resetDailyCalls = append(r.resetDailyCalls, id)
-	return nil
 }
 func (stubUserSubscriptionRepo) ResetWeeklyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
 	return errors.New("not implemented")

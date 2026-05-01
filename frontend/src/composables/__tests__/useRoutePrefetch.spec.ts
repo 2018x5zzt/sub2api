@@ -32,11 +32,8 @@ const createMockRouter = (): Router => {
     { path: '/admin/redeem', components: { default: mockImportFn } },
     { path: '/dashboard', components: { default: mockImportFn } },
     { path: '/keys', components: { default: mockImportFn } },
-    { path: '/models', components: { default: mockImportFn } },
-    { path: '/available-channels', components: { default: mockImportFn } },
     { path: '/usage', components: { default: mockImportFn } },
     { path: '/redeem', components: { default: mockImportFn } },
-    { path: '/affiliate', components: { default: mockImportFn } },
     { path: '/profile', components: { default: mockImportFn } }
   ]
 
@@ -199,8 +196,6 @@ describe('useRoutePrefetch', () => {
     it('用户预加载映射表应该包含正确的路由', () => {
       expect(_userPrefetchMap).toHaveProperty('/dashboard')
       expect(_userPrefetchMap['/dashboard']).toHaveLength(2)
-      expect(_userPrefetchMap['/dashboard']).toContain('/models')
-      expect(_userPrefetchMap['/dashboard']).not.toContain('/available-channels')
     })
   })
 

@@ -21,29 +21,47 @@ type Announcement func(*sql.Selector)
 // AnnouncementRead is the predicate function for announcementread builders.
 type AnnouncementRead func(*sql.Selector)
 
+// AuthIdentity is the predicate function for authidentity builders.
+type AuthIdentity func(*sql.Selector)
+
+// AuthIdentityChannel is the predicate function for authidentitychannel builders.
+type AuthIdentityChannel func(*sql.Selector)
+
+// ChannelMonitor is the predicate function for channelmonitor builders.
+type ChannelMonitor func(*sql.Selector)
+
+// ChannelMonitorDailyRollup is the predicate function for channelmonitordailyrollup builders.
+type ChannelMonitorDailyRollup func(*sql.Selector)
+
+// ChannelMonitorHistory is the predicate function for channelmonitorhistory builders.
+type ChannelMonitorHistory func(*sql.Selector)
+
+// ChannelMonitorRequestTemplate is the predicate function for channelmonitorrequesttemplate builders.
+type ChannelMonitorRequestTemplate func(*sql.Selector)
+
 // ErrorPassthroughRule is the predicate function for errorpassthroughrule builders.
 type ErrorPassthroughRule func(*sql.Selector)
 
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
 
-// GroupHealthSnapshot is the predicate function for grouphealthsnapshot builders.
-type GroupHealthSnapshot func(*sql.Selector)
-
 // IdempotencyRecord is the predicate function for idempotencyrecord builders.
 type IdempotencyRecord func(*sql.Selector)
 
-// InviteAdminAction is the predicate function for inviteadminaction builders.
-type InviteAdminAction func(*sql.Selector)
+// IdentityAdoptionDecision is the predicate function for identityadoptiondecision builders.
+type IdentityAdoptionDecision func(*sql.Selector)
 
-// InviteRelationshipEvent is the predicate function for inviterelationshipevent builders.
-type InviteRelationshipEvent func(*sql.Selector)
+// PaymentAuditLog is the predicate function for paymentauditlog builders.
+type PaymentAuditLog func(*sql.Selector)
 
-// InviteRewardRecord is the predicate function for inviterewardrecord builders.
-type InviteRewardRecord func(*sql.Selector)
+// PaymentOrder is the predicate function for paymentorder builders.
+type PaymentOrder func(*sql.Selector)
 
-// ProductSubscriptionMigrationSource is the predicate function for productsubscriptionmigrationsource builders.
-type ProductSubscriptionMigrationSource func(*sql.Selector)
+// PaymentProviderInstance is the predicate function for paymentproviderinstance builders.
+type PaymentProviderInstance func(*sql.Selector)
+
+// PendingAuthSession is the predicate function for pendingauthsession builders.
+type PendingAuthSession func(*sql.Selector)
 
 // PromoCode is the predicate function for promocode builders.
 type PromoCode func(*sql.Selector)
@@ -63,11 +81,8 @@ type SecuritySecret func(*sql.Selector)
 // Setting is the predicate function for setting builders.
 type Setting func(*sql.Selector)
 
-// SubscriptionProduct is the predicate function for subscriptionproduct builders.
-type SubscriptionProduct func(*sql.Selector)
-
-// SubscriptionProductGroup is the predicate function for subscriptionproductgroup builders.
-type SubscriptionProductGroup func(*sql.Selector)
+// SubscriptionPlan is the predicate function for subscriptionplan builders.
+type SubscriptionPlan func(*sql.Selector)
 
 // TLSFingerprintProfile is the predicate function for tlsfingerprintprofile builders.
 type TLSFingerprintProfile func(*sql.Selector)
@@ -89,9 +104,6 @@ type UserAttributeDefinition func(*sql.Selector)
 
 // UserAttributeValue is the predicate function for userattributevalue builders.
 type UserAttributeValue func(*sql.Selector)
-
-// UserProductSubscription is the predicate function for userproductsubscription builders.
-type UserProductSubscription func(*sql.Selector)
 
 // UserSubscription is the predicate function for usersubscription builders.
 type UserSubscription func(*sql.Selector)

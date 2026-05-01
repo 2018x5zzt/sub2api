@@ -189,11 +189,11 @@ func (m *mockChannelAuthCacheInvalidator) InvalidateAuthCacheByGroupID(_ context
 // ---------------------------------------------------------------------------
 
 func newTestChannelService(repo *mockChannelRepository) *ChannelService {
-	return NewChannelService(repo, nil)
+	return NewChannelService(repo, nil, nil, nil)
 }
 
 func newTestChannelServiceWithAuth(repo *mockChannelRepository, auth *mockChannelAuthCacheInvalidator) *ChannelService {
-	return NewChannelService(repo, auth)
+	return NewChannelService(repo, nil, auth, nil)
 }
 
 // makeStandardRepo returns a repo that serves one active channel with anthropic pricing
@@ -907,7 +907,7 @@ func TestResolveChannelMapping_DefaultBillingModelSource(t *testing.T) {
 		ID:                 1,
 		Status:             StatusActive,
 		GroupIDs:           []int64{10},
-		BillingModelSource: "",
+		BillingModelSource: "", // empty
 	}
 	repo := makeStandardRepo(ch, map[int64]string{10: "anthropic"})
 	svc := newTestChannelService(repo)
@@ -1068,6 +1068,8 @@ func TestIsModelRestricted_CaseInsensitive(t *testing.T) {
 }
 
 // --- 4.5 ResolveChannelMappingAndRestrict ---
+// 注意：模型限制检查已移至调度阶段（GatewayService.checkChannelPricingRestriction），
+// ResolveChannelMappingAndRestrict 仅做映射，restricted 始终为 false。
 
 func TestResolveChannelMappingAndRestrict_NilGroupID(t *testing.T) {
 	repo := &mockChannelRepository{
@@ -1083,7 +1085,7 @@ func TestResolveChannelMappingAndRestrict_NilGroupID(t *testing.T) {
 	require.Equal(t, "claude-opus-4", mapping.MappedModel)
 }
 
-func TestResolveChannelMappingAndRestrict_ModelInPricing_WithMapping(t *testing.T) {
+func TestResolveChannelMappingAndRestrict_WithMapping(t *testing.T) {
 	ch := Channel{
 		ID:             1,
 		Status:         StatusActive,
@@ -1103,41 +1105,12 @@ func TestResolveChannelMappingAndRestrict_ModelInPricing_WithMapping(t *testing.
 
 	gid := int64(10)
 	mapping, restricted := svc.ResolveChannelMappingAndRestrict(context.Background(), &gid, "claude-sonnet-4")
-	require.False(t, restricted) // model IS in pricing
+	require.False(t, restricted) // restricted 始终为 false，限制检查在调度阶段
 	require.True(t, mapping.Mapped)
 	require.Equal(t, "claude-sonnet-4-20250514", mapping.MappedModel)
 }
 
-func TestResolveChannelMappingAndRestrict_ModelNotInPricing_WithMapping(t *testing.T) {
-	// CRITICAL: this test verifies that restriction checks the ORIGINAL model
-	// against pricing BEFORE applying mapping. The model "unknown-model" is NOT
-	// in pricing, so even though the wildcard mapping "*" matches it, it should
-	// still be restricted.
-	ch := Channel{
-		ID:             1,
-		Status:         StatusActive,
-		GroupIDs:       []int64{10},
-		RestrictModels: true,
-		ModelPricing: []ChannelModelPricing{
-			{Platform: "anthropic", Models: []string{"claude-sonnet-4"}},
-		},
-		ModelMapping: map[string]map[string]string{
-			"anthropic": {
-				"*": "catch-all-target",
-			},
-		},
-	}
-	repo := makeStandardRepo(ch, map[int64]string{10: "anthropic"})
-	svc := newTestChannelService(repo)
-
-	gid := int64(10)
-	mapping, restricted := svc.ResolveChannelMappingAndRestrict(context.Background(), &gid, "unknown-model")
-	require.True(t, restricted) // model NOT in pricing, even though mapping exists
-	require.True(t, mapping.Mapped)
-	require.Equal(t, "catch-all-target", mapping.MappedModel)
-}
-
-func TestResolveChannelMappingAndRestrict_ModelNotInPricing_NoMapping(t *testing.T) {
+func TestResolveChannelMappingAndRestrict_NoMapping(t *testing.T) {
 	ch := Channel{
 		ID:             1,
 		Status:         StatusActive,
@@ -1152,7 +1125,7 @@ func TestResolveChannelMappingAndRestrict_ModelNotInPricing_NoMapping(t *testing
 
 	gid := int64(10)
 	mapping, restricted := svc.ResolveChannelMappingAndRestrict(context.Background(), &gid, "unknown-model")
-	require.True(t, restricted) // model NOT in pricing
+	require.False(t, restricted) // restricted 始终为 false，限制检查在调度阶段
 	require.False(t, mapping.Mapped)
 	require.Equal(t, "unknown-model", mapping.MappedModel)
 }
@@ -1209,12 +1182,15 @@ func TestBuildCache_GroupPlatformError(t *testing.T) {
 	}
 	svc := newTestChannelService(repo)
 
-	// Should degrade gracefully: channel is found, but without platform info
-	// pricing won't match because platform will be "" and pricing platform is "anthropic"
+	// Should fail-close: error propagated when group platforms cannot be loaded
 	result, err := svc.GetChannelForGroup(context.Background(), 10)
-	require.NoError(t, err)
-	require.NotNil(t, result) // channel still found
-	require.Equal(t, int64(1), result.ID)
+	require.Error(t, err)
+	require.Nil(t, result)
+
+	// Within error-TTL, second call should hit cache (empty) and return nil, nil
+	result2, err2 := svc.GetChannelForGroup(context.Background(), 10)
+	require.NoError(t, err2)
+	require.Nil(t, result2)
 }
 
 func TestBuildCache_MultipleGroupsSameChannel(t *testing.T) {
@@ -1428,6 +1404,32 @@ func TestCreate_DuplicateModel(t *testing.T) {
 	require.Contains(t, err.Error(), "claude-opus-4")
 }
 
+func TestCreate_InvalidPricingIntervals(t *testing.T) {
+	repo := &mockChannelRepository{
+		existsByNameFn: func(_ context.Context, _ string) (bool, error) {
+			return false, nil
+		},
+	}
+	svc := newTestChannelService(repo)
+
+	_, err := svc.Create(context.Background(), &CreateChannelInput{
+		Name: "new-channel",
+		ModelPricing: []ChannelModelPricing{
+			{
+				Platform: "anthropic",
+				Models:   []string{"claude-opus-4"},
+				Intervals: []PricingInterval{
+					{MinTokens: 0, MaxTokens: testPtrInt(2000), InputPrice: testPtrFloat64(1e-6)},
+					{MinTokens: 1000, MaxTokens: testPtrInt(3000), InputPrice: testPtrFloat64(2e-6)},
+				},
+			},
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "INVALID_PRICING_INTERVALS")
+	require.Contains(t, err.Error(), "overlap")
+}
+
 func TestCreate_DefaultBillingModelSource(t *testing.T) {
 	var capturedChannel *Channel
 	repo := &mockChannelRepository{
@@ -1450,7 +1452,7 @@ func TestCreate_DefaultBillingModelSource(t *testing.T) {
 
 	result, err := svc.Create(context.Background(), &CreateChannelInput{
 		Name:               "new-channel",
-		BillingModelSource: "",
+		BillingModelSource: "", // empty, should default to "channel_mapped"
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
@@ -1617,6 +1619,37 @@ func TestUpdate_DuplicateModel(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "claude-opus-4")
+}
+
+func TestUpdate_InvalidPricingIntervals(t *testing.T) {
+	existing := &Channel{
+		ID:     1,
+		Name:   "original",
+		Status: StatusActive,
+	}
+	repo := &mockChannelRepository{
+		getByIDFn: func(_ context.Context, _ int64) (*Channel, error) {
+			return existing.Clone(), nil
+		},
+	}
+	svc := newTestChannelService(repo)
+
+	invalidPricing := []ChannelModelPricing{
+		{
+			Platform: "anthropic",
+			Models:   []string{"claude-opus-4"},
+			Intervals: []PricingInterval{
+				{MinTokens: 0, MaxTokens: nil, InputPrice: testPtrFloat64(1e-6)},
+				{MinTokens: 2000, MaxTokens: testPtrInt(4000), InputPrice: testPtrFloat64(2e-6)},
+			},
+		},
+	}
+	_, err := svc.Update(context.Background(), 1, &UpdateChannelInput{
+		ModelPricing: &invalidPricing,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "INVALID_PRICING_INTERVALS")
+	require.Contains(t, err.Error(), "unbounded")
 }
 
 func TestUpdate_InvalidatesChannelCache(t *testing.T) {
@@ -1886,4 +1919,487 @@ func TestReplaceModelInBody_InvalidJSON(t *testing.T) {
 	arrayBody := []byte("[]")
 	result2 := ReplaceModelInBody(arrayBody, "new-model")
 	require.Equal(t, arrayBody, result2)
+}
+
+// ===========================================================================
+// 7. isPlatformPricingMatch
+// ===========================================================================
+
+func TestIsPlatformPricingMatch(t *testing.T) {
+	tests := []struct {
+		name            string
+		groupPlatform   string
+		pricingPlatform string
+		want            bool
+	}{
+		{"antigravity does NOT match anthropic", PlatformAntigravity, PlatformAnthropic, false},
+		{"antigravity does NOT match gemini", PlatformAntigravity, PlatformGemini, false},
+		{"antigravity matches antigravity", PlatformAntigravity, PlatformAntigravity, true},
+		{"antigravity does NOT match openai", PlatformAntigravity, PlatformOpenAI, false},
+		{"anthropic matches anthropic", PlatformAnthropic, PlatformAnthropic, true},
+		{"anthropic does NOT match antigravity", PlatformAnthropic, PlatformAntigravity, false},
+		{"anthropic does NOT match gemini", PlatformAnthropic, PlatformGemini, false},
+		{"gemini matches gemini", PlatformGemini, PlatformGemini, true},
+		{"gemini does NOT match antigravity", PlatformGemini, PlatformAntigravity, false},
+		{"gemini does NOT match anthropic", PlatformGemini, PlatformAnthropic, false},
+		{"empty string matches nothing", "", PlatformAnthropic, false},
+		{"empty string matches empty", "", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, isPlatformPricingMatch(tt.groupPlatform, tt.pricingPlatform))
+		})
+	}
+}
+
+// ===========================================================================
+// 8. matchingPlatforms
+// ===========================================================================
+
+func TestMatchingPlatforms(t *testing.T) {
+	tests := []struct {
+		name          string
+		groupPlatform string
+		want          []string
+	}{
+		{"antigravity returns itself only", PlatformAntigravity, []string{PlatformAntigravity}},
+		{"anthropic returns itself", PlatformAnthropic, []string{PlatformAnthropic}},
+		{"gemini returns itself", PlatformGemini, []string{PlatformGemini}},
+		{"openai returns itself", PlatformOpenAI, []string{PlatformOpenAI}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := matchingPlatforms(tt.groupPlatform)
+			require.Equal(t, tt.want, result)
+		})
+	}
+}
+
+// ===========================================================================
+// 9. Antigravity platform isolation — no cross-platform pricing leakage
+// ===========================================================================
+
+func TestGetChannelModelPricing_AntigravityDoesNotSeeCrossPlatformPricing(t *testing.T) {
+	// Channel has anthropic pricing for claude-opus-4-6.
+	// Group 10 is antigravity — should NOT see the anthropic pricing.
+	ch := Channel{
+		ID:       1,
+		Status:   StatusActive,
+		GroupIDs: []int64{10},
+		ModelPricing: []ChannelModelPricing{
+			{ID: 100, Platform: PlatformAnthropic, Models: []string{"claude-opus-4-6"}, InputPrice: testPtrFloat64(15e-6)},
+		},
+	}
+	repo := makeStandardRepo(ch, map[int64]string{10: PlatformAntigravity})
+	svc := newTestChannelService(repo)
+
+	result := svc.GetChannelModelPricing(context.Background(), 10, "claude-opus-4-6")
+	require.Nil(t, result, "antigravity group should NOT see anthropic-platform pricing")
+}
+
+func TestGetChannelModelPricing_AnthropicCannotSeeAntigravityPricing(t *testing.T) {
+	// Channel has antigravity-platform pricing for claude-opus-4-6.
+	// Group 10 is anthropic — should NOT see antigravity pricing (no cross-platform leakage).
+	ch := Channel{
+		ID:       1,
+		Status:   StatusActive,
+		GroupIDs: []int64{10},
+		ModelPricing: []ChannelModelPricing{
+			{ID: 100, Platform: PlatformAntigravity, Models: []string{"claude-opus-4-6"}, InputPrice: testPtrFloat64(15e-6)},
+		},
+	}
+	repo := makeStandardRepo(ch, map[int64]string{10: PlatformAnthropic})
+	svc := newTestChannelService(repo)
+
+	result := svc.GetChannelModelPricing(context.Background(), 10, "claude-opus-4-6")
+	require.Nil(t, result, "anthropic group should NOT see antigravity-platform pricing")
+}
+
+// ===========================================================================
+// 10. Antigravity platform isolation — no cross-platform model mapping
+// ===========================================================================
+
+func TestResolveChannelMapping_AntigravityDoesNotSeeCrossPlatformMapping(t *testing.T) {
+	// Channel has anthropic model mapping: claude-opus-4-5 → claude-opus-4-6.
+	// Group 10 is antigravity — should NOT apply the anthropic mapping.
+	ch := Channel{
+		ID:       1,
+		Status:   StatusActive,
+		GroupIDs: []int64{10},
+		ModelMapping: map[string]map[string]string{
+			PlatformAnthropic: {
+				"claude-opus-4-5": "claude-opus-4-6",
+			},
+		},
+	}
+	repo := makeStandardRepo(ch, map[int64]string{10: PlatformAntigravity})
+	svc := newTestChannelService(repo)
+
+	result := svc.ResolveChannelMapping(context.Background(), 10, "claude-opus-4-5")
+	require.False(t, result.Mapped, "antigravity group should NOT apply anthropic mapping")
+	require.Equal(t, "claude-opus-4-5", result.MappedModel)
+}
+
+// ===========================================================================
+// 11. Antigravity platform isolation — same-name model across platforms
+// ===========================================================================
+
+func TestGetChannelModelPricing_AntigravityDoesNotSeeSameModelFromOtherPlatforms(t *testing.T) {
+	// anthropic 和 gemini 都定义了同名模型 "shared-model"，价格不同。
+	// antigravity 分组不应看到任何一个（各平台严格独立）。
+	ch := Channel{
+		ID:       1,
+		Status:   StatusActive,
+		GroupIDs: []int64{10},
+		ModelPricing: []ChannelModelPricing{
+			{ID: 200, Platform: PlatformAnthropic, Models: []string{"shared-model"}, InputPrice: testPtrFloat64(10e-6)},
+			{ID: 201, Platform: PlatformGemini, Models: []string{"shared-model"}, InputPrice: testPtrFloat64(5e-6)},
+		},
+	}
+	repo := makeStandardRepo(ch, map[int64]string{10: PlatformAntigravity})
+	svc := newTestChannelService(repo)
+
+	result := svc.GetChannelModelPricing(context.Background(), 10, "shared-model")
+	require.Nil(t, result, "antigravity group should NOT see anthropic/gemini-platform pricing")
+}
+
+func TestGetChannelModelPricing_AntigravityDoesNotSeeGeminiOnlyPricing(t *testing.T) {
+	// 只有 gemini 平台定义了模型 "gemini-model"。
+	// antigravity 分组不应看到 gemini 的定价。
+	ch := Channel{
+		ID:       1,
+		Status:   StatusActive,
+		GroupIDs: []int64{10},
+		ModelPricing: []ChannelModelPricing{
+			{ID: 300, Platform: PlatformGemini, Models: []string{"gemini-model"}, InputPrice: testPtrFloat64(2e-6)},
+		},
+	}
+	repo := makeStandardRepo(ch, map[int64]string{10: PlatformAntigravity})
+	svc := newTestChannelService(repo)
+
+	result := svc.GetChannelModelPricing(context.Background(), 10, "gemini-model")
+	require.Nil(t, result, "antigravity group should NOT see gemini-platform pricing")
+}
+
+func TestGetChannelModelPricing_AntigravityDoesNotSeeWildcardFromOtherPlatforms(t *testing.T) {
+	// anthropic 和 gemini 都有 "shared-*" 通配符定价。
+	// antigravity 分组不应命中任何一个。
+	ch := Channel{
+		ID:       1,
+		Status:   StatusActive,
+		GroupIDs: []int64{10},
+		ModelPricing: []ChannelModelPricing{
+			{ID: 400, Platform: PlatformAnthropic, Models: []string{"shared-*"}, InputPrice: testPtrFloat64(10e-6)},
+			{ID: 401, Platform: PlatformGemini, Models: []string{"shared-*"}, InputPrice: testPtrFloat64(5e-6)},
+		},
+	}
+	repo := makeStandardRepo(ch, map[int64]string{10: PlatformAntigravity})
+	svc := newTestChannelService(repo)
+
+	result := svc.GetChannelModelPricing(context.Background(), 10, "shared-model")
+	require.Nil(t, result, "antigravity group should NOT see wildcard pricing from other platforms")
+}
+
+func TestResolveChannelMapping_AntigravityDoesNotSeeMappingFromOtherPlatforms(t *testing.T) {
+	// anthropic 和 gemini 都定义了同名模型映射 "alias" → 不同目标。
+	// antigravity 分组不应命中任何一个。
+	ch := Channel{
+		ID:       1,
+		Status:   StatusActive,
+		GroupIDs: []int64{10},
+		ModelMapping: map[string]map[string]string{
+			PlatformAnthropic: {"alias": "anthropic-target"},
+			PlatformGemini:    {"alias": "gemini-target"},
+		},
+	}
+	repo := makeStandardRepo(ch, map[int64]string{10: PlatformAntigravity})
+	svc := newTestChannelService(repo)
+
+	result := svc.ResolveChannelMapping(context.Background(), 10, "alias")
+	require.False(t, result.Mapped, "antigravity group should NOT see mapping from other platforms")
+	require.Equal(t, "alias", result.MappedModel)
+}
+
+func TestCheckRestricted_AntigravityDoesNotSeeModelsFromOtherPlatforms(t *testing.T) {
+	// anthropic 和 gemini 都定义了同名模型 "shared-model"。
+	// antigravity 分组启用了 RestrictModels，"shared-model" 应被限制（各平台独立）。
+	ch := Channel{
+		ID:             1,
+		Status:         StatusActive,
+		RestrictModels: true,
+		GroupIDs:       []int64{10},
+		ModelPricing: []ChannelModelPricing{
+			{ID: 500, Platform: PlatformAnthropic, Models: []string{"shared-model"}, InputPrice: testPtrFloat64(10e-6)},
+			{ID: 501, Platform: PlatformGemini, Models: []string{"shared-model"}, InputPrice: testPtrFloat64(5e-6)},
+		},
+	}
+	repo := makeStandardRepo(ch, map[int64]string{10: PlatformAntigravity})
+	svc := newTestChannelService(repo)
+
+	restricted := svc.IsModelRestricted(context.Background(), 10, "shared-model")
+	require.True(t, restricted, "shared-model from other platforms should be restricted for antigravity")
+
+	restricted = svc.IsModelRestricted(context.Background(), 10, "unknown-model")
+	require.True(t, restricted, "unknown-model should be restricted for antigravity")
+}
+
+func TestGetChannelModelPricing_AntigravityOwnPricingWorks(t *testing.T) {
+	// antigravity 平台自己配置的定价应正常生效（覆盖 Claude 和 Gemini 模型）。
+	ch := Channel{
+		ID:       1,
+		Status:   StatusActive,
+		GroupIDs: []int64{10},
+		ModelPricing: []ChannelModelPricing{
+			{ID: 600, Platform: PlatformAntigravity, Models: []string{"claude-*"}, InputPrice: testPtrFloat64(15e-6)},
+			{ID: 601, Platform: PlatformAntigravity, Models: []string{"gemini-*"}, InputPrice: testPtrFloat64(2e-6)},
+		},
+	}
+	repo := makeStandardRepo(ch, map[int64]string{10: PlatformAntigravity})
+	svc := newTestChannelService(repo)
+
+	// Claude 模型匹配 antigravity 定价
+	result := svc.GetChannelModelPricing(context.Background(), 10, "claude-sonnet-4")
+	require.NotNil(t, result)
+	require.Equal(t, int64(600), result.ID)
+	require.InDelta(t, 15e-6, *result.InputPrice, 1e-12)
+
+	// Gemini 模型匹配 antigravity 定价
+	result = svc.GetChannelModelPricing(context.Background(), 10, "gemini-2.5-flash")
+	require.NotNil(t, result)
+	require.Equal(t, int64(601), result.ID)
+	require.InDelta(t, 2e-6, *result.InputPrice, 1e-12)
+}
+
+func TestGetChannelModelPricing_NonAntigravityUnaffected(t *testing.T) {
+	// 确保非 antigravity 平台的行为不受影响。
+	// anthropic 分组只能看到 anthropic 的定价，看不到 gemini 的。
+	ch := Channel{
+		ID:       1,
+		Status:   StatusActive,
+		GroupIDs: []int64{10, 20},
+		ModelPricing: []ChannelModelPricing{
+			{ID: 600, Platform: PlatformAnthropic, Models: []string{"shared-model"}, InputPrice: testPtrFloat64(10e-6)},
+			{ID: 601, Platform: PlatformGemini, Models: []string{"shared-model"}, InputPrice: testPtrFloat64(5e-6)},
+		},
+	}
+	repo := makeStandardRepo(ch, map[int64]string{10: PlatformAnthropic, 20: PlatformGemini})
+	svc := newTestChannelService(repo)
+
+	// anthropic 分组应该只看到 anthropic 的定价
+	result := svc.GetChannelModelPricing(context.Background(), 10, "shared-model")
+	require.NotNil(t, result)
+	require.Equal(t, int64(600), result.ID)
+	require.InDelta(t, 10e-6, *result.InputPrice, 1e-12)
+
+	// gemini 分组应该只看到 gemini 的定价
+	result = svc.GetChannelModelPricing(context.Background(), 20, "shared-model")
+	require.NotNil(t, result)
+	require.Equal(t, int64(601), result.ID)
+	require.InDelta(t, 5e-6, *result.InputPrice, 1e-12)
+}
+
+// ---------------------------------------------------------------------------
+// 10. ToUsageFields
+// ---------------------------------------------------------------------------
+
+func TestToUsageFields_NoMapping(t *testing.T) {
+	r := ChannelMappingResult{
+		MappedModel:        "claude-opus-4",
+		ChannelID:          1,
+		Mapped:             false,
+		BillingModelSource: BillingModelSourceRequested,
+	}
+	fields := r.ToUsageFields("claude-opus-4", "claude-opus-4")
+	require.Equal(t, int64(1), fields.ChannelID)
+	require.Equal(t, "claude-opus-4", fields.OriginalModel)
+	require.Equal(t, "claude-opus-4", fields.ChannelMappedModel)
+	require.Equal(t, BillingModelSourceRequested, fields.BillingModelSource)
+	require.Empty(t, fields.ModelMappingChain)
+}
+
+func TestToUsageFields_WithChannelMapping(t *testing.T) {
+	r := ChannelMappingResult{
+		MappedModel:        "claude-sonnet-4-20250514",
+		ChannelID:          2,
+		Mapped:             true,
+		BillingModelSource: BillingModelSourceChannelMapped,
+	}
+	fields := r.ToUsageFields("claude-sonnet-4", "claude-sonnet-4-20250514")
+	require.Equal(t, int64(2), fields.ChannelID)
+	require.Equal(t, "claude-sonnet-4", fields.OriginalModel)
+	require.Equal(t, "claude-sonnet-4-20250514", fields.ChannelMappedModel)
+	require.Equal(t, "claude-sonnet-4→claude-sonnet-4-20250514", fields.ModelMappingChain)
+}
+
+func TestToUsageFields_WithUpstreamDifference(t *testing.T) {
+	r := ChannelMappingResult{
+		MappedModel:        "claude-sonnet-4",
+		ChannelID:          3,
+		Mapped:             true,
+		BillingModelSource: BillingModelSourceUpstream,
+	}
+	fields := r.ToUsageFields("my-alias", "claude-sonnet-4-20250514")
+	require.Equal(t, "my-alias", fields.OriginalModel)
+	require.Equal(t, "claude-sonnet-4", fields.ChannelMappedModel)
+	require.Equal(t, "my-alias→claude-sonnet-4→claude-sonnet-4-20250514", fields.ModelMappingChain)
+}
+
+// ---------------------------------------------------------------------------
+// 11. validatePricingBillingMode (moved from handler tests)
+// ---------------------------------------------------------------------------
+
+func TestValidatePricingBillingMode(t *testing.T) {
+	tests := []struct {
+		name    string
+		pricing []ChannelModelPricing
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "token mode - valid",
+			pricing: []ChannelModelPricing{{BillingMode: BillingModeToken}},
+		},
+		{
+			name: "per_request with price - valid",
+			pricing: []ChannelModelPricing{{
+				BillingMode:     BillingModePerRequest,
+				PerRequestPrice: testPtrFloat64(0.5),
+			}},
+		},
+		{
+			name: "per_request with intervals - valid",
+			pricing: []ChannelModelPricing{{
+				BillingMode: BillingModePerRequest,
+				Intervals:   []PricingInterval{{MinTokens: 0, MaxTokens: testPtrInt(1000), PerRequestPrice: testPtrFloat64(0.1)}},
+			}},
+		},
+		{
+			name:    "per_request no price no intervals - invalid",
+			pricing: []ChannelModelPricing{{BillingMode: BillingModePerRequest}},
+			wantErr: true,
+			errMsg:  "per-request price or intervals required",
+		},
+		{
+			name:    "image no price no intervals - invalid",
+			pricing: []ChannelModelPricing{{BillingMode: BillingModeImage}},
+			wantErr: true,
+			errMsg:  "per-request price or intervals required",
+		},
+		{
+			name:    "empty list - valid",
+			pricing: []ChannelModelPricing{},
+		},
+		{
+			name: "negative input_price - invalid",
+			pricing: []ChannelModelPricing{{
+				BillingMode: BillingModeToken,
+				InputPrice:  testPtrFloat64(-0.01),
+			}},
+			wantErr: true,
+			errMsg:  "input_price must be >= 0",
+		},
+		{
+			name: "interval with no price fields - invalid",
+			pricing: []ChannelModelPricing{{
+				BillingMode:     BillingModePerRequest,
+				PerRequestPrice: testPtrFloat64(0.5),
+				Intervals:       []PricingInterval{{MinTokens: 0, MaxTokens: testPtrInt(1000)}},
+			}},
+			wantErr: true,
+			errMsg:  "has no price fields set",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePricingBillingMode(tt.pricing)
+			if tt.wantErr {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 12. Antigravity wildcard mapping isolation
+// ---------------------------------------------------------------------------
+
+func TestResolveChannelMapping_AntigravityDoesNotSeeWildcardMappingFromOtherPlatforms(t *testing.T) {
+	ch := Channel{
+		ID:       1,
+		Status:   StatusActive,
+		GroupIDs: []int64{10, 20},
+		ModelMapping: map[string]map[string]string{
+			PlatformAnthropic: {"claude-*": "claude-override"},
+			PlatformGemini:    {"gemini-*": "gemini-override"},
+		},
+	}
+	repo := makeStandardRepo(ch, map[int64]string{10: PlatformAntigravity, 20: PlatformAnthropic})
+	svc := newTestChannelService(repo)
+
+	// antigravity 分组不应看到 anthropic/gemini 的通配符映射
+	result := svc.ResolveChannelMapping(context.Background(), 10, "claude-opus-4")
+	require.False(t, result.Mapped)
+	require.Equal(t, "claude-opus-4", result.MappedModel)
+
+	result = svc.ResolveChannelMapping(context.Background(), 10, "gemini-2.5-pro")
+	require.False(t, result.Mapped)
+	require.Equal(t, "gemini-2.5-pro", result.MappedModel)
+
+	// anthropic 分组应该能看到 anthropic 的通配符映射
+	result = svc.ResolveChannelMapping(context.Background(), 20, "claude-opus-4")
+	require.True(t, result.Mapped)
+	require.Equal(t, "claude-override", result.MappedModel)
+}
+
+// ---------------------------------------------------------------------------
+// 13. Create/Update with mapping conflict validation
+// ---------------------------------------------------------------------------
+
+func TestCreate_MappingConflict(t *testing.T) {
+	repo := &mockChannelRepository{}
+	svc := newTestChannelService(repo)
+
+	_, err := svc.Create(context.Background(), &CreateChannelInput{
+		Name: "test",
+		ModelMapping: map[string]map[string]string{
+			PlatformAnthropic: {
+				"claude-*":      "target-a",
+				"claude-opus-*": "target-b",
+			},
+		},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "MAPPING_PATTERN_CONFLICT")
+}
+
+func TestUpdate_MappingConflict(t *testing.T) {
+	existingChannel := &Channel{
+		ID:     1,
+		Name:   "existing",
+		Status: StatusActive,
+	}
+	repo := &mockChannelRepository{
+		getByIDFn: func(_ context.Context, _ int64) (*Channel, error) {
+			return existingChannel, nil
+		},
+	}
+	svc := newTestChannelService(repo)
+
+	conflictMapping := map[string]map[string]string{
+		PlatformAnthropic: {
+			"claude-*":      "target-a",
+			"claude-opus-*": "target-b",
+		},
+	}
+	_, err := svc.Update(context.Background(), 1, &UpdateChannelInput{
+		ModelMapping: conflictMapping,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "MAPPING_PATTERN_CONFLICT")
 }

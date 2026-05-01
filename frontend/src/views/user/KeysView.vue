@@ -49,11 +49,19 @@
       </template>
 
       <template #table>
-        <DataTable :columns="columns" :data="apiKeys" :loading="loading">
+        <DataTable
+          :columns="columns"
+          :data="apiKeys"
+          :loading="loading"
+          :server-side-sort="true"
+          default-sort-key="created_at"
+          default-sort-order="desc"
+          @sort="handleSort"
+        >
           <template #cell-key="{ value, row }">
             <div class="flex items-center gap-2">
               <code class="code text-xs">
-                {{ maskKey(value) }}
+                {{ maskApiKey(value) }}
               </code>
               <button
                 @click="copyToClipboard(value, row.id)"
@@ -90,18 +98,39 @@
           </template>
 
           <template #cell-group="{ row }">
-            <div>
-              <GroupBadge
-                v-if="row.group"
-                :name="row.group.name"
-                :platform="row.group.platform"
-                :subscription-type="row.group.subscription_type"
-                :rate-multiplier="row.group.rate_multiplier"
-                :user-rate-multiplier="userGroupRates[row.group.id]"
-              />
-              <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
-                t('keys.noGroup')
-              }}</span>
+            <div class="group/dropdown relative">
+              <button
+                :ref="(el) => setGroupButtonRef(row.id, el)"
+                @click="openGroupSelector(row)"
+                class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
+                :title="t('keys.clickToChangeGroup')"
+              >
+                <GroupBadge
+                  v-if="row.group"
+                  :name="row.group.name"
+                  :platform="row.group.platform"
+                  :subscription-type="row.group.subscription_type"
+                  :rate-multiplier="row.group.rate_multiplier"
+                  :user-rate-multiplier="userGroupRates[row.group.id]"
+                />
+                <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
+                  t('keys.noGroup')
+                }}</span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('keys.selectGroup') }}</span>
+                <svg
+                  class="h-3.5 w-3.5 text-gray-400 opacity-60 transition-opacity group-hover/dropdown:opacity-100"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"
+                  />
+                </svg>
+              </button>
             </div>
           </template>
 
@@ -377,22 +406,7 @@
 
         <div>
           <label class="input-label">{{ t('keys.groupLabel') }}</label>
-          <template v-if="showEditModal">
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-700/60">
-              <GroupBadge
-                v-if="selectedFormGroup"
-                :name="selectedFormGroup.name"
-                :platform="selectedFormGroup.platform"
-                :subscription-type="selectedFormGroup.subscription_type"
-                :rate-multiplier="selectedFormGroup.rate_multiplier"
-                :user-rate-multiplier="userGroupRates[selectedFormGroup.id]"
-              />
-              <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t('keys.noGroup') }}</span>
-            </div>
-            <p class="input-hint">{{ t('keys.groupImmutableHint') }}</p>
-          </template>
           <Select
-            v-else
             v-model="formData.group_id"
             :options="groupOptions"
             :placeholder="t('keys.selectGroup')"
@@ -403,40 +417,26 @@
             <template #selected="{ option }">
               <GroupBadge
                 v-if="option"
-                :name="(option as unknown as ApiKeyGroupOption).label"
-                :platform="(option as unknown as ApiKeyGroupOption).platform"
-                :subscription-type="(option as unknown as ApiKeyGroupOption).subscriptionType"
-                :rate-multiplier="(option as unknown as ApiKeyGroupOption).rate"
-                :user-rate-multiplier="(option as unknown as ApiKeyGroupOption).userRate"
+                :name="(option as unknown as GroupOption).label"
+                :platform="(option as unknown as GroupOption).platform"
+                :subscription-type="(option as unknown as GroupOption).subscriptionType"
+                :rate-multiplier="(option as unknown as GroupOption).rate"
+                :user-rate-multiplier="(option as unknown as GroupOption).userRate"
               />
               <span v-else class="text-gray-400">{{ t('keys.selectGroup') }}</span>
             </template>
             <template #option="{ option, selected }">
               <GroupOptionItem
-                :name="(option as unknown as ApiKeyGroupOption).label"
-                :platform="(option as unknown as ApiKeyGroupOption).platform"
-                :subscription-type="(option as unknown as ApiKeyGroupOption).subscriptionType"
-                :rate-multiplier="(option as unknown as ApiKeyGroupOption).rate"
-                :user-rate-multiplier="(option as unknown as ApiKeyGroupOption).userRate"
-                :description="(option as unknown as ApiKeyGroupOption).description"
+                :name="(option as unknown as GroupOption).label"
+                :platform="(option as unknown as GroupOption).platform"
+                :subscription-type="(option as unknown as GroupOption).subscriptionType"
+                :rate-multiplier="(option as unknown as GroupOption).rate"
+                :user-rate-multiplier="(option as unknown as GroupOption).userRate"
+                :description="(option as unknown as GroupOption).description"
                 :selected="selected"
               />
             </template>
           </Select>
-        </div>
-
-        <div v-if="showBudgetMultiplierField">
-          <label class="input-label">{{ t('keys.budgetMultiplierLabel') }}</label>
-          <input
-            v-model.number="formData.budget_multiplier"
-            type="number"
-            step="0.1"
-            min="3"
-            max="50"
-            class="input"
-            :placeholder="String(defaultBudgetMultiplierForForm ?? '')"
-          />
-          <p class="input-hint">{{ t('keys.budgetMultiplierHint') }}</p>
         </div>
 
         <!-- Custom Key Section (only for create) -->
@@ -977,19 +977,80 @@
       </template>
     </BaseDialog>
 
+    <!-- Group Selector Dropdown (Teleported to body to avoid overflow clipping) -->
+    <Teleport to="body">
+      <div
+        v-if="groupSelectorKeyId !== null && dropdownPosition"
+        ref="dropdownRef"
+        class="animate-in fade-in slide-in-from-top-2 fixed z-[100000020] w-max min-w-[380px] overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/5 duration-200 dark:bg-dark-800 dark:ring-white/10"
+        style="pointer-events: auto !important;"
+        :style="{
+          top: dropdownPosition.top !== undefined ? dropdownPosition.top + 'px' : undefined,
+          bottom: dropdownPosition.bottom !== undefined ? dropdownPosition.bottom + 'px' : undefined,
+          left: dropdownPosition.left + 'px'
+        }"
+      >
+        <!-- Search box -->
+        <div class="border-b border-gray-100 p-2 dark:border-dark-700">
+          <div class="relative">
+            <svg class="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              v-model="groupSearchQuery"
+              type="text"
+              class="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-8 pr-3 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-primary-300 focus:ring-1 focus:ring-primary-300 dark:border-dark-600 dark:bg-dark-700 dark:text-white dark:placeholder-gray-500 dark:focus:border-primary-600 dark:focus:ring-primary-600"
+              :placeholder="t('keys.searchGroup')"
+              @click.stop
+            />
+          </div>
+        </div>
+        <!-- Group list -->
+        <div class="max-h-80 overflow-y-auto p-1.5">
+          <button
+            v-for="option in filteredGroupOptions"
+            :key="option.value ?? 'null'"
+            @click="changeGroup(selectedKeyForGroup!, option.value)"
+            :class="[
+              'flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm transition-colors',
+              'border-b border-gray-100 last:border-0 dark:border-dark-700',
+              selectedKeyForGroup?.group_id === option.value ||
+              (!selectedKeyForGroup?.group_id && option.value === null)
+                ? 'bg-primary-50 dark:bg-primary-900/20'
+                : 'hover:bg-gray-100 dark:hover:bg-dark-700'
+            ]"
+            :title="option.description || undefined"
+          >
+            <GroupOptionItem
+              :name="option.label"
+              :platform="option.platform"
+              :subscription-type="option.subscriptionType"
+              :rate-multiplier="option.rate"
+              :user-rate-multiplier="option.userRate"
+              :description="option.description"
+              :selected="
+                selectedKeyForGroup?.group_id === option.value ||
+                (!selectedKeyForGroup?.group_id && option.value === null)
+              "
+            />
+          </button>
+          <!-- Empty state when search has no results -->
+          <div v-if="filteredGroupOptions.length === 0" class="py-4 text-center text-sm text-gray-400 dark:text-gray-500">
+            {{ t('keys.noGroupFound') }}
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-	import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+	import { ref, computed, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
-import { useSubscriptionProductStore } from '@/stores/subscriptionProducts'
 	import { useClipboard } from '@/composables/useClipboard'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
-import { isDynamicPricingGroup, resolveApiKeyBudgetMultiplier, resolveGroupBudgetMultiplier } from '@/utils/dynamicPricing'
-import { buildApiKeyGroupOptions, type ApiKeyGroupOption } from '@/views/user/keyGroupOptions'
 
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
@@ -1007,10 +1068,11 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import EndpointPopover from '@/components/keys/EndpointPopover.vue'
 	import GroupBadge from '@/components/common/GroupBadge.vue'
 	import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
-	import type { ApiKey, Group, PublicSettings } from '@/types'
+	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform } from '@/types'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
+import { maskApiKey } from '@/utils/maskApiKey'
 
 // Helper to format date for datetime-local input
 const formatDateTimeLocal = (isoDate: string): string => {
@@ -1019,9 +1081,18 @@ const formatDateTimeLocal = (isoDate: string): string => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+interface GroupOption {
+  value: number
+  label: string
+  description: string | null
+  rate: number
+  userRate: number | null
+  subscriptionType: SubscriptionType
+  platform: GroupPlatform
+}
+
 const appStore = useAppStore()
 const onboardingStore = useOnboardingStore()
-const subscriptionProductStore = useSubscriptionProductStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
 
 const columns = computed<Column[]>(() => [
@@ -1052,6 +1123,10 @@ const pagination = ref({
   total: 0,
   pages: 0
 })
+const sortState = ref({
+  sort_by: 'created_at',
+  sort_order: 'desc' as 'asc' | 'desc'
+})
 
 // Filter state
 const filterSearch = ref('')
@@ -1068,26 +1143,30 @@ const showCcsClientSelect = ref(false)
 const pendingCcsRow = ref<ApiKey | null>(null)
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
+const groupSelectorKeyId = ref<number | null>(null)
 const publicSettings = ref<PublicSettings | null>(null)
+const dropdownRef = ref<HTMLElement | null>(null)
+const dropdownPosition = ref<{ top?: number; bottom?: number; left: number } | null>(null)
+const groupButtonRefs = ref<Map<number, HTMLElement>>(new Map())
 let abortController: AbortController | null = null
 
-const selectedFormGroup = computed(() => {
-  if (showEditModal.value) {
-    return selectedKey.value?.group || groups.value.find((group) => group.id === selectedKey.value?.group_id) || null
-  }
-  if (formData.value.group_id === null) {
-    return null
-  }
-  return groups.value.find((group) => group.id === formData.value.group_id) || null
+// Get the currently selected key for group change
+const selectedKeyForGroup = computed(() => {
+  if (groupSelectorKeyId.value === null) return null
+  return apiKeys.value.find((k) => k.id === groupSelectorKeyId.value) || null
 })
 
-const showBudgetMultiplierField = computed(() => isDynamicPricingGroup(selectedFormGroup.value))
-const defaultBudgetMultiplierForForm = computed(() => resolveGroupBudgetMultiplier(selectedFormGroup.value))
+const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance | null) => {
+  if (el instanceof HTMLElement) {
+    groupButtonRefs.value.set(keyId, el)
+  } else {
+    groupButtonRefs.value.delete(keyId)
+  }
+}
 
 const formData = ref({
   name: '',
   group_id: null as number | null,
-  budget_multiplier: null as number | null,
   status: 'active' as 'active' | 'inactive',
   use_custom_key: false,
   custom_key: '',
@@ -1160,13 +1239,27 @@ const onStatusFilterChange = (value: string | number | boolean | null) => {
 
 // Convert groups to Select options format with rate multiplier and subscription type
 const groupOptions = computed(() =>
-  buildApiKeyGroupOptions(groups.value, userGroupRates.value, subscriptionProductStore.items)
+  groups.value.map((group) => ({
+    value: group.id,
+    label: group.name,
+    description: group.description,
+    rate: group.rate_multiplier,
+    userRate: userGroupRates.value[group.id] ?? null,
+    subscriptionType: group.subscription_type,
+    platform: group.platform
+  }))
 )
 
-const maskKey = (key: string): string => {
-  if (key.length <= 12) return key
-  return `${key.slice(0, 8)}...${key.slice(-4)}`
-}
+// Group dropdown search
+const groupSearchQuery = ref('')
+const filteredGroupOptions = computed(() => {
+  const query = groupSearchQuery.value.trim().toLowerCase()
+  if (!query) return groupOptions.value
+  return groupOptions.value.filter((opt) => {
+    return opt.label.toLowerCase().includes(query) ||
+      (opt.description && opt.description.toLowerCase().includes(query))
+  })
+})
 
 const copyToClipboard = async (text: string, keyId: number) => {
   const success = await clipboardCopy(text, t('keys.copied'))
@@ -1192,10 +1285,18 @@ const loadApiKeys = async () => {
   loading.value = true
   try {
     // Build filters
-    const filters: { search?: string; status?: string; group_id?: number | string } = {}
+    const filters: {
+      search?: string
+      status?: string
+      group_id?: number | string
+      sort_by?: string
+      sort_order?: 'asc' | 'desc'
+    } = {}
     if (filterSearch.value) filters.search = filterSearch.value
     if (filterStatus.value) filters.status = filterStatus.value
     if (filterGroupId.value !== '') filters.group_id = filterGroupId.value
+    filters.sort_by = sortState.value.sort_by
+    filters.sort_order = sortState.value.sort_order
 
     const response = await keysAPI.list(pagination.value.page, pagination.value.page_size, filters, {
       signal
@@ -1238,14 +1339,6 @@ const loadGroups = async () => {
   }
 }
 
-const loadSubscriptionProducts = async () => {
-  try {
-    await subscriptionProductStore.fetchActive()
-  } catch (error) {
-    console.error('Failed to load subscription products:', error)
-  }
-}
-
 const loadUserGroupRates = async () => {
   try {
     userGroupRates.value = await userGroupsAPI.getUserGroupRates()
@@ -1283,6 +1376,13 @@ const handlePageSizeChange = (pageSize: number) => {
   loadApiKeys()
 }
 
+const handleSort = (key: string, order: 'asc' | 'desc') => {
+  sortState.value.sort_by = key
+  sortState.value.sort_order = order
+  pagination.value.page = 1
+  loadApiKeys()
+}
+
 const editKey = (key: ApiKey) => {
   selectedKey.value = key
   const hasIPRestriction = (key.ip_whitelist?.length > 0) || (key.ip_blacklist?.length > 0)
@@ -1290,7 +1390,6 @@ const editKey = (key: ApiKey) => {
   formData.value = {
     name: key.name,
     group_id: key.group_id,
-    budget_multiplier: resolveApiKeyBudgetMultiplier(key),
     status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
     use_custom_key: false,
     custom_key: '',
@@ -1323,27 +1422,70 @@ const toggleKeyStatus = async (key: ApiKey) => {
   }
 }
 
+const openGroupSelector = (key: ApiKey) => {
+  if (groupSelectorKeyId.value === key.id) {
+    groupSelectorKeyId.value = null
+    dropdownPosition.value = null
+  } else {
+    const buttonEl = groupButtonRefs.value.get(key.id)
+    if (buttonEl) {
+      const rect = buttonEl.getBoundingClientRect()
+      const dropdownEstHeight = 400 // estimated max dropdown height
+      const spaceBelow = window.innerHeight - rect.bottom
+      const spaceAbove = rect.top
+
+      if (spaceBelow < dropdownEstHeight && spaceAbove > spaceBelow) {
+        // Not enough space below, pop upward
+        dropdownPosition.value = {
+          bottom: window.innerHeight - rect.top + 4,
+          left: rect.left
+        }
+      } else {
+        // Default: pop downward
+        dropdownPosition.value = {
+          top: rect.bottom + 4,
+          left: rect.left
+        }
+      }
+    }
+    groupSelectorKeyId.value = key.id
+    groupSearchQuery.value = ''
+  }
+}
+
+const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
+  groupSelectorKeyId.value = null
+  dropdownPosition.value = null
+  if (key.group_id === newGroupId) return
+
+  try {
+    await keysAPI.update(key.id, { group_id: newGroupId })
+    appStore.showSuccess(t('keys.groupChangedSuccess'))
+    loadApiKeys()
+  } catch (error) {
+    appStore.showError(t('keys.failedToChangeGroup'))
+  }
+}
+
+const closeGroupSelector = (event: MouseEvent) => {
+  const target = event.target as HTMLElement
+  // Check if click is inside the dropdown or the trigger button
+  if (!target.closest('.group\\/dropdown') && !dropdownRef.value?.contains(target)) {
+    groupSelectorKeyId.value = null
+    dropdownPosition.value = null
+  }
+}
+
 const confirmDelete = (key: ApiKey) => {
   selectedKey.value = key
   showDeleteDialog.value = true
 }
 
 const handleSubmit = async () => {
-  if (!showEditModal.value && formData.value.group_id === null) {
+  // Validate group_id is required
+  if (formData.value.group_id === null) {
     appStore.showError(t('keys.groupRequired'))
     return
-  }
-
-  if (showBudgetMultiplierField.value) {
-    const budgetMultiplier = formData.value.budget_multiplier
-    if (budgetMultiplier === null || budgetMultiplier === undefined) {
-      appStore.showError(t('keys.budgetMultiplierRequired'))
-      return
-    }
-    if (budgetMultiplier < 3 || budgetMultiplier > 50) {
-      appStore.showError(t('keys.budgetMultiplierRange'))
-      return
-    }
   }
 
   // Validate custom key if enabled
@@ -1392,14 +1534,13 @@ const handleSubmit = async () => {
     rate_limit_1d: formData.value.rate_limit_1d && formData.value.rate_limit_1d > 0 ? formData.value.rate_limit_1d : 0,
     rate_limit_7d: formData.value.rate_limit_7d && formData.value.rate_limit_7d > 0 ? formData.value.rate_limit_7d : 0,
   } : { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 }
-  const budgetMultiplier = showBudgetMultiplierField.value ? formData.value.budget_multiplier ?? undefined : undefined
 
   submitting.value = true
   try {
     if (showEditModal.value && selectedKey.value) {
       await keysAPI.update(selectedKey.value.id, {
         name: formData.value.name,
-        budget_multiplier: budgetMultiplier,
+        group_id: formData.value.group_id,
         status: formData.value.status,
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
@@ -1420,8 +1561,7 @@ const handleSubmit = async () => {
         ipBlacklist,
         quota,
         expiresInDays,
-        rateLimitData,
-        budgetMultiplier
+        rateLimitData
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1467,7 +1607,6 @@ const closeModals = () => {
   formData.value = {
     name: '',
     group_id: null,
-    budget_multiplier: null,
     status: 'active',
     use_custom_key: false,
     custom_key: '',
@@ -1485,20 +1624,6 @@ const closeModals = () => {
     expiration_date: ''
   }
 }
-
-watch(
-  () => [showCreateModal.value, showEditModal.value, formData.value.group_id] as const,
-  ([showCreate, showEdit, groupID], [, prevShowEdit, prevGroupID]) => {
-    if (showEdit || !showCreate) {
-      return
-    }
-    if (groupID === prevGroupID && prevShowEdit === showEdit) {
-      return
-    }
-    const nextGroup = groups.value.find((group) => group.id === groupID) || null
-    formData.value.budget_multiplier = resolveGroupBudgetMultiplier(nextGroup)
-  }
-)
 
 // Show reset quota confirmation dialog
 const confirmResetQuota = () => {
@@ -1678,13 +1803,14 @@ function formatResetTime(resetAt: string | null): string {
 onMounted(() => {
   loadApiKeys()
   loadGroups()
-  loadSubscriptionProducts()
   loadUserGroupRates()
   loadPublicSettings()
+  document.addEventListener('click', closeGroupSelector)
   resetTimer = setInterval(() => { now.value = new Date() }, 60000)
 })
 
 onUnmounted(() => {
+  document.removeEventListener('click', closeGroupSelector)
   if (resetTimer) clearInterval(resetTimer)
 })
 </script>

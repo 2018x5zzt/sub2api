@@ -99,8 +99,8 @@ func TransformClaudeToGeminiWithOptions(claudeReq *ClaudeRequest, projectID, map
 		}
 	}
 
-	// 检测是否启用 thinking。显式配置优先，其次兼容 *-thinking 模型的默认语义。
-	isThinkingEnabled := isThinkingEnabledForClaudeRequest(targetModel, claudeReq.Thinking)
+	// 检测是否启用 thinking
+	isThinkingEnabled := claudeReq.Thinking != nil && (claudeReq.Thinking.Type == "enabled" || claudeReq.Thinking.Type == "adaptive")
 
 	// 只有 Gemini 模型支持 dummy thought workaround
 	// Claude 模型通过 Vertex/Google API 需要有效的 thought signatures
@@ -121,7 +121,7 @@ func TransformClaudeToGeminiWithOptions(claudeReq *ClaudeRequest, projectID, map
 		// If we had to downgrade thinking blocks to plain text due to missing/invalid signatures,
 		// disable upstream thinking mode to avoid signature/structure validation errors.
 		reqCopy := *claudeReq
-		reqCopy.Thinking = &ThinkingConfig{Type: "disabled"}
+		reqCopy.Thinking = nil
 		reqForConfig = &reqCopy
 	}
 	if targetModel != "" && targetModel != reqForConfig.Model {
@@ -204,13 +204,11 @@ type modelInfo struct {
 // 只有在此映射表中的模型才会注入身份提示词
 // 注意：模型映射逻辑在网关层完成；这里仅用于按模型前缀判断是否注入身份提示词。
 var modelInfoMap = map[string]modelInfo{
-	"claude-opus-4-5":            {DisplayName: "Claude Opus 4.5", CanonicalID: "claude-opus-4-5-20250929"},
-	"claude-opus-4-7":            {DisplayName: "Claude Opus 4.7", CanonicalID: "claude-opus-4-7"},
-	"claude-opus-4-6":            {DisplayName: "Claude Opus 4.6", CanonicalID: "claude-opus-4-6"},
-	"claude-sonnet-4-6-thinking": {DisplayName: "Claude Sonnet 4.6 Thinking", CanonicalID: "claude-sonnet-4-6-thinking"},
-	"claude-sonnet-4-6":          {DisplayName: "Claude Sonnet 4.6", CanonicalID: "claude-sonnet-4-6"},
-	"claude-sonnet-4-5":          {DisplayName: "Claude Sonnet 4.5", CanonicalID: "claude-sonnet-4-5-20250929"},
-	"claude-haiku-4-5":           {DisplayName: "Claude Haiku 4.5", CanonicalID: "claude-haiku-4-5-20251001"},
+	"claude-opus-4-5":   {DisplayName: "Claude Opus 4.5", CanonicalID: "claude-opus-4-5-20250929"},
+	"claude-opus-4-6":   {DisplayName: "Claude Opus 4.6", CanonicalID: "claude-opus-4-6"},
+	"claude-sonnet-4-6": {DisplayName: "Claude Sonnet 4.6", CanonicalID: "claude-sonnet-4-6"},
+	"claude-sonnet-4-5": {DisplayName: "Claude Sonnet 4.5", CanonicalID: "claude-sonnet-4-5-20250929"},
+	"claude-haiku-4-5":  {DisplayName: "Claude Haiku 4.5", CanonicalID: "claude-haiku-4-5-20251001"},
 }
 
 // getModelInfo 根据模型 ID 获取模型信息（前缀匹配）
@@ -584,22 +582,12 @@ func maxOutputTokensLimit(model string) int {
 	return maxOutputTokensUpperBound
 }
 
-func isAntigravityHighBudgetOpusModel(model string) bool {
-	model = strings.ToLower(model)
-	return strings.HasPrefix(model, "claude-opus-4-6") || strings.HasPrefix(model, "claude-opus-4-7")
-}
-
-func isThinkingEnabledForClaudeRequest(model string, thinking *ThinkingConfig) bool {
-	if thinking != nil {
-		switch strings.ToLower(strings.TrimSpace(thinking.Type)) {
-		case "enabled", "adaptive":
-			return true
-		default:
-			return false
-		}
-	}
-
-	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(model)), "-thinking")
+// isAntigravityOpusHighTierModel 判断是否为高阶 Opus 模型（4.6+），
+// 用于 adaptive thinking 时覆写为高预算。
+func isAntigravityOpusHighTierModel(model string) bool {
+	lower := strings.ToLower(model)
+	return strings.HasPrefix(lower, "claude-opus-4-6") ||
+		strings.HasPrefix(lower, "claude-opus-4-7")
 }
 
 func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
@@ -615,18 +603,18 @@ func buildGenerationConfig(req *ClaudeRequest) *GeminiGenerationConfig {
 	}
 
 	// Thinking 配置
-	if isThinkingEnabledForClaudeRequest(req.Model, req.Thinking) {
+	if req.Thinking != nil && (req.Thinking.Type == "enabled" || req.Thinking.Type == "adaptive") {
 		config.ThinkingConfig = &GeminiThinkingConfig{
 			IncludeThoughts: true,
 		}
 
 		// - thinking.type=enabled：budget_tokens>0 用显式预算
-		// - thinking.type=adaptive：仅在 Antigravity 的高预算 Opus 模型上覆写为 24576
+		// - thinking.type=adaptive：在 Antigravity 的高阶 Opus（4.6+）上覆写为 （24576）
 		budget := -1
-		if req.Thinking != nil && req.Thinking.BudgetTokens > 0 {
+		if req.Thinking.BudgetTokens > 0 {
 			budget = req.Thinking.BudgetTokens
 		}
-		if req.Thinking != nil && strings.EqualFold(strings.TrimSpace(req.Thinking.Type), "adaptive") && isAntigravityHighBudgetOpusModel(req.Model) {
+		if req.Thinking.Type == "adaptive" && isAntigravityOpusHighTierModel(req.Model) {
 			budget = ClaudeAdaptiveHighThinkingBudgetTokens
 		}
 
@@ -746,13 +734,14 @@ func buildTools(tools []ClaudeTool) []GeminiToolDeclaration {
 		})
 	}
 
-	if len(funcDecls) == 0 {
-		if !hasWebSearch {
-			return nil
-		}
-
-		// Web Search 工具映射
-		return []GeminiToolDeclaration{{
+	var declarations []GeminiToolDeclaration
+	if len(funcDecls) > 0 {
+		declarations = append(declarations, GeminiToolDeclaration{
+			FunctionDeclarations: funcDecls,
+		})
+	}
+	if hasWebSearch {
+		declarations = append(declarations, GeminiToolDeclaration{
 			GoogleSearch: &GeminiGoogleSearch{
 				EnhancedContent: &GeminiEnhancedContent{
 					ImageSearch: &GeminiImageSearch{
@@ -760,10 +749,11 @@ func buildTools(tools []ClaudeTool) []GeminiToolDeclaration {
 					},
 				},
 			},
-		}}
+		})
+	}
+	if len(declarations) == 0 {
+		return nil
 	}
 
-	return []GeminiToolDeclaration{{
-		FunctionDeclarations: funcDecls,
-	}}
+	return declarations
 }

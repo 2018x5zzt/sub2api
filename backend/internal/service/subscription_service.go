@@ -611,17 +611,6 @@ func (s *SubscriptionService) ListUserSubscriptions(ctx context.Context, userID 
 	return subs, nil
 }
 
-// ListVisibleUserSubscriptions returns user-facing legacy group subscriptions.
-// Legacy subscriptions that were migrated into product subscriptions stay available
-// for admin/audit paths, but should not be shown back to the user as a second plan.
-func (s *SubscriptionService) ListVisibleUserSubscriptions(ctx context.Context, userID int64) ([]UserSubscription, error) {
-	subs, err := s.ListUserSubscriptions(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	return s.filterMigratedLegacySubscriptions(ctx, userID, subs)
-}
-
 // ListActiveUserSubscriptions 获取用户的所有有效订阅
 func (s *SubscriptionService) ListActiveUserSubscriptions(ctx context.Context, userID int64) ([]UserSubscription, error) {
 	subs, err := s.userSubRepo.ListActiveByUserID(ctx, userID)
@@ -630,14 +619,6 @@ func (s *SubscriptionService) ListActiveUserSubscriptions(ctx context.Context, u
 	}
 	normalizeExpiredWindows(subs)
 	return subs, nil
-}
-
-func (s *SubscriptionService) ListVisibleActiveUserSubscriptions(ctx context.Context, userID int64) ([]UserSubscription, error) {
-	subs, err := s.ListActiveUserSubscriptions(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	return s.filterMigratedLegacySubscriptions(ctx, userID, subs)
 }
 
 // ListGroupSubscriptions 获取分组的所有订阅
@@ -669,21 +650,10 @@ func (s *SubscriptionService) List(ctx context.Context, page, pageSize int, user
 func normalizeExpiredWindows(subs []UserSubscription) {
 	for i := range subs {
 		sub := &subs[i]
-		clearLegacyDailyCarryover(sub)
 		// 日窗口过期：清零展示数据
 		if sub.NeedsDailyReset() {
-			if sub.Group != nil && sub.Group.HasDailyLimit() {
-				preview := previewDailyWindowAdvance(sub, sub.Group, startOfDay(time.Now()))
-				sub.DailyWindowStart = &preview.WindowStart
-				sub.DailyUsageUSD = 0
-				sub.DailyCarryoverInUSD = preview.CarryoverInUSD
-				sub.DailyCarryoverRemainingUSD = preview.CarryoverRemainingUSD
-			} else {
-				sub.DailyWindowStart = nil
-				sub.DailyUsageUSD = 0
-				sub.DailyCarryoverInUSD = 0
-				sub.DailyCarryoverRemainingUSD = 0
-			}
+			sub.DailyWindowStart = nil
+			sub.DailyUsageUSD = 0
 		}
 		// 周窗口过期：清零展示数据
 		if sub.NeedsWeeklyReset() {
@@ -768,13 +738,19 @@ func (s *SubscriptionService) AdminResetQuota(ctx context.Context, subscriptionI
 
 // CheckAndResetWindows 检查并重置过期的窗口
 func (s *SubscriptionService) CheckAndResetWindows(ctx context.Context, sub *UserSubscription) error {
-	clearLegacyDailyCarryover(sub)
-
 	// 使用当天零点作为新窗口起始时间
 	windowStart := startOfDay(time.Now())
 	needsInvalidateCache := false
 
-	// 日窗口推进由权威扣费写路径负责；旧订阅不支持 daily carryover。
+	// 日窗口重置（24小时）
+	if sub.NeedsDailyReset() {
+		if err := s.userSubRepo.ResetDailyUsage(ctx, sub.ID, windowStart); err != nil {
+			return err
+		}
+		sub.DailyWindowStart = &windowStart
+		sub.DailyUsageUSD = 0
+		needsInvalidateCache = true
+	}
 
 	// 周窗口重置（7天）
 	if sub.NeedsWeeklyReset() {
@@ -826,8 +802,6 @@ func (s *SubscriptionService) CheckUsageLimits(ctx context.Context, sub *UserSub
 // 仅做内存检查，不触发 DB 写入。窗口重置的 DB 写入由 DoWindowMaintenance 异步完成。
 // 返回 needsMaintenance 表示是否需要异步执行窗口维护。
 func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, group *Group) (needsMaintenance bool, err error) {
-	clearLegacyDailyCarryover(sub)
-
 	// 1. 验证订阅状态
 	if sub.Status == SubscriptionStatusExpired {
 		return false, ErrSubscriptionExpired
@@ -842,12 +816,7 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 	// 2. 内存中修正过期窗口的用量，确保 CheckUsageLimits 不会误拒绝用户
 	//    实际的 DB 窗口重置由 DoWindowMaintenance 异步完成
 	if sub.NeedsDailyReset() {
-		windowStart := startOfDay(time.Now())
-		preview := previewDailyWindowAdvance(sub, group, windowStart)
-		sub.DailyWindowStart = &preview.WindowStart
 		sub.DailyUsageUSD = 0
-		sub.DailyCarryoverInUSD = preview.CarryoverInUSD
-		sub.DailyCarryoverRemainingUSD = preview.CarryoverRemainingUSD
 		needsMaintenance = true
 	}
 	if sub.NeedsWeeklyReset() {
@@ -874,44 +843,6 @@ func (s *SubscriptionService) ValidateAndCheckLimits(sub *UserSubscription, grou
 	}
 
 	return needsMaintenance, nil
-}
-
-func clearLegacyDailyCarryover(sub *UserSubscription) {
-	if sub == nil {
-		return
-	}
-	sub.DailyCarryoverInUSD = 0
-	sub.DailyCarryoverRemainingUSD = 0
-}
-
-type migratedLegacySubscriptionIDLister interface {
-	ListMigratedLegacySubscriptionIDs(ctx context.Context, userID int64) (map[int64]struct{}, error)
-}
-
-func (s *SubscriptionService) filterMigratedLegacySubscriptions(ctx context.Context, userID int64, subs []UserSubscription) ([]UserSubscription, error) {
-	if len(subs) == 0 {
-		return subs, nil
-	}
-	lister, ok := s.userSubRepo.(migratedLegacySubscriptionIDLister)
-	if !ok {
-		return subs, nil
-	}
-	migratedIDs, err := lister.ListMigratedLegacySubscriptionIDs(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	if len(migratedIDs) == 0 {
-		return subs, nil
-	}
-
-	visible := make([]UserSubscription, 0, len(subs))
-	for _, sub := range subs {
-		if _, migrated := migratedIDs[sub.ID]; migrated {
-			continue
-		}
-		visible = append(visible, sub)
-	}
-	return visible, nil
 }
 
 // DoWindowMaintenance 异步执行窗口维护（激活+重置）
@@ -959,60 +890,6 @@ func (s *SubscriptionService) doWindowMaintenance(sub *UserSubscription) {
 // RecordUsage 记录使用量到订阅
 func (s *SubscriptionService) RecordUsage(ctx context.Context, subscriptionID int64, costUSD float64) error {
 	return s.userSubRepo.IncrementUsage(ctx, subscriptionID, costUSD)
-}
-
-// BulkResetDailyQuotaResult captures the outcome of an admin compensation reset.
-type BulkResetDailyQuotaResult struct {
-	ResetCount  int64     `json:"reset_count"`
-	WindowStart time.Time `json:"window_start"`
-}
-
-// AdminBulkResetDailyQuota performs a one-off compensation reset for daily quota state.
-// It only touches active subscriptions and only resets the daily window.
-func (s *SubscriptionService) AdminBulkResetDailyQuota(ctx context.Context, groupID *int64) (*BulkResetDailyQuotaResult, error) {
-	windowStart := startOfDay(time.Now())
-	var resetCount int64
-
-	for page := 1; ; page++ {
-		subs, pag, err := s.userSubRepo.List(
-			ctx,
-			pagination.PaginationParams{Page: page, PageSize: 200},
-			nil,
-			groupID,
-			SubscriptionStatusActive,
-			"",
-			"created_at",
-			"asc",
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		for i := range subs {
-			sub := subs[i]
-			if err := s.userSubRepo.ResetDailyUsage(ctx, sub.ID, windowStart); err != nil {
-				return nil, err
-			}
-			resetCount++
-			s.InvalidateSubCache(sub.UserID, sub.GroupID)
-			if s.billingCacheService != nil {
-				_ = s.billingCacheService.InvalidateSubscription(ctx, sub.UserID, sub.GroupID)
-			}
-		}
-
-		if pag == nil || len(subs) == 0 || page >= pag.Pages {
-			break
-		}
-	}
-
-	if s.subCacheL1 != nil {
-		s.subCacheL1.Wait()
-	}
-
-	return &BulkResetDailyQuotaResult{
-		ResetCount:  resetCount,
-		WindowStart: windowStart,
-	}, nil
 }
 
 // SubscriptionProgress 订阅进度
@@ -1066,17 +943,13 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 
 	// 日进度
 	if group.HasDailyLimit() && sub.DailyWindowStart != nil {
-		limit := sub.DailyEffectiveLimit(group)
+		limit := *group.DailyLimitUSD
 		resetsAt := sub.DailyWindowStart.Add(24 * time.Hour)
-		percentage := 0.0
-		if limit > 0 {
-			percentage = (sub.DailyUsageUSD / limit) * 100
-		}
 		progress.Daily = &UsageWindowProgress{
 			LimitUSD:        limit,
 			UsedUSD:         sub.DailyUsageUSD,
-			RemainingUSD:    sub.DailyRemainingTotal(group),
-			Percentage:      percentage,
+			RemainingUSD:    limit - sub.DailyUsageUSD,
+			Percentage:      (sub.DailyUsageUSD / limit) * 100,
 			WindowStart:     *sub.DailyWindowStart,
 			ResetsAt:        resetsAt,
 			ResetsInSeconds: int64(time.Until(resetsAt).Seconds()),

@@ -8,6 +8,8 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/authidentity"
+	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/suite"
@@ -26,6 +28,8 @@ func (s *UserRepoSuite) SetupTest() {
 	s.repo = newUserRepositoryWithSQL(s.client, integrationDB)
 
 	// 清理测试数据，确保每个测试从干净状态开始
+	_, _ = integrationDB.ExecContext(s.ctx, "DELETE FROM auth_identity_channels")
+	_, _ = integrationDB.ExecContext(s.ctx, "DELETE FROM auth_identities")
 	_, _ = integrationDB.ExecContext(s.ctx, "DELETE FROM user_subscriptions")
 	_, _ = integrationDB.ExecContext(s.ctx, "DELETE FROM user_allowed_groups")
 	_, _ = integrationDB.ExecContext(s.ctx, "DELETE FROM users")
@@ -122,49 +126,24 @@ func (s *UserRepoSuite) TestGetByEmail() {
 	s.Require().Equal(user.ID, got.ID)
 }
 
+func (s *UserRepoSuite) TestGetByEmail_NormalizesSpacingAndCaseOnPostgres() {
+	user := s.mustCreateUser(&service.User{Email: " Legacy@Example.com "})
+
+	got, err := s.repo.GetByEmail(s.ctx, "  legacy@example.com  ")
+	s.Require().NoError(err, "GetByEmail normalized lookup")
+	s.Require().Equal(user.ID, got.ID)
+}
+
 func (s *UserRepoSuite) TestGetByEmail_NotFound() {
 	_, err := s.repo.GetByEmail(s.ctx, "nonexistent@test.com")
 	s.Require().Error(err, "expected error for non-existent email")
 }
 
-func (s *UserRepoSuite) TestGetByInviteCode_FallsBackToAlias() {
-	user := s.mustCreateUser(&service.User{
-		Email:      "alias-lookup@test.com",
-		InviteCode: "AbCdEfGh",
-	})
+func (s *UserRepoSuite) TestExistsByEmail_NormalizesSpacingAndCaseOnPostgres() {
+	s.mustCreateUser(&service.User{Email: " Legacy@Example.com "})
 
-	_, err := integrationDB.ExecContext(
-		s.ctx,
-		"INSERT INTO invite_code_aliases (user_id, alias_code, source) VALUES ($1, $2, $3)",
-		user.ID,
-		"U1",
-		"integration_test",
-	)
-	s.Require().NoError(err, "insert invite alias")
-
-	got, err := s.repo.GetByInviteCode(s.ctx, "U1")
-	s.Require().NoError(err, "GetByInviteCode via alias")
-	s.Require().Equal(user.ID, got.ID)
-	s.Require().Equal("AbCdEfGh", got.InviteCode)
-}
-
-func (s *UserRepoSuite) TestExistsByInviteCode_ReturnsTrueForAlias() {
-	user := s.mustCreateUser(&service.User{
-		Email:      "alias-exists@test.com",
-		InviteCode: "QwErTyUi",
-	})
-
-	_, err := integrationDB.ExecContext(
-		s.ctx,
-		"INSERT INTO invite_code_aliases (user_id, alias_code, source) VALUES ($1, $2, $3)",
-		user.ID,
-		"U2",
-		"integration_test",
-	)
-	s.Require().NoError(err, "insert invite alias")
-
-	exists, err := s.repo.ExistsByInviteCode(s.ctx, "U2")
-	s.Require().NoError(err, "ExistsByInviteCode via alias")
+	exists, err := s.repo.ExistsByEmail(s.ctx, "  LEGACY@example.com  ")
+	s.Require().NoError(err, "ExistsByEmail normalized lookup")
 	s.Require().True(exists)
 }
 
@@ -181,6 +160,30 @@ func (s *UserRepoSuite) TestUpdate() {
 	s.Require().Equal("updated", updated.Username)
 }
 
+func (s *UserRepoSuite) TestUpdateIgnoresNoRowsFromConflictingEmailIdentityUpsert() {
+	user := s.mustCreateUser(&service.User{Email: "update-existing-identity@test.com", Username: "original"})
+
+	identityCount, err := s.client.AuthIdentity.Query().
+		Where(
+			authidentity.UserIDEQ(user.ID),
+			authidentity.ProviderTypeEQ("email"),
+			authidentity.ProviderKeyEQ("email"),
+			authidentity.ProviderSubjectEQ("update-existing-identity@test.com"),
+		).
+		Count(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Equal(1, identityCount)
+
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	got.Username = "updated"
+	s.Require().NoError(s.repo.Update(s.ctx, got), "Update should tolerate ON CONFLICT DO NOTHING returning no rows")
+
+	updated, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().Equal("updated", updated.Username)
+}
+
 func (s *UserRepoSuite) TestDelete() {
 	user := s.mustCreateUser(&service.User{Email: "delete@test.com"})
 
@@ -189,6 +192,39 @@ func (s *UserRepoSuite) TestDelete() {
 
 	_, err = s.repo.GetByID(s.ctx, user.ID)
 	s.Require().Error(err, "expected error after delete")
+}
+
+func (s *UserRepoSuite) TestDeleteRemovesAuthIdentitiesAndChannels() {
+	user := s.mustCreateUser(&service.User{Email: "delete-oauth@test.com"})
+
+	identity, err := s.client.AuthIdentity.Create().
+		SetUserID(user.ID).
+		SetProviderType("linuxdo").
+		SetProviderKey("linuxdo").
+		SetProviderSubject("delete-oauth-subject").
+		Save(s.ctx)
+	s.Require().NoError(err)
+
+	_, err = s.client.AuthIdentityChannel.Create().
+		SetIdentityID(identity.ID).
+		SetProviderType("wechat").
+		SetProviderKey("wechat").
+		SetChannel("open").
+		SetChannelAppID("app-id").
+		SetChannelSubject("openid-123").
+		Save(s.ctx)
+	s.Require().NoError(err)
+
+	err = s.repo.Delete(s.ctx, user.ID)
+	s.Require().NoError(err)
+
+	identityCount, err := s.client.AuthIdentity.Query().Where(authidentity.UserIDEQ(user.ID)).Count(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Zero(identityCount)
+
+	channelCount, err := s.client.AuthIdentityChannel.Query().Where(authidentitychannel.IdentityIDEQ(identity.ID)).Count(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Zero(channelCount)
 }
 
 // --- List / ListWithFilters ---

@@ -23,14 +23,6 @@ func newCreateAndRedeemHandler() *RedeemHandler {
 	}
 }
 
-func newGenerateHandler() (*RedeemHandler, *stubAdminService) {
-	adminSvc := newStubAdminService()
-	return &RedeemHandler{
-		adminService:  adminSvc,
-		redeemService: &service.RedeemService{},
-	}, adminSvc
-}
-
 // postCreateAndRedeemValidation calls CreateAndRedeem and returns the response
 // status code. For cases that pass validation and proceed into the service layer,
 // a panic may occur (because RedeemService internals are nil); this is expected
@@ -54,21 +46,6 @@ func postCreateAndRedeemValidation(t *testing.T, handler *RedeemHandler, body an
 	}()
 	handler.CreateAndRedeem(c)
 	return w.Code
-}
-
-func postGenerate(t *testing.T, handler *RedeemHandler, body any) *httptest.ResponseRecorder {
-	t.Helper()
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	jsonBytes, err := json.Marshal(body)
-	require.NoError(t, err)
-	c.Request, _ = http.NewRequest(http.MethodPost, "/api/v1/admin/redeem-codes/generate", bytes.NewReader(jsonBytes))
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	handler.Generate(c)
-	return w
 }
 
 func TestCreateAndRedeem_TypeDefaultsToBalance(t *testing.T) {
@@ -99,32 +76,38 @@ func TestCreateAndRedeem_SubscriptionRequiresGroupID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, code)
 }
 
-func TestCreateAndRedeem_SubscriptionRequiresPositiveValidityDays(t *testing.T) {
+func TestCreateAndRedeem_SubscriptionRequiresNonZeroValidityDays(t *testing.T) {
 	groupID := int64(5)
 	h := newCreateAndRedeemHandler()
 
-	cases := []struct {
-		name         string
-		validityDays int
-	}{
-		{"zero", 0},
-		{"negative", -1},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			code := postCreateAndRedeemValidation(t, h, map[string]any{
-				"code":          "test-sub-bad-days-" + tc.name,
-				"type":          "subscription",
-				"value":         29.9,
-				"user_id":       1,
-				"group_id":      groupID,
-				"validity_days": tc.validityDays,
-			})
-
-			assert.Equal(t, http.StatusBadRequest, code)
+	// zero should be rejected
+	t.Run("zero", func(t *testing.T) {
+		code := postCreateAndRedeemValidation(t, h, map[string]any{
+			"code":          "test-sub-bad-days-zero",
+			"type":          "subscription",
+			"value":         29.9,
+			"user_id":       1,
+			"group_id":      groupID,
+			"validity_days": 0,
 		})
-	}
+
+		assert.Equal(t, http.StatusBadRequest, code)
+	})
+
+	// negative should pass validation (used for refund/reduction)
+	t.Run("negative_passes_validation", func(t *testing.T) {
+		code := postCreateAndRedeemValidation(t, h, map[string]any{
+			"code":          "test-sub-negative-days",
+			"type":          "subscription",
+			"value":         29.9,
+			"user_id":       1,
+			"group_id":      groupID,
+			"validity_days": -7,
+		})
+
+		assert.NotEqual(t, http.StatusBadRequest, code,
+			"negative validity_days should pass validation for refund")
+	})
 }
 
 func TestCreateAndRedeem_SubscriptionValidParamsPassValidation(t *testing.T) {
@@ -155,134 +138,4 @@ func TestCreateAndRedeem_BalanceIgnoresSubscriptionFields(t *testing.T) {
 
 	assert.NotEqual(t, http.StatusBadRequest, code,
 		"balance type should not require group_id or validity_days")
-}
-
-func TestCreateAndRedeem_RejectsLegacyInvitationType(t *testing.T) {
-	h := newCreateAndRedeemHandler()
-	code := postCreateAndRedeemValidation(t, h, map[string]any{
-		"code":    "legacy-invitation",
-		"type":    "invitation",
-		"value":   0,
-		"user_id": 1,
-	})
-
-	assert.Equal(t, http.StatusBadRequest, code)
-}
-
-func TestGenerateRedeemCodes_DefaultsBalanceSourceTypeToCommercial(t *testing.T) {
-	h, adminSvc := newGenerateHandler()
-	w := postGenerate(t, h, map[string]any{
-		"count": 1,
-		"type":  "balance",
-		"value": 10,
-	})
-
-	require.Equal(t, http.StatusOK, w.Code)
-	require.NotNil(t, adminSvc.lastGenerateRedeem)
-	require.Equal(t, service.RedeemSourceCommercial, adminSvc.lastGenerateRedeem.SourceType)
-}
-
-func TestGenerateRedeemCodes_PassesExplicitCommercialSourceType(t *testing.T) {
-	h, adminSvc := newGenerateHandler()
-	w := postGenerate(t, h, map[string]any{
-		"count":       1,
-		"type":        "balance",
-		"value":       10,
-		"source_type": "commercial",
-	})
-
-	require.Equal(t, http.StatusOK, w.Code)
-	require.NotNil(t, adminSvc.lastGenerateRedeem)
-	require.Equal(t, service.RedeemSourceCommercial, adminSvc.lastGenerateRedeem.SourceType)
-}
-
-func TestGenerateRedeemCodes_RejectsLegacyInvitationType(t *testing.T) {
-	h, _ := newGenerateHandler()
-	w := postGenerate(t, h, map[string]any{
-		"count": 1,
-		"type":  "invitation",
-		"value": 0,
-	})
-
-	require.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestAdminRedeemHandler_Generate_ProductIDXorGroupID(t *testing.T) {
-	groupID := int64(11)
-	productID := int64(101)
-
-	cases := []struct {
-		name       string
-		body       map[string]any
-		wantStatus int
-	}{
-		{
-			name: "rejects missing group and product",
-			body: map[string]any{
-				"count":         1,
-				"type":          "subscription",
-				"value":         0,
-				"validity_days": 30,
-			},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name: "rejects both group and product",
-			body: map[string]any{
-				"count":         1,
-				"type":          "subscription",
-				"value":         0,
-				"group_id":      groupID,
-				"product_id":    productID,
-				"validity_days": 30,
-			},
-			wantStatus: http.StatusBadRequest,
-		},
-		{
-			name: "accepts product only",
-			body: map[string]any{
-				"count":         1,
-				"type":          "subscription",
-				"value":         0,
-				"product_id":    productID,
-				"validity_days": 30,
-			},
-			wantStatus: http.StatusOK,
-		},
-		{
-			name: "accepts group only",
-			body: map[string]any{
-				"count":         1,
-				"type":          "subscription",
-				"value":         0,
-				"group_id":      groupID,
-				"validity_days": 30,
-			},
-			wantStatus: http.StatusOK,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			h, adminSvc := newGenerateHandler()
-			w := postGenerate(t, h, tc.body)
-
-			require.Equal(t, tc.wantStatus, w.Code)
-			if tc.wantStatus != http.StatusOK {
-				return
-			}
-
-			require.NotNil(t, adminSvc.lastGenerateRedeem)
-			if raw, ok := tc.body["product_id"]; ok {
-				require.NotNil(t, adminSvc.lastGenerateRedeem.ProductID)
-				require.Equal(t, raw, *adminSvc.lastGenerateRedeem.ProductID)
-				require.Nil(t, adminSvc.lastGenerateRedeem.GroupID)
-			}
-			if raw, ok := tc.body["group_id"]; ok {
-				require.NotNil(t, adminSvc.lastGenerateRedeem.GroupID)
-				require.Equal(t, raw, *adminSvc.lastGenerateRedeem.GroupID)
-				require.Nil(t, adminSvc.lastGenerateRedeem.ProductID)
-			}
-		})
-	}
 }
