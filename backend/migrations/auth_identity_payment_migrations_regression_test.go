@@ -127,3 +127,14 @@ func TestMigration124BackfillsLegacyOIDCSecurityFlagsSafely(t *testing.T) {
 	require.Contains(t, sql, "oidc_connect_enabled")
 	require.Contains(t, sql, "'false'")
 }
+
+func TestMigration138DeduplicatesLegacyProductSubscriptionsPerUserGroup(t *testing.T) {
+	content, err := FS.ReadFile("138_migrate_xlabapi_subscription_products_to_upstream_plans.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "SELECT DISTINCT ON (ups.user_id, spg.group_id)")
+	require.Contains(t, sql, "ORDER BY ups.user_id, spg.group_id")
+	require.Contains(t, sql, "ups.expires_at DESC")
+	require.Contains(t, sql, "ups.id DESC")
+}

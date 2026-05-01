@@ -90,7 +90,7 @@ BEGIN
         created_at,
         updated_at
     )
-    SELECT
+    SELECT DISTINCT ON (ups.user_id, spg.group_id)
         ups.user_id,
         spg.group_id,
         ups.starts_at,
@@ -133,7 +133,8 @@ BEGIN
           WHERE existing.user_id = ups.user_id
             AND existing.group_id = spg.group_id
             AND existing.deleted_at IS NULL
-      );
+      )
+    ORDER BY ups.user_id, spg.group_id, ups.expires_at DESC NULLS LAST, ups.id DESC;
 
     WITH product_entitlements AS (
         SELECT
