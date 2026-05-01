@@ -3881,6 +3881,13 @@ func (s *OpenAIGatewayService) handleErrorResponse(
 	var statusCode int
 
 	switch resp.StatusCode {
+	case 400:
+		statusCode = http.StatusBadRequest
+		errType = "invalid_request_error"
+		errMsg = upstreamMsg
+		if errMsg == "" {
+			errMsg = "Invalid request"
+		}
 	case 401:
 		statusCode = http.StatusBadGateway
 		errType = "upstream_error"

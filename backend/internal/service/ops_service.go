@@ -598,11 +598,14 @@ func isSensitiveKey(key string) bool {
 }
 
 func trimConversationArrays(root map[string]any, maxBytes int) (map[string]any, bool) {
-	// Supported: anthropic/openai: messages; gemini: contents.
+	// Supported: anthropic/openai: messages; gemini: contents; OpenAI Responses: input.
 	if out, ok := trimArrayField(root, "messages", maxBytes); ok {
 		return out, true
 	}
 	if out, ok := trimArrayField(root, "contents", maxBytes); ok {
+		return out, true
+	}
+	if out, ok := trimArrayField(root, "input", maxBytes); ok {
 		return out, true
 	}
 	return root, false
@@ -679,9 +682,17 @@ func shrinkToEssentials(root map[string]any) map[string]any {
 		"temperature",
 		"top_p",
 		"top_k",
+		"previous_response_id",
+		"tool_choice",
+		"parallel_tool_calls",
 	} {
 		if v, ok := root[key]; ok {
 			out[key] = v
+		}
+	}
+	if v, ok := root["tools"]; ok {
+		if tools := shrinkToolsToEssentials(v); len(tools) > 0 {
+			out["tools"] = tools
 		}
 	}
 
@@ -695,6 +706,49 @@ func shrinkToEssentials(root map[string]any) map[string]any {
 		if arr, ok := v.([]any); ok && len(arr) > 0 {
 			out["contents"] = []any{arr[len(arr)-1]}
 		}
+	}
+	if v, ok := root["input"]; ok {
+		if arr, ok := v.([]any); ok && len(arr) > 0 {
+			out["input"] = []any{arr[len(arr)-1]}
+		}
+	}
+	return out
+}
+
+func shrinkToolsToEssentials(v any) []any {
+	tools, ok := v.([]any)
+	if !ok || len(tools) == 0 {
+		return nil
+	}
+	const maxTools = 8
+	if len(tools) > maxTools {
+		tools = tools[:maxTools]
+	}
+	out := make([]any, 0, len(tools))
+	for _, rawTool := range tools {
+		toolMap, ok := rawTool.(map[string]any)
+		if !ok {
+			out = append(out, map[string]any{"type": "unknown"})
+			continue
+		}
+		summary := make(map[string]any, 3)
+		if typ, ok := toolMap["type"]; ok {
+			summary["type"] = typ
+		}
+		if name, ok := toolMap["name"]; ok {
+			summary["name"] = name
+		}
+		if functionRaw, ok := toolMap["function"]; ok {
+			if functionMap, ok := functionRaw.(map[string]any); ok {
+				if name, ok := functionMap["name"]; ok {
+					summary["function_name"] = name
+				}
+			}
+		}
+		if len(summary) == 0 {
+			summary["type"] = "unknown"
+		}
+		out = append(out, summary)
 	}
 	return out
 }
