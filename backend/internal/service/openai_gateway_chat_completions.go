@@ -22,6 +22,7 @@ import (
 )
 
 var cursorResponsesUnsupportedFields = []string{
+	"max_output_tokens",
 	"prompt_cache_retention",
 	"safety_identifier",
 	"metadata",

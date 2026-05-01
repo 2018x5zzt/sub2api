@@ -113,6 +113,7 @@ func TestCursorMixedShape_StripsUnsupportedFields(t *testing.T) {
 		"model": "gpt-5.4",
 		"stream": true,
 		"prompt_cache_retention": "24h",
+		"max_output_tokens": 4096,
 		"safety_identifier": "cursor-user-xyz",
 		"metadata": {"trace_id":"abc","caller":"cursor"},
 		"stream_options": {"include_usage": true},
@@ -133,6 +134,7 @@ func TestCursorMixedShape_StripsUnsupportedFields(t *testing.T) {
 	for _, field := range cursorResponsesUnsupportedFields {
 		assert.False(t, gjson.GetBytes(result, field).Exists(), "%s must be stripped", field)
 	}
+	assert.False(t, gjson.GetBytes(result, "max_output_tokens").Exists(), "max_output_tokens must be stripped")
 
 	assert.Equal(t, "gpt-5.4", gjson.GetBytes(result, "model").String())
 	assert.Equal(t, true, gjson.GetBytes(result, "stream").Bool())
