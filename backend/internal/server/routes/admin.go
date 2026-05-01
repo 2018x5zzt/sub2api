@@ -94,6 +94,9 @@ func RegisterAdminRoutes(
 
 		// 邀请返利（专属用户管理）
 		registerAffiliateRoutes(admin, h)
+
+		// 邀请增长管理
+		registerInviteRoutes(admin, h)
 	}
 }
 
@@ -610,5 +613,19 @@ func registerAffiliateRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 			users.PUT("/:user_id", h.Admin.Affiliate.UpdateUserSettings)
 			users.DELETE("/:user_id", h.Admin.Affiliate.ClearUserSettings)
 		}
+	}
+}
+
+func registerInviteRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	invites := admin.Group("/invites")
+	{
+		invites.GET("/stats", h.Admin.Invite.GetStats)
+		invites.GET("/relationships", h.Admin.Invite.ListRelationships)
+		invites.GET("/rewards", h.Admin.Invite.ListRewards)
+		invites.GET("/actions", h.Admin.Invite.ListActions)
+		invites.POST("/rebind", h.Admin.Invite.Rebind)
+		invites.POST("/manual-grants", h.Admin.Invite.CreateManualGrant)
+		invites.POST("/recompute/preview", h.Admin.Invite.PreviewRecompute)
+		invites.POST("/recompute/execute", h.Admin.Invite.ExecuteRecompute)
 	}
 }

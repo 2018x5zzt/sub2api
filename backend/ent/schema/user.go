@@ -54,6 +54,18 @@ func (User) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
+		field.String("invite_code").
+			MaxLen(32).
+			Optional().
+			Nillable().
+			Unique(),
+		field.Int64("invited_by_user_id").
+			Optional().
+			Nillable(),
+		field.Time("invite_bound_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 
 		// Optional profile fields (added later; default '' in DB migration)
 		field.String("username").
@@ -137,6 +149,8 @@ func (User) Edges() []ent.Edge {
 func (User) Indexes() []ent.Index {
 	return []ent.Index{
 		// email 字段已在 Fields() 中声明 Unique()，无需重复索引
+		index.Fields("invite_code"),
+		index.Fields("invited_by_user_id"),
 		index.Fields("status"),
 		index.Fields("deleted_at"),
 	}

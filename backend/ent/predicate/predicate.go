@@ -51,6 +51,15 @@ type IdempotencyRecord func(*sql.Selector)
 // IdentityAdoptionDecision is the predicate function for identityadoptiondecision builders.
 type IdentityAdoptionDecision func(*sql.Selector)
 
+// InviteAdminAction is the predicate function for inviteadminaction builders.
+type InviteAdminAction func(*sql.Selector)
+
+// InviteRelationshipEvent is the predicate function for inviterelationshipevent builders.
+type InviteRelationshipEvent func(*sql.Selector)
+
+// InviteRewardRecord is the predicate function for inviterewardrecord builders.
+type InviteRewardRecord func(*sql.Selector)
+
 // PaymentAuditLog is the predicate function for paymentauditlog builders.
 type PaymentAuditLog func(*sql.Selector)
 

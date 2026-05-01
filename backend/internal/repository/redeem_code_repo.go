@@ -28,6 +28,7 @@ func (r *redeemCodeRepository) Create(ctx context.Context, code *service.RedeemC
 		SetType(code.Type).
 		SetValue(code.Value).
 		SetStatus(code.Status).
+		SetSourceType(service.NormalizeRedeemSourceType(code.SourceType, service.RedeemSourceSystemGrant)).
 		SetNotes(code.Notes).
 		SetValidityDays(code.ValidityDays).
 		SetNillableUsedBy(code.UsedBy).
@@ -303,6 +304,7 @@ func redeemCodeEntityToService(m *dbent.RedeemCode) *service.RedeemCode {
 		Type:         m.Type,
 		Value:        m.Value,
 		Status:       m.Status,
+		SourceType:   service.NormalizeRedeemSourceType(m.SourceType, service.RedeemSourceSystemGrant),
 		UsedBy:       m.UsedBy,
 		UsedAt:       m.UsedAt,
 		Notes:        derefString(m.Notes),
@@ -327,4 +329,45 @@ func redeemCodeEntitiesToService(models []*dbent.RedeemCode) []service.RedeemCod
 		}
 	}
 	return out
+}
+
+func (r *redeemCodeRepository) ListInviteQualifyingRecharges(ctx context.Context, scope service.InviteRecomputeScope) ([]service.InviteQualifyingRecharge, error) {
+	client := clientFromContext(ctx, r.client)
+	query := client.RedeemCode.Query().
+		Where(
+			redeemcode.TypeEQ(service.RedeemTypeBalance),
+			redeemcode.SourceTypeEQ(service.RedeemSourceCommercial),
+			redeemcode.StatusEQ(service.StatusUsed),
+			redeemcode.UsedByNotNil(),
+			redeemcode.UsedAtNotNil(),
+		)
+
+	if scope.InviteeUserID != nil {
+		query = query.Where(redeemcode.UsedByEQ(*scope.InviteeUserID))
+	}
+	if scope.StartAt != nil {
+		query = query.Where(redeemcode.UsedAtGTE(*scope.StartAt))
+	}
+	if scope.EndAt != nil {
+		query = query.Where(redeemcode.UsedAtLTE(*scope.EndAt))
+	}
+
+	rows, err := query.All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]service.InviteQualifyingRecharge, 0, len(rows))
+	for i := range rows {
+		row := rows[i]
+		if row.UsedBy == nil || row.UsedAt == nil {
+			continue
+		}
+		out = append(out, service.InviteQualifyingRecharge{
+			InviteeUserID:          *row.UsedBy,
+			TriggerRedeemCodeID:    row.ID,
+			TriggerRedeemCodeValue: row.Value,
+			UsedAt:                 *row.UsedAt,
+		})
+	}
+	return out, nil
 }

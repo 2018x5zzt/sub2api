@@ -80,8 +80,12 @@ type UserRepository interface {
 	Create(ctx context.Context, user *User) error
 	GetByID(ctx context.Context, id int64) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
+	GetByInviteCode(ctx context.Context, code string) (*User, error)
+	ExistsByInviteCode(ctx context.Context, code string) (bool, error)
+	CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error)
 	GetFirstAdmin(ctx context.Context) (*User, error)
 	Update(ctx context.Context, user *User) error
+	UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
 	Delete(ctx context.Context, id int64) error
 	GetUserAvatar(ctx context.Context, userID int64) (*UserAvatar, error)
 	UpsertUserAvatar(ctx context.Context, userID int64, input UpsertUserAvatarInput) (*UserAvatar, error)

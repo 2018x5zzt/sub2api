@@ -174,6 +174,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/models',
+    name: 'ModelHub',
+    component: () => import('@/views/user/ModelHubView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: 'Model Hub',
+      titleKey: 'modelHub.title',
+      descriptionKey: 'modelHub.description'
+    }
+  },
+  {
     path: '/usage',
     name: 'Usage',
     component: () => import('@/views/user/UsageView.vue'),
@@ -196,6 +208,10 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'redeem.title',
       descriptionKey: 'redeem.description'
     }
+  },
+  {
+    path: '/invite',
+    redirect: '/affiliate'
   },
   {
     path: '/affiliate',
@@ -482,6 +498,10 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/invites',
+    redirect: '/admin/users'
+  },
+  {
     path: '/admin/promo-codes',
     name: 'AdminPromoCodes',
     component: () => import('@/views/admin/PromoCodesView.vue'),
@@ -491,6 +511,18 @@ const routes: RouteRecordRaw[] = [
       title: 'Promo Code Management',
       titleKey: 'admin.promo.title',
       descriptionKey: 'admin.promo.description'
+    }
+  },
+  {
+    path: '/admin/data-management',
+    name: 'AdminDataManagement',
+    component: () => import('@/views/admin/DataManagementView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Data Management',
+      titleKey: 'admin.dataManagement.title',
+      descriptionKey: 'admin.dataManagement.description'
     }
   },
   {

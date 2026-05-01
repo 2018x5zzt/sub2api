@@ -163,6 +163,73 @@ func (_u *UserUpdate) SetNillableStatus(v *string) *UserUpdate {
 	return _u
 }
 
+// SetInviteCode sets the "invite_code" field.
+func (_u *UserUpdate) SetInviteCode(v string) *UserUpdate {
+	_u.mutation.SetInviteCode(v)
+	return _u
+}
+
+// SetNillableInviteCode sets the "invite_code" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableInviteCode(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetInviteCode(*v)
+	}
+	return _u
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (_u *UserUpdate) ClearInviteCode() *UserUpdate {
+	_u.mutation.ClearInviteCode()
+	return _u
+}
+
+// SetInvitedByUserID sets the "invited_by_user_id" field.
+func (_u *UserUpdate) SetInvitedByUserID(v int64) *UserUpdate {
+	_u.mutation.ResetInvitedByUserID()
+	_u.mutation.SetInvitedByUserID(v)
+	return _u
+}
+
+// SetNillableInvitedByUserID sets the "invited_by_user_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableInvitedByUserID(v *int64) *UserUpdate {
+	if v != nil {
+		_u.SetInvitedByUserID(*v)
+	}
+	return _u
+}
+
+// AddInvitedByUserID adds value to the "invited_by_user_id" field.
+func (_u *UserUpdate) AddInvitedByUserID(v int64) *UserUpdate {
+	_u.mutation.AddInvitedByUserID(v)
+	return _u
+}
+
+// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
+func (_u *UserUpdate) ClearInvitedByUserID() *UserUpdate {
+	_u.mutation.ClearInvitedByUserID()
+	return _u
+}
+
+// SetInviteBoundAt sets the "invite_bound_at" field.
+func (_u *UserUpdate) SetInviteBoundAt(v time.Time) *UserUpdate {
+	_u.mutation.SetInviteBoundAt(v)
+	return _u
+}
+
+// SetNillableInviteBoundAt sets the "invite_bound_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableInviteBoundAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetInviteBoundAt(*v)
+	}
+	return _u
+}
+
+// ClearInviteBoundAt clears the value of the "invite_bound_at" field.
+func (_u *UserUpdate) ClearInviteBoundAt() *UserUpdate {
+	_u.mutation.ClearInviteBoundAt()
+	return _u
+}
+
 // SetUsername sets the "username" field.
 func (_u *UserUpdate) SetUsername(v string) *UserUpdate {
 	_u.mutation.SetUsername(v)
@@ -911,6 +978,11 @@ func (_u *UserUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "User.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.InviteCode(); ok {
+		if err := user.InviteCodeValidator(v); err != nil {
+			return &ValidationError{Name: "invite_code", err: fmt.Errorf(`ent: validator failed for field "User.invite_code": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Username(); ok {
 		if err := user.UsernameValidator(v); err != nil {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
@@ -968,6 +1040,27 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InviteCode(); ok {
+		_spec.SetField(user.FieldInviteCode, field.TypeString, value)
+	}
+	if _u.mutation.InviteCodeCleared() {
+		_spec.ClearField(user.FieldInviteCode, field.TypeString)
+	}
+	if value, ok := _u.mutation.InvitedByUserID(); ok {
+		_spec.SetField(user.FieldInvitedByUserID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInvitedByUserID(); ok {
+		_spec.AddField(user.FieldInvitedByUserID, field.TypeInt64, value)
+	}
+	if _u.mutation.InvitedByUserIDCleared() {
+		_spec.ClearField(user.FieldInvitedByUserID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.InviteBoundAt(); ok {
+		_spec.SetField(user.FieldInviteBoundAt, field.TypeTime, value)
+	}
+	if _u.mutation.InviteBoundAtCleared() {
+		_spec.ClearField(user.FieldInviteBoundAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)
@@ -1728,6 +1821,73 @@ func (_u *UserUpdateOne) SetNillableStatus(v *string) *UserUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetInviteCode sets the "invite_code" field.
+func (_u *UserUpdateOne) SetInviteCode(v string) *UserUpdateOne {
+	_u.mutation.SetInviteCode(v)
+	return _u
+}
+
+// SetNillableInviteCode sets the "invite_code" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInviteCode(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetInviteCode(*v)
+	}
+	return _u
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (_u *UserUpdateOne) ClearInviteCode() *UserUpdateOne {
+	_u.mutation.ClearInviteCode()
+	return _u
+}
+
+// SetInvitedByUserID sets the "invited_by_user_id" field.
+func (_u *UserUpdateOne) SetInvitedByUserID(v int64) *UserUpdateOne {
+	_u.mutation.ResetInvitedByUserID()
+	_u.mutation.SetInvitedByUserID(v)
+	return _u
+}
+
+// SetNillableInvitedByUserID sets the "invited_by_user_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInvitedByUserID(v *int64) *UserUpdateOne {
+	if v != nil {
+		_u.SetInvitedByUserID(*v)
+	}
+	return _u
+}
+
+// AddInvitedByUserID adds value to the "invited_by_user_id" field.
+func (_u *UserUpdateOne) AddInvitedByUserID(v int64) *UserUpdateOne {
+	_u.mutation.AddInvitedByUserID(v)
+	return _u
+}
+
+// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
+func (_u *UserUpdateOne) ClearInvitedByUserID() *UserUpdateOne {
+	_u.mutation.ClearInvitedByUserID()
+	return _u
+}
+
+// SetInviteBoundAt sets the "invite_bound_at" field.
+func (_u *UserUpdateOne) SetInviteBoundAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetInviteBoundAt(v)
+	return _u
+}
+
+// SetNillableInviteBoundAt sets the "invite_bound_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInviteBoundAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetInviteBoundAt(*v)
+	}
+	return _u
+}
+
+// ClearInviteBoundAt clears the value of the "invite_bound_at" field.
+func (_u *UserUpdateOne) ClearInviteBoundAt() *UserUpdateOne {
+	_u.mutation.ClearInviteBoundAt()
 	return _u
 }
 
@@ -2492,6 +2652,11 @@ func (_u *UserUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "User.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.InviteCode(); ok {
+		if err := user.InviteCodeValidator(v); err != nil {
+			return &ValidationError{Name: "invite_code", err: fmt.Errorf(`ent: validator failed for field "User.invite_code": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Username(); ok {
 		if err := user.UsernameValidator(v); err != nil {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
@@ -2566,6 +2731,27 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InviteCode(); ok {
+		_spec.SetField(user.FieldInviteCode, field.TypeString, value)
+	}
+	if _u.mutation.InviteCodeCleared() {
+		_spec.ClearField(user.FieldInviteCode, field.TypeString)
+	}
+	if value, ok := _u.mutation.InvitedByUserID(); ok {
+		_spec.SetField(user.FieldInvitedByUserID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInvitedByUserID(); ok {
+		_spec.AddField(user.FieldInvitedByUserID, field.TypeInt64, value)
+	}
+	if _u.mutation.InvitedByUserIDCleared() {
+		_spec.ClearField(user.FieldInvitedByUserID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.InviteBoundAt(); ok {
+		_spec.SetField(user.FieldInviteBoundAt, field.TypeTime, value)
+	}
+	if _u.mutation.InviteBoundAtCleared() {
+		_spec.ClearField(user.FieldInviteBoundAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)

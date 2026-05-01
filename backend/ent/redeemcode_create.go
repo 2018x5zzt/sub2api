@@ -72,6 +72,20 @@ func (_c *RedeemCodeCreate) SetNillableStatus(v *string) *RedeemCodeCreate {
 	return _c
 }
 
+// SetSourceType sets the "source_type" field.
+func (_c *RedeemCodeCreate) SetSourceType(v string) *RedeemCodeCreate {
+	_c.mutation.SetSourceType(v)
+	return _c
+}
+
+// SetNillableSourceType sets the "source_type" field if the given value is not nil.
+func (_c *RedeemCodeCreate) SetNillableSourceType(v *string) *RedeemCodeCreate {
+	if v != nil {
+		_c.SetSourceType(*v)
+	}
+	return _c
+}
+
 // SetUsedBy sets the "used_by" field.
 func (_c *RedeemCodeCreate) SetUsedBy(v int64) *RedeemCodeCreate {
 	_c.mutation.SetUsedBy(v)
@@ -227,6 +241,10 @@ func (_c *RedeemCodeCreate) defaults() {
 		v := redeemcode.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.SourceType(); !ok {
+		v := redeemcode.DefaultSourceType
+		_c.mutation.SetSourceType(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := redeemcode.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -264,6 +282,14 @@ func (_c *RedeemCodeCreate) check() error {
 	if v, ok := _c.mutation.Status(); ok {
 		if err := redeemcode.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.status": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.SourceType(); !ok {
+		return &ValidationError{Name: "source_type", err: errors.New(`ent: missing required field "RedeemCode.source_type"`)}
+	}
+	if v, ok := _c.mutation.SourceType(); ok {
+		if err := redeemcode.SourceTypeValidator(v); err != nil {
+			return &ValidationError{Name: "source_type", err: fmt.Errorf(`ent: validator failed for field "RedeemCode.source_type": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
@@ -314,6 +340,10 @@ func (_c *RedeemCodeCreate) createSpec() (*RedeemCode, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(redeemcode.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.SourceType(); ok {
+		_spec.SetField(redeemcode.FieldSourceType, field.TypeString, value)
+		_node.SourceType = value
 	}
 	if value, ok := _c.mutation.UsedAt(); ok {
 		_spec.SetField(redeemcode.FieldUsedAt, field.TypeTime, value)
@@ -468,6 +498,18 @@ func (u *RedeemCodeUpsert) SetStatus(v string) *RedeemCodeUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *RedeemCodeUpsert) UpdateStatus() *RedeemCodeUpsert {
 	u.SetExcluded(redeemcode.FieldStatus)
+	return u
+}
+
+// SetSourceType sets the "source_type" field.
+func (u *RedeemCodeUpsert) SetSourceType(v string) *RedeemCodeUpsert {
+	u.Set(redeemcode.FieldSourceType, v)
+	return u
+}
+
+// UpdateSourceType sets the "source_type" field to the value that was provided on create.
+func (u *RedeemCodeUpsert) UpdateSourceType() *RedeemCodeUpsert {
+	u.SetExcluded(redeemcode.FieldSourceType)
 	return u
 }
 
@@ -666,6 +708,20 @@ func (u *RedeemCodeUpsertOne) SetStatus(v string) *RedeemCodeUpsertOne {
 func (u *RedeemCodeUpsertOne) UpdateStatus() *RedeemCodeUpsertOne {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetSourceType sets the "source_type" field.
+func (u *RedeemCodeUpsertOne) SetSourceType(v string) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetSourceType(v)
+	})
+}
+
+// UpdateSourceType sets the "source_type" field to the value that was provided on create.
+func (u *RedeemCodeUpsertOne) UpdateSourceType() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateSourceType()
 	})
 }
 
@@ -1045,6 +1101,20 @@ func (u *RedeemCodeUpsertBulk) SetStatus(v string) *RedeemCodeUpsertBulk {
 func (u *RedeemCodeUpsertBulk) UpdateStatus() *RedeemCodeUpsertBulk {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetSourceType sets the "source_type" field.
+func (u *RedeemCodeUpsertBulk) SetSourceType(v string) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetSourceType(v)
+	})
+}
+
+// UpdateSourceType sets the "source_type" field to the value that was provided on create.
+func (u *RedeemCodeUpsertBulk) UpdateSourceType() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateSourceType()
 	})
 }
 

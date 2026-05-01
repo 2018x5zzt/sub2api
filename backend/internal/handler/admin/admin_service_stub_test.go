@@ -605,5 +605,37 @@ func (s *stubAdminService) ReplaceUserGroup(ctx context.Context, userID, oldGrou
 	return &service.ReplaceUserGroupResult{MigratedKeys: 0}, nil
 }
 
+func (s *stubAdminService) GetInviteStats(ctx context.Context) (*service.AdminInviteStats, error) {
+	return &service.AdminInviteStats{}, nil
+}
+
+func (s *stubAdminService) ListInviteRelationships(ctx context.Context, page, pageSize int, filters service.AdminInviteRelationshipFilters) ([]service.AdminInviteRelationship, int64, error) {
+	return []service.AdminInviteRelationship{}, 0, nil
+}
+
+func (s *stubAdminService) ListInviteRewards(ctx context.Context, page, pageSize int, filters service.AdminInviteRewardFilters) ([]service.AdminInviteRewardRow, int64, error) {
+	return []service.AdminInviteRewardRow{}, 0, nil
+}
+
+func (s *stubAdminService) ListInviteActions(ctx context.Context, page, pageSize int, filters service.InviteAdminActionFilters) ([]service.InviteAdminAction, int64, error) {
+	return []service.InviteAdminAction{}, 0, nil
+}
+
+func (s *stubAdminService) RebindInviter(ctx context.Context, input service.RebindInviterInput) error {
+	return nil
+}
+
+func (s *stubAdminService) CreateManualInviteGrant(ctx context.Context, input service.ManualInviteGrantInput) error {
+	return nil
+}
+
+func (s *stubAdminService) PreviewInviteRecompute(ctx context.Context, input service.InviteRecomputeInput) (*service.InviteRecomputePreview, error) {
+	return &service.InviteRecomputePreview{}, nil
+}
+
+func (s *stubAdminService) ExecuteInviteRecompute(ctx context.Context, input service.InviteRecomputeExecuteInput) error {
+	return nil
+}
+
 // Ensure stub implements interface.
 var _ service.AdminService = (*stubAdminService)(nil)

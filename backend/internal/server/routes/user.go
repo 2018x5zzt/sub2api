@@ -103,6 +103,13 @@ func RegisterUserRoutes(
 			redeem.GET("/history", h.Redeem.GetHistory)
 		}
 
+		// 邀请返利
+		invite := authenticated.Group("/invite")
+		{
+			invite.GET("/summary", h.Invite.GetSummary)
+			invite.GET("/rewards", h.Invite.ListRewards)
+		}
+
 		// 用户订阅
 		subscriptions := authenticated.Group("/subscriptions")
 		{

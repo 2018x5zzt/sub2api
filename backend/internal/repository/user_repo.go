@@ -90,6 +90,9 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
+		SetNillableInviteCode(stringPtrOrNil(normalizedInviteCode(userIn.InviteCode))).
+		SetNillableInvitedByUserID(userIn.InvitedByUserID).
+		SetNillableInviteBoundAt(normalizedInviteBoundAt(userIn.InvitedByUserID, userIn.InviteBoundAt)).
 		SetSignupSource(userSignupSourceOrDefault(userIn.SignupSource)).
 		SetNillableLastLoginAt(userIn.LastLoginAt).
 		SetNillableLastActiveAt(userIn.LastActiveAt).
@@ -160,6 +163,28 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 	return out, nil
 }
 
+func (r *userRepository) GetByInviteCode(ctx context.Context, code string) (*service.User, error) {
+	normalized := normalizedInviteCode(code)
+	if normalized == "" {
+		return nil, service.ErrUserNotFound
+	}
+	m, err := r.client.User.Query().Where(dbuser.InviteCodeEQ(normalized)).Only(ctx)
+	if err != nil {
+		aliasUserID, aliasErr := r.lookupInviteAliasUserID(ctx, normalized)
+		if aliasErr != nil {
+			return nil, aliasErr
+		}
+		if aliasUserID == 0 {
+			return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
+		}
+		m, err = r.client.User.Query().Where(dbuser.IDEQ(aliasUserID)).Only(ctx)
+		if err != nil {
+			return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
+		}
+	}
+	return userEntityToService(m), nil
+}
+
 func (r *userRepository) Update(ctx context.Context, userIn *service.User) error {
 	if userIn == nil {
 		return nil
@@ -216,6 +241,9 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
+		SetNillableInviteCode(stringPtrOrNil(normalizedInviteCode(userIn.InviteCode))).
+		SetNillableInvitedByUserID(userIn.InvitedByUserID).
+		SetNillableInviteBoundAt(normalizedInviteBoundAt(userIn.InvitedByUserID, userIn.InviteBoundAt)).
 		SetBalanceNotifyEnabled(userIn.BalanceNotifyEnabled).
 		SetBalanceNotifyThresholdType(userIn.BalanceNotifyThresholdType).
 		SetNillableBalanceNotifyThreshold(userIn.BalanceNotifyThreshold).
@@ -254,6 +282,21 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 
 	userIn.UpdatedAt = updated.UpdatedAt
 	return nil
+}
+
+func (r *userRepository) UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error {
+	client := clientFromContext(ctx, r.client)
+	update := client.User.UpdateOneID(inviteeUserID)
+	if inviterUserID != nil {
+		now := time.Now().UTC()
+		update.SetInvitedByUserID(*inviterUserID)
+		update.SetInviteBoundAt(now)
+	} else {
+		update.ClearInvitedByUserID()
+		update.ClearInviteBoundAt()
+	}
+	_, err := update.Save(ctx)
+	return translatePersistenceError(err, service.ErrUserNotFound, nil)
 }
 
 func ensureEmailAuthIdentityWithClient(ctx context.Context, client *dbent.Client, userID int64, email string, source string) error {
@@ -741,6 +784,23 @@ func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool,
 	return r.client.User.Query().Where(userEmailLookupPredicate(email)).Exist(ctx)
 }
 
+func (r *userRepository) ExistsByInviteCode(ctx context.Context, code string) (bool, error) {
+	normalized := normalizedInviteCode(code)
+	if normalized == "" {
+		return false, nil
+	}
+	exists, err := r.client.User.Query().Where(dbuser.InviteCodeEQ(normalized)).Exist(ctx)
+	if err != nil || exists {
+		return exists, err
+	}
+	return r.inviteAliasExists(ctx, normalized)
+}
+
+func (r *userRepository) CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error) {
+	total, err := r.client.User.Query().Where(dbuser.InvitedByUserIDEQ(inviterID)).Count(ctx)
+	return int64(total), err
+}
+
 func ensureNormalizedEmailAvailableWithClient(ctx context.Context, client *dbent.Client, userID int64, email string) error {
 	client = clientFromContext(ctx, client)
 	if client == nil {
@@ -786,6 +846,57 @@ func normalizedEmailUniquenessLockKey(email string) string {
 		return ""
 	}
 	return "users:normalized-email:" + normalized
+}
+
+func normalizedInviteCode(code string) string {
+	return strings.TrimSpace(code)
+}
+
+func normalizedInviteBoundAt(invitedByUserID *int64, inviteBoundAt *time.Time) *time.Time {
+	if invitedByUserID == nil {
+		return nil
+	}
+	if inviteBoundAt != nil {
+		return inviteBoundAt
+	}
+	now := time.Now().UTC()
+	return &now
+}
+
+func stringPtrOrNil(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func (r *userRepository) inviteAliasExists(ctx context.Context, code string) (bool, error) {
+	userID, err := r.lookupInviteAliasUserID(ctx, code)
+	return userID > 0, err
+}
+
+func (r *userRepository) lookupInviteAliasUserID(ctx context.Context, code string) (int64, error) {
+	normalized := normalizedInviteCode(code)
+	if normalized == "" || r.sql == nil {
+		return 0, nil
+	}
+	var userID int64
+	err := scanSingleRow(ctx, r.sql, `
+		SELECT user_id
+		FROM invite_code_aliases
+		WHERE alias_code = $1
+		LIMIT 1
+	`, []any{normalized}, &userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		if strings.Contains(err.Error(), "invite_code_aliases") {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return userID, nil
 }
 
 func (r *userRepository) AddGroupToAllowedGroups(ctx context.Context, userID int64, groupID int64) error {
@@ -914,6 +1025,9 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 		return
 	}
 	dst.ID = src.ID
+	dst.InviteCode = normalizedInviteCode(derefString(src.InviteCode))
+	dst.InvitedByUserID = src.InvitedByUserID
+	dst.InviteBoundAt = src.InviteBoundAt
 	dst.SignupSource = src.SignupSource
 	dst.LastLoginAt = src.LastLoginAt
 	dst.LastActiveAt = src.LastActiveAt

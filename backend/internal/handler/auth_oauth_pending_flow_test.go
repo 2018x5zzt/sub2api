@@ -2641,6 +2641,18 @@ func (r *oauthPendingFlowUserRepo) GetByEmail(ctx context.Context, email string)
 	return oauthPendingFlowServiceUser(entity), nil
 }
 
+func (r *oauthPendingFlowUserRepo) GetByInviteCode(context.Context, string) (*service.User, error) {
+	return nil, service.ErrUserNotFound
+}
+
+func (r *oauthPendingFlowUserRepo) ExistsByInviteCode(context.Context, string) (bool, error) {
+	return false, nil
+}
+
+func (r *oauthPendingFlowUserRepo) CountInviteesByInviter(context.Context, int64) (int64, error) {
+	return 0, nil
+}
+
 func (r *oauthPendingFlowUserRepo) GetFirstAdmin(context.Context) (*service.User, error) {
 	panic("unexpected GetFirstAdmin call")
 }
@@ -2667,6 +2679,10 @@ func (r *oauthPendingFlowUserRepo) Update(ctx context.Context, user *service.Use
 		return err
 	}
 	user.UpdatedAt = entity.UpdatedAt
+	return nil
+}
+
+func (r *oauthPendingFlowUserRepo) UpdateInviterBinding(context.Context, int64, *int64) error {
 	return nil
 }
 

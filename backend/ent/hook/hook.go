@@ -189,6 +189,42 @@ func (f IdentityAdoptionDecisionFunc) Mutate(ctx context.Context, m ent.Mutation
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdentityAdoptionDecisionMutation", m)
 }
 
+// The InviteAdminActionFunc type is an adapter to allow the use of ordinary
+// function as InviteAdminAction mutator.
+type InviteAdminActionFunc func(context.Context, *ent.InviteAdminActionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f InviteAdminActionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.InviteAdminActionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.InviteAdminActionMutation", m)
+}
+
+// The InviteRelationshipEventFunc type is an adapter to allow the use of ordinary
+// function as InviteRelationshipEvent mutator.
+type InviteRelationshipEventFunc func(context.Context, *ent.InviteRelationshipEventMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f InviteRelationshipEventFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.InviteRelationshipEventMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.InviteRelationshipEventMutation", m)
+}
+
+// The InviteRewardRecordFunc type is an adapter to allow the use of ordinary
+// function as InviteRewardRecord mutator.
+type InviteRewardRecordFunc func(context.Context, *ent.InviteRewardRecordMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f InviteRewardRecordFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.InviteRewardRecordMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.InviteRewardRecordMutation", m)
+}
+
 // The PaymentAuditLogFunc type is an adapter to allow the use of ordinary
 // function as PaymentAuditLog mutator.
 type PaymentAuditLogFunc func(context.Context, *ent.PaymentAuditLogMutation) (ent.Value, error)

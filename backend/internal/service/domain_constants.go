@@ -57,6 +57,13 @@ const (
 	RedeemTypeInvitation   = domain.RedeemTypeInvitation
 )
 
+const (
+	RedeemSourceCommercial   = domain.RedeemSourceCommercial
+	RedeemSourceBenefit      = domain.RedeemSourceBenefit
+	RedeemSourceCompensation = domain.RedeemSourceCompensation
+	RedeemSourceSystemGrant  = domain.RedeemSourceSystemGrant
+)
+
 // PromoCode status constants
 const (
 	PromoCodeStatusActive   = domain.PromoCodeStatusActive
@@ -350,6 +357,9 @@ const (
 
 	// Web Search Emulation
 	SettingKeyWebSearchEmulationConfig = "web_search_emulation_config" // JSON 配置
+
+	// Enterprise BFF
+	SettingKeyEnterpriseVisibleGroupIDsByEnterprise = "enterprise_visible_group_ids_by_enterprise"
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).

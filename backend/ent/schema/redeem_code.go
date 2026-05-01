@@ -48,6 +48,9 @@ func (RedeemCode) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusUnused),
+		field.String("source_type").
+			MaxLen(32).
+			Default(domain.RedeemSourceSystemGrant),
 		field.Int64("used_by").
 			Optional().
 			Nillable(),

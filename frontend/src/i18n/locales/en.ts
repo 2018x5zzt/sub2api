@@ -358,6 +358,8 @@ export default {
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
     promoCodes: 'Promo Codes',
+    modelHub: 'Model Hub',
+    dataManagement: 'Data Management',
     settings: 'Settings',
     myAccount: 'My Account',
     lightMode: 'Light Mode',

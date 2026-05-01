@@ -33,6 +33,12 @@ const (
 	FieldConcurrency = "concurrency"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldInviteCode holds the string denoting the invite_code field in the database.
+	FieldInviteCode = "invite_code"
+	// FieldInvitedByUserID holds the string denoting the invited_by_user_id field in the database.
+	FieldInvitedByUserID = "invited_by_user_id"
+	// FieldInviteBoundAt holds the string denoting the invite_bound_at field in the database.
+	FieldInviteBoundAt = "invite_bound_at"
 	// FieldUsername holds the string denoting the username field in the database.
 	FieldUsername = "username"
 	// FieldNotes holds the string denoting the notes field in the database.
@@ -192,6 +198,9 @@ var Columns = []string{
 	FieldBalance,
 	FieldConcurrency,
 	FieldStatus,
+	FieldInviteCode,
+	FieldInvitedByUserID,
+	FieldInviteBoundAt,
 	FieldUsername,
 	FieldNotes,
 	FieldTotpSecretEncrypted,
@@ -254,6 +263,8 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
+	// InviteCodeValidator is a validator for the "invite_code" field. It is called by the builders before save.
+	InviteCodeValidator func(string) error
 	// DefaultUsername holds the default value on creation for the "username" field.
 	DefaultUsername string
 	// UsernameValidator is a validator for the "username" field. It is called by the builders before save.
@@ -329,6 +340,21 @@ func ByConcurrency(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByInviteCode orders the results by the invite_code field.
+func ByInviteCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInviteCode, opts...).ToFunc()
+}
+
+// ByInvitedByUserID orders the results by the invited_by_user_id field.
+func ByInvitedByUserID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvitedByUserID, opts...).ToFunc()
+}
+
+// ByInviteBoundAt orders the results by the invite_bound_at field.
+func ByInviteBoundAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInviteBoundAt, opts...).ToFunc()
 }
 
 // ByUsername orders the results by the username field.

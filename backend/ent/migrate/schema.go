@@ -775,6 +775,88 @@ var (
 			},
 		},
 	}
+	// InviteAdminActionsColumns holds the columns for the "invite_admin_actions" table.
+	InviteAdminActionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "action_type", Type: field.TypeString, Size: 32},
+		{Name: "operator_user_id", Type: field.TypeInt64},
+		{Name: "target_user_id", Type: field.TypeInt64},
+		{Name: "reason", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "request_snapshot_json", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "result_snapshot_json", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// InviteAdminActionsTable holds the schema information for the "invite_admin_actions" table.
+	InviteAdminActionsTable = &schema.Table{
+		Name:       "invite_admin_actions",
+		Columns:    InviteAdminActionsColumns,
+		PrimaryKey: []*schema.Column{InviteAdminActionsColumns[0]},
+	}
+	// InviteRelationshipEventsColumns holds the columns for the "invite_relationship_events" table.
+	InviteRelationshipEventsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "invitee_user_id", Type: field.TypeInt64},
+		{Name: "previous_inviter_user_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "new_inviter_user_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "event_type", Type: field.TypeString, Size: 32},
+		{Name: "effective_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "operator_user_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "reason", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// InviteRelationshipEventsTable holds the schema information for the "invite_relationship_events" table.
+	InviteRelationshipEventsTable = &schema.Table{
+		Name:       "invite_relationship_events",
+		Columns:    InviteRelationshipEventsColumns,
+		PrimaryKey: []*schema.Column{InviteRelationshipEventsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "inviterelationshipevent_invitee_user_id_effective_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{InviteRelationshipEventsColumns[1], InviteRelationshipEventsColumns[5], InviteRelationshipEventsColumns[0]},
+			},
+		},
+	}
+	// InviteRewardRecordsColumns holds the columns for the "invite_reward_records" table.
+	InviteRewardRecordsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "inviter_user_id", Type: field.TypeInt64},
+		{Name: "invitee_user_id", Type: field.TypeInt64},
+		{Name: "trigger_redeem_code_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "trigger_redeem_code_value", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "reward_target_user_id", Type: field.TypeInt64},
+		{Name: "reward_role", Type: field.TypeString, Size: 32},
+		{Name: "reward_type", Type: field.TypeString, Size: 64},
+		{Name: "reward_rate", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,8)"}},
+		{Name: "reward_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "status", Type: field.TypeString, Size: 32, Default: "applied"},
+		{Name: "notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "admin_action_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// InviteRewardRecordsTable holds the schema information for the "invite_reward_records" table.
+	InviteRewardRecordsTable = &schema.Table{
+		Name:       "invite_reward_records",
+		Columns:    InviteRewardRecordsColumns,
+		PrimaryKey: []*schema.Column{InviteRewardRecordsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "inviterewardrecord_reward_target_user_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{InviteRewardRecordsColumns[5], InviteRewardRecordsColumns[13]},
+			},
+			{
+				Name:    "inviterewardrecord_admin_action_id",
+				Unique:  false,
+				Columns: []*schema.Column{InviteRewardRecordsColumns[12]},
+			},
+			{
+				Name:    "inviterewardrecord_trigger_redeem_code_id_reward_role_reward_type",
+				Unique:  true,
+				Columns: []*schema.Column{InviteRewardRecordsColumns[3], InviteRewardRecordsColumns[6], InviteRewardRecordsColumns[7]},
+			},
+		},
+	}
 	// PaymentAuditLogsColumns holds the columns for the "payment_audit_logs" table.
 	PaymentAuditLogsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1114,6 +1196,7 @@ var (
 		{Name: "type", Type: field.TypeString, Size: 20, Default: "balance"},
 		{Name: "value", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "unused"},
+		{Name: "source_type", Type: field.TypeString, Size: 32, Default: "system_grant"},
 		{Name: "used_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "notes", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
@@ -1129,13 +1212,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "redeem_codes_groups_redeem_codes",
-				Columns:    []*schema.Column{RedeemCodesColumns[9]},
+				Columns:    []*schema.Column{RedeemCodesColumns[10]},
 				RefColumns: []*schema.Column{GroupsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "redeem_codes_users_redeem_codes",
-				Columns:    []*schema.Column{RedeemCodesColumns[10]},
+				Columns:    []*schema.Column{RedeemCodesColumns[11]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1149,12 +1232,12 @@ var (
 			{
 				Name:    "redeemcode_used_by",
 				Unique:  false,
-				Columns: []*schema.Column{RedeemCodesColumns[10]},
+				Columns: []*schema.Column{RedeemCodesColumns[11]},
 			},
 			{
 				Name:    "redeemcode_group_id",
 				Unique:  false,
-				Columns: []*schema.Column{RedeemCodesColumns[9]},
+				Columns: []*schema.Column{RedeemCodesColumns[10]},
 			},
 		},
 	}
@@ -1435,6 +1518,9 @@ var (
 		{Name: "balance", Type: field.TypeFloat64, Default: 0, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
 		{Name: "concurrency", Type: field.TypeInt, Default: 5},
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "invite_code", Type: field.TypeString, Unique: true, Nullable: true, Size: 32},
+		{Name: "invited_by_user_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "invite_bound_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "username", Type: field.TypeString, Size: 100, Default: ""},
 		{Name: "notes", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "totp_secret_encrypted", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
@@ -1456,6 +1542,16 @@ var (
 		Columns:    UsersColumns,
 		PrimaryKey: []*schema.Column{UsersColumns[0]},
 		Indexes: []*schema.Index{
+			{
+				Name:    "user_invite_code",
+				Unique:  false,
+				Columns: []*schema.Column{UsersColumns[10]},
+			},
+			{
+				Name:    "user_invited_by_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{UsersColumns[11]},
+			},
 			{
 				Name:    "user_status",
 				Unique:  false,
@@ -1693,6 +1789,9 @@ var (
 		GroupsTable,
 		IdempotencyRecordsTable,
 		IdentityAdoptionDecisionsTable,
+		InviteAdminActionsTable,
+		InviteRelationshipEventsTable,
+		InviteRewardRecordsTable,
 		PaymentAuditLogsTable,
 		PaymentOrdersTable,
 		PaymentProviderInstancesTable,
@@ -1774,6 +1873,15 @@ func init() {
 	IdentityAdoptionDecisionsTable.ForeignKeys[1].RefTable = PendingAuthSessionsTable
 	IdentityAdoptionDecisionsTable.Annotation = &entsql.Annotation{
 		Table: "identity_adoption_decisions",
+	}
+	InviteAdminActionsTable.Annotation = &entsql.Annotation{
+		Table: "invite_admin_actions",
+	}
+	InviteRelationshipEventsTable.Annotation = &entsql.Annotation{
+		Table: "invite_relationship_events",
+	}
+	InviteRewardRecordsTable.Annotation = &entsql.Annotation{
+		Table: "invite_reward_records",
 	}
 	PaymentAuditLogsTable.Annotation = &entsql.Annotation{
 		Table: "payment_audit_logs",

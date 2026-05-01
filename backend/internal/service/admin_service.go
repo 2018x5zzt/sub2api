@@ -110,6 +110,16 @@ type AdminService interface {
 	BatchDeleteRedeemCodes(ctx context.Context, ids []int64) (int64, error)
 	ExpireRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
 	ResetAccountQuota(ctx context.Context, id int64) error
+
+	// Invite read/write management
+	GetInviteStats(ctx context.Context) (*AdminInviteStats, error)
+	ListInviteRelationships(ctx context.Context, page, pageSize int, filters AdminInviteRelationshipFilters) ([]AdminInviteRelationship, int64, error)
+	ListInviteRewards(ctx context.Context, page, pageSize int, filters AdminInviteRewardFilters) ([]AdminInviteRewardRow, int64, error)
+	ListInviteActions(ctx context.Context, page, pageSize int, filters InviteAdminActionFilters) ([]InviteAdminAction, int64, error)
+	RebindInviter(ctx context.Context, input RebindInviterInput) error
+	CreateManualInviteGrant(ctx context.Context, input ManualInviteGrantInput) error
+	PreviewInviteRecompute(ctx context.Context, input InviteRecomputeInput) (*InviteRecomputePreview, error)
+	ExecuteInviteRecompute(ctx context.Context, input InviteRecomputeExecuteInput) error
 }
 
 // CreateUserInput represents input for creating a new user via admin operations.
@@ -505,23 +515,31 @@ var ErrRPMStatusUnavailable = infraerrors.New(http.StatusNotImplemented, "RPM_ST
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
-	userRepo             UserRepository
-	groupRepo            GroupRepository
-	accountRepo          AccountRepository
-	proxyRepo            ProxyRepository
-	apiKeyRepo           APIKeyRepository
-	redeemCodeRepo       RedeemCodeRepository
-	userGroupRateRepo    UserGroupRateRepository
-	userRPMCache         UserRPMCache
-	billingCacheService  *BillingCacheService
-	proxyProber          ProxyExitInfoProber
-	proxyLatencyCache    ProxyLatencyCache
-	authCacheInvalidator APIKeyAuthCacheInvalidator
-	entClient            *dbent.Client // 用于开启数据库事务
-	settingService       *SettingService
-	defaultSubAssigner   DefaultSubscriptionAssigner
-	userSubRepo          UserSubscriptionRepository
-	privacyClientFactory PrivacyClientFactory
+	userRepo                     UserRepository
+	groupRepo                    GroupRepository
+	accountRepo                  AccountRepository
+	proxyRepo                    ProxyRepository
+	apiKeyRepo                   APIKeyRepository
+	redeemCodeRepo               RedeemCodeRepository
+	inviteAdminQueryRepo         InviteAdminQueryRepository
+	inviteRewardRecordRepo       InviteRewardAdminRepository
+	inviteRelationshipEventRepo  InviteRelationshipEventAdminRepository
+	inviteAdminActionRepo        InviteAdminActionRepository
+	inviteQualifyingRechargeRepo InviteQualifyingRechargeRepository
+	userGroupRateRepo            UserGroupRateRepository
+	userRPMCache                 UserRPMCache
+	billingCacheService          *BillingCacheService
+	proxyProber                  ProxyExitInfoProber
+	proxyLatencyCache            ProxyLatencyCache
+	authCacheInvalidator         APIKeyAuthCacheInvalidator
+	entClient                    *dbent.Client // 用于开启数据库事务
+	settingService               *SettingService
+	defaultSubAssigner           DefaultSubscriptionAssigner
+	userSubRepo                  UserSubscriptionRepository
+	privacyClientFactory         PrivacyClientFactory
+	inviteBindingUserRepo        interface {
+		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
+	}
 }
 
 type userGroupRateBatchReader interface {
@@ -536,6 +554,11 @@ func NewAdminService(
 	proxyRepo ProxyRepository,
 	apiKeyRepo APIKeyRepository,
 	redeemCodeRepo RedeemCodeRepository,
+	inviteAdminQueryRepo InviteAdminQueryRepository,
+	inviteRewardRecordRepo InviteRewardAdminRepository,
+	inviteRelationshipEventRepo InviteRelationshipEventAdminRepository,
+	inviteAdminActionRepo InviteAdminActionRepository,
+	inviteQualifyingRechargeRepo InviteQualifyingRechargeRepository,
 	userGroupRateRepo UserGroupRateRepository,
 	userRPMCache UserRPMCache,
 	billingCacheService *BillingCacheService,
@@ -548,24 +571,39 @@ func NewAdminService(
 	userSubRepo UserSubscriptionRepository,
 	privacyClientFactory PrivacyClientFactory,
 ) AdminService {
+	var inviteBindingUserRepo interface {
+		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
+	}
+	if binder, ok := userRepo.(interface {
+		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
+	}); ok {
+		inviteBindingUserRepo = binder
+	}
+
 	return &adminServiceImpl{
-		userRepo:             userRepo,
-		groupRepo:            groupRepo,
-		accountRepo:          accountRepo,
-		proxyRepo:            proxyRepo,
-		apiKeyRepo:           apiKeyRepo,
-		redeemCodeRepo:       redeemCodeRepo,
-		userGroupRateRepo:    userGroupRateRepo,
-		userRPMCache:         userRPMCache,
-		billingCacheService:  billingCacheService,
-		proxyProber:          proxyProber,
-		proxyLatencyCache:    proxyLatencyCache,
-		authCacheInvalidator: authCacheInvalidator,
-		entClient:            entClient,
-		settingService:       settingService,
-		defaultSubAssigner:   defaultSubAssigner,
-		userSubRepo:          userSubRepo,
-		privacyClientFactory: privacyClientFactory,
+		userRepo:                     userRepo,
+		groupRepo:                    groupRepo,
+		accountRepo:                  accountRepo,
+		proxyRepo:                    proxyRepo,
+		apiKeyRepo:                   apiKeyRepo,
+		redeemCodeRepo:               redeemCodeRepo,
+		inviteAdminQueryRepo:         inviteAdminQueryRepo,
+		inviteRewardRecordRepo:       inviteRewardRecordRepo,
+		inviteRelationshipEventRepo:  inviteRelationshipEventRepo,
+		inviteAdminActionRepo:        inviteAdminActionRepo,
+		inviteQualifyingRechargeRepo: inviteQualifyingRechargeRepo,
+		userGroupRateRepo:            userGroupRateRepo,
+		userRPMCache:                 userRPMCache,
+		billingCacheService:          billingCacheService,
+		proxyProber:                  proxyProber,
+		proxyLatencyCache:            proxyLatencyCache,
+		authCacheInvalidator:         authCacheInvalidator,
+		entClient:                    entClient,
+		settingService:               settingService,
+		defaultSubAssigner:           defaultSubAssigner,
+		userSubRepo:                  userSubRepo,
+		privacyClientFactory:         privacyClientFactory,
+		inviteBindingUserRepo:        inviteBindingUserRepo,
 	}
 }
 

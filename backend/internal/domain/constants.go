@@ -42,6 +42,13 @@ const (
 	RedeemTypeInvitation   = "invitation"
 )
 
+const (
+	RedeemSourceCommercial   = "commercial"
+	RedeemSourceBenefit      = "benefit"
+	RedeemSourceCompensation = "compensation"
+	RedeemSourceSystemGrant  = "system_grant"
+)
+
 // PromoCode status constants
 const (
 	PromoCodeStatusActive   = "active"
