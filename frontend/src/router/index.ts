@@ -222,6 +222,30 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/models',
+    redirect: '/available-channels',
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false
+    }
+  },
+  {
+    path: '/model-hub',
+    redirect: '/available-channels',
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false
+    }
+  },
+  {
+    path: '/model-plaza',
+    redirect: '/available-channels',
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false
+    }
+  },
+  {
     path: '/profile',
     name: 'Profile',
     component: () => import('@/views/user/ProfileView.vue'),
