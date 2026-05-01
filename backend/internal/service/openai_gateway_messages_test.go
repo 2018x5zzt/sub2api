@@ -119,6 +119,50 @@ func TestForwardAsAnthropic_APIKeyAddsDefaultInstructionsWhenMissing(t *testing.
 	require.Equal(t, "final answer", gjson.GetBytes(rec.Body.Bytes(), "content.0.text").String())
 }
 
+func TestForwardAsAnthropic_APIKeyStripsConvertedMaxOutputTokens(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(nil))
+
+	body := []byte(`{"model":"gpt-5.4","max_tokens":4096,"max_outputs_tokens":4096,"messages":[{"role":"user","content":"Hi"}],"stream":false}`)
+	upstreamSSE := strings.Join([]string{
+		`data: {"type":"response.completed","response":{"id":"resp_messages_no_max_output","model":"gpt-5.4","status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"final answer"}]}],"usage":{"input_tokens":1,"output_tokens":2}}}`,
+		"",
+	}, "\n")
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid-messages-no-max-output"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamSSE)),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{}},
+		httpUpstream: upstream,
+	}
+
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeAPIKey,
+		Concurrency:    1,
+		Credentials:    map[string]any{"api_key": "test-api-key"},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.ForwardAsAnthropic(context.Background(), c, account, body, "", "gpt-5.4")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, gjson.GetBytes(upstream.lastBody, "max_output_tokens").Exists(), "API key messages compatibility path must not forward max_output_tokens")
+	require.False(t, gjson.GetBytes(upstream.lastBody, "max_outputs_tokens").Exists(), "API key messages compatibility path must not forward misspelled max_outputs_tokens")
+	require.Equal(t, "final answer", gjson.GetBytes(rec.Body.Bytes(), "content.0.text").String())
+}
+
 func TestForwardAsAnthropic_BufferedToolCallDeltaOnlyTerminalResponsePreservesToolUse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

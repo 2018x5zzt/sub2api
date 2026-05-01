@@ -114,6 +114,7 @@ func TestCursorMixedShape_StripsUnsupportedFields(t *testing.T) {
 		"stream": true,
 		"prompt_cache_retention": "24h",
 		"max_output_tokens": 4096,
+		"max_outputs_tokens": 4096,
 		"safety_identifier": "cursor-user-xyz",
 		"metadata": {"trace_id":"abc","caller":"cursor"},
 		"stream_options": {"include_usage": true},

@@ -23,10 +23,22 @@ import (
 
 var cursorResponsesUnsupportedFields = []string{
 	"max_output_tokens",
+	"max_outputs_tokens",
 	"prompt_cache_retention",
 	"safety_identifier",
 	"metadata",
 	"stream_options",
+}
+
+func stripOpenAIAPIKeyUnsupportedResponsesTokenLimits(reqBody map[string]any) bool {
+	modified := false
+	for _, field := range []string{"max_output_tokens", "max_outputs_tokens"} {
+		if _, ok := reqBody[field]; ok {
+			delete(reqBody, field)
+			modified = true
+		}
+	}
+	return modified
 }
 
 // ForwardAsChatCompletions accepts a Chat Completions request body, converts it
@@ -116,8 +128,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	}
 	needsRemarshal := false
 	if account.Type == AccountTypeAPIKey {
-		if _, ok := reqBody["max_output_tokens"]; ok {
-			delete(reqBody, "max_output_tokens")
+		if stripOpenAIAPIKeyUnsupportedResponsesTokenLimits(reqBody) {
 			needsRemarshal = true
 		}
 	}
