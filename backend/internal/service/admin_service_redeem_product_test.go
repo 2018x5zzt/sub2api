@@ -94,6 +94,38 @@ func TestAdminServiceGenerateSubscriptionCardCodesConvertsMappedLegacyGroupToPro
 	require.Equal(t, 30, repo.created[0].ValidityDays)
 }
 
+func TestAdminServiceGenerateSubscriptionCardCodesKeepsValidityDaysOnSameProduct(t *testing.T) {
+	t.Parallel()
+
+	groupID := int64(21)
+	repo := &redeemCreateRepoStub{}
+	svc := &adminServiceImpl{
+		redeemCodeRepo:     repo,
+		groupRepo:          &subscriptionGroupRepoStub{group: &Group{ID: groupID, Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		defaultSubAssigner: redeemProductAwareAssignerStub{groupID: groupID, productID: 88},
+	}
+
+	for _, days := range []int{1, 7, 30} {
+		codes, err := svc.GenerateRedeemCodes(context.Background(), &GenerateRedeemCodesInput{
+			Count:        1,
+			Type:         RedeemTypeSubscription,
+			GroupID:      &groupID,
+			ValidityDays: days,
+		})
+
+		require.NoError(t, err)
+		require.Len(t, codes, 1)
+	}
+
+	require.Len(t, repo.created, 3)
+	for i, days := range []int{1, 7, 30} {
+		require.Nil(t, repo.created[i].GroupID)
+		require.NotNil(t, repo.created[i].ProductID)
+		require.Equal(t, int64(88), *repo.created[i].ProductID)
+		require.Equal(t, days, repo.created[i].ValidityDays)
+	}
+}
+
 func TestAdminServiceGenerateSubscriptionCardCodesRejectsUnknownProduct(t *testing.T) {
 	t.Parallel()
 
