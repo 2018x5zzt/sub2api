@@ -102,3 +102,39 @@ func TestBillingCacheServiceEnqueueAfterStopReturnsFalse(t *testing.T) {
 	})
 	require.False(t, enqueued)
 }
+
+type billingEligibilityCacheStub struct {
+	billingCacheWorkerStub
+}
+
+func (b *billingEligibilityCacheStub) GetSubscriptionCache(ctx context.Context, userID, groupID int64) (*SubscriptionCacheData, error) {
+	return &SubscriptionCacheData{
+		Status:    SubscriptionStatusActive,
+		ExpiresAt: time.Now().Add(time.Hour),
+	}, nil
+}
+
+func (b *billingEligibilityCacheStub) GetAPIKeyRateLimit(ctx context.Context, keyID int64) (*APIKeyRateLimitCacheData, error) {
+	now := time.Now()
+	return &APIKeyRateLimitCacheData{
+		Usage1d:  45,
+		Window1d: now.Unix(),
+	}, nil
+}
+
+func TestBillingCacheServiceCheckBillingEligibilitySkipsAPIKeyRateLimitsForSubscriptions(t *testing.T) {
+	cache := &billingEligibilityCacheStub{}
+	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{})
+	t.Cleanup(svc.Stop)
+
+	limit := 45.0
+	err := svc.CheckBillingEligibility(
+		context.Background(),
+		&User{ID: 1},
+		&APIKey{ID: 2, RateLimit1d: 45},
+		&Group{ID: 3, SubscriptionType: SubscriptionTypeSubscription, DailyLimitUSD: &limit},
+		&UserSubscription{ID: 4, Status: SubscriptionStatusActive, ExpiresAt: time.Now().Add(time.Hour)},
+	)
+
+	require.NoError(t, err)
+}

@@ -146,6 +146,7 @@ func apiKeyAuthWithSubscription(
 		var subscription *service.UserSubscription
 		var productSettlement *service.ProductSettlementContext
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+		subscriptionBalanceFallback := false
 
 		if isSubscriptionType && productSubscriptionService != nil {
 			settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
@@ -155,6 +156,15 @@ func apiKeyAuthWithSubscription(
 			)
 			if productErr == nil {
 				productSettlement = settlement
+			} else if isSubscriptionLimitError(productErr) && !skipBilling {
+				if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
+					apiKey = fallbackAPIKey
+					isSubscriptionType = false
+					subscriptionBalanceFallback = true
+				} else {
+					AbortWithError(c, 429, "USAGE_LIMIT_EXCEEDED", productErr.Error())
+					return
+				}
 			} else if !errors.Is(productErr, service.ErrSubscriptionNotFound) && !skipBilling {
 				AbortWithError(c, 403, "SUBSCRIPTION_INVALID", productErr.Error())
 				return
@@ -169,8 +179,14 @@ func apiKeyAuthWithSubscription(
 			)
 			if subErr != nil {
 				if !skipBilling {
-					AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for this group")
-					return
+					if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
+						apiKey = fallbackAPIKey
+						isSubscriptionType = false
+						subscriptionBalanceFallback = true
+					} else {
+						AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for this group")
+						return
+					}
 				}
 				// skipBilling: 订阅不存在也放行，handler 会返回可用的数据
 			} else {
@@ -181,11 +197,14 @@ func apiKeyAuthWithSubscription(
 		// ── 6. 计费执行（skipBilling 时整块跳过） ────────────────────
 
 		if !skipBilling {
+			skipAPIKeyUsageQuota := hasSubscriptionEntitlement(productSettlement, subscription)
 			// Key 状态检查
 			switch apiKey.Status {
 			case service.StatusAPIKeyQuotaExhausted:
-				AbortWithError(c, 429, "API_KEY_QUOTA_EXHAUSTED", "API key 额度已用完")
-				return
+				if !skipAPIKeyUsageQuota {
+					AbortWithError(c, 429, "API_KEY_QUOTA_EXHAUSTED", "API key 额度已用完")
+					return
+				}
 			case service.StatusAPIKeyExpired:
 				AbortWithError(c, 403, "API_KEY_EXPIRED", "API key 已过期")
 				return
@@ -196,7 +215,7 @@ func apiKeyAuthWithSubscription(
 				AbortWithError(c, 403, "API_KEY_EXPIRED", "API key 已过期")
 				return
 			}
-			if apiKey.IsQuotaExhausted() {
+			if !skipAPIKeyUsageQuota && apiKey.IsQuotaExhausted() {
 				AbortWithError(c, 429, "API_KEY_QUOTA_EXHAUSTED", "API key 额度已用完")
 				return
 			}
@@ -226,12 +245,23 @@ func apiKeyAuthWithSubscription(
 						code = "USAGE_LIMIT_EXCEEDED"
 						status = 429
 					}
-					AbortWithError(c, status, code, validateErr.Error())
-					return
+					if isSubscriptionLimitError(validateErr) {
+						if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
+							apiKey = fallbackAPIKey
+							subscription = nil
+							subscriptionBalanceFallback = true
+						} else {
+							AbortWithError(c, status, code, validateErr.Error())
+							return
+						}
+					} else {
+						AbortWithError(c, status, code, validateErr.Error())
+						return
+					}
 				}
 
 				// 窗口维护异步化（不阻塞请求）
-				if needsMaintenance {
+				if subscription != nil && needsMaintenance {
 					maintenanceCopy := *subscription
 					subscriptionService.DoWindowMaintenance(&maintenanceCopy)
 				}
@@ -254,6 +284,9 @@ func apiKeyAuthWithSubscription(
 			ctx := service.ContextWithProductSettlement(c.Request.Context(), productSettlement)
 			c.Request = c.Request.WithContext(ctx)
 		}
+		if subscriptionBalanceFallback {
+			c.Request = c.Request.WithContext(service.ContextWithSubscriptionBalanceFallback(c.Request.Context()))
+		}
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{
 			UserID:      apiKey.User.ID,
@@ -265,6 +298,10 @@ func apiKeyAuthWithSubscription(
 
 		c.Next()
 	}
+}
+
+func hasSubscriptionEntitlement(productSettlement *service.ProductSettlementContext, subscription *service.UserSubscription) bool {
+	return productSettlement != nil || subscription != nil
 }
 
 // GetAPIKeyFromContext 从上下文中获取API key
@@ -305,4 +342,41 @@ func setGroupContext(c *gin.Context, group *service.Group) {
 	}
 	ctx := context.WithValue(c.Request.Context(), ctxkey.Group, group)
 	c.Request = c.Request.WithContext(ctx)
+}
+
+func isSubscriptionLimitError(err error) bool {
+	return errors.Is(err, service.ErrDailyLimitExceeded) ||
+		errors.Is(err, service.ErrWeeklyLimitExceeded) ||
+		errors.Is(err, service.ErrMonthlyLimitExceeded)
+}
+
+func resolveSubscriptionBalanceFallbackAPIKey(ctx context.Context, apiKeyService *service.APIKeyService, apiKey *service.APIKey) (*service.APIKey, error) {
+	if apiKeyService == nil || apiKey == nil || apiKey.User == nil || apiKey.Group == nil {
+		return nil, service.ErrSubscriptionNotFound
+	}
+	user := apiKey.User
+	if !user.SubscriptionBalanceFallbackEnabled ||
+		user.SubscriptionBalanceFallbackLimitUSD <= 0 ||
+		user.SubscriptionBalanceFallbackUsedUSD >= user.SubscriptionBalanceFallbackLimitUSD ||
+		user.Balance <= 0 ||
+		apiKey.Group.BalanceFallbackGroupID == nil ||
+		*apiKey.Group.BalanceFallbackGroupID <= 0 {
+		return nil, service.ErrSubscriptionNotFound
+	}
+
+	fallbackGroup, err := apiKeyService.GetGroupByID(ctx, *apiKey.Group.BalanceFallbackGroupID)
+	if err != nil {
+		return nil, err
+	}
+	if fallbackGroup == nil ||
+		!fallbackGroup.IsActive() ||
+		fallbackGroup.SubscriptionType != service.SubscriptionTypeStandard {
+		return nil, service.ErrSubscriptionInvalid
+	}
+
+	fallbackAPIKey := *apiKey
+	groupID := fallbackGroup.ID
+	fallbackAPIKey.GroupID = &groupID
+	fallbackAPIKey.Group = fallbackGroup
+	return &fallbackAPIKey, nil
 }

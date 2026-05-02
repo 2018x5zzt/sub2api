@@ -20,11 +20,14 @@ type User struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 
 	// 余额不足通知
-	BalanceNotifyEnabled       bool               `json:"balance_notify_enabled"`
-	BalanceNotifyThresholdType string             `json:"balance_notify_threshold_type"`
-	BalanceNotifyThreshold     *float64           `json:"balance_notify_threshold"`
-	BalanceNotifyExtraEmails   []NotifyEmailEntry `json:"balance_notify_extra_emails"`
-	TotalRecharged             float64            `json:"total_recharged"`
+	BalanceNotifyEnabled                bool               `json:"balance_notify_enabled"`
+	BalanceNotifyThresholdType          string             `json:"balance_notify_threshold_type"`
+	BalanceNotifyThreshold              *float64           `json:"balance_notify_threshold"`
+	BalanceNotifyExtraEmails            []NotifyEmailEntry `json:"balance_notify_extra_emails"`
+	TotalRecharged                      float64            `json:"total_recharged"`
+	SubscriptionBalanceFallbackEnabled  bool               `json:"subscription_balance_fallback_enabled"`
+	SubscriptionBalanceFallbackLimitUSD float64            `json:"subscription_balance_fallback_limit_usd"`
+	SubscriptionBalanceFallbackUsedUSD  float64            `json:"subscription_balance_fallback_used_usd"`
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制），仅在所用分组未设置 rpm_limit 时作为兜底生效。
 	RPMLimit int `json:"rpm_limit"`
@@ -103,6 +106,7 @@ type Group struct {
 	FallbackGroupID *int64 `json:"fallback_group_id"`
 	// 无效请求兜底分组
 	FallbackGroupIDOnInvalidRequest *int64 `json:"fallback_group_id_on_invalid_request"`
+	BalanceFallbackGroupID          *int64 `json:"balance_fallback_group_id"`
 
 	// OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
 	AllowMessagesDispatch bool `json:"allow_messages_dispatch"`

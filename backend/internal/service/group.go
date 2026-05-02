@@ -35,6 +35,8 @@ type Group struct {
 	FallbackGroupID *int64
 	// 无效请求兜底分组（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
+	// 订阅额度耗尽时允许切换到的余额分组。仅订阅分组使用，目标分组必须是 standard。
+	BalanceFallbackGroupID *int64
 
 	// 模型路由配置
 	// key: 模型匹配模式（支持 * 通配符，如 "claude-opus-*"）

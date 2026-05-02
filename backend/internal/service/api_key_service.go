@@ -246,6 +246,13 @@ func (s *APIKeyService) SetProductVisibleGroupsLister(lister ProductVisibleGroup
 	s.productVisibleGroups = lister
 }
 
+func (s *APIKeyService) GetGroupByID(ctx context.Context, groupID int64) (*Group, error) {
+	if s == nil || s.groupRepo == nil || groupID <= 0 {
+		return nil, ErrGroupNotFound
+	}
+	return s.groupRepo.GetByID(ctx, groupID)
+}
+
 func (s *APIKeyService) compileAPIKeyIPRules(apiKey *APIKey) {
 	if apiKey == nil {
 		return

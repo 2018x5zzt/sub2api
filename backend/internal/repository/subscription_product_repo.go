@@ -33,17 +33,12 @@ func (r *subscriptionProductRepository) execForContext(ctx context.Context) sqlE
 }
 
 func (r *subscriptionProductRepository) GetActiveProductSubscriptionByUserAndGroupID(ctx context.Context, userID, groupID int64) (*service.SubscriptionProductBinding, *service.UserProductSubscription, error) {
-	var binding service.SubscriptionProductBinding
-	var sub service.UserProductSubscription
-	var dailyWindowStart sql.NullTime
-	var weeklyWindowStart sql.NullTime
-	var monthlyWindowStart sql.NullTime
-
-	err := scanSingleRow(ctx, r.sql, `
+	rows, err := r.sql.QueryContext(ctx, `
 SELECT
 	sp.id,
 	sp.code,
 	sp.name,
+	sp.product_family,
 	sp.status,
 	sp.default_validity_days,
 	sp.daily_limit_usd,
@@ -87,49 +82,93 @@ JOIN user_product_subscriptions ups
 WHERE spg.group_id = $2
   AND spg.deleted_at IS NULL
   AND spg.status = 'active'
-ORDER BY ups.expires_at DESC, ups.id DESC
-LIMIT 1
-`, []any{userID, groupID},
-		&binding.ProductID,
-		&binding.ProductCode,
-		&binding.ProductName,
-		&binding.ProductStatus,
-		&binding.DefaultValidityDays,
-		&binding.DailyLimitUSD,
-		&binding.WeeklyLimitUSD,
-		&binding.MonthlyLimitUSD,
-		&binding.GroupID,
-		&binding.GroupName,
-		&binding.GroupPlatform,
-		&binding.GroupStatus,
-		&binding.GroupSubscription,
-		&binding.DebitMultiplier,
-		&binding.BindingStatus,
-		&sub.ID,
-		&sub.UserID,
-		&sub.ProductID,
-		&sub.StartsAt,
-		&sub.ExpiresAt,
-		&sub.Status,
-		&dailyWindowStart,
-		&weeklyWindowStart,
-		&monthlyWindowStart,
-		&sub.DailyUsageUSD,
-		&sub.WeeklyUsageUSD,
-		&sub.MonthlyUsageUSD,
-		&sub.DailyCarryoverInUSD,
-		&sub.DailyCarryoverRemainingUSD,
-	)
+ORDER BY sp.product_family ASC, sp.sort_order ASC, ups.starts_at ASC, ups.id ASC
+`, userID, groupID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil, service.ErrSubscriptionNotFound
-		}
 		return nil, nil, err
 	}
-	sub.DailyWindowStart = nullableTimePtr(dailyWindowStart)
-	sub.WeeklyWindowStart = nullableTimePtr(weeklyWindowStart)
-	sub.MonthlyWindowStart = nullableTimePtr(monthlyWindowStart)
-	return &binding, &sub, nil
+	defer func() { _ = rows.Close() }()
+
+	var firstFamily string
+	var firstLimitErr error
+	seen := false
+	for rows.Next() {
+		seen = true
+		var binding service.SubscriptionProductBinding
+		var sub service.UserProductSubscription
+		var dailyWindowStart sql.NullTime
+		var weeklyWindowStart sql.NullTime
+		var monthlyWindowStart sql.NullTime
+		if err := rows.Scan(
+			&binding.ProductID,
+			&binding.ProductCode,
+			&binding.ProductName,
+			&binding.ProductFamily,
+			&binding.ProductStatus,
+			&binding.DefaultValidityDays,
+			&binding.DailyLimitUSD,
+			&binding.WeeklyLimitUSD,
+			&binding.MonthlyLimitUSD,
+			&binding.GroupID,
+			&binding.GroupName,
+			&binding.GroupPlatform,
+			&binding.GroupStatus,
+			&binding.GroupSubscription,
+			&binding.DebitMultiplier,
+			&binding.BindingStatus,
+			&sub.ID,
+			&sub.UserID,
+			&sub.ProductID,
+			&sub.StartsAt,
+			&sub.ExpiresAt,
+			&sub.Status,
+			&dailyWindowStart,
+			&weeklyWindowStart,
+			&monthlyWindowStart,
+			&sub.DailyUsageUSD,
+			&sub.WeeklyUsageUSD,
+			&sub.MonthlyUsageUSD,
+			&sub.DailyCarryoverInUSD,
+			&sub.DailyCarryoverRemainingUSD,
+		); err != nil {
+			return nil, nil, err
+		}
+		if firstFamily == "" {
+			firstFamily = strings.TrimSpace(binding.ProductFamily)
+			if firstFamily == "" {
+				firstFamily = "default"
+			}
+		}
+		family := strings.TrimSpace(binding.ProductFamily)
+		if family == "" {
+			family = "default"
+		}
+		if family != firstFamily {
+			break
+		}
+		sub.DailyWindowStart = nullableTimePtr(dailyWindowStart)
+		sub.WeeklyWindowStart = nullableTimePtr(weeklyWindowStart)
+		sub.MonthlyWindowStart = nullableTimePtr(monthlyWindowStart)
+		product := binding.Product()
+		service.NormalizeExpiredProductSubscriptionWindowForRepository(&sub, product, time.Now())
+		if err := productSubscriptionHasRemaining(&sub, product); err != nil {
+			if firstLimitErr == nil {
+				firstLimitErr = err
+			}
+			continue
+		}
+		return &binding, &sub, nil
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	if !seen {
+		return nil, nil, service.ErrSubscriptionNotFound
+	}
+	if firstLimitErr != nil {
+		return nil, nil, firstLimitErr
+	}
+	return nil, nil, service.ErrSubscriptionNotFound
 }
 
 func (r *subscriptionProductRepository) ListActiveProductsByUserID(ctx context.Context, userID int64) ([]service.ActiveSubscriptionProduct, error) {
@@ -159,6 +198,7 @@ SELECT
 	sp.name,
 	COALESCE(sp.description, ''),
 	sp.status,
+	sp.product_family,
 	sp.default_validity_days,
 	sp.daily_limit_usd,
 	sp.weekly_limit_usd,
@@ -213,6 +253,7 @@ ORDER BY sp.sort_order ASC, ups.expires_at DESC, ups.id DESC`, userID)
 			&item.Product.Name,
 			&item.Product.Description,
 			&item.Product.Status,
+			&item.Product.ProductFamily,
 			&item.Product.DefaultValidityDays,
 			&item.Product.DailyLimitUSD,
 			&item.Product.WeeklyLimitUSD,
@@ -231,6 +272,7 @@ ORDER BY sp.sort_order ASC, ups.expires_at DESC, ups.id DESC`, userID)
 			item.Subscription.AssignedBy = &v
 		}
 		item.Subscription.Notes = notes.String
+		service.NormalizeExpiredProductSubscriptionWindowForRepository(&item.Subscription, &item.Product, time.Now())
 		item.Groups = []service.SubscriptionProductGroupSummary{}
 		items = append(items, item)
 		productIDs = append(productIDs, item.Product.ID)
@@ -381,6 +423,7 @@ SELECT
 	name,
 	COALESCE(description, ''),
 	status,
+	product_family,
 	default_validity_days,
 	daily_limit_usd,
 	weekly_limit_usd,
@@ -405,6 +448,7 @@ ORDER BY sort_order ASC, id ASC`)
 			&product.Name,
 			&product.Description,
 			&product.Status,
+			&product.ProductFamily,
 			&product.DefaultValidityDays,
 			&product.DailyLimitUSD,
 			&product.WeeklyLimitUSD,
@@ -436,6 +480,7 @@ SELECT
 	sp.name,
 	COALESCE(sp.description, ''),
 	sp.status,
+	sp.product_family,
 	sp.default_validity_days,
 	sp.daily_limit_usd,
 	sp.weekly_limit_usd,
@@ -458,6 +503,7 @@ LIMIT 1`, []any{groupID},
 		&product.Name,
 		&product.Description,
 		&product.Status,
+		&product.ProductFamily,
 		&product.DefaultValidityDays,
 		&product.DailyLimitUSD,
 		&product.WeeklyLimitUSD,
@@ -500,6 +546,7 @@ INSERT INTO subscription_products (
 	name,
 	description,
 	status,
+	product_family,
 	default_validity_days,
 	daily_limit_usd,
 	weekly_limit_usd,
@@ -507,12 +554,13 @@ INSERT INTO subscription_products (
 	sort_order,
 	created_at,
 	updated_at
-) VALUES ($1, $2, NULLIF($3, ''), $4, $5, $6, $7, $8, $9, NOW(), NOW())
+) VALUES ($1, $2, NULLIF($3, ''), $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
 RETURNING id`, []any{
 		code,
 		name,
 		strings.TrimSpace(input.Description),
 		status,
+		normalizeProductFamily(input.ProductFamily),
 		validityDays,
 		input.DailyLimitUSD,
 		input.WeeklyLimitUSD,
@@ -568,6 +616,9 @@ func (r *subscriptionProductRepository) UpdateProduct(ctx context.Context, produ
 			return nil, err
 		}
 		addSet("status", status)
+	}
+	if input.ProductFamily != nil {
+		addSet("product_family", normalizeProductFamily(*input.ProductFamily))
 	}
 	if input.DefaultValidityDays != nil {
 		if *input.DefaultValidityDays <= 0 || *input.DefaultValidityDays > service.MaxValidityDays {
@@ -712,7 +763,12 @@ func (r *subscriptionProductRepository) ListProductSubscriptions(ctx context.Con
 	if productID <= 0 {
 		return nil, infraerrors.BadRequest("INVALID_PRODUCT_SUBSCRIPTION_LIST", "product_id is required")
 	}
-	rows, err := r.execForContext(ctx).QueryContext(ctx, `
+	exec := r.execForContext(ctx)
+	product, err := r.getProductByID(ctx, exec, productID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := exec.QueryContext(ctx, `
 SELECT
 	id,
 	user_id,
@@ -743,10 +799,14 @@ ORDER BY expires_at DESC, id DESC`, productID)
 	defer func() { _ = rows.Close() }()
 
 	subs := make([]service.UserProductSubscription, 0)
+	now := time.Now()
 	for rows.Next() {
 		sub, err := scanUserProductSubscriptionFromRows(rows)
 		if err != nil {
 			return nil, err
+		}
+		if sub.Status == service.SubscriptionStatusActive && sub.ExpiresAt.After(now) {
+			service.NormalizeExpiredProductSubscriptionWindowForRepository(sub, product, now)
 		}
 		subs = append(subs, *sub)
 	}
@@ -913,6 +973,7 @@ LIMIT $` + strconv.Itoa(limitPos) + ` OFFSET $` + strconv.Itoa(offsetPos)
 			item.AssignedBy = &v
 		}
 		item.Notes = notes.String
+		normalizeAdminProductSubscriptionListItem(&item)
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -924,6 +985,22 @@ LIMIT $` + strconv.Itoa(limitPos) + ` OFFSET $` + strconv.Itoa(offsetPos)
 		pages = 1
 	}
 	return items, &pagination.PaginationResult{Total: total, Page: page, PageSize: pageSize, Pages: pages}, nil
+}
+
+func normalizeAdminProductSubscriptionListItem(item *service.AdminProductSubscriptionListItem) {
+	if item == nil {
+		return
+	}
+	product := &service.SubscriptionProduct{DailyLimitUSD: item.DailyLimitUSD}
+	service.NormalizeExpiredProductSubscriptionWindowForRepository(&item.UserProductSubscription, product, time.Now())
+	item.CarryoverUsedUSD = item.DailyCarryoverInUSD - item.DailyCarryoverRemainingUSD
+	if item.CarryoverUsedUSD < 0 {
+		item.CarryoverUsedUSD = 0
+	}
+	item.FreshDailyUsageUSD = item.DailyUsageUSD - item.CarryoverUsedUSD
+	if item.FreshDailyUsageUSD < 0 {
+		item.FreshDailyUsageUSD = 0
+	}
 }
 
 func (r *subscriptionProductRepository) AssignOrExtendProductSubscription(ctx context.Context, input *service.AssignProductSubscriptionInput) (*service.UserProductSubscription, bool, error) {
@@ -1147,6 +1224,7 @@ SELECT
 	name,
 	COALESCE(description, ''),
 	status,
+	product_family,
 	default_validity_days,
 	daily_limit_usd,
 	weekly_limit_usd,
@@ -1162,6 +1240,7 @@ WHERE id = $1
 		&product.Name,
 		&product.Description,
 		&product.Status,
+		&product.ProductFamily,
 		&product.DefaultValidityDays,
 		&product.DailyLimitUSD,
 		&product.WeeklyLimitUSD,
@@ -1322,6 +1401,30 @@ func validateProductLimits(daily, weekly, monthly float64) error {
 	}
 	if monthly < 0 {
 		return infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "monthly_limit_usd cannot be negative")
+	}
+	return nil
+}
+
+func normalizeProductFamily(input string) string {
+	out := strings.TrimSpace(input)
+	if out == "" {
+		return "default"
+	}
+	return out
+}
+
+func productSubscriptionHasRemaining(sub *service.UserProductSubscription, product *service.SubscriptionProduct) error {
+	if sub == nil || product == nil {
+		return service.ErrSubscriptionNotFound
+	}
+	if product.HasDailyLimit() && sub.DailyRemainingTotal(product) <= 0 {
+		return service.ErrDailyLimitExceeded
+	}
+	if product.HasWeeklyLimit() && sub.WeeklyUsageUSD >= product.WeeklyLimitUSD {
+		return service.ErrWeeklyLimitExceeded
+	}
+	if product.HasMonthlyLimit() && sub.MonthlyUsageUSD >= product.MonthlyLimitUSD {
+		return service.ErrMonthlyLimitExceeded
 	}
 	return nil
 }

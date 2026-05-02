@@ -42,7 +42,7 @@ func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subsc
 				END AS should_advance_weekly,
 				CASE
 					WHEN ups.monthly_window_start IS NULL THEN true
-					WHEN ups.monthly_window_start + INTERVAL '1 month' <= NOW() THEN true
+					WHEN date_trunc('month', ups.monthly_window_start) < date_trunc('month', NOW()) THEN true
 					ELSE false
 				END AS should_advance_monthly,
 				CASE

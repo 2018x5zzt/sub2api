@@ -96,6 +96,9 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		SetSignupSource(userSignupSourceOrDefault(userIn.SignupSource)).
 		SetNillableLastLoginAt(userIn.LastLoginAt).
 		SetNillableLastActiveAt(userIn.LastActiveAt).
+		SetSubscriptionBalanceFallbackEnabled(userIn.SubscriptionBalanceFallbackEnabled).
+		SetSubscriptionBalanceFallbackLimitUsd(userIn.SubscriptionBalanceFallbackLimitUSD).
+		SetSubscriptionBalanceFallbackUsedUsd(userIn.SubscriptionBalanceFallbackUsedUSD).
 		SetRpmLimit(userIn.RPMLimit).
 		Save(txCtx)
 	if err != nil {
@@ -249,6 +252,9 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetNillableBalanceNotifyThreshold(userIn.BalanceNotifyThreshold).
 		SetBalanceNotifyExtraEmails(marshalExtraEmails(userIn.BalanceNotifyExtraEmails)).
 		SetTotalRecharged(userIn.TotalRecharged).
+		SetSubscriptionBalanceFallbackEnabled(userIn.SubscriptionBalanceFallbackEnabled).
+		SetSubscriptionBalanceFallbackLimitUsd(userIn.SubscriptionBalanceFallbackLimitUSD).
+		SetSubscriptionBalanceFallbackUsedUsd(userIn.SubscriptionBalanceFallbackUsedUSD).
 		SetRpmLimit(userIn.RPMLimit)
 	if userIn.SignupSource != "" {
 		updateOp = updateOp.SetSignupSource(userIn.SignupSource)

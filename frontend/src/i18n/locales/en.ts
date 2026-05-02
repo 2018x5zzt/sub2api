@@ -1927,6 +1927,7 @@ export default {
       daily: 'Daily',
       weekly: 'Weekly',
       monthly: 'Monthly',
+      family: 'Family',
       unlimited: 'Unlimited',
       carryoverIn: 'In',
       carryoverUsed: 'Used',
@@ -1966,6 +1967,7 @@ export default {
         code: 'Code',
         name: 'Name',
         status: 'Status',
+        productFamily: 'Product Family',
         validityDays: 'Validity Days',
         dailyLimit: 'Daily Limit USD',
         weeklyLimit: 'Weekly Limit USD',
@@ -6041,7 +6043,20 @@ export default {
     expiresOn: 'Expires on {date}',
     resetIn: 'Resets in {time}',
     windowNotActive: 'Awaiting first use',
-    usageOf: '{used} of {limit}'
+    usageOf: '{used} of {limit}',
+    balanceFallback: {
+      title: 'Use balance automatically when subscription quota is exhausted',
+      description:
+        'When enabled, requests switch to balance billing within your cap after product subscription quota is exhausted and the group has a balance fallback mapping.',
+      limit: 'Balance fallback cap',
+      usage: 'Used ${used}, remaining ${remaining}'
+    },
+    keyReminder: {
+      title: 'Create a dedicated API key after activation',
+      description:
+        'This avoids accidentally reusing an old key’s balance or limits and keeps your subscription usage isolated by group.',
+      action: 'Go to API Keys'
+    }
   },
 
   // Onboarding Tour

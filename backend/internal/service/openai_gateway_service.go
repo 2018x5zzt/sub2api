@@ -5216,16 +5216,17 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 
 	billingErr := func() error {
 		_, err := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
-			Cost:                  cost,
-			User:                  user,
-			APIKey:                apiKey,
-			Account:               account,
-			Subscription:          subscription,
-			ProductSettlement:     productSettlement,
-			RequestPayloadHash:    resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
-			IsSubscriptionBill:    isSubscriptionBilling,
-			AccountRateMultiplier: accountRateMultiplier,
-			APIKeyService:         input.APIKeyService,
+			Cost:                        cost,
+			User:                        user,
+			APIKey:                      apiKey,
+			Account:                     account,
+			Subscription:                subscription,
+			ProductSettlement:           productSettlement,
+			RequestPayloadHash:          resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
+			IsSubscriptionBill:          isSubscriptionBilling,
+			SubscriptionBalanceFallback: SubscriptionBalanceFallbackFromContext(ctx),
+			AccountRateMultiplier:       accountRateMultiplier,
+			APIKeyService:               input.APIKeyService,
 		}, s.billingDeps(), s.usageBillingRepo)
 		return err
 	}()

@@ -3,11 +3,27 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import SubscriptionsView from '../SubscriptionsView.vue'
 
-const { getMySubscriptions, getActiveSubscriptions, getActiveProducts, showError } = vi.hoisted(() => ({
+const {
+  getMySubscriptions,
+  getActiveSubscriptions,
+  getActiveProducts,
+  updateProfileMock,
+  showError,
+  showSuccess,
+  authStore,
+  routerPush
+} = vi.hoisted(() => ({
   getMySubscriptions: vi.fn(),
   getActiveSubscriptions: vi.fn(),
   getActiveProducts: vi.fn(),
-  showError: vi.fn()
+  updateProfileMock: vi.fn(),
+  showError: vi.fn(),
+  showSuccess: vi.fn(),
+  routerPush: vi.fn(),
+  authStore: {
+    user: null as any,
+    refreshUser: vi.fn()
+  }
 }))
 
 vi.mock('@/api/subscriptions', () => ({
@@ -28,13 +44,22 @@ vi.mock('@/api/subscriptionProducts', () => ({
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
-    showError
+    showError,
+    showSuccess
   })
+}))
+
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => authStore
+}))
+
+vi.mock('@/api/user', () => ({
+  updateProfile: updateProfileMock
 }))
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({
-    push: vi.fn()
+    push: routerPush
   })
 }))
 
@@ -56,6 +81,13 @@ vi.mock('vue-i18n', async () => {
         }
         if (key === 'userSubscriptions.visibleGroups') return 'Included groups'
         if (key === 'userSubscriptions.groupMultiplier') return `${params?.multiplier}x`
+        if (key === 'userSubscriptions.balanceFallback.title') return 'Use balance automatically when subscription quota is exhausted'
+        if (key === 'userSubscriptions.balanceFallback.description') return 'Fallback description'
+        if (key === 'userSubscriptions.balanceFallback.limit') return 'Balance fallback cap'
+        if (key === 'userSubscriptions.balanceFallback.usage') return `Used $${params?.used}, remaining $${params?.remaining}`
+        if (key === 'userSubscriptions.keyReminder.title') return '激活后建议新建分组专用 API Key'
+        if (key === 'userSubscriptions.keyReminder.description') return '这样可以避免继续误用旧 key 的余额或限额，并按分组隔离你的订阅用量。'
+        if (key === 'userSubscriptions.keyReminder.action') return '去生成 API Key'
         if (key === 'userSubscriptions.unlimited') return 'Unlimited'
         if (key === 'userSubscriptions.unlimitedDesc') return 'No usage limits'
         if (key === 'common.today') return 'today'
@@ -73,6 +105,14 @@ describe('SubscriptionsView product subscriptions', () => {
     getMySubscriptions.mockResolvedValue([])
     getActiveSubscriptions.mockResolvedValue([])
     getActiveProducts.mockResolvedValue([])
+    routerPush.mockReset()
+    authStore.user = {
+      subscription_balance_fallback_enabled: false,
+      subscription_balance_fallback_limit_usd: 0,
+      subscription_balance_fallback_used_usd: 0
+    }
+    authStore.refreshUser.mockResolvedValue(authStore.user)
+    updateProfileMock.mockResolvedValue(authStore.user)
   })
 
   afterEach(() => {
@@ -135,6 +175,9 @@ describe('SubscriptionsView product subscriptions', () => {
     expect(text).toContain('plus/team mixed pool')
     expect(text).toContain('pro pool')
     expect(text).toContain('1.5x')
+    expect(text).toContain('激活后建议新建分组专用 API Key')
+    await wrapper.get('button').trigger('click')
+    expect(routerPush).toHaveBeenCalledWith('/keys')
   })
 
   it('hides legacy group subscriptions covered by an active product', async () => {

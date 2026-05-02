@@ -1980,6 +1980,7 @@ export default {
       daily: '每日',
       weekly: '每周',
       monthly: '每月',
+      family: '产品族',
       unlimited: '不限',
       carryoverIn: '结转',
       carryoverUsed: '已用',
@@ -2019,6 +2020,7 @@ export default {
         code: '编码',
         name: '名称',
         status: '状态',
+        productFamily: '产品族',
         validityDays: '有效天数',
         dailyLimit: '每日额度 USD',
         weeklyLimit: '每周额度 USD',
@@ -6198,7 +6200,18 @@ export default {
     expiresOn: '{date} 到期',
     resetIn: '{time} 后重置',
     windowNotActive: '等待首次使用',
-    usageOf: '已用 {used} / {limit}'
+    usageOf: '已用 {used} / {limit}',
+    balanceFallback: {
+      title: '订阅消耗完时，自动消耗余额',
+      description: '开启后，产品订阅额度耗尽且分组存在余额兜底映射时，会在你设置的上限内自动改用余额。',
+      limit: '余额兜底上限',
+      usage: '已用 ${used}，剩余 ${remaining}'
+    },
+    keyReminder: {
+      title: '激活后建议新建分组专用 API Key',
+      description: '这样可以避免继续误用旧 key 的余额或限额，并按分组隔离你的订阅用量。',
+      action: '去生成 API Key'
+    }
   },
 
   // Onboarding Tour

@@ -60,9 +60,8 @@ func TestSubscriptionProductRepositoryAssignOrExtendProductSubscription(t *testi
 
 func TestSubscriptionProductRepositoryAdminProductManagement(t *testing.T) {
 	ctx := context.Background()
-	tx := testEntTx(t)
-	client := tx.Client()
-	repo := &subscriptionProductRepository{client: client, sql: tx.Client()}
+	client := testEntClient(t)
+	repo := NewSubscriptionProductRepository(client, integrationDB)
 
 	groupA, err := client.Group.Create().
 		SetName(uniqueTestValue(t, "product-admin-a")).
@@ -125,6 +124,118 @@ func TestSubscriptionProductRepositoryAdminProductManagement(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, subs, 1)
 	require.Equal(t, user.ID, subs[0].UserID)
+}
+
+func TestSubscriptionProductRepositoryListActiveProductsNormalizesCalendarMonthUsage(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewSubscriptionProductRepository(client, integrationDB)
+
+	var userID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO users (email, password_hash, status, role, created_at, updated_at)
+		VALUES ($1, 'hash', 'active', 'user', NOW(), NOW())
+		RETURNING id
+	`, uniqueTestValue(t, "product-list-month-user")+"@example.com").Scan(&userID))
+
+	var productID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, daily_limit_usd, monthly_limit_usd)
+		VALUES ($1, 'monthly display product', 'active', 45, 150)
+		RETURNING id
+	`, "list-month-"+uuid.NewString()).Scan(&productID))
+
+	_, err := integrationDB.ExecContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id,
+			product_id,
+			starts_at,
+			expires_at,
+			status,
+			daily_window_start,
+			weekly_window_start,
+			monthly_window_start,
+			daily_usage_usd,
+			weekly_usage_usd,
+			monthly_usage_usd
+		)
+		VALUES ($1, $2, NOW() - INTERVAL '10 days', NOW() + INTERVAL '20 days', 'active',
+			date_trunc('day', NOW()), date_trunc('week', NOW()), date_trunc('month', NOW()) - INTERVAL '1 day',
+			0, 0, 149)
+	`, userID, productID)
+	require.NoError(t, err)
+
+	items, err := repo.ListActiveProductsByUserID(ctx, userID)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.InDelta(t, 0, items[0].Subscription.MonthlyUsageUSD, 0.000001)
+
+	var wantMonthlyWindowStart time.Time
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('month', NOW())`).Scan(&wantMonthlyWindowStart))
+	require.NotNil(t, items[0].Subscription.MonthlyWindowStart)
+	require.True(t, items[0].Subscription.MonthlyWindowStart.Equal(wantMonthlyWindowStart), "monthly window = %s, want %s", items[0].Subscription.MonthlyWindowStart, wantMonthlyWindowStart)
+}
+
+func TestSubscriptionProductRepositoryListProductSubscriptionsNormalizesExpiredWindows(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewSubscriptionProductRepository(client, integrationDB)
+
+	var userID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO users (email, password_hash, status, role, created_at, updated_at)
+		VALUES ($1, 'hash', 'active', 'user', NOW(), NOW())
+		RETURNING id
+	`, uniqueTestValue(t, "product-detail-normalize-user")+"@example.com").Scan(&userID))
+
+	var productID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, daily_limit_usd, monthly_limit_usd)
+		VALUES ($1, 'detail normalize product', 'active', 45, 150)
+		RETURNING id
+	`, "detail-normalize-"+uuid.NewString()).Scan(&productID))
+
+	_, err := integrationDB.ExecContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id,
+			product_id,
+			starts_at,
+			expires_at,
+			status,
+			daily_window_start,
+			weekly_window_start,
+			monthly_window_start,
+			daily_usage_usd,
+			weekly_usage_usd,
+			monthly_usage_usd,
+			daily_carryover_in_usd,
+			daily_carryover_remaining_usd
+		)
+		VALUES ($1, $2, NOW() - INTERVAL '10 days', NOW() + INTERVAL '20 days', 'active',
+			date_trunc('day', NOW()) - INTERVAL '1 day',
+			date_trunc('week', NOW()),
+			date_trunc('month', NOW()) - INTERVAL '1 day',
+			10, 20, 149, 5, 2)
+	`, userID, productID)
+	require.NoError(t, err)
+
+	subs, err := repo.ListProductSubscriptions(ctx, productID)
+	require.NoError(t, err)
+	require.Len(t, subs, 1)
+
+	var todayStart, monthStart time.Time
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('day', NOW())`).Scan(&todayStart))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('month', NOW())`).Scan(&monthStart))
+
+	got := subs[0]
+	require.NotNil(t, got.DailyWindowStart)
+	require.True(t, got.DailyWindowStart.Equal(todayStart), "daily_window_start = %s, want %s", got.DailyWindowStart, todayStart)
+	require.InDelta(t, 0, got.DailyUsageUSD, 0.000001)
+	require.InDelta(t, 38, got.DailyCarryoverInUSD, 0.000001)
+	require.InDelta(t, 38, got.DailyCarryoverRemainingUSD, 0.000001)
+	require.NotNil(t, got.MonthlyWindowStart)
+	require.True(t, got.MonthlyWindowStart.Equal(monthStart), "monthly_window_start = %s, want %s", got.MonthlyWindowStart, monthStart)
+	require.InDelta(t, 0, got.MonthlyUsageUSD, 0.000001)
 }
 
 func TestSubscriptionProductRepositoryListUserProductSubscriptionsForAdmin(t *testing.T) {
@@ -192,6 +303,74 @@ WHERE user_id = $2
 	require.Contains(t, items[0].Notes, "admin list subscription")
 }
 
+func TestSubscriptionProductRepositoryListUserProductSubscriptionsForAdminNormalizesExpiredWindows(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewSubscriptionProductRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("product-sub-admin-normalize-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+	})
+
+	var productID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, daily_limit_usd, monthly_limit_usd)
+		VALUES ($1, 'admin normalize product', 'active', 45, 150)
+		RETURNING id
+	`, "admin-normalize-"+uuid.NewString()).Scan(&productID))
+
+	_, err := integrationDB.ExecContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id,
+			product_id,
+			starts_at,
+			expires_at,
+			status,
+			daily_window_start,
+			weekly_window_start,
+			monthly_window_start,
+			daily_usage_usd,
+			weekly_usage_usd,
+			monthly_usage_usd,
+			daily_carryover_in_usd,
+			daily_carryover_remaining_usd
+		)
+		VALUES ($1, $2, NOW() - INTERVAL '10 days', NOW() + INTERVAL '20 days', 'active',
+			date_trunc('day', NOW()) - INTERVAL '1 day',
+			date_trunc('week', NOW()),
+			date_trunc('month', NOW()) - INTERVAL '1 day',
+			10, 20, 149, 5, 2)
+	`, user.ID, productID)
+	require.NoError(t, err)
+
+	items, page, err := repo.ListUserProductSubscriptionsForAdmin(ctx, service.AdminProductSubscriptionListParams{
+		Page:     1,
+		PageSize: 20,
+		UserID:   user.ID,
+		Status:   service.SubscriptionStatusActive,
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), page.Total)
+	require.Len(t, items, 1)
+
+	var todayStart, monthStart time.Time
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('day', NOW())`).Scan(&todayStart))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('month', NOW())`).Scan(&monthStart))
+
+	got := items[0]
+	require.NotNil(t, got.DailyWindowStart)
+	require.True(t, got.DailyWindowStart.Equal(todayStart), "daily_window_start = %s, want %s", got.DailyWindowStart, todayStart)
+	require.InDelta(t, 0, got.DailyUsageUSD, 0.000001)
+	require.InDelta(t, 38, got.DailyCarryoverInUSD, 0.000001)
+	require.InDelta(t, 38, got.DailyCarryoverRemainingUSD, 0.000001)
+	require.InDelta(t, 0, got.CarryoverUsedUSD, 0.000001)
+	require.InDelta(t, 0, got.FreshDailyUsageUSD, 0.000001)
+	require.NotNil(t, got.MonthlyWindowStart)
+	require.True(t, got.MonthlyWindowStart.Equal(monthStart), "monthly_window_start = %s, want %s", got.MonthlyWindowStart, monthStart)
+	require.InDelta(t, 0, got.MonthlyUsageUSD, 0.000001)
+}
+
 func TestSubscriptionProductRepositoryResolveActiveProductByGroupID(t *testing.T) {
 	ctx := context.Background()
 	tx := testEntTx(t)
@@ -222,6 +401,110 @@ func TestSubscriptionProductRepositoryResolveActiveProductByGroupID(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, product.ID, resolved.ID)
 	require.Equal(t, product.Code, resolved.Code)
+}
+
+func TestSubscriptionProductRepositorySelectsEligibleProductByFamilyPriority(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewSubscriptionProductRepository(client, integrationDB)
+
+	var userID, groupID int64
+	var err error
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO users (email, password_hash, status, role, created_at, updated_at)
+		VALUES ($1, 'hash', 'active', 'user', NOW(), NOW())
+		RETURNING id
+	`, uniqueTestValue(t, "product-select-user")+"@example.com").Scan(&userID))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO groups (name, status, subscription_type, created_at, updated_at)
+		VALUES ($1, 'active', 'subscription', NOW(), NOW())
+		RETURNING id
+	`, uniqueTestValue(t, "product-select-group")).Scan(&groupID))
+
+	var exhaustedProductID, nextProductID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, product_family, default_validity_days, daily_limit_usd, sort_order)
+		VALUES ($1, '45 weekly', 'active', 'gpt_shared', 7, 45, 10)
+		RETURNING id
+	`, "select-exhausted-"+uuid.NewString()).Scan(&exhaustedProductID))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, product_family, default_validity_days, daily_limit_usd, sort_order)
+		VALUES ($1, '150 monthly', 'active', 'gpt_shared', 30, 150, 20)
+		RETURNING id
+	`, "select-next-"+uuid.NewString()).Scan(&nextProductID))
+	_, err = integrationDB.ExecContext(ctx, `
+		INSERT INTO subscription_product_groups (product_id, group_id, debit_multiplier, status, sort_order)
+		VALUES ($1, $3, 1, 'active', 1), ($2, $3, 1, 'active', 1)
+	`, exhaustedProductID, nextProductID, groupID)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	_, err = integrationDB.ExecContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id, product_id, starts_at, expires_at, status,
+			daily_window_start, weekly_window_start, monthly_window_start, daily_usage_usd
+		)
+		VALUES
+			($1, $2, $4::timestamptz - INTERVAL '2 days', $4::timestamptz + INTERVAL '7 days', 'active', date_trunc('day', $4::timestamptz), date_trunc('day', $4::timestamptz), date_trunc('day', $4::timestamptz), 45),
+			($1, $3, $4::timestamptz - INTERVAL '1 day', $4::timestamptz + INTERVAL '30 days', 'active', date_trunc('day', $4::timestamptz), date_trunc('day', $4::timestamptz), date_trunc('day', $4::timestamptz), 12)
+	`, userID, exhaustedProductID, nextProductID, now)
+	require.NoError(t, err)
+
+	binding, sub, err := repo.GetActiveProductSubscriptionByUserAndGroupID(ctx, userID, groupID)
+	require.NoError(t, err)
+	require.Equal(t, nextProductID, binding.ProductID)
+	require.Equal(t, nextProductID, sub.ProductID)
+}
+
+func TestSubscriptionProductRepositoryDoesNotFallbackAcrossProductFamilies(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewSubscriptionProductRepository(client, integrationDB)
+
+	var userID, groupID int64
+	var err error
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO users (email, password_hash, status, role, created_at, updated_at)
+		VALUES ($1, 'hash', 'active', 'user', NOW(), NOW())
+		RETURNING id
+	`, uniqueTestValue(t, "product-family-user")+"@example.com").Scan(&userID))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO groups (name, status, subscription_type, created_at, updated_at)
+		VALUES ($1, 'active', 'subscription', NOW(), NOW())
+		RETURNING id
+	`, uniqueTestValue(t, "product-family-group")).Scan(&groupID))
+
+	var exhaustedProductID, otherFamilyProductID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, product_family, default_validity_days, daily_limit_usd, sort_order)
+		VALUES ($1, 'exhausted family', 'active', 'gpt_shared', 7, 45, 10)
+		RETURNING id
+	`, "family-exhausted-"+uuid.NewString()).Scan(&exhaustedProductID))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, product_family, default_validity_days, daily_limit_usd, sort_order)
+		VALUES ($1, 'other family', 'active', 'image_only', 30, 150, 20)
+		RETURNING id
+	`, "family-other-"+uuid.NewString()).Scan(&otherFamilyProductID))
+	_, err = integrationDB.ExecContext(ctx, `
+		INSERT INTO subscription_product_groups (product_id, group_id, debit_multiplier, status, sort_order)
+		VALUES ($1, $3, 1, 'active', 1), ($2, $3, 1, 'active', 1)
+	`, exhaustedProductID, otherFamilyProductID, groupID)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	_, err = integrationDB.ExecContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id, product_id, starts_at, expires_at, status,
+			daily_window_start, weekly_window_start, monthly_window_start, daily_usage_usd
+		)
+		VALUES
+			($1, $2, $4::timestamptz - INTERVAL '2 days', $4::timestamptz + INTERVAL '7 days', 'active', date_trunc('day', $4::timestamptz), date_trunc('day', $4::timestamptz), date_trunc('day', $4::timestamptz), 45),
+			($1, $3, $4::timestamptz - INTERVAL '1 day', $4::timestamptz + INTERVAL '30 days', 'active', date_trunc('day', $4::timestamptz), date_trunc('day', $4::timestamptz), date_trunc('day', $4::timestamptz), 12)
+	`, userID, exhaustedProductID, otherFamilyProductID, now)
+	require.NoError(t, err)
+
+	_, _, err = repo.GetActiveProductSubscriptionByUserAndGroupID(ctx, userID, groupID)
+	require.ErrorIs(t, err, service.ErrDailyLimitExceeded)
 }
 
 func productIDs(products []service.SubscriptionProduct) []int64 {

@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 )
 
@@ -135,4 +136,59 @@ func TestBuildUsageBillingCommand_ProductSubscriptionUsesSharedProductDebit(t *t
 	if log.ProductDebitCost == nil || *log.ProductDebitCost != 15 {
 		t.Fatalf("usage log ProductDebitCost = %v, want 15", log.ProductDebitCost)
 	}
+}
+
+func TestBuildUsageBillingCommand_SubscriptionBillingDoesNotConsumeAPIKeyQuota(t *testing.T) {
+	t.Parallel()
+
+	groupID := int64(7)
+	subID := int64(42)
+	p := &postUsageBillingParams{
+		Cost:               &CostBreakdown{TotalCost: 10, ActualCost: 10},
+		User:               &User{ID: 1},
+		APIKey:             &APIKey{ID: 2, GroupID: &groupID, Quota: 45, RateLimit1d: 45},
+		Account:            &Account{ID: 3},
+		Subscription:       &UserSubscription{ID: subID},
+		IsSubscriptionBill: true,
+		APIKeyService:      &noopAPIKeyQuotaUpdater{},
+	}
+
+	cmd := buildUsageBillingCommand("req-sub-key-quota", nil, p)
+
+	if cmd == nil {
+		t.Fatal("buildUsageBillingCommand returned nil")
+	}
+	if cmd.SubscriptionID == nil || *cmd.SubscriptionID != subID || cmd.SubscriptionCost != 10 {
+		t.Fatalf("Subscription billing = id %v cost %v, want id %d cost 10", cmd.SubscriptionID, cmd.SubscriptionCost, subID)
+	}
+	if cmd.APIKeyQuotaCost != 0 {
+		t.Fatalf("APIKeyQuotaCost = %v, want 0 for subscription billing", cmd.APIKeyQuotaCost)
+	}
+	if cmd.APIKeyRateLimitCost != 0 {
+		t.Fatalf("APIKeyRateLimitCost = %v, want 0 for subscription billing", cmd.APIKeyRateLimitCost)
+	}
+}
+
+func TestShouldQueueAPIKeyRateLimitCacheSkipsSubscriptionBilling(t *testing.T) {
+	t.Parallel()
+
+	p := &postUsageBillingParams{
+		Cost:               &CostBreakdown{TotalCost: 10, ActualCost: 10},
+		APIKey:             &APIKey{ID: 2, RateLimit1d: 45},
+		IsSubscriptionBill: true,
+	}
+
+	if shouldQueueAPIKeyRateLimitCache(p) {
+		t.Fatal("subscription billing should not update API key rate-limit cache")
+	}
+}
+
+type noopAPIKeyQuotaUpdater struct{}
+
+func (n *noopAPIKeyQuotaUpdater) UpdateQuotaUsed(_ context.Context, _ int64, _ float64) error {
+	return nil
+}
+
+func (n *noopAPIKeyQuotaUpdater) UpdateRateLimitUsage(_ context.Context, _ int64, _ float64) error {
+	return nil
 }

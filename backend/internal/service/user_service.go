@@ -169,12 +169,14 @@ const (
 
 // UpdateProfileRequest 更新用户资料请求
 type UpdateProfileRequest struct {
-	Email                  *string  `json:"email"`
-	Username               *string  `json:"username"`
-	AvatarURL              *string  `json:"avatar_url"`
-	Concurrency            *int     `json:"concurrency"`
-	BalanceNotifyEnabled   *bool    `json:"balance_notify_enabled"`
-	BalanceNotifyThreshold *float64 `json:"balance_notify_threshold"`
+	Email                               *string  `json:"email"`
+	Username                            *string  `json:"username"`
+	AvatarURL                           *string  `json:"avatar_url"`
+	Concurrency                         *int     `json:"concurrency"`
+	BalanceNotifyEnabled                *bool    `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold              *float64 `json:"balance_notify_threshold"`
+	SubscriptionBalanceFallbackEnabled  *bool    `json:"subscription_balance_fallback_enabled"`
+	SubscriptionBalanceFallbackLimitUSD *float64 `json:"subscription_balance_fallback_limit_usd"`
 }
 
 type UserAvatar struct {
@@ -390,7 +392,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req Updat
 		}); err != nil {
 			return nil, err
 		}
-		if s.authCacheInvalidator != nil && updated != nil && updated.Concurrency != oldConcurrency {
+		if s.authCacheInvalidator != nil && updated != nil && (updated.Concurrency != oldConcurrency || req.SubscriptionBalanceFallbackEnabled != nil || req.SubscriptionBalanceFallbackLimitUSD != nil) {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 		}
 		return updated, nil
@@ -400,7 +402,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req Updat
 	if err != nil {
 		return nil, err
 	}
-	if s.authCacheInvalidator != nil && updated.Concurrency != oldConcurrency {
+	if s.authCacheInvalidator != nil && (updated.Concurrency != oldConcurrency || req.SubscriptionBalanceFallbackEnabled != nil || req.SubscriptionBalanceFallbackLimitUSD != nil) {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
 	return updated, nil
@@ -450,6 +452,16 @@ func (s *UserService) updateProfile(ctx context.Context, userID int64, req Updat
 			user.BalanceNotifyThreshold = nil // clear to system default
 		} else {
 			user.BalanceNotifyThreshold = req.BalanceNotifyThreshold
+		}
+	}
+	if req.SubscriptionBalanceFallbackEnabled != nil {
+		user.SubscriptionBalanceFallbackEnabled = *req.SubscriptionBalanceFallbackEnabled
+	}
+	if req.SubscriptionBalanceFallbackLimitUSD != nil {
+		if *req.SubscriptionBalanceFallbackLimitUSD <= 0 {
+			user.SubscriptionBalanceFallbackLimitUSD = 0
+		} else {
+			user.SubscriptionBalanceFallbackLimitUSD = *req.SubscriptionBalanceFallbackLimitUSD
 		}
 	}
 

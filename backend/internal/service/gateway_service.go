@@ -7875,24 +7875,25 @@ type usageLogBestEffortWriter interface {
 
 // postUsageBillingParams 统一扣费所需的参数
 type postUsageBillingParams struct {
-	Cost                  *CostBreakdown
-	User                  *User
-	APIKey                *APIKey
-	Account               *Account
-	Subscription          *UserSubscription
-	ProductSettlement     *ProductSettlementContext
-	RequestPayloadHash    string
-	IsSubscriptionBill    bool
-	AccountRateMultiplier float64
-	APIKeyService         APIKeyQuotaUpdater
+	Cost                        *CostBreakdown
+	User                        *User
+	APIKey                      *APIKey
+	Account                     *Account
+	Subscription                *UserSubscription
+	ProductSettlement           *ProductSettlementContext
+	RequestPayloadHash          string
+	IsSubscriptionBill          bool
+	SubscriptionBalanceFallback bool
+	AccountRateMultiplier       float64
+	APIKeyService               APIKeyQuotaUpdater
 }
 
 func (p *postUsageBillingParams) shouldDeductAPIKeyQuota() bool {
-	return p.Cost.ActualCost > 0 && p.APIKey.Quota > 0 && p.APIKeyService != nil
+	return !p.IsSubscriptionBill && p.Cost.ActualCost > 0 && p.APIKey.Quota > 0 && p.APIKeyService != nil
 }
 
 func (p *postUsageBillingParams) shouldUpdateRateLimits() bool {
-	return p.Cost.ActualCost > 0 && p.APIKey.HasRateLimits() && p.APIKeyService != nil
+	return !p.IsSubscriptionBill && p.Cost.ActualCost > 0 && p.APIKey.HasRateLimits() && p.APIKeyService != nil
 }
 
 func (p *postUsageBillingParams) shouldUpdateAccountQuota() bool {
@@ -8031,6 +8032,9 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		}
 	} else if p.Cost.ActualCost > 0 {
 		cmd.BalanceCost = p.Cost.ActualCost
+		if p.SubscriptionBalanceFallback {
+			cmd.SubscriptionBalanceFallbackCost = p.Cost.ActualCost
+		}
 	}
 
 	if p.shouldDeductAPIKeyQuota() {
@@ -8094,8 +8098,13 @@ func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps, resu
 		deps.billingCacheService.QueueDeductBalance(p.User.ID, p.Cost.ActualCost)
 	}
 
-	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {
+	if shouldQueueAPIKeyRateLimitCache(p) {
 		deps.billingCacheService.QueueUpdateAPIKeyRateLimitUsage(p.APIKey.ID, p.Cost.ActualCost)
+	}
+	if p.SubscriptionBalanceFallback && p.APIKeyService != nil && p.APIKey != nil && p.APIKey.Key != "" {
+		if invalidator, ok := p.APIKeyService.(apiKeyAuthCacheInvalidator); ok {
+			invalidator.InvalidateAuthCacheByKey(context.Background(), p.APIKey.Key)
+		}
 	}
 
 	deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
@@ -8104,6 +8113,15 @@ func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps, resu
 	// no dependency on the request context or upstream connection.
 	go notifyBalanceLow(p, deps, result)
 	go notifyAccountQuota(p, deps, result)
+}
+
+func shouldQueueAPIKeyRateLimitCache(p *postUsageBillingParams) bool {
+	return p != nil &&
+		!p.IsSubscriptionBill &&
+		p.Cost != nil &&
+		p.Cost.ActualCost > 0 &&
+		p.APIKey != nil &&
+		p.APIKey.HasRateLimits()
 }
 
 // notifyBalanceLow sends balance low notification after deduction.
@@ -8443,16 +8461,17 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		applyProductSettlementUsageLog(usageLog, productSettlement, cost.TotalCost)
 	}
 	_, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
-		Cost:                  cost,
-		User:                  user,
-		APIKey:                apiKey,
-		Account:               account,
-		Subscription:          subscription,
-		ProductSettlement:     productSettlement,
-		RequestPayloadHash:    resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
-		IsSubscriptionBill:    isSubscriptionBilling,
-		AccountRateMultiplier: accountRateMultiplier,
-		APIKeyService:         input.APIKeyService,
+		Cost:                        cost,
+		User:                        user,
+		APIKey:                      apiKey,
+		Account:                     account,
+		Subscription:                subscription,
+		ProductSettlement:           productSettlement,
+		RequestPayloadHash:          resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
+		IsSubscriptionBill:          isSubscriptionBilling,
+		SubscriptionBalanceFallback: SubscriptionBalanceFallbackFromContext(ctx),
+		AccountRateMultiplier:       accountRateMultiplier,
+		APIKeyService:               input.APIKeyService,
 	}, s.billingDeps(), s.usageBillingRepo)
 
 	if billingErr != nil {

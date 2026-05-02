@@ -52,6 +52,11 @@ type User struct {
 	BalanceNotifyExtraEmails   []NotifyEmailEntry
 	TotalRecharged             float64
 
+	// 订阅余额兜底：默认关闭；开启后，订阅产品额度耗尽时可在累计上限内自动扣余额。
+	SubscriptionBalanceFallbackEnabled  bool
+	SubscriptionBalanceFallbackLimitUSD float64
+	SubscriptionBalanceFallbackUsedUSD  float64
+
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制）。仅在所用分组未设置 rpm_limit
 	// 且该 (用户, 分组) 无 rpm_override 时作为全局兜底生效，计数键 rpm:u:{userID}:{min}。
 	RPMLimit int

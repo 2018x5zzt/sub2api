@@ -8,8 +8,98 @@
         ></div>
       </div>
 
+      <div
+        v-if="!loading"
+        class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800"
+      >
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <Icon name="creditCard" size="sm" class="text-emerald-600 dark:text-emerald-400" />
+              <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
+                {{ t('userSubscriptions.balanceFallback.title', '订阅消耗完时，自动消耗余额') }}
+              </h2>
+            </div>
+            <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
+              {{
+                t(
+                  'userSubscriptions.balanceFallback.description',
+                  '开启后，产品订阅额度耗尽且分组存在余额兜底映射时，会在你设置的上限内自动改用余额。'
+                )
+              }}
+            </p>
+          </div>
+          <label class="inline-flex shrink-0 items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              v-model="fallbackEnabled"
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              :disabled="savingFallback"
+              @change="saveBalanceFallbackSettings"
+            />
+            <span>{{ fallbackEnabled ? t('common.enabled', '已开启') : t('common.disabled', '已关闭') }}</span>
+          </label>
+        </div>
+
+        <div v-if="fallbackEnabled" class="mt-4 grid gap-3 sm:grid-cols-[minmax(0,220px)_1fr] sm:items-end">
+          <label class="block">
+            <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">
+              {{ t('userSubscriptions.balanceFallback.limit', '余额兜底上限') }}
+            </span>
+            <input
+              v-model.number="fallbackLimit"
+              type="number"
+              min="0"
+              step="0.01"
+              class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-900 dark:text-white"
+              :disabled="savingFallback"
+              @blur="saveBalanceFallbackSettings"
+            />
+          </label>
+          <div class="text-xs text-gray-500 dark:text-dark-400">
+            {{
+              t('userSubscriptions.balanceFallback.usage', {
+                used: fallbackUsed.toFixed(2),
+                remaining: fallbackRemaining.toFixed(2)
+              })
+            }}
+          </div>
+        </div>
+      </div>
+
+      <div
+        v-if="!loading && (subscriptionProducts.length > 0 || visibleSubscriptions.length > 0)"
+        class="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sky-900 dark:border-sky-900/60 dark:bg-sky-950/30 dark:text-sky-100"
+      >
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <Icon name="key" size="sm" class="text-sky-600 dark:text-sky-300" />
+              <h2 class="text-sm font-semibold">
+                {{ t('userSubscriptions.keyReminder.title', '激活后建议新建分组专用 API Key') }}
+              </h2>
+            </div>
+            <p class="mt-1 text-xs text-sky-700/90 dark:text-sky-200/80">
+              {{
+                t(
+                  'userSubscriptions.keyReminder.description',
+                  '这样可以避免继续误用旧 key 的余额或限额，并按分组隔离你的订阅用量。'
+                )
+              }}
+            </p>
+          </div>
+          <button
+            class="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-sky-700"
+            @click="router.push('/keys')"
+          >
+            <Icon name="plus" size="sm" />
+            {{ t('userSubscriptions.keyReminder.action', '去生成 API Key') }}
+          </button>
+        </div>
+      </div>
+
       <!-- Empty State -->
-      <div v-else-if="subscriptionProducts.length === 0 && visibleSubscriptions.length === 0" class="card p-12 text-center">
+      <div v-if="!loading && subscriptionProducts.length === 0 && visibleSubscriptions.length === 0" class="card p-12 text-center">
         <div
           class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
         >
@@ -24,7 +114,7 @@
       </div>
 
       <!-- Subscriptions Grid -->
-      <div v-else class="grid gap-6 lg:grid-cols-2">
+      <div v-if="!loading && (subscriptionProducts.length > 0 || visibleSubscriptions.length > 0)" class="grid gap-6 lg:grid-cols-2">
         <div
           v-for="product in subscriptionProducts"
           :key="`product-${product.subscription_id}`"
@@ -398,8 +488,10 @@ import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import subscriptionsAPI from '@/api/subscriptions'
 import subscriptionProductsAPI from '@/api/subscriptionProducts'
+import { updateProfile } from '@/api/user'
 import type { ActiveSubscriptionProduct, UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -419,10 +511,17 @@ function platformAccentDotClass(p: string): string {
 const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 
 const subscriptions = ref<UserSubscription[]>([])
 const subscriptionProducts = ref<ActiveSubscriptionProduct[]>([])
 const loading = ref(true)
+const savingFallback = ref(false)
+const fallbackEnabled = ref(false)
+const fallbackLimit = ref(0)
+
+const fallbackUsed = computed(() => authStore.user?.subscription_balance_fallback_used_usd || 0)
+const fallbackRemaining = computed(() => Math.max((fallbackLimit.value || 0) - fallbackUsed.value, 0))
 
 const productGroupIDs = computed(() => {
   const ids = new Set<number>()
@@ -441,17 +540,44 @@ const visibleSubscriptions = computed(() =>
 async function loadSubscriptions() {
   try {
     loading.value = true
-    const [legacySubscriptions, products] = await Promise.all([
+    const [legacySubscriptions, products, profile] = await Promise.all([
       subscriptionsAPI.getActiveSubscriptions(),
-      subscriptionProductsAPI.getActive()
+      subscriptionProductsAPI.getActive(),
+      authStore.refreshUser()
     ])
     subscriptions.value = legacySubscriptions
     subscriptionProducts.value = products
+    fallbackEnabled.value = Boolean(profile.subscription_balance_fallback_enabled)
+    fallbackLimit.value = profile.subscription_balance_fallback_limit_usd || 0
   } catch (error) {
     console.error('Failed to load subscriptions:', error)
     appStore.showError(t('userSubscriptions.failedToLoad'))
   } finally {
     loading.value = false
+  }
+}
+
+async function saveBalanceFallbackSettings() {
+  savingFallback.value = true
+  try {
+    if (!fallbackEnabled.value && fallbackLimit.value < 0) {
+      fallbackLimit.value = 0
+    }
+    const updated = await updateProfile({
+      subscription_balance_fallback_enabled: fallbackEnabled.value,
+      subscription_balance_fallback_limit_usd: Math.max(fallbackLimit.value || 0, 0)
+    })
+    authStore.user = updated
+    fallbackEnabled.value = Boolean(updated.subscription_balance_fallback_enabled)
+    fallbackLimit.value = updated.subscription_balance_fallback_limit_usd || 0
+    appStore.showSuccess(t('common.saved'))
+  } catch (error) {
+    console.error('Failed to save subscription balance fallback:', error)
+    appStore.showError(t('common.error'))
+    fallbackEnabled.value = Boolean(authStore.user?.subscription_balance_fallback_enabled)
+    fallbackLimit.value = authStore.user?.subscription_balance_fallback_limit_usd || 0
+  } finally {
+    savingFallback.value = false
   }
 }
 

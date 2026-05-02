@@ -198,6 +198,74 @@ func TestUsageBillingRepositoryApply_ProductSubscriptionAdvancesCarryover(t *tes
 	require.InDelta(t, 32, carryoverRemaining, 0.000001)
 }
 
+func TestUsageBillingRepositoryApply_ProductSubscriptionResetsMonthlyOnCalendarMonthBoundary(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-product-month-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-product-month-" + uuid.NewString(),
+		Name:   "billing-product-month",
+	})
+
+	var productID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, daily_limit_usd, weekly_limit_usd, monthly_limit_usd)
+		VALUES ($1, $2, 'active', 45, 315, 150)
+		RETURNING id
+	`, "month-reset-"+uuid.NewString(), "monthly reset product").Scan(&productID))
+
+	var productSubscriptionID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id,
+			product_id,
+			starts_at,
+			expires_at,
+			status,
+			daily_window_start,
+			weekly_window_start,
+			monthly_window_start,
+			daily_usage_usd,
+			weekly_usage_usd,
+			monthly_usage_usd
+		)
+		VALUES ($1, $2, NOW() - INTERVAL '10 days', NOW() + INTERVAL '20 days', 'active',
+			date_trunc('day', NOW()), date_trunc('week', NOW()), date_trunc('month', NOW()) - INTERVAL '1 day',
+			0, 0, 149)
+		RETURNING id
+	`, user.ID, productID).Scan(&productSubscriptionID))
+
+	_, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:             uuid.NewString(),
+		APIKeyID:              apiKey.ID,
+		UserID:                user.ID,
+		ProductSubscriptionID: &productSubscriptionID,
+		ProductDebitCost:      2,
+	})
+	require.NoError(t, err)
+
+	var monthlyUsage float64
+	var monthlyWindowStart time.Time
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT monthly_usage_usd, monthly_window_start
+		FROM user_product_subscriptions
+		WHERE id = $1
+	`, productSubscriptionID).Scan(&monthlyUsage, &monthlyWindowStart))
+
+	require.InDelta(t, 2, monthlyUsage, 0.000001)
+	var wantMonthlyWindowStart time.Time
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT date_trunc('month', NOW())
+	`).Scan(&wantMonthlyWindowStart))
+	require.True(t, monthlyWindowStart.Equal(wantMonthlyWindowStart), "monthly_window_start = %s, want %s", monthlyWindowStart, wantMonthlyWindowStart)
+}
+
 func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
@@ -230,6 +298,68 @@ func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 		BalanceCost: 2.50,
 	})
 	require.ErrorIs(t, err, service.ErrUsageBillingRequestConflict)
+}
+
+func TestUsageBillingRepositoryApply_SubscriptionBalanceFallbackCap(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-fallback-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      20,
+	})
+	_, err := integrationDB.ExecContext(ctx, `
+		UPDATE users
+		SET subscription_balance_fallback_enabled = TRUE,
+			subscription_balance_fallback_limit_usd = 5,
+			subscription_balance_fallback_used_usd = 3
+		WHERE id = $1
+	`, user.ID)
+	require.NoError(t, err)
+
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-fallback-" + uuid.NewString(),
+		Name:   "billing-fallback",
+	})
+
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:                       uuid.NewString(),
+		APIKeyID:                        apiKey.ID,
+		UserID:                          user.ID,
+		BalanceCost:                     1.5,
+		SubscriptionBalanceFallbackCost: 1.5,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+
+	var balance, fallbackUsed float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT balance, subscription_balance_fallback_used_usd
+		FROM users
+		WHERE id = $1
+	`, user.ID).Scan(&balance, &fallbackUsed))
+	require.InDelta(t, 18.5, balance, 0.000001)
+	require.InDelta(t, 4.5, fallbackUsed, 0.000001)
+
+	_, err = repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:                       uuid.NewString(),
+		APIKeyID:                        apiKey.ID,
+		UserID:                          user.ID,
+		BalanceCost:                     1.0,
+		SubscriptionBalanceFallbackCost: 1.0,
+	})
+	require.ErrorIs(t, err, service.ErrSubscriptionBalanceFallbackLimitExceeded)
+
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT balance, subscription_balance_fallback_used_usd
+		FROM users
+		WHERE id = $1
+	`, user.ID).Scan(&balance, &fallbackUsed))
+	require.InDelta(t, 18.5, balance, 0.000001)
+	require.InDelta(t, 4.5, fallbackUsed, 0.000001)
 }
 
 func TestUsageBillingRepositoryApply_UpdatesAccountQuota(t *testing.T) {

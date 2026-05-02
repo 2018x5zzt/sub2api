@@ -118,7 +118,7 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	if cmd.BalanceCost > 0 {
-		newBalance, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
+		newBalance, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost, cmd.SubscriptionBalanceFallbackCost)
 		if err != nil {
 			return err
 		}
@@ -178,8 +178,37 @@ func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscrip
 	return service.ErrSubscriptionNotFound
 }
 
-func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) (float64, error) {
+func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount, subscriptionBalanceFallbackCost float64) (float64, error) {
 	var newBalance float64
+	if subscriptionBalanceFallbackCost > 0 {
+		err := tx.QueryRowContext(ctx, `
+		UPDATE users
+		SET balance = balance - $1,
+			subscription_balance_fallback_used_usd = subscription_balance_fallback_used_usd + $3,
+			updated_at = NOW()
+		WHERE id = $2
+			AND deleted_at IS NULL
+			AND subscription_balance_fallback_enabled = TRUE
+			AND subscription_balance_fallback_limit_usd > 0
+			AND subscription_balance_fallback_used_usd + $3 <= subscription_balance_fallback_limit_usd
+		RETURNING balance
+	`, amount, userID, subscriptionBalanceFallbackCost).Scan(&newBalance)
+		if errors.Is(err, sql.ErrNoRows) {
+			var exists bool
+			if existsErr := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL)`, userID).Scan(&exists); existsErr != nil {
+				return 0, existsErr
+			}
+			if !exists {
+				return 0, service.ErrUserNotFound
+			}
+			return 0, service.ErrSubscriptionBalanceFallbackLimitExceeded
+		}
+		if err != nil {
+			return 0, err
+		}
+		return newBalance, nil
+	}
+
 	err := tx.QueryRowContext(ctx, `
 		UPDATE users
 		SET balance = balance - $1,

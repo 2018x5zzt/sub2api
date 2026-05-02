@@ -93,6 +93,9 @@ export interface User {
   balance_notify_enabled: boolean
   balance_notify_threshold: number | null
   balance_notify_extra_emails: NotifyEmailEntry[]
+  subscription_balance_fallback_enabled: boolean
+  subscription_balance_fallback_limit_usd: number
+  subscription_balance_fallback_used_usd: number
   subscriptions?: UserSubscription[] // User's active subscriptions
   last_active_at?: string | null
   created_at: string
@@ -1467,6 +1470,7 @@ export interface AdminSubscriptionProduct {
   name: string
   description: string
   status: 'draft' | 'active' | 'disabled' | string
+  product_family: string
   default_validity_days: number
   daily_limit_usd: number
   weekly_limit_usd: number
@@ -1524,6 +1528,7 @@ export interface CreateSubscriptionProductRequest {
   name: string
   description?: string
   status?: string
+  product_family?: string
   default_validity_days?: number
   daily_limit_usd?: number
   weekly_limit_usd?: number
@@ -1536,6 +1541,7 @@ export interface UpdateSubscriptionProductRequest {
   name?: string
   description?: string
   status?: string
+  product_family?: string
   default_validity_days?: number
   daily_limit_usd?: number
   weekly_limit_usd?: number

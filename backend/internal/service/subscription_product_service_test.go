@@ -142,6 +142,34 @@ func TestSubscriptionProductServiceListActiveUserProductsReturnsSharedProductGro
 	}
 }
 
+func TestNormalizeExpiredProductSubscriptionWindowResetsMonthlyOnCalendarMonthBoundary(t *testing.T) {
+	t.Parallel()
+
+	location := time.UTC
+	previousMonthWindow := time.Date(2026, 4, 30, 0, 0, 0, 0, location)
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, location)
+	sub := &UserProductSubscription{
+		Status:             SubscriptionStatusActive,
+		ExpiresAt:          now.Add(24 * time.Hour),
+		MonthlyWindowStart: &previousMonthWindow,
+		MonthlyUsageUSD:    149,
+	}
+	product := &SubscriptionProduct{MonthlyLimitUSD: 150}
+
+	NormalizeExpiredProductSubscriptionWindowForRepository(sub, product, now)
+
+	if sub.MonthlyWindowStart == nil {
+		t.Fatal("MonthlyWindowStart is nil, want current calendar month start")
+	}
+	wantWindow := time.Date(2026, 5, 1, 0, 0, 0, 0, location)
+	if !sub.MonthlyWindowStart.Equal(wantWindow) {
+		t.Fatalf("MonthlyWindowStart = %s, want %s", sub.MonthlyWindowStart.Format(time.RFC3339), wantWindow.Format(time.RFC3339))
+	}
+	if sub.MonthlyUsageUSD != 0 {
+		t.Fatalf("MonthlyUsageUSD = %v, want 0", sub.MonthlyUsageUSD)
+	}
+}
+
 type legacyDefaultSubscriptionAssignerStub struct {
 	inputs []AssignSubscriptionInput
 }

@@ -35,6 +35,7 @@ type createSubscriptionProductRequest struct {
 	Name                string  `json:"name" binding:"required,max=255"`
 	Description         string  `json:"description"`
 	Status              string  `json:"status" binding:"omitempty,oneof=draft active disabled"`
+	ProductFamily       string  `json:"product_family" binding:"omitempty,max=64"`
 	DefaultValidityDays int     `json:"default_validity_days" binding:"omitempty,min=1,max=36500"`
 	DailyLimitUSD       float64 `json:"daily_limit_usd" binding:"omitempty,min=0"`
 	WeeklyLimitUSD      float64 `json:"weekly_limit_usd" binding:"omitempty,min=0"`
@@ -47,6 +48,7 @@ type updateSubscriptionProductRequest struct {
 	Name                *string  `json:"name" binding:"omitempty,max=255"`
 	Description         *string  `json:"description"`
 	Status              *string  `json:"status" binding:"omitempty,oneof=draft active disabled"`
+	ProductFamily       *string  `json:"product_family" binding:"omitempty,max=64"`
 	DefaultValidityDays *int     `json:"default_validity_days" binding:"omitempty,min=1,max=36500"`
 	DailyLimitUSD       *float64 `json:"daily_limit_usd" binding:"omitempty,min=0"`
 	WeeklyLimitUSD      *float64 `json:"weekly_limit_usd" binding:"omitempty,min=0"`
@@ -115,6 +117,7 @@ func (h *SubscriptionProductHandler) Create(c *gin.Context) {
 		Name:                req.Name,
 		Description:         req.Description,
 		Status:              req.Status,
+		ProductFamily:       req.ProductFamily,
 		DefaultValidityDays: req.DefaultValidityDays,
 		DailyLimitUSD:       req.DailyLimitUSD,
 		WeeklyLimitUSD:      req.WeeklyLimitUSD,
@@ -146,6 +149,7 @@ func (h *SubscriptionProductHandler) Update(c *gin.Context) {
 		Name:                req.Name,
 		Description:         req.Description,
 		Status:              req.Status,
+		ProductFamily:       req.ProductFamily,
 		DefaultValidityDays: req.DefaultValidityDays,
 		DailyLimitUSD:       req.DailyLimitUSD,
 		WeeklyLimitUSD:      req.WeeklyLimitUSD,

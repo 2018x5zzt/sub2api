@@ -684,8 +684,10 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		}
 	}
 
-	// Check API Key rate limits (applies to both billing modes)
-	if apiKey != nil && apiKey.HasRateLimits() {
+	// API key quota/rate-limit windows are balance-mode controls. Subscription
+	// groups are limited by their subscription/product windows, while RPM checks
+	// below still apply to both modes.
+	if !isSubscriptionMode && apiKey != nil && apiKey.HasRateLimits() {
 		if err := s.checkAPIKeyRateLimits(ctx, apiKey); err != nil {
 			return err
 		}

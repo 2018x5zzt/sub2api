@@ -22,6 +22,7 @@ type SubscriptionProduct struct {
 	Name                string
 	Description         string
 	Status              string
+	ProductFamily       string
 	DefaultValidityDays int
 	DailyLimitUSD       float64
 	WeeklyLimitUSD      float64
@@ -32,10 +33,11 @@ type SubscriptionProduct struct {
 }
 
 type CreateSubscriptionProductInput struct {
-	Code        string
-	Name        string
-	Description string
-	Status      string
+	Code          string
+	Name          string
+	Description   string
+	Status        string
+	ProductFamily string
 
 	DefaultValidityDays int
 	DailyLimitUSD       float64
@@ -45,10 +47,11 @@ type CreateSubscriptionProductInput struct {
 }
 
 type UpdateSubscriptionProductInput struct {
-	Code        *string
-	Name        *string
-	Description *string
-	Status      *string
+	Code          *string
+	Name          *string
+	Description   *string
+	Status        *string
+	ProductFamily *string
 
 	DefaultValidityDays *int
 	DailyLimitUSD       *float64
@@ -70,9 +73,10 @@ func (p *SubscriptionProduct) HasMonthlyLimit() bool {
 }
 
 type SubscriptionProductBinding struct {
-	ProductID   int64
-	ProductCode string
-	ProductName string
+	ProductID     int64
+	ProductCode   string
+	ProductName   string
+	ProductFamily string
 
 	DefaultValidityDays int
 	DailyLimitUSD       float64
@@ -98,6 +102,7 @@ func (b *SubscriptionProductBinding) Product() *SubscriptionProduct {
 		Code:                b.ProductCode,
 		Name:                b.ProductName,
 		Status:              b.ProductStatus,
+		ProductFamily:       b.ProductFamily,
 		DefaultValidityDays: b.DefaultValidityDays,
 		DailyLimitUSD:       b.DailyLimitUSD,
 		WeeklyLimitUSD:      b.WeeklyLimitUSD,

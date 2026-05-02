@@ -46,11 +46,12 @@ type SubscriptionProductSummary struct {
 }
 
 type AdminSubscriptionProduct struct {
-	ID          int64  `json:"id"`
-	Code        string `json:"code"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Status      string `json:"status"`
+	ID            int64  `json:"id"`
+	Code          string `json:"code"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	Status        string `json:"status"`
+	ProductFamily string `json:"product_family"`
 
 	DefaultValidityDays int     `json:"default_validity_days"`
 	DailyLimitUSD       float64 `json:"daily_limit_usd"`
@@ -179,6 +180,7 @@ func AdminSubscriptionProductFromService(product *service.SubscriptionProduct) *
 		Name:                product.Name,
 		Description:         product.Description,
 		Status:              product.Status,
+		ProductFamily:       product.ProductFamily,
 		DefaultValidityDays: product.DefaultValidityDays,
 		DailyLimitUSD:       product.DailyLimitUSD,
 		WeeklyLimitUSD:      product.WeeklyLimitUSD,

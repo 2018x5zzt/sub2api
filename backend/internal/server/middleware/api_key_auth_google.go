@@ -80,6 +80,7 @@ func APIKeyAuthWithProductSubscriptionGoogle(
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 		var productSettlement *service.ProductSettlementContext
+		subscriptionBalanceFallback := false
 		if isSubscriptionType && productSubscriptionService != nil {
 			settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
 				c.Request.Context(),
@@ -88,6 +89,15 @@ func APIKeyAuthWithProductSubscriptionGoogle(
 			)
 			if productErr == nil {
 				productSettlement = settlement
+			} else if isSubscriptionLimitError(productErr) {
+				if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
+					apiKey = fallbackAPIKey
+					isSubscriptionType = false
+					subscriptionBalanceFallback = true
+				} else {
+					abortWithGoogleError(c, 429, productErr.Error())
+					return
+				}
 			} else if !errors.Is(productErr, service.ErrSubscriptionNotFound) {
 				abortWithGoogleError(c, 403, productErr.Error())
 				return
@@ -111,27 +121,48 @@ func APIKeyAuthWithProductSubscriptionGoogle(
 				apiKey.Group.ID,
 			)
 			if err != nil {
-				abortWithGoogleError(c, 403, "No active subscription found for this group")
-				return
-			}
-
-			needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-			if err != nil {
-				status := 403
-				if errors.Is(err, service.ErrDailyLimitExceeded) ||
-					errors.Is(err, service.ErrWeeklyLimitExceeded) ||
-					errors.Is(err, service.ErrMonthlyLimitExceeded) {
-					status = 429
+				if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
+					apiKey = fallbackAPIKey
+					isSubscriptionType = false
+					subscriptionBalanceFallback = true
+				} else {
+					abortWithGoogleError(c, 403, "No active subscription found for this group")
+					return
 				}
-				abortWithGoogleError(c, status, err.Error())
-				return
 			}
 
-			c.Set(string(ContextKeySubscription), subscription)
+			if isSubscriptionType {
+				needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+				if err != nil {
+					status := 403
+					if errors.Is(err, service.ErrDailyLimitExceeded) ||
+						errors.Is(err, service.ErrWeeklyLimitExceeded) ||
+						errors.Is(err, service.ErrMonthlyLimitExceeded) {
+						status = 429
+					}
+					if isSubscriptionLimitError(err) {
+						if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
+							apiKey = fallbackAPIKey
+							subscription = nil
+							subscriptionBalanceFallback = true
+						} else {
+							abortWithGoogleError(c, status, err.Error())
+							return
+						}
+					} else {
+						abortWithGoogleError(c, status, err.Error())
+						return
+					}
+				}
 
-			if needsMaintenance {
-				maintenanceCopy := *subscription
-				subscriptionService.DoWindowMaintenance(&maintenanceCopy)
+				if subscription != nil {
+					c.Set(string(ContextKeySubscription), subscription)
+				}
+
+				if subscription != nil && needsMaintenance {
+					maintenanceCopy := *subscription
+					subscriptionService.DoWindowMaintenance(&maintenanceCopy)
+				}
 			}
 		} else {
 			if apiKey.User.Balance <= 0 {
@@ -144,6 +175,9 @@ func APIKeyAuthWithProductSubscriptionGoogle(
 			c.Set(string(ContextKeyProductSettlement), productSettlement)
 			ctx := service.ContextWithProductSettlement(c.Request.Context(), productSettlement)
 			c.Request = c.Request.WithContext(ctx)
+		}
+		if subscriptionBalanceFallback {
+			c.Request = c.Request.WithContext(service.ContextWithSubscriptionBalanceFallback(c.Request.Context()))
 		}
 
 		c.Set(string(ContextKeyAPIKey), apiKey)

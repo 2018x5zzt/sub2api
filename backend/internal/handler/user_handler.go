@@ -46,10 +46,12 @@ type ChangePasswordRequest struct {
 
 // UpdateProfileRequest represents the update profile request payload
 type UpdateProfileRequest struct {
-	Username               *string  `json:"username"`
-	AvatarURL              *string  `json:"avatar_url"`
-	BalanceNotifyEnabled   *bool    `json:"balance_notify_enabled"`
-	BalanceNotifyThreshold *float64 `json:"balance_notify_threshold"`
+	Username                            *string  `json:"username"`
+	AvatarURL                           *string  `json:"avatar_url"`
+	BalanceNotifyEnabled                *bool    `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold              *float64 `json:"balance_notify_threshold"`
+	SubscriptionBalanceFallbackEnabled  *bool    `json:"subscription_balance_fallback_enabled"`
+	SubscriptionBalanceFallbackLimitUSD *float64 `json:"subscription_balance_fallback_limit_usd"`
 }
 
 type userProfileResponse struct {
@@ -142,10 +144,12 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	svcReq := service.UpdateProfileRequest{
-		Username:               req.Username,
-		AvatarURL:              req.AvatarURL,
-		BalanceNotifyEnabled:   req.BalanceNotifyEnabled,
-		BalanceNotifyThreshold: req.BalanceNotifyThreshold,
+		Username:                            req.Username,
+		AvatarURL:                           req.AvatarURL,
+		BalanceNotifyEnabled:                req.BalanceNotifyEnabled,
+		BalanceNotifyThreshold:              req.BalanceNotifyThreshold,
+		SubscriptionBalanceFallbackEnabled:  req.SubscriptionBalanceFallbackEnabled,
+		SubscriptionBalanceFallbackLimitUSD: req.SubscriptionBalanceFallbackLimitUSD,
 	}
 	updatedUser, err := h.userService.UpdateProfile(c.Request.Context(), subject.UserID, svcReq)
 	if err != nil {

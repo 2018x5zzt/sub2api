@@ -11,6 +11,7 @@ import (
 
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
 var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerprint conflict")
+var ErrSubscriptionBalanceFallbackLimitExceeded = errors.New("subscription balance fallback limit exceeded")
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
@@ -35,12 +36,13 @@ type UsageBillingCommand struct {
 	ImageCount            int
 	MediaType             string
 
-	BalanceCost         float64
-	SubscriptionCost    float64
-	ProductDebitCost    float64
-	APIKeyQuotaCost     float64
-	APIKeyRateLimitCost float64
-	AccountQuotaCost    float64
+	BalanceCost                     float64
+	SubscriptionCost                float64
+	ProductDebitCost                float64
+	SubscriptionBalanceFallbackCost float64
+	APIKeyQuotaCost                 float64
+	APIKeyRateLimitCost             float64
+	AccountQuotaCost                float64
 }
 
 func (c *UsageBillingCommand) Normalize() {
@@ -58,7 +60,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		return ""
 	}
 	raw := fmt.Sprintf(
-		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
+		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
 		c.UserID,
 		c.AccountID,
 		c.APIKeyID,
@@ -78,6 +80,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.BalanceCost,
 		c.SubscriptionCost,
 		c.ProductDebitCost,
+		c.SubscriptionBalanceFallbackCost,
 		c.APIKeyQuotaCost,
 		c.APIKeyRateLimitCost,
 		c.AccountQuotaCost,

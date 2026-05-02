@@ -142,12 +142,28 @@ func (s *stubUserRepo) GetByEmail(ctx context.Context, email string) (*service.U
 	panic("unexpected GetByEmail call")
 }
 
+func (s *stubUserRepo) GetByInviteCode(ctx context.Context, code string) (*service.User, error) {
+	panic("unexpected GetByInviteCode call")
+}
+
+func (s *stubUserRepo) ExistsByInviteCode(ctx context.Context, code string) (bool, error) {
+	panic("unexpected ExistsByInviteCode call")
+}
+
+func (s *stubUserRepo) CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error) {
+	panic("unexpected CountInviteesByInviter call")
+}
+
 func (s *stubUserRepo) GetFirstAdmin(ctx context.Context) (*service.User, error) {
 	panic("unexpected GetFirstAdmin call")
 }
 
 func (s *stubUserRepo) Update(ctx context.Context, user *service.User) error {
 	panic("unexpected Update call")
+}
+
+func (s *stubUserRepo) UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error {
+	panic("unexpected UpdateInviterBinding call")
 }
 
 func (s *stubUserRepo) Delete(ctx context.Context, id int64) error {

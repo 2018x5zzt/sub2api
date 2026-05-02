@@ -82,6 +82,7 @@ describe('admin SubscriptionProductsView', () => {
         name: 'GPT 订阅每天45刀',
         description: '',
         status: 'active',
+        product_family: 'gpt_shared',
         default_validity_days: 30,
         daily_limit_usd: 45,
         weekly_limit_usd: 0,

@@ -36,13 +36,16 @@ type APIKeyAuthUserSnapshot struct {
 	Concurrency int     `json:"concurrency"`
 
 	// Balance notification fields (required for CheckBalanceAfterDeduction)
-	Email                      string             `json:"email"`
-	Username                   string             `json:"username"`
-	BalanceNotifyEnabled       bool               `json:"balance_notify_enabled"`
-	BalanceNotifyThresholdType string             `json:"balance_notify_threshold_type"`
-	BalanceNotifyThreshold     *float64           `json:"balance_notify_threshold,omitempty"`
-	BalanceNotifyExtraEmails   []NotifyEmailEntry `json:"balance_notify_extra_emails,omitempty"`
-	TotalRecharged             float64            `json:"total_recharged"`
+	Email                               string             `json:"email"`
+	Username                            string             `json:"username"`
+	BalanceNotifyEnabled                bool               `json:"balance_notify_enabled"`
+	BalanceNotifyThresholdType          string             `json:"balance_notify_threshold_type"`
+	BalanceNotifyThreshold              *float64           `json:"balance_notify_threshold,omitempty"`
+	BalanceNotifyExtraEmails            []NotifyEmailEntry `json:"balance_notify_extra_emails,omitempty"`
+	TotalRecharged                      float64            `json:"total_recharged"`
+	SubscriptionBalanceFallbackEnabled  bool               `json:"subscription_balance_fallback_enabled"`
+	SubscriptionBalanceFallbackLimitUSD float64            `json:"subscription_balance_fallback_limit_usd"`
+	SubscriptionBalanceFallbackUsedUSD  float64            `json:"subscription_balance_fallback_used_usd"`
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制）；用于 billing_cache_service.checkRPM 兜底判断。
 	RPMLimit int `json:"rpm_limit"`
@@ -69,6 +72,7 @@ type APIKeyAuthGroupSnapshot struct {
 	ClaudeCodeOnly                  bool     `json:"claude_code_only"`
 	FallbackGroupID                 *int64   `json:"fallback_group_id,omitempty"`
 	FallbackGroupIDOnInvalidRequest *int64   `json:"fallback_group_id_on_invalid_request,omitempty"`
+	BalanceFallbackGroupID          *int64   `json:"balance_fallback_group_id,omitempty"`
 
 	// Model routing is used by gateway account selection, so it must be part of auth cache snapshot.
 	// Only anthropic groups use these fields; others may leave them empty.

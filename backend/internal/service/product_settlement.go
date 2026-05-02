@@ -70,3 +70,18 @@ func ProductSettlementFromContext(ctx context.Context) (*ProductSettlementContex
 	settlement, ok := ctx.Value(ctxkey.ProductSettlement).(*ProductSettlementContext)
 	return settlement, ok && settlement != nil
 }
+
+func ContextWithSubscriptionBalanceFallback(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, ctxkey.SubscriptionBalanceFallback, true)
+}
+
+func SubscriptionBalanceFallbackFromContext(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(ctxkey.SubscriptionBalanceFallback).(bool)
+	return v
+}

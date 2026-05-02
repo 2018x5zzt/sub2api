@@ -301,6 +301,20 @@ func (_c *GroupCreate) SetNillableFallbackGroupIDOnInvalidRequest(v *int64) *Gro
 	return _c
 }
 
+// SetBalanceFallbackGroupID sets the "balance_fallback_group_id" field.
+func (_c *GroupCreate) SetBalanceFallbackGroupID(v int64) *GroupCreate {
+	_c.mutation.SetBalanceFallbackGroupID(v)
+	return _c
+}
+
+// SetNillableBalanceFallbackGroupID sets the "balance_fallback_group_id" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableBalanceFallbackGroupID(v *int64) *GroupCreate {
+	if v != nil {
+		_c.SetBalanceFallbackGroupID(*v)
+	}
+	return _c
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (_c *GroupCreate) SetModelRouting(v map[string][]int64) *GroupCreate {
 	_c.mutation.SetModelRouting(v)
@@ -844,6 +858,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.FallbackGroupIDOnInvalidRequest(); ok {
 		_spec.SetField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64, value)
 		_node.FallbackGroupIDOnInvalidRequest = &value
+	}
+	if value, ok := _c.mutation.BalanceFallbackGroupID(); ok {
+		_spec.SetField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
+		_node.BalanceFallbackGroupID = &value
 	}
 	if value, ok := _c.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
@@ -1390,6 +1408,30 @@ func (u *GroupUpsert) AddFallbackGroupIDOnInvalidRequest(v int64) *GroupUpsert {
 // ClearFallbackGroupIDOnInvalidRequest clears the value of the "fallback_group_id_on_invalid_request" field.
 func (u *GroupUpsert) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsert {
 	u.SetNull(group.FieldFallbackGroupIDOnInvalidRequest)
+	return u
+}
+
+// SetBalanceFallbackGroupID sets the "balance_fallback_group_id" field.
+func (u *GroupUpsert) SetBalanceFallbackGroupID(v int64) *GroupUpsert {
+	u.Set(group.FieldBalanceFallbackGroupID, v)
+	return u
+}
+
+// UpdateBalanceFallbackGroupID sets the "balance_fallback_group_id" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateBalanceFallbackGroupID() *GroupUpsert {
+	u.SetExcluded(group.FieldBalanceFallbackGroupID)
+	return u
+}
+
+// AddBalanceFallbackGroupID adds v to the "balance_fallback_group_id" field.
+func (u *GroupUpsert) AddBalanceFallbackGroupID(v int64) *GroupUpsert {
+	u.Add(group.FieldBalanceFallbackGroupID, v)
+	return u
+}
+
+// ClearBalanceFallbackGroupID clears the value of the "balance_fallback_group_id" field.
+func (u *GroupUpsert) ClearBalanceFallbackGroupID() *GroupUpsert {
+	u.SetNull(group.FieldBalanceFallbackGroupID)
 	return u
 }
 
@@ -1991,6 +2033,34 @@ func (u *GroupUpsertOne) UpdateFallbackGroupIDOnInvalidRequest() *GroupUpsertOne
 func (u *GroupUpsertOne) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearFallbackGroupIDOnInvalidRequest()
+	})
+}
+
+// SetBalanceFallbackGroupID sets the "balance_fallback_group_id" field.
+func (u *GroupUpsertOne) SetBalanceFallbackGroupID(v int64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBalanceFallbackGroupID(v)
+	})
+}
+
+// AddBalanceFallbackGroupID adds v to the "balance_fallback_group_id" field.
+func (u *GroupUpsertOne) AddBalanceFallbackGroupID(v int64) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBalanceFallbackGroupID(v)
+	})
+}
+
+// UpdateBalanceFallbackGroupID sets the "balance_fallback_group_id" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateBalanceFallbackGroupID() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBalanceFallbackGroupID()
+	})
+}
+
+// ClearBalanceFallbackGroupID clears the value of the "balance_fallback_group_id" field.
+func (u *GroupUpsertOne) ClearBalanceFallbackGroupID() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearBalanceFallbackGroupID()
 	})
 }
 
@@ -2783,6 +2853,34 @@ func (u *GroupUpsertBulk) UpdateFallbackGroupIDOnInvalidRequest() *GroupUpsertBu
 func (u *GroupUpsertBulk) ClearFallbackGroupIDOnInvalidRequest() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.ClearFallbackGroupIDOnInvalidRequest()
+	})
+}
+
+// SetBalanceFallbackGroupID sets the "balance_fallback_group_id" field.
+func (u *GroupUpsertBulk) SetBalanceFallbackGroupID(v int64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetBalanceFallbackGroupID(v)
+	})
+}
+
+// AddBalanceFallbackGroupID adds v to the "balance_fallback_group_id" field.
+func (u *GroupUpsertBulk) AddBalanceFallbackGroupID(v int64) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.AddBalanceFallbackGroupID(v)
+	})
+}
+
+// UpdateBalanceFallbackGroupID sets the "balance_fallback_group_id" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateBalanceFallbackGroupID() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateBalanceFallbackGroupID()
+	})
+}
+
+// ClearBalanceFallbackGroupID clears the value of the "balance_fallback_group_id" field.
+func (u *GroupUpsertBulk) ClearBalanceFallbackGroupID() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.ClearBalanceFallbackGroupID()
 	})
 }
 
