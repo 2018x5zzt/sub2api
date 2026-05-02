@@ -12,6 +12,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -753,6 +754,176 @@ ORDER BY expires_at DESC, id DESC`, productID)
 		return nil, err
 	}
 	return subs, nil
+}
+
+func (r *subscriptionProductRepository) ListUserProductSubscriptionsForAdmin(ctx context.Context, params service.AdminProductSubscriptionListParams) ([]service.AdminProductSubscriptionListItem, *pagination.PaginationResult, error) {
+	page := params.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := params.PageSize
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 1000 {
+		pageSize = 1000
+	}
+	sortOrder := pagination.NormalizeSortOrder(params.SortOrder, pagination.SortOrderDesc)
+	sortBy := strings.TrimSpace(params.SortBy)
+	orderExpr := "ups.expires_at DESC, ups.id DESC"
+	switch sortBy {
+	case "created_at":
+		if sortOrder == pagination.SortOrderAsc {
+			orderExpr = "ups.created_at ASC, ups.id ASC"
+		} else {
+			orderExpr = "ups.created_at DESC, ups.id DESC"
+		}
+	case "daily_usage_usd":
+		if sortOrder == pagination.SortOrderAsc {
+			orderExpr = "ups.daily_usage_usd ASC, ups.id ASC"
+		} else {
+			orderExpr = "ups.daily_usage_usd DESC, ups.id DESC"
+		}
+	case "expires_at", "":
+		if sortOrder == pagination.SortOrderAsc {
+			orderExpr = "ups.expires_at ASC, ups.id ASC"
+		}
+	}
+
+	where := []string{"ups.deleted_at IS NULL", "sp.deleted_at IS NULL", "u.deleted_at IS NULL"}
+	args := make([]any, 0, 8)
+	if params.ProductID > 0 {
+		args = append(args, params.ProductID)
+		where = append(where, fmt.Sprintf("ups.product_id = $%d", len(args)))
+	}
+	if params.UserID > 0 {
+		args = append(args, params.UserID)
+		where = append(where, fmt.Sprintf("ups.user_id = $%d", len(args)))
+	}
+	if status := strings.TrimSpace(params.Status); status != "" {
+		args = append(args, status)
+		where = append(where, fmt.Sprintf("ups.status = $%d", len(args)))
+	}
+	if search := strings.TrimSpace(params.Search); search != "" {
+		args = append(args, "%"+strings.ToLower(search)+"%")
+		idx := len(args)
+		where = append(where, fmt.Sprintf("(LOWER(u.email) LIKE $%d OR LOWER(u.username) LIKE $%d OR CAST(u.id AS TEXT) LIKE $%d OR LOWER(sp.name) LIKE $%d OR LOWER(sp.code) LIKE $%d)", idx, idx, idx, idx, idx))
+	}
+	whereSQL := strings.Join(where, " AND ")
+
+	var total int64
+	countQuery := `
+SELECT COUNT(*)
+FROM user_product_subscriptions ups
+JOIN users u ON u.id = ups.user_id
+JOIN subscription_products sp ON sp.id = ups.product_id
+WHERE ` + whereSQL
+	if err := scanSingleRow(ctx, r.execForContext(ctx), countQuery, args, &total); err != nil {
+		return nil, nil, fmt.Errorf("count admin product subscriptions: %w", err)
+	}
+
+	limit := pageSize
+	offset := (page - 1) * pageSize
+	listArgs := append([]any{}, args...)
+	listArgs = append(listArgs, limit, offset)
+	limitPos := len(listArgs) - 1
+	offsetPos := len(listArgs)
+	query := `
+SELECT
+	ups.id,
+	ups.user_id,
+	u.email,
+	u.username,
+	ups.product_id,
+	sp.code,
+	sp.name,
+	sp.daily_limit_usd,
+	ups.starts_at,
+	ups.expires_at,
+	ups.status,
+	ups.daily_window_start,
+	ups.weekly_window_start,
+	ups.monthly_window_start,
+	ups.daily_usage_usd,
+	ups.weekly_usage_usd,
+	ups.monthly_usage_usd,
+	ups.daily_carryover_in_usd,
+	ups.daily_carryover_remaining_usd,
+	GREATEST(ups.daily_carryover_in_usd - ups.daily_carryover_remaining_usd, 0) AS carryover_used_usd,
+	GREATEST(ups.daily_usage_usd - GREATEST(ups.daily_carryover_in_usd - ups.daily_carryover_remaining_usd, 0), 0) AS fresh_daily_usage_usd,
+	ups.assigned_by,
+	ups.assigned_at,
+	ups.notes,
+	ups.created_at,
+	ups.updated_at
+FROM user_product_subscriptions ups
+JOIN users u ON u.id = ups.user_id
+JOIN subscription_products sp ON sp.id = ups.product_id
+WHERE ` + whereSQL + `
+ORDER BY ` + orderExpr + `
+LIMIT $` + strconv.Itoa(limitPos) + ` OFFSET $` + strconv.Itoa(offsetPos)
+
+	rows, err := r.execForContext(ctx).QueryContext(ctx, query, listArgs...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list admin product subscriptions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]service.AdminProductSubscriptionListItem, 0, limit)
+	for rows.Next() {
+		var item service.AdminProductSubscriptionListItem
+		var dailyWindow, weeklyWindow, monthlyWindow sql.NullTime
+		var assignedBy sql.NullInt64
+		var notes sql.NullString
+		if err := rows.Scan(
+			&item.ID,
+			&item.UserID,
+			&item.UserEmail,
+			&item.UserUsername,
+			&item.ProductID,
+			&item.ProductCode,
+			&item.ProductName,
+			&item.DailyLimitUSD,
+			&item.StartsAt,
+			&item.ExpiresAt,
+			&item.Status,
+			&dailyWindow,
+			&weeklyWindow,
+			&monthlyWindow,
+			&item.DailyUsageUSD,
+			&item.WeeklyUsageUSD,
+			&item.MonthlyUsageUSD,
+			&item.DailyCarryoverInUSD,
+			&item.DailyCarryoverRemainingUSD,
+			&item.CarryoverUsedUSD,
+			&item.FreshDailyUsageUSD,
+			&assignedBy,
+			&item.AssignedAt,
+			&notes,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, nil, err
+		}
+		item.DailyWindowStart = nullableTimePtr(dailyWindow)
+		item.WeeklyWindowStart = nullableTimePtr(weeklyWindow)
+		item.MonthlyWindowStart = nullableTimePtr(monthlyWindow)
+		if assignedBy.Valid {
+			v := assignedBy.Int64
+			item.AssignedBy = &v
+		}
+		item.Notes = notes.String
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	pages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	if pages < 1 {
+		pages = 1
+	}
+	return items, &pagination.PaginationResult{Total: total, Page: page, PageSize: pageSize, Pages: pages}, nil
 }
 
 func (r *subscriptionProductRepository) AssignOrExtendProductSubscription(ctx context.Context, input *service.AssignProductSubscriptionInput) (*service.UserProductSubscription, bool, error) {

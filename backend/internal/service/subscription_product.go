@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
 const (
@@ -128,6 +130,31 @@ type UserProductSubscription struct {
 	Notes      string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+type AdminProductSubscriptionListParams struct {
+	Page      int
+	PageSize  int
+	Search    string
+	ProductID int64
+	UserID    int64
+	Status    string
+	SortBy    string
+	SortOrder string
+}
+
+type AdminProductSubscriptionListItem struct {
+	UserProductSubscription
+
+	UserEmail    string
+	UserUsername string
+
+	ProductCode   string
+	ProductName   string
+	DailyLimitUSD float64
+
+	CarryoverUsedUSD   float64
+	FreshDailyUsageUSD float64
 }
 
 type SubscriptionProductBindingInput struct {
@@ -257,6 +284,7 @@ type ProductSubscriptionRepository interface {
 	ListProductBindings(ctx context.Context, productID int64) ([]SubscriptionProductBindingDetail, error)
 	SyncProductBindings(ctx context.Context, productID int64, inputs []SubscriptionProductBindingInput) ([]SubscriptionProductBindingDetail, error)
 	ListProductSubscriptions(ctx context.Context, productID int64) ([]UserProductSubscription, error)
+	ListUserProductSubscriptionsForAdmin(ctx context.Context, params AdminProductSubscriptionListParams) ([]AdminProductSubscriptionListItem, *pagination.PaginationResult, error)
 	AssignOrExtendProductSubscription(ctx context.Context, input *AssignProductSubscriptionInput) (*UserProductSubscription, bool, error)
 }
 

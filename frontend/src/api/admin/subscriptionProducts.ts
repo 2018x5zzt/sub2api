@@ -1,16 +1,39 @@
 import { apiClient } from '../client'
 import type {
+  AdminProductSubscriptionListItem,
   AdminSubscriptionProduct,
   AdminSubscriptionProductBinding,
   AdminUserProductSubscription,
   AssignProductSubscriptionRequest,
   CreateSubscriptionProductRequest,
+  PaginatedResponse,
   SyncSubscriptionProductBindingRequest,
   UpdateSubscriptionProductRequest
 } from '@/types'
 
+export interface ListUserProductSubscriptionsParams {
+  page?: number
+  page_size?: number
+  search?: string
+  product_id?: number | null
+  user_id?: number | null
+  status?: string | null
+  sort_by?: 'expires_at' | 'created_at' | 'daily_usage_usd'
+  sort_order?: 'asc' | 'desc'
+}
+
 export async function list(): Promise<AdminSubscriptionProduct[]> {
   const { data } = await apiClient.get<AdminSubscriptionProduct[]>('/admin/subscription-products')
+  return data
+}
+
+export async function listUserSubscriptions(
+  params: ListUserProductSubscriptionsParams = {}
+): Promise<PaginatedResponse<AdminProductSubscriptionListItem>> {
+  const { data } = await apiClient.get<PaginatedResponse<AdminProductSubscriptionListItem>>(
+    '/admin/product-subscriptions',
+    { params }
+  )
   return data
 }
 
@@ -57,6 +80,7 @@ export async function assign(
 
 export const subscriptionProductsAPI = {
   list,
+  listUserSubscriptions,
   create,
   update,
   listBindings,

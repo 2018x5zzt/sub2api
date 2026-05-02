@@ -4,6 +4,25 @@
       <template #filters>
         <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
           <div class="flex flex-1 flex-wrap items-center gap-3">
+            <div class="flex rounded-md border border-gray-200 bg-gray-50 p-1 dark:border-dark-700 dark:bg-dark-800">
+              <button
+                type="button"
+                class="tab-button"
+                :class="activeTab === 'subscriptions' ? 'tab-button-active' : 'tab-button-inactive'"
+                @click="activeTab = 'subscriptions'"
+              >
+                {{ t('admin.subscriptionProducts.userSubscriptionsTab', 'User Subscriptions') }}
+              </button>
+              <button
+                type="button"
+                class="tab-button"
+                :class="activeTab === 'products' ? 'tab-button-active' : 'tab-button-inactive'"
+                @click="activeTab = 'products'"
+              >
+                {{ t('admin.subscriptionProducts.productConfigTab', 'Product Config') }}
+              </button>
+            </div>
+
             <div class="relative w-full sm:w-72">
               <Icon
                 name="search"
@@ -11,7 +30,16 @@
                 class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"
               />
               <input
-                v-model="searchQuery"
+                v-if="activeTab === 'subscriptions'"
+                v-model="subscriptionSearchQuery"
+                type="text"
+                :placeholder="t('admin.subscriptionProducts.searchSubscriptionsPlaceholder', 'Search users or products')"
+                class="input pl-10"
+                @input="debounceSubscriptionSearch"
+              />
+              <input
+                v-else
+                v-model="productSearchQuery"
                 type="text"
                 :placeholder="t('admin.subscriptionProducts.searchPlaceholder', 'Search products')"
                 class="input pl-10"
@@ -19,23 +47,38 @@
             </div>
 
             <Select
-              v-model="statusFilter"
+              v-if="activeTab === 'subscriptions'"
+              v-model="subscriptionStatusFilter"
               :options="statusFilterOptions"
               :placeholder="t('admin.subscriptionProducts.allStatus', 'All Status')"
               class="w-40"
+            />
+            <Select
+              v-else
+              v-model="productStatusFilter"
+              :options="productStatusFilterOptions"
+              :placeholder="t('admin.subscriptionProducts.allStatus', 'All Status')"
+              class="w-40"
+            />
+            <Select
+              v-if="activeTab === 'subscriptions'"
+              v-model="subscriptionProductFilter"
+              :options="productFilterOptions"
+              :placeholder="t('admin.subscriptionProducts.allProducts', 'All Products')"
+              class="w-56"
             />
           </div>
 
           <div class="flex w-full flex-shrink-0 flex-wrap items-center justify-end gap-3 lg:w-auto">
             <button
-              @click="loadProducts"
-              :disabled="loading"
+              @click="refreshActiveTab"
+              :disabled="activeLoading"
               class="btn btn-secondary"
               :title="t('common.refresh', 'Refresh')"
             >
-              <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+              <Icon name="refresh" size="md" :class="activeLoading ? 'animate-spin' : ''" />
             </button>
-            <button @click="openProductDialog(null)" class="btn btn-primary">
+            <button v-if="activeTab === 'products'" @click="openProductDialog(null)" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.subscriptionProducts.createProduct', 'Create Product') }}
             </button>
@@ -44,7 +87,69 @@
       </template>
 
       <template #table>
-        <DataTable :columns="columns" :data="pagedProducts" :loading="loading">
+        <DataTable
+          v-if="activeTab === 'subscriptions'"
+          :columns="userSubscriptionColumns"
+          :data="userSubscriptions"
+          :loading="userSubscriptionsLoading"
+        >
+          <template #cell-user="{ row }">
+            <div class="min-w-[220px]">
+              <div class="font-medium text-gray-900 dark:text-white">{{ row.user_email }}</div>
+              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ row.user_username || '-' }} #{{ row.user_id }}
+              </div>
+            </div>
+          </template>
+
+          <template #cell-product="{ row }">
+            <div class="min-w-[220px]">
+              <div class="font-medium text-gray-900 dark:text-white">{{ row.product_name }}</div>
+              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ row.product_code }}</div>
+            </div>
+          </template>
+
+          <template #cell-status="{ value }">
+            <span class="status-badge" :class="statusBadgeClass(value)">
+              {{ statusLabel(value) }}
+            </span>
+          </template>
+
+          <template #cell-daily_usage="{ row }">
+            <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
+              <div>{{ formatUSD(row.daily_usage_usd) }} / {{ formatUSD(row.daily_limit_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.weekly', 'Weekly') }}: {{ formatUSD(row.weekly_usage_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}: {{ formatUSD(row.monthly_usage_usd) }}</div>
+            </div>
+          </template>
+
+          <template #cell-carryover="{ row }">
+            <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
+              <div>{{ t('admin.subscriptionProducts.carryoverIn', 'In') }}: {{ formatUSD(row.daily_carryover_in_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.carryoverUsed', 'Used') }}: {{ formatUSD(row.carryover_used_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.carryoverRemaining', 'Remaining') }}: {{ formatUSD(row.daily_carryover_remaining_usd) }}</div>
+            </div>
+          </template>
+
+          <template #cell-fresh_daily_usage="{ value }">
+            {{ formatUSD(value) }}
+          </template>
+
+          <template #cell-period="{ row }">
+            <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
+              <div>{{ formatDateOnly(row.starts_at) }}</div>
+              <div>{{ formatDateOnly(row.expires_at) }}</div>
+            </div>
+          </template>
+
+          <template #cell-notes="{ value }">
+            <span class="block max-w-[220px] truncate text-gray-600 dark:text-gray-400">
+              {{ value || '-' }}
+            </span>
+          </template>
+        </DataTable>
+
+        <DataTable v-else :columns="productColumns" :data="pagedProducts" :loading="loading">
           <template #cell-name="{ row }">
             <div class="min-w-[220px]">
               <div class="font-medium text-gray-900 dark:text-white">{{ row.name }}</div>
@@ -122,7 +227,15 @@
 
       <template #pagination>
         <Pagination
-          v-if="filteredProducts.length > 0"
+          v-if="activeTab === 'subscriptions' && subscriptionPagination.total > 0"
+          :page="subscriptionPagination.page"
+          :total="subscriptionPagination.total"
+          :page-size="subscriptionPagination.page_size"
+          @update:page="handleSubscriptionPageChange"
+          @update:pageSize="handleSubscriptionPageSizeChange"
+        />
+        <Pagination
+          v-else-if="activeTab === 'products' && filteredProducts.length > 0"
           :page="pagination.page"
           :total="filteredProducts.length"
           :page-size="pagination.page_size"
@@ -186,7 +299,7 @@
 
     <BaseDialog
       :show="showBindingsDialog"
-      :title="t('admin.subscriptionProducts.bindingsTitle', { name: selectedProduct?.name || '' }, 'Bind Groups')"
+      :title="formatProductDialogTitle(t('admin.subscriptionProducts.bindGroups', 'Bind Groups'))"
       width="extra-wide"
       @close="closeBindingsDialog"
     >
@@ -286,11 +399,11 @@
 
     <BaseDialog
       :show="showSubscriptionsDialog"
-      :title="t('admin.subscriptionProducts.subscriptionsTitle', { name: selectedProduct?.name || '' }, 'Product Subscriptions')"
+      :title="formatProductDialogTitle(t('admin.subscriptionProducts.viewSubscriptions', 'View Subscriptions'))"
       width="extra-wide"
       @close="closeSubscriptionsDialog"
     >
-      <DataTable :columns="subscriptionColumns" :data="productSubscriptions" :loading="subscriptionsLoading">
+      <DataTable :columns="productSubscriptionColumns" :data="productSubscriptions" :loading="subscriptionsLoading">
         <template #cell-user_id="{ value }">#{{ value }}</template>
         <template #cell-expires_at="{ value }">{{ formatDateOnly(value) }}</template>
         <template #cell-usage="{ row }">
@@ -309,6 +422,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import type {
+  AdminProductSubscriptionListItem,
   AdminGroup,
   AdminSubscriptionProduct,
   AdminSubscriptionProductBinding,
@@ -355,9 +469,14 @@ type BindingFormRow = {
 const products = ref<AdminSubscriptionProduct[]>([])
 const groups = ref<AdminGroup[]>([])
 const loading = ref(false)
+const userSubscriptionsLoading = ref(false)
 const submitting = ref(false)
-const searchQuery = ref('')
-const statusFilter = ref<string | null>(null)
+const activeTab = ref<'subscriptions' | 'products'>('subscriptions')
+const productSearchQuery = ref('')
+const productStatusFilter = ref<string | null>(null)
+const subscriptionSearchQuery = ref('')
+const subscriptionStatusFilter = ref<string | null>(null)
+const subscriptionProductFilter = ref<number | null>(null)
 const editingProduct = ref<AdminSubscriptionProduct | null>(null)
 const selectedProduct = ref<AdminSubscriptionProduct | null>(null)
 const showProductDialog = ref(false)
@@ -374,11 +493,24 @@ const userResults = ref<SimpleUser[]>([])
 const showUserDropdown = ref(false)
 const userSearchLoading = ref(false)
 let userSearchTimeout: ReturnType<typeof setTimeout> | null = null
+let subscriptionSearchTimeout: ReturnType<typeof setTimeout> | null = null
 
 const pagination = reactive({
   page: 1,
   page_size: getPersistedPageSize(),
 })
+
+const subscriptionPagination = reactive({
+  page: 1,
+  page_size: getPersistedPageSize(),
+  total: 0,
+})
+
+const userSubscriptions = ref<AdminProductSubscriptionListItem[]>([])
+
+const activeLoading = computed(() =>
+  activeTab.value === 'subscriptions' ? userSubscriptionsLoading.value : loading.value
+)
 
 const productForm = reactive<ProductForm>({
   code: '',
@@ -397,16 +529,27 @@ const assignForm = reactive({
   notes: '',
 })
 
-const columns: Column[] = [
+const userSubscriptionColumns: Column[] = [
+  { key: 'user', label: t('admin.subscriptionProducts.columns.user', 'User') },
+  { key: 'product', label: t('admin.subscriptionProducts.columns.product', 'Product') },
+  { key: 'status', label: t('admin.subscriptionProducts.columns.status', 'Status') },
+  { key: 'daily_usage', label: t('admin.subscriptionProducts.columns.dailyUsage', 'Daily Usage') },
+  { key: 'carryover', label: t('admin.subscriptionProducts.columns.carryover', 'Carryover') },
+  { key: 'fresh_daily_usage', label: t('admin.subscriptionProducts.columns.freshDailyUsage', 'Fresh Today') },
+  { key: 'period', label: t('admin.subscriptionProducts.columns.period', 'Period') },
+  { key: 'notes', label: t('admin.subscriptionProducts.columns.notes', 'Notes') },
+]
+
+const productColumns: Column[] = [
   { key: 'name', label: t('admin.subscriptionProducts.columns.product', 'Product') },
   { key: 'status', label: t('admin.subscriptionProducts.columns.status', 'Status') },
   { key: 'limits', label: t('admin.subscriptionProducts.columns.limits', 'Limits') },
-  { key: 'default_validity_days', label: t('admin.subscriptionProducts.columns.validity', 'Validity Days') },
+  { key: 'default_validity_days', label: t('admin.subscriptionProducts.columns.defaultValidity', 'Default Validity Days') },
   { key: 'description', label: t('admin.subscriptionProducts.columns.description', 'Description') },
   { key: 'actions', label: t('common.actions', 'Actions'), class: 'text-right' },
 ]
 
-const subscriptionColumns: Column[] = [
+const productSubscriptionColumns: Column[] = [
   { key: 'id', label: 'ID' },
   { key: 'user_id', label: t('admin.subscriptionProducts.columns.user', 'User') },
   { key: 'status', label: t('admin.subscriptionProducts.columns.status', 'Status') },
@@ -418,11 +561,18 @@ const subscriptionColumns: Column[] = [
 const statusFilterOptions = [
   { value: null, label: t('admin.subscriptionProducts.allStatus', 'All Status') },
   { value: 'active', label: t('admin.subscriptionProducts.status.active', 'Active') },
+  { value: 'expired', label: t('admin.subscriptionProducts.status.expired', 'Expired') },
+  { value: 'revoked', label: t('admin.subscriptionProducts.status.revoked', 'Revoked') },
+]
+
+const productStatusFilterOptions = [
+  { value: null, label: t('admin.subscriptionProducts.allStatus', 'All Status') },
+  { value: 'active', label: t('admin.subscriptionProducts.status.active', 'Active') },
   { value: 'draft', label: t('admin.subscriptionProducts.status.draft', 'Draft') },
   { value: 'disabled', label: t('admin.subscriptionProducts.status.disabled', 'Disabled') },
 ]
 
-const statusEditOptions = statusFilterOptions.filter((item) => item.value !== null)
+const statusEditOptions = productStatusFilterOptions.filter((item) => item.value !== null)
 
 const bindingStatusOptions = [
   { value: 'active', label: t('admin.subscriptionProducts.status.active', 'Active') },
@@ -436,10 +586,18 @@ const groupOptions = computed(() =>
   }))
 )
 
+const productFilterOptions = computed(() => [
+  { value: null, label: t('admin.subscriptionProducts.allProducts', 'All Products') },
+  ...products.value.map((product) => ({
+    value: product.id,
+    label: `${product.name} (${product.code})`,
+  })),
+])
+
 const filteredProducts = computed(() => {
-  const keyword = searchQuery.value.trim().toLowerCase()
+  const keyword = productSearchQuery.value.trim().toLowerCase()
   return products.value.filter((product) => {
-    if (statusFilter.value && product.status !== statusFilter.value) return false
+    if (productStatusFilter.value && product.status !== productStatusFilter.value) return false
     if (!keyword) return true
     return [product.name, product.code, product.description].some((value) =>
       String(value || '').toLowerCase().includes(keyword)
@@ -452,9 +610,43 @@ const pagedProducts = computed(() => {
   return filteredProducts.value.slice(start, start + pagination.page_size)
 })
 
-watch([searchQuery, statusFilter], () => {
+watch([productSearchQuery, productStatusFilter], () => {
   pagination.page = 1
 })
+
+watch([subscriptionStatusFilter, subscriptionProductFilter], () => {
+  subscriptionPagination.page = 1
+  void loadUserSubscriptions()
+})
+
+async function loadUserSubscriptions() {
+  userSubscriptionsLoading.value = true
+  try {
+    const params: {
+      page: number
+      page_size: number
+      search?: string
+      product_id?: number
+      status?: string
+    } = {
+      page: subscriptionPagination.page,
+      page_size: subscriptionPagination.page_size,
+    }
+    const keyword = subscriptionSearchQuery.value.trim()
+    if (keyword) params.search = keyword
+    if (subscriptionProductFilter.value) params.product_id = subscriptionProductFilter.value
+    if (subscriptionStatusFilter.value) params.status = subscriptionStatusFilter.value
+    const response = await adminAPI.subscriptionProducts.listUserSubscriptions(params)
+    userSubscriptions.value = response.items
+    subscriptionPagination.total = response.total
+    subscriptionPagination.page = response.page
+    subscriptionPagination.page_size = response.page_size
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.subscriptionProducts.subscriptionsLoadError', 'Failed to load subscriptions')))
+  } finally {
+    userSubscriptionsLoading.value = false
+  }
+}
 
 async function loadProducts() {
   loading.value = true
@@ -617,6 +809,14 @@ function debounceSearchUsers() {
   userSearchTimeout = setTimeout(searchUsers, 300)
 }
 
+function debounceSubscriptionSearch() {
+  if (subscriptionSearchTimeout) clearTimeout(subscriptionSearchTimeout)
+  subscriptionSearchTimeout = setTimeout(() => {
+    subscriptionPagination.page = 1
+    void loadUserSubscriptions()
+  }, 300)
+}
+
 async function searchUsers() {
   const keyword = userKeyword.value.trim()
   if (!keyword) {
@@ -690,6 +890,26 @@ function handlePageSizeChange(pageSize: number) {
   setPersistedPageSize(pageSize)
 }
 
+function handleSubscriptionPageChange(page: number) {
+  subscriptionPagination.page = page
+  void loadUserSubscriptions()
+}
+
+function handleSubscriptionPageSizeChange(pageSize: number) {
+  subscriptionPagination.page_size = pageSize
+  subscriptionPagination.page = 1
+  setPersistedPageSize(pageSize)
+  void loadUserSubscriptions()
+}
+
+function refreshActiveTab() {
+  if (activeTab.value === 'subscriptions') {
+    void loadUserSubscriptions()
+    return
+  }
+  void loadProducts()
+}
+
 function formatUSD(value: number | null | undefined): string {
   const amount = Number(value || 0)
   return amount > 0 ? `$${amount.toFixed(2)}` : t('admin.subscriptionProducts.unlimited', 'Unlimited')
@@ -705,8 +925,12 @@ function statusBadgeClass(status: string): string {
   return 'status-draft'
 }
 
+function formatProductDialogTitle(prefix: string): string {
+  return selectedProduct.value?.name ? `${prefix}: ${selectedProduct.value.name}` : prefix
+}
+
 onMounted(async () => {
-  await Promise.all([loadProducts(), loadGroups()])
+  await Promise.all([loadUserSubscriptions(), loadProducts(), loadGroups()])
 })
 </script>
 

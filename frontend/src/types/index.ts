@@ -1509,6 +1509,16 @@ export interface AdminUserProductSubscription {
   updated_at: string
 }
 
+export interface AdminProductSubscriptionListItem extends AdminUserProductSubscription {
+  user_email: string
+  user_username: string
+  product_code: string
+  product_name: string
+  daily_limit_usd: number
+  carryover_used_usd: number
+  fresh_daily_usage_usd: number
+}
+
 export interface CreateSubscriptionProductRequest {
   code: string
   name: string

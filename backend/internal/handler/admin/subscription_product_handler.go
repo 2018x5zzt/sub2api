@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -17,6 +18,7 @@ type subscriptionProductAdminService interface {
 	ListProductBindings(ctx context.Context, productID int64) ([]service.SubscriptionProductBindingDetail, error)
 	SyncProductBindings(ctx context.Context, productID int64, inputs []service.SubscriptionProductBindingInput) ([]service.SubscriptionProductBindingDetail, error)
 	ListProductSubscriptions(ctx context.Context, productID int64) ([]service.UserProductSubscription, error)
+	ListUserProductSubscriptionsForAdmin(ctx context.Context, params service.AdminProductSubscriptionListParams) ([]service.AdminProductSubscriptionListItem, *pagination.PaginationResult, error)
 	AssignOrExtendProductSubscription(ctx context.Context, input *service.AssignProductSubscriptionInput) (*service.UserProductSubscription, bool, error)
 }
 
@@ -76,6 +78,29 @@ func (h *SubscriptionProductHandler) List(c *gin.Context) {
 		return
 	}
 	response.Success(c, dto.AdminSubscriptionProductsFromService(products))
+}
+
+func (h *SubscriptionProductHandler) ListAllSubscriptions(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	productID, _ := strconv.ParseInt(c.DefaultQuery("product_id", "0"), 10, 64)
+	userID, _ := strconv.ParseInt(c.DefaultQuery("user_id", "0"), 10, 64)
+
+	items, pageResult, err := h.subscriptionProductService.ListUserProductSubscriptionsForAdmin(c.Request.Context(), service.AdminProductSubscriptionListParams{
+		Page:      page,
+		PageSize:  pageSize,
+		Search:    c.Query("search"),
+		ProductID: productID,
+		UserID:    userID,
+		Status:    c.Query("status"),
+		SortBy:    c.DefaultQuery("sort_by", "expires_at"),
+		SortOrder: c.DefaultQuery("sort_order", "desc"),
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Paginated(c, dto.AdminProductSubscriptionListItemsFromService(items), pageResult.Total, pageResult.Page, pageResult.PageSize)
 }
 
 func (h *SubscriptionProductHandler) Create(c *gin.Context) {

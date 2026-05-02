@@ -98,6 +98,20 @@ type AdminUserProductSubscription struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+type AdminProductSubscriptionListItem struct {
+	AdminUserProductSubscription
+
+	UserEmail    string `json:"user_email"`
+	UserUsername string `json:"user_username"`
+
+	ProductCode   string  `json:"product_code"`
+	ProductName   string  `json:"product_name"`
+	DailyLimitUSD float64 `json:"daily_limit_usd"`
+
+	CarryoverUsedUSD   float64 `json:"carryover_used_usd"`
+	FreshDailyUsageUSD float64 `json:"fresh_daily_usage_usd"`
+}
+
 func ActiveSubscriptionProductFromService(item *service.ActiveSubscriptionProduct) *ActiveSubscriptionProduct {
 	if item == nil {
 		return nil
@@ -223,6 +237,24 @@ func AdminUserProductSubscriptionsFromService(subscriptions []service.UserProduc
 			Notes:                      sub.Notes,
 			CreatedAt:                  sub.CreatedAt,
 			UpdatedAt:                  sub.UpdatedAt,
+		})
+	}
+	return out
+}
+
+func AdminProductSubscriptionListItemsFromService(items []service.AdminProductSubscriptionListItem) []AdminProductSubscriptionListItem {
+	out := make([]AdminProductSubscriptionListItem, 0, len(items))
+	for _, item := range items {
+		base := AdminUserProductSubscriptionsFromService([]service.UserProductSubscription{item.UserProductSubscription})[0]
+		out = append(out, AdminProductSubscriptionListItem{
+			AdminUserProductSubscription: base,
+			UserEmail:                    item.UserEmail,
+			UserUsername:                 item.UserUsername,
+			ProductCode:                  item.ProductCode,
+			ProductName:                  item.ProductName,
+			DailyLimitUSD:                item.DailyLimitUSD,
+			CarryoverUsedUSD:             item.CarryoverUsedUSD,
+			FreshDailyUsageUSD:           item.FreshDailyUsageUSD,
 		})
 	}
 	return out

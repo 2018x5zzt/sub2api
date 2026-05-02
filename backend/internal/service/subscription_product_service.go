@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
 type SubscriptionProductService struct {
@@ -104,6 +106,13 @@ func (s *SubscriptionProductService) ListProductSubscriptions(ctx context.Contex
 		return []UserProductSubscription{}, nil
 	}
 	return s.repo.ListProductSubscriptions(ctx, productID)
+}
+
+func (s *SubscriptionProductService) ListUserProductSubscriptionsForAdmin(ctx context.Context, params AdminProductSubscriptionListParams) ([]AdminProductSubscriptionListItem, *pagination.PaginationResult, error) {
+	if s == nil || s.repo == nil {
+		return []AdminProductSubscriptionListItem{}, &pagination.PaginationResult{Total: 0, Page: 1, PageSize: 20, Pages: 1}, nil
+	}
+	return s.repo.ListUserProductSubscriptionsForAdmin(ctx, params)
 }
 
 func (s *SubscriptionProductService) GetUserProductSummary(ctx context.Context, userID int64) (*SubscriptionProductSummary, error) {

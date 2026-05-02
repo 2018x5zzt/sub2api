@@ -127,6 +127,71 @@ func TestSubscriptionProductRepositoryAdminProductManagement(t *testing.T) {
 	require.Equal(t, user.ID, subs[0].UserID)
 }
 
+func TestSubscriptionProductRepositoryListUserProductSubscriptionsForAdmin(t *testing.T) {
+	ctx := context.Background()
+	tx := testEntTx(t)
+	client := tx.Client()
+	repo := &subscriptionProductRepository{client: client, sql: tx.Client()}
+
+	user, err := client.User.Create().
+		SetEmail(uniqueTestValue(t, "product-sub-admin") + "@example.com").
+		SetPasswordHash("hash").
+		SetUsername("Product User").
+		Save(ctx)
+	require.NoError(t, err)
+
+	product, err := repo.CreateProduct(ctx, &service.CreateSubscriptionProductInput{
+		Code:                "admin-list-" + uuid.NewString(),
+		Name:                "admin list product",
+		Status:              service.SubscriptionProductStatusActive,
+		DefaultValidityDays: 30,
+		DailyLimitUSD:       45,
+	})
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	_, _, err = repo.AssignOrExtendProductSubscription(ctx, &service.AssignProductSubscriptionInput{
+		UserID:       user.ID,
+		ProductID:    product.ID,
+		ValidityDays: 7,
+		Notes:        "admin list subscription",
+	})
+	require.NoError(t, err)
+	_, err = tx.Client().ExecContext(ctx, `
+UPDATE user_product_subscriptions
+SET daily_usage_usd = 12.5,
+    weekly_usage_usd = 25,
+    monthly_usage_usd = 50,
+    daily_carryover_in_usd = 8,
+    daily_carryover_remaining_usd = 3,
+    starts_at = $1
+WHERE user_id = $2
+  AND product_id = $3`, now.Add(-time.Hour), user.ID, product.ID)
+	require.NoError(t, err)
+
+	items, page, err := repo.ListUserProductSubscriptionsForAdmin(ctx, service.AdminProductSubscriptionListParams{
+		Page:     1,
+		PageSize: 20,
+		Search:   user.Email,
+		Status:   service.SubscriptionStatusActive,
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), page.Total)
+	require.Len(t, items, 1)
+	require.Equal(t, user.ID, items[0].UserID)
+	require.Equal(t, user.Email, items[0].UserEmail)
+	require.Equal(t, product.ID, items[0].ProductID)
+	require.Equal(t, product.Code, items[0].ProductCode)
+	require.Equal(t, product.Name, items[0].ProductName)
+	require.InDelta(t, 45, items[0].DailyLimitUSD, 0.000001)
+	require.InDelta(t, 12.5, items[0].DailyUsageUSD, 0.000001)
+	require.InDelta(t, 8, items[0].DailyCarryoverInUSD, 0.000001)
+	require.InDelta(t, 3, items[0].DailyCarryoverRemainingUSD, 0.000001)
+	require.InDelta(t, 5, items[0].CarryoverUsedUSD, 0.000001)
+	require.InDelta(t, 7.5, items[0].FreshDailyUsageUSD, 0.000001)
+	require.Contains(t, items[0].Notes, "admin list subscription")
+}
+
 func TestSubscriptionProductRepositoryResolveActiveProductByGroupID(t *testing.T) {
 	ctx := context.Background()
 	tx := testEntTx(t)

@@ -111,6 +111,8 @@ func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 }
 
 func registerSubscriptionProductRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	admin.GET("/product-subscriptions", h.Admin.SubscriptionProduct.ListAllSubscriptions)
+
 	products := admin.Group("/subscription-products")
 	{
 		products.GET("", h.Admin.SubscriptionProduct.List)
