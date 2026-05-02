@@ -3,15 +3,17 @@ import { flushPromises, mount } from '@vue/test-utils'
 
 import SubscriptionsView from '../SubscriptionsView.vue'
 
-const { getMySubscriptions, getActiveProducts, showError } = vi.hoisted(() => ({
+const { getMySubscriptions, getActiveSubscriptions, getActiveProducts, showError } = vi.hoisted(() => ({
   getMySubscriptions: vi.fn(),
+  getActiveSubscriptions: vi.fn(),
   getActiveProducts: vi.fn(),
   showError: vi.fn()
 }))
 
 vi.mock('@/api/subscriptions', () => ({
   default: {
-    getMySubscriptions
+    getMySubscriptions,
+    getActiveSubscriptions
   }
 }))
 
@@ -69,6 +71,7 @@ describe('SubscriptionsView product subscriptions', () => {
     vi.useRealTimers()
     vi.clearAllMocks()
     getMySubscriptions.mockResolvedValue([])
+    getActiveSubscriptions.mockResolvedValue([])
     getActiveProducts.mockResolvedValue([])
   })
 
@@ -208,5 +211,168 @@ describe('SubscriptionsView product subscriptions', () => {
     const text = wrapper.text()
     expect(text).toContain('GPT Daily 45')
     expect(text).not.toContain('Old group subscription')
+  })
+
+  it('does not render expired legacy group cards when a product subscription exists', async () => {
+    getActiveSubscriptions.mockResolvedValue([
+      {
+        id: 11,
+        user_id: 791,
+        group_id: 21,
+        status: 'expired',
+        daily_usage_usd: 0,
+        weekly_usage_usd: 0,
+        monthly_usage_usd: 0,
+        daily_window_start: null,
+        weekly_window_start: null,
+        monthly_window_start: null,
+        created_at: '2026-04-14T01:05:05Z',
+        updated_at: '2026-04-26T16:52:16Z',
+        expires_at: '2026-04-30T16:52:16Z',
+        group: {
+          id: 21,
+          name: '【订阅】plus/team混合池',
+          description: 'OpenAI',
+          platform: 'openai',
+          rate_multiplier: 1,
+          is_exclusive: false,
+          status: 'active',
+          subscription_type: 'subscription',
+          daily_limit_usd: 45,
+          weekly_limit_usd: 315,
+          monthly_limit_usd: 1350
+        }
+      },
+      {
+        id: 12,
+        user_id: 791,
+        group_id: 33,
+        status: 'expired',
+        daily_usage_usd: 0,
+        weekly_usage_usd: 0,
+        monthly_usage_usd: 0,
+        daily_window_start: null,
+        weekly_window_start: null,
+        monthly_window_start: null,
+        created_at: '2026-04-14T01:05:05Z',
+        updated_at: '2026-04-26T16:52:16Z',
+        expires_at: '2026-04-30T16:52:16Z',
+        group: {
+          id: 33,
+          name: '【订阅】pro号池',
+          description: 'OpenAI',
+          platform: 'openai',
+          rate_multiplier: 1.5,
+          is_exclusive: false,
+          status: 'active',
+          subscription_type: 'subscription',
+          daily_limit_usd: null,
+          weekly_limit_usd: null,
+          monthly_limit_usd: null
+        }
+      }
+    ])
+    getActiveProducts.mockResolvedValue([
+      {
+        product_id: 101,
+        subscription_id: 501,
+        code: 'gpt_daily_45',
+        name: 'GPT Daily 45',
+        description: 'Shared GPT product',
+        expires_at: null,
+        status: 'active',
+        daily_usage_usd: 3,
+        weekly_usage_usd: 0,
+        monthly_usage_usd: 0,
+        daily_limit_usd: 45,
+        weekly_limit_usd: 0,
+        monthly_limit_usd: 0,
+        daily_carryover_in_usd: 0,
+        daily_carryover_remaining_usd: 0,
+        groups: [
+          {
+            group_id: 21,
+            group_name: 'plus/team mixed pool',
+            debit_multiplier: 1,
+            status: 'active',
+            sort_order: 1
+          },
+          {
+            group_id: 33,
+            group_name: 'pro pool',
+            debit_multiplier: 1.5,
+            status: 'active',
+            sort_order: 2
+          }
+        ]
+      }
+    ])
+
+    const wrapper = mount(SubscriptionsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('GPT Daily 45')
+    expect(text).toContain('plus/team mixed pool')
+    expect(text).toContain('pro pool')
+    expect(text).not.toContain('【订阅】plus/team混合池')
+    expect(text).not.toContain('【订阅】pro号池')
+  })
+
+  it('loads active legacy subscriptions instead of historical subscription records', async () => {
+    getMySubscriptions.mockResolvedValue([
+      {
+        id: 11,
+        user_id: 791,
+        group_id: 21,
+        status: 'expired',
+        daily_usage_usd: 0,
+        weekly_usage_usd: 0,
+        monthly_usage_usd: 0,
+        daily_window_start: null,
+        weekly_window_start: null,
+        monthly_window_start: null,
+        created_at: '2026-04-14T01:05:05Z',
+        updated_at: '2026-04-26T16:52:16Z',
+        expires_at: '2026-04-30T16:52:16Z',
+        group: {
+          id: 21,
+          name: 'Expired legacy pool',
+          description: '',
+          platform: 'openai',
+          rate_multiplier: 1,
+          is_exclusive: false,
+          status: 'active',
+          subscription_type: 'subscription',
+          daily_limit_usd: 45,
+          weekly_limit_usd: 315,
+          monthly_limit_usd: 1350
+        }
+      }
+    ])
+    getActiveSubscriptions.mockResolvedValue([])
+
+    const wrapper = mount(SubscriptionsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(getActiveSubscriptions).toHaveBeenCalled()
+    expect(getMySubscriptions).not.toHaveBeenCalled()
+    expect(wrapper.text()).not.toContain('Expired legacy pool')
   })
 })

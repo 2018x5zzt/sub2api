@@ -442,7 +442,7 @@ async function loadSubscriptions() {
   try {
     loading.value = true
     const [legacySubscriptions, products] = await Promise.all([
-      subscriptionsAPI.getMySubscriptions(),
+      subscriptionsAPI.getActiveSubscriptions(),
       subscriptionProductsAPI.getActive()
     ])
     subscriptions.value = legacySubscriptions
