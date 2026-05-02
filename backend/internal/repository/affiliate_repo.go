@@ -152,6 +152,55 @@ func (r *affiliateRepository) GetAccruedRebateFromInvitee(ctx context.Context, i
 	return total, rows.Close()
 }
 
+func (r *affiliateRepository) CountEffectiveInvitees(ctx context.Context, inviterID int64) (int64, error) {
+	client := clientFromContext(ctx, r.client)
+	return countEffectiveInvitees(ctx, client, inviterID)
+}
+
+func countEffectiveInvitees(ctx context.Context, exec affiliateQueryExecer, inviterID int64) (int64, error) {
+	rows, err := exec.QueryContext(ctx, `
+SELECT COUNT(DISTINCT ua.user_id)
+FROM user_affiliates ua
+WHERE ua.inviter_id = $1
+  AND (
+      EXISTS (
+          SELECT 1
+          FROM payment_orders po
+          WHERE po.user_id = ua.user_id
+            AND po.status IN ('COMPLETED', 'PAID', 'RECHARGING')
+            AND (po.paid_at IS NOT NULL OR po.completed_at IS NOT NULL)
+            AND (po.amount > 0 OR po.pay_amount > 0)
+      )
+      OR EXISTS (
+          SELECT 1
+          FROM redeem_codes rc
+          WHERE rc.used_by = ua.user_id
+            AND rc.status = 'used'
+            AND rc.used_at IS NOT NULL
+            AND (
+                (rc.source_type = 'commercial' AND rc.type IN ('balance', 'subscription'))
+                OR rc.type = 'subscription'
+            )
+            AND (rc.value > 0 OR rc.group_id IS NOT NULL OR rc.validity_days > 0)
+      )
+  )`, inviterID)
+	if err != nil {
+		return 0, fmt.Errorf("count effective affiliate invitees: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var count int64
+	if rows.Next() {
+		if err := rows.Scan(&count); err != nil {
+			return 0, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	return count, rows.Close()
+}
+
 func (r *affiliateRepository) ThawFrozenQuota(ctx context.Context, userID int64) (float64, error) {
 	var thawed float64
 	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {

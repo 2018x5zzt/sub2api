@@ -83,3 +83,56 @@ func TestBuildUsageBillingCommand_SubscriptionAppliesRateMultiplier(t *testing.T
 		})
 	}
 }
+
+func TestBuildUsageBillingCommand_ProductSubscriptionUsesSharedProductDebit(t *testing.T) {
+	t.Parallel()
+
+	groupID := int64(7)
+	productID := int64(88)
+	productSubID := int64(99)
+	multiplier := 1.5
+	settlement := &ProductSettlementContext{
+		Binding: &SubscriptionProductBinding{
+			ProductID:       productID,
+			GroupID:         groupID,
+			DebitMultiplier: multiplier,
+		},
+		Subscription: &UserProductSubscription{ID: productSubID},
+	}
+
+	p := &postUsageBillingParams{
+		Cost:               &CostBreakdown{TotalCost: 10, ActualCost: 20},
+		User:               &User{ID: 1},
+		APIKey:             &APIKey{ID: 2, GroupID: &groupID},
+		Account:            &Account{ID: 3},
+		Subscription:       &UserSubscription{ID: 42},
+		ProductSettlement:  settlement,
+		IsSubscriptionBill: true,
+	}
+	log := &UsageLog{
+		SubscriptionID: &p.Subscription.ID,
+	}
+
+	cmd := buildUsageBillingCommand("req-product", log, p)
+	if cmd == nil {
+		t.Fatal("buildUsageBillingCommand returned nil")
+	}
+	if cmd.SubscriptionID != nil || cmd.SubscriptionCost != 0 {
+		t.Fatalf("group subscription billing should be suppressed, got id=%v cost=%v", cmd.SubscriptionID, cmd.SubscriptionCost)
+	}
+	if cmd.ProductSubscriptionID == nil || *cmd.ProductSubscriptionID != productSubID {
+		t.Fatalf("ProductSubscriptionID = %v, want %d", cmd.ProductSubscriptionID, productSubID)
+	}
+	if cmd.ProductDebitCost != 15 {
+		t.Fatalf("ProductDebitCost = %v, want 15", cmd.ProductDebitCost)
+	}
+	if log.SubscriptionID != nil {
+		t.Fatalf("usage log SubscriptionID should be cleared for product settlement")
+	}
+	if log.ProductID == nil || *log.ProductID != productID {
+		t.Fatalf("usage log ProductID = %v, want %d", log.ProductID, productID)
+	}
+	if log.ProductDebitCost == nil || *log.ProductDebitCost != 15 {
+		t.Fatalf("usage log ProductDebitCost = %v, want 15", log.ProductDebitCost)
+	}
+}

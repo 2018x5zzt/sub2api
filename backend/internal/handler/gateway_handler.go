@@ -199,6 +199,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	// 获取订阅信息（可能为nil）- 提前获取用于后续检查
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	productSettlement, _ := middleware2.GetProductSettlementFromContext(c)
 
 	// 0. 检查wait队列是否已满
 	maxWait := service.CalculateMaxWait(subject.Concurrency)
@@ -241,14 +242,16 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 
 	// 2. 【新增】Wait后二次检查余额/订阅
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
-		reqLog.Info("gateway.billing_eligibility_check_failed", zap.Error(err))
-		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
+	if productSettlement == nil {
+		if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+			reqLog.Info("gateway.billing_eligibility_check_failed", zap.Error(err))
+			status, code, message, retryAfter := billingErrorDetails(err)
+			if retryAfter > 0 {
+				c.Header("Retry-After", strconv.Itoa(retryAfter))
+			}
+			h.handleStreamingAwareError(c, status, code, message, streamStarted)
+			return
 		}
-		h.handleStreamingAwareError(c, status, code, message, streamStarted)
-		return
 	}
 
 	// 设置请求所属分组 ID（用于渠道级功能判断，如 WebSearch 模拟）
@@ -505,6 +508,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					User:               apiKey.User,
 					Account:            account,
 					Subscription:       subscription,
+					ProductSettlement:  productSettlement,
 					InboundEndpoint:    inboundEndpoint,
 					UpstreamEndpoint:   upstreamEndpoint,
 					UserAgent:          userAgent,
@@ -893,6 +897,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					User:               currentAPIKey.User,
 					Account:            account,
 					Subscription:       currentSubscription,
+					ProductSettlement:  productSettlement,
 					InboundEndpoint:    inboundEndpoint,
 					UpstreamEndpoint:   upstreamEndpoint,
 					UserAgent:          userAgent,
@@ -1510,16 +1515,19 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 
 	// 获取订阅信息（可能为nil）
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	productSettlement, _ := middleware2.GetProductSettlementFromContext(c)
 
 	// 校验 billing eligibility（订阅/余额）
 	// 【注意】不计算并发，但需要校验订阅/余额
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
-		status, code, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
+	if productSettlement == nil {
+		if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+			status, code, message, retryAfter := billingErrorDetails(err)
+			if retryAfter > 0 {
+				c.Header("Retry-After", strconv.Itoa(retryAfter))
+			}
+			h.errorResponse(c, status, code, message)
+			return
 		}
-		h.errorResponse(c, status, code, message)
-		return
 	}
 
 	// 计算粘性会话 hash

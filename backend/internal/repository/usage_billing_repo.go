@@ -111,6 +111,11 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 			return err
 		}
 	}
+	if cmd.ProductDebitCost > 0 && cmd.ProductSubscriptionID != nil {
+		if err := advanceAndIncrementProductSubscriptionUsage(ctx, tx, *cmd.ProductSubscriptionID, cmd.ProductDebitCost); err != nil {
+			return err
+		}
+	}
 
 	if cmd.BalanceCost > 0 {
 		newBalance, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)

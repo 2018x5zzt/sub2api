@@ -6,6 +6,9 @@ import (
 	"context"
 	"math"
 	"testing"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/config"
 
 	"github.com/stretchr/testify/require"
 )
@@ -44,6 +47,31 @@ func TestResolveRebateRatePercent_PerUserOverride(t *testing.T) {
 	tooLow := -5.0
 	require.InDelta(t, AffiliateRebateRateMin,
 		svc.resolveRebateRatePercent(context.Background(), &AffiliateSummary{AffRebateRatePercent: &tooLow}), 1e-9)
+}
+
+func TestAffiliateDetailUsesTierRateFromEffectiveInvitees(t *testing.T) {
+	ctx := context.Background()
+	repo := &affiliateTierRepoStub{
+		summaries: map[int64]*AffiliateSummary{
+			7: {UserID: 7, AffCode: "INVITER", AffCount: 689, CreatedAt: time.Now().Add(-24 * time.Hour)},
+		},
+		effectiveInvitees: map[int64]int64{7: 689},
+	}
+	settings := NewSettingService(&settingRepoStub{values: map[string]string{
+		SettingKeyAffiliateEnabled:             "true",
+		SettingKeyAffiliateRebateRate:          "1",
+		SettingKeyAffiliateRebateFreezeHours:   "48",
+		SettingKeyAffiliateRebateDurationDays:  "0",
+		SettingKeyAffiliateRebatePerInviteeCap: "0",
+		SettingKeyAffiliateRebateTiers:         `[{"min_effective_invitees":1,"rebate_rate":5},{"min_effective_invitees":3,"rebate_rate":8},{"min_effective_invitees":10,"rebate_rate":12},{"min_effective_invitees":30,"rebate_rate":15},{"min_effective_invitees":50,"rebate_rate":20}]`,
+	}}, &config.Config{})
+	svc := NewAffiliateService(repo, settings, nil, nil)
+
+	detail, err := svc.GetAffiliateDetail(ctx, 7)
+
+	require.NoError(t, err)
+	require.Equal(t, 689, detail.EffectiveInviteeCount)
+	require.InDelta(t, 20.0, detail.EffectiveRebateRatePercent, 1e-9)
 }
 
 // TestIsEnabled_NilSettingServiceReturnsDefault verifies that IsEnabled
@@ -128,4 +156,69 @@ func TestIsValidAffiliateCodeFormat(t *testing.T) {
 			require.Equal(t, tc.want, isValidAffiliateCodeFormat(tc.in))
 		})
 	}
+}
+
+type affiliateTierRepoStub struct {
+	summaries         map[int64]*AffiliateSummary
+	effectiveInvitees map[int64]int64
+}
+
+func (s *affiliateTierRepoStub) EnsureUserAffiliate(_ context.Context, userID int64) (*AffiliateSummary, error) {
+	if summary, ok := s.summaries[userID]; ok {
+		clone := *summary
+		return &clone, nil
+	}
+	return nil, ErrAffiliateProfileNotFound
+}
+
+func (s *affiliateTierRepoStub) GetAffiliateByCode(context.Context, string) (*AffiliateSummary, error) {
+	return nil, ErrAffiliateProfileNotFound
+}
+
+func (s *affiliateTierRepoStub) BindInviter(context.Context, int64, int64) (bool, error) {
+	return false, nil
+}
+
+func (s *affiliateTierRepoStub) AccrueQuota(context.Context, int64, int64, float64, int) (bool, error) {
+	return false, nil
+}
+
+func (s *affiliateTierRepoStub) GetAccruedRebateFromInvitee(context.Context, int64, int64) (float64, error) {
+	return 0, nil
+}
+
+func (s *affiliateTierRepoStub) CountEffectiveInvitees(_ context.Context, inviterID int64) (int64, error) {
+	return s.effectiveInvitees[inviterID], nil
+}
+
+func (s *affiliateTierRepoStub) ThawFrozenQuota(context.Context, int64) (float64, error) {
+	return 0, nil
+}
+
+func (s *affiliateTierRepoStub) TransferQuotaToBalance(context.Context, int64) (float64, float64, error) {
+	return 0, 0, ErrAffiliateQuotaEmpty
+}
+
+func (s *affiliateTierRepoStub) ListInvitees(context.Context, int64, int) ([]AffiliateInvitee, error) {
+	return nil, nil
+}
+
+func (s *affiliateTierRepoStub) UpdateUserAffCode(context.Context, int64, string) error {
+	return nil
+}
+
+func (s *affiliateTierRepoStub) ResetUserAffCode(context.Context, int64) (string, error) {
+	return "", nil
+}
+
+func (s *affiliateTierRepoStub) SetUserRebateRate(context.Context, int64, *float64) error {
+	return nil
+}
+
+func (s *affiliateTierRepoStub) BatchSetUserRebateRate(context.Context, []int64, *float64) error {
+	return nil
+}
+
+func (s *affiliateTierRepoStub) ListUsersWithCustomSettings(context.Context, AffiliateAdminFilter) ([]AffiliateAdminEntry, int64, error) {
+	return nil, 0, nil
 }

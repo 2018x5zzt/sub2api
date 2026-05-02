@@ -194,6 +194,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 
 	// Get subscription (may be nil)
 	subscription, _ := middleware.GetSubscriptionFromContext(c)
+	productSettlement, _ := middleware.GetProductSettlementFromContext(c)
 
 	// For Gemini native API, do not send Claude-style ping frames.
 	geminiConcurrency := NewConcurrencyHelper(h.concurrencyHelper.concurrencyService, SSEPingFormatNone, 0)
@@ -240,14 +241,16 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 
 	// 2) billing eligibility check (after wait)
-	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
-		reqLog.Info("gemini.billing_eligibility_check_failed", zap.Error(err))
-		status, _, message, retryAfter := billingErrorDetails(err)
-		if retryAfter > 0 {
-			c.Header("Retry-After", strconv.Itoa(retryAfter))
+	if productSettlement == nil {
+		if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+			reqLog.Info("gemini.billing_eligibility_check_failed", zap.Error(err))
+			status, _, message, retryAfter := billingErrorDetails(err)
+			if retryAfter > 0 {
+				c.Header("Retry-After", strconv.Itoa(retryAfter))
+			}
+			googleError(c, status, message)
+			return
 		}
-		googleError(c, status, message)
-		return
 	}
 
 	// 3) select account (sticky session based on request body)
@@ -525,6 +528,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				User:                  apiKey.User,
 				Account:               account,
 				Subscription:          subscription,
+				ProductSettlement:     productSettlement,
 				InboundEndpoint:       inboundEndpoint,
 				UpstreamEndpoint:      upstreamEndpoint,
 				UserAgent:             userAgent,

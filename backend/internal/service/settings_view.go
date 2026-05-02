@@ -11,6 +11,11 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+type AffiliateRebateTier struct {
+	MinEffectiveInvitees int     `json:"min_effective_invitees"`
+	RebateRate           float64 `json:"rebate_rate"`
+}
+
 type SystemSettings struct {
 	RegistrationEnabled              bool
 	EmailVerifyEnabled               bool

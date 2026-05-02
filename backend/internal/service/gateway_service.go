@@ -7846,7 +7846,8 @@ type RecordUsageInput struct {
 	APIKey             *APIKey
 	User               *User
 	Account            *Account
-	Subscription       *UserSubscription  // 可选：订阅信息
+	Subscription       *UserSubscription // 可选：订阅信息
+	ProductSettlement  *ProductSettlementContext
 	InboundEndpoint    string             // 入站端点（客户端请求路径）
 	UpstreamEndpoint   string             // 上游端点（标准化后的上游路径）
 	UserAgent          string             // 请求的 User-Agent
@@ -7879,6 +7880,7 @@ type postUsageBillingParams struct {
 	APIKey                *APIKey
 	Account               *Account
 	Subscription          *UserSubscription
+	ProductSettlement     *ProductSettlementContext
 	RequestPayloadHash    string
 	IsSubscriptionBill    bool
 	AccountRateMultiplier float64
@@ -8007,15 +8009,26 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		if usageLog.SubscriptionID != nil {
 			cmd.SubscriptionID = usageLog.SubscriptionID
 		}
+		if usageLog.ProductSubscriptionID != nil {
+			cmd.ProductSubscriptionID = usageLog.ProductSubscriptionID
+		}
 	}
 
 	// Record subscription / balance cost using ActualCost so the group (and any
 	// user-specific) rate multiplier consumes subscription quota at the expected
 	// speed. TotalCost remains the raw (pre-multiplier) value; downstream guards
 	// on "> 0" still correctly skip free subscriptions (RateMultiplier == 0).
-	if p.IsSubscriptionBill && p.Subscription != nil && p.Cost.TotalCost > 0 {
-		cmd.SubscriptionID = &p.Subscription.ID
-		cmd.SubscriptionCost = p.Cost.ActualCost
+	if p.IsSubscriptionBill {
+		if fields, ok := productSettlementBilling(p.ProductSettlement, p.Cost.TotalCost); ok {
+			applyProductSettlementUsageLog(usageLog, p.ProductSettlement, p.Cost.TotalCost)
+			cmd.SubscriptionID = nil
+			cmd.SubscriptionCost = 0
+			cmd.ProductSubscriptionID = &fields.productSubscriptionID
+			cmd.ProductDebitCost = fields.productDebitCost
+		} else if p.Subscription != nil && p.Cost.TotalCost > 0 {
+			cmd.SubscriptionID = &p.Subscription.ID
+			cmd.SubscriptionCost = p.Cost.ActualCost
+		}
 	} else if p.Cost.ActualCost > 0 {
 		cmd.BalanceCost = p.Cost.ActualCost
 	}
@@ -8251,6 +8264,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		User:               input.User,
 		Account:            input.Account,
 		Subscription:       input.Subscription,
+		ProductSettlement:  input.ProductSettlement,
 		InboundEndpoint:    input.InboundEndpoint,
 		UpstreamEndpoint:   input.UpstreamEndpoint,
 		UserAgent:          input.UserAgent,
@@ -8270,7 +8284,8 @@ type RecordUsageLongContextInput struct {
 	APIKey                *APIKey
 	User                  *User
 	Account               *Account
-	Subscription          *UserSubscription  // 可选：订阅信息
+	Subscription          *UserSubscription // 可选：订阅信息
+	ProductSettlement     *ProductSettlementContext
 	InboundEndpoint       string             // 入站端点（客户端请求路径）
 	UpstreamEndpoint      string             // 上游端点（标准化后的上游路径）
 	UserAgent             string             // 请求的 User-Agent
@@ -8292,6 +8307,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		User:               input.User,
 		Account:            input.Account,
 		Subscription:       input.Subscription,
+		ProductSettlement:  input.ProductSettlement,
 		InboundEndpoint:    input.InboundEndpoint,
 		UpstreamEndpoint:   input.UpstreamEndpoint,
 		UserAgent:          input.UserAgent,
@@ -8313,6 +8329,7 @@ type recordUsageCoreInput struct {
 	User               *User
 	Account            *Account
 	Subscription       *UserSubscription
+	ProductSettlement  *ProductSettlementContext
 	InboundEndpoint    string
 	UpstreamEndpoint   string
 	UserAgent          string
@@ -8333,6 +8350,12 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
+	productSettlement := input.ProductSettlement
+	if productSettlement == nil {
+		if settlement, ok := ProductSettlementFromContext(ctx); ok {
+			productSettlement = settlement
+		}
+	}
 
 	// 强制缓存计费：将 input_tokens 转为 cache_read_input_tokens
 	// 用于粘性会话切换时的特殊计费处理
@@ -8380,7 +8403,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, opts)
 
 	// 判断计费方式：订阅模式 vs 余额模式
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	isSubscriptionBilling := (subscription != nil || productSettlement != nil) && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription
@@ -8416,12 +8439,16 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 
 	requestID := usageLog.RequestID
+	if productSettlement != nil && isSubscriptionBilling {
+		applyProductSettlementUsageLog(usageLog, productSettlement, cost.TotalCost)
+	}
 	_, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
 		Cost:                  cost,
 		User:                  user,
 		APIKey:                apiKey,
 		Account:               account,
 		Subscription:          subscription,
+		ProductSettlement:     productSettlement,
 		RequestPayloadHash:    resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
 		IsSubscriptionBill:    isSubscriptionBilling,
 		AccountRateMultiplier: accountRateMultiplier,
@@ -8616,6 +8643,9 @@ func (s *GatewayService) buildRecordUsageLog(
 		GroupID:               apiKey.GroupID,
 		SubscriptionID:        optionalSubscriptionID(subscription),
 		CreatedAt:             time.Now(),
+	}
+	if input.ProductSettlement != nil && cost != nil {
+		applyProductSettlementUsageLog(usageLog, input.ProductSettlement, cost.TotalCost)
 	}
 	if cost != nil {
 		usageLog.InputCost = cost.InputCost

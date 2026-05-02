@@ -138,3 +138,27 @@ func TestMigration138DeduplicatesLegacyProductSubscriptionsPerUserGroup(t *testi
 	require.Contains(t, sql, "ups.expires_at DESC")
 	require.Contains(t, sql, "ups.id DESC")
 }
+
+func TestMigration140AllowsMultipleProductsPerRuntimeGroup(t *testing.T) {
+	content, err := FS.ReadFile("140_restore_shared_subscription_products.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "subscription_product_groups_product_group_unique_active")
+	require.NotContains(t, sql, "subscription_product_groups_group_unique_active")
+}
+
+func TestMigration141ConvergesLegacyGroupSubscriptionsToProducts(t *testing.T) {
+	content, err := FS.ReadFile("141_converge_legacy_group_subscriptions_to_products.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "INSERT INTO subscription_product_groups")
+	require.Contains(t, sql, "gpt_daily_150")
+	require.Contains(t, sql, "gpt_daily_225")
+	require.Contains(t, sql, "gpt_daily_450")
+	require.Contains(t, sql, "GREATEST(ups.daily_usage_usd, merged_product_usage.daily_usage_usd)")
+	require.Contains(t, sql, "ON CONFLICT (legacy_user_subscription_id) DO NOTHING")
+	require.Contains(t, sql, "deleted_at = NOW()")
+	require.Contains(t, sql, "Soft-deleted after convergence to product subscription")
+}

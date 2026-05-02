@@ -22,6 +22,8 @@ const (
 	ContextKeyAPIKey ContextKey = "api_key"
 	// ContextKeySubscription 订阅上下文键
 	ContextKeySubscription ContextKey = "subscription"
+	// ContextKeyProductSettlement 产品订阅共享额度上下文键
+	ContextKeyProductSettlement ContextKey = "product_settlement"
 	// ContextKeyForcePlatform 强制平台（用于 /antigravity 路由）
 	ContextKeyForcePlatform ContextKey = "force_platform"
 )

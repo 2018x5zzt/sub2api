@@ -128,6 +128,76 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 	require.InDelta(t, 2.5, dailyUsage, 0.000001)
 }
 
+func TestUsageBillingRepositoryApply_ProductSubscriptionAdvancesCarryover(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-product-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-product-" + uuid.NewString(),
+		Name:   "billing-product",
+	})
+
+	var productID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, daily_limit_usd, weekly_limit_usd, monthly_limit_usd)
+		VALUES ($1, $2, 'active', 45, 315, 1350)
+		RETURNING id
+	`, "it-"+uuid.NewString(), "integration product").Scan(&productID))
+
+	yesterday := time.Now().UTC().Add(-24 * time.Hour).Truncate(24 * time.Hour)
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	var productSubscriptionID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id,
+			product_id,
+			starts_at,
+			expires_at,
+			status,
+			daily_window_start,
+			weekly_window_start,
+			monthly_window_start,
+			daily_usage_usd,
+			weekly_usage_usd,
+			monthly_usage_usd,
+			daily_carryover_in_usd,
+			daily_carryover_remaining_usd
+		)
+		VALUES ($1, $2, NOW() - INTERVAL '1 day', NOW() + INTERVAL '7 days', 'active',
+			$3, $4, $4, 10, 20, 30, 5, 2)
+		RETURNING id
+	`, user.ID, productID, yesterday, today).Scan(&productSubscriptionID))
+
+	_, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:             uuid.NewString(),
+		APIKeyID:              apiKey.ID,
+		UserID:                user.ID,
+		ProductSubscriptionID: &productSubscriptionID,
+		ProductDebitCost:      6,
+	})
+	require.NoError(t, err)
+
+	var dailyUsage, weeklyUsage, monthlyUsage, carryoverIn, carryoverRemaining float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT daily_usage_usd, weekly_usage_usd, monthly_usage_usd,
+			daily_carryover_in_usd, daily_carryover_remaining_usd
+		FROM user_product_subscriptions
+		WHERE id = $1
+	`, productSubscriptionID).Scan(&dailyUsage, &weeklyUsage, &monthlyUsage, &carryoverIn, &carryoverRemaining))
+
+	require.InDelta(t, 6, dailyUsage, 0.000001)
+	require.InDelta(t, 26, weeklyUsage, 0.000001)
+	require.InDelta(t, 36, monthlyUsage, 0.000001)
+	require.InDelta(t, 38, carryoverIn, 0.000001)
+	require.InDelta(t, 32, carryoverRemaining, 0.000001)
+}
+
 func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)

@@ -15,7 +15,16 @@ import (
 
 // NewAPIKeyAuthMiddleware 创建 API Key 认证中间件
 func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) APIKeyAuthMiddleware {
-	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, cfg))
+	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, nil, cfg))
+}
+
+func NewAPIKeyAuthMiddlewareWithProductSubscription(
+	apiKeyService *service.APIKeyService,
+	subscriptionService *service.SubscriptionService,
+	productSubscriptionService *service.SubscriptionProductService,
+	cfg *config.Config,
+) APIKeyAuthMiddleware {
+	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, productSubscriptionService, cfg))
 }
 
 // apiKeyAuthWithSubscription API Key认证中间件（支持订阅验证）
@@ -25,7 +34,12 @@ func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionS
 //   - 计费执行（Billing Enforcement）：过期/配额/订阅/余额检查 —— skipBilling 时整块跳过
 //
 // /v1/usage 端点只需鉴权，不需要计费执行（允许过期/配额耗尽的 Key 查询自身用量）。
-func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
+func apiKeyAuthWithSubscription(
+	apiKeyService *service.APIKeyService,
+	subscriptionService *service.SubscriptionService,
+	productSubscriptionService *service.SubscriptionProductService,
+	cfg *config.Config,
+) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// ── 1. 提取 API Key ──────────────────────────────────────────
 
@@ -130,9 +144,24 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		skipBilling := c.Request.URL.Path == "/v1/usage"
 
 		var subscription *service.UserSubscription
+		var productSettlement *service.ProductSettlementContext
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 
-		if isSubscriptionType && subscriptionService != nil {
+		if isSubscriptionType && productSubscriptionService != nil {
+			settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
+				c.Request.Context(),
+				apiKey.User.ID,
+				apiKey.Group.ID,
+			)
+			if productErr == nil {
+				productSettlement = settlement
+			} else if !errors.Is(productErr, service.ErrSubscriptionNotFound) && !skipBilling {
+				AbortWithError(c, 403, "SUBSCRIPTION_INVALID", productErr.Error())
+				return
+			}
+		}
+
+		if isSubscriptionType && productSettlement == nil && subscriptionService != nil {
 			sub, subErr := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,
@@ -173,7 +202,20 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			}
 
 			// 订阅模式：验证订阅限额
-			if subscription != nil {
+			if productSettlement != nil {
+				if validateErr := productSubscriptionService.CheckProductLimits(productSettlement, 0); validateErr != nil {
+					code := "SUBSCRIPTION_INVALID"
+					status := 403
+					if errors.Is(validateErr, service.ErrDailyLimitExceeded) ||
+						errors.Is(validateErr, service.ErrWeeklyLimitExceeded) ||
+						errors.Is(validateErr, service.ErrMonthlyLimitExceeded) {
+						code = "USAGE_LIMIT_EXCEEDED"
+						status = 429
+					}
+					AbortWithError(c, status, code, validateErr.Error())
+					return
+				}
+			} else if subscription != nil {
 				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
 				if validateErr != nil {
 					code := "SUBSCRIPTION_INVALID"
@@ -207,6 +249,11 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		if subscription != nil {
 			c.Set(string(ContextKeySubscription), subscription)
 		}
+		if productSettlement != nil {
+			c.Set(string(ContextKeyProductSettlement), productSettlement)
+			ctx := service.ContextWithProductSettlement(c.Request.Context(), productSettlement)
+			c.Request = c.Request.WithContext(ctx)
+		}
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{
 			UserID:      apiKey.User.ID,
@@ -238,6 +285,15 @@ func GetSubscriptionFromContext(c *gin.Context) (*service.UserSubscription, bool
 	}
 	subscription, ok := value.(*service.UserSubscription)
 	return subscription, ok
+}
+
+func GetProductSettlementFromContext(c *gin.Context) (*service.ProductSettlementContext, bool) {
+	value, exists := c.Get(string(ContextKeyProductSettlement))
+	if !exists {
+		return nil, false
+	}
+	settlement, ok := value.(*service.ProductSettlementContext)
+	return settlement, ok
 }
 
 func setGroupContext(c *gin.Context, group *service.Group) {

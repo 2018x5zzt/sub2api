@@ -21,6 +21,15 @@ func APIKeyAuthGoogle(apiKeyService *service.APIKeyService, cfg *config.Config) 
 //
 // It is intended for Gemini native endpoints (/v1beta) to match Gemini SDK expectations.
 func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
+	return APIKeyAuthWithProductSubscriptionGoogle(apiKeyService, subscriptionService, nil, cfg)
+}
+
+func APIKeyAuthWithProductSubscriptionGoogle(
+	apiKeyService *service.APIKeyService,
+	subscriptionService *service.SubscriptionService,
+	productSubscriptionService *service.SubscriptionProductService,
+	cfg *config.Config,
+) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if v := strings.TrimSpace(c.Query("api_key")); v != "" {
 			abortWithGoogleError(c, 400, "Query parameter api_key is deprecated. Use Authorization header or key instead.")
@@ -70,7 +79,32 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
-		if isSubscriptionType && subscriptionService != nil {
+		var productSettlement *service.ProductSettlementContext
+		if isSubscriptionType && productSubscriptionService != nil {
+			settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
+				c.Request.Context(),
+				apiKey.User.ID,
+				apiKey.Group.ID,
+			)
+			if productErr == nil {
+				productSettlement = settlement
+			} else if !errors.Is(productErr, service.ErrSubscriptionNotFound) {
+				abortWithGoogleError(c, 403, productErr.Error())
+				return
+			}
+		}
+		if productSettlement != nil {
+			if err := productSubscriptionService.CheckProductLimits(productSettlement, 0); err != nil {
+				status := 403
+				if errors.Is(err, service.ErrDailyLimitExceeded) ||
+					errors.Is(err, service.ErrWeeklyLimitExceeded) ||
+					errors.Is(err, service.ErrMonthlyLimitExceeded) {
+					status = 429
+				}
+				abortWithGoogleError(c, status, err.Error())
+				return
+			}
+		} else if isSubscriptionType && subscriptionService != nil {
 			subscription, err := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,
@@ -104,6 +138,12 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 				abortWithGoogleError(c, 403, "Insufficient account balance")
 				return
 			}
+		}
+
+		if productSettlement != nil {
+			c.Set(string(ContextKeyProductSettlement), productSettlement)
+			ctx := service.ContextWithProductSettlement(c.Request.Context(), productSettlement)
+			c.Request = c.Request.WithContext(ctx)
 		}
 
 		c.Set(string(ContextKeyAPIKey), apiKey)

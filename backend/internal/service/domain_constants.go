@@ -29,6 +29,7 @@ const (
 	AffiliateRebateDurationDaysDefault  = 0     // 0 = 永久有效
 	AffiliateRebateDurationDaysMax      = 3650  // ~10 年
 	AffiliateRebatePerInviteeCapDefault = 0.0   // 0 = 无上限
+	AffiliateRebateTiersDefault         = `[{"min_effective_invitees":1,"rebate_rate":5},{"min_effective_invitees":3,"rebate_rate":8},{"min_effective_invitees":10,"rebate_rate":12},{"min_effective_invitees":30,"rebate_rate":15},{"min_effective_invitees":50,"rebate_rate":20}]`
 )
 
 // Platform constants
@@ -113,6 +114,7 @@ const (
 	SettingKeyAffiliateRebateFreezeHours       = "affiliate_rebate_freeze_hours"       // 返利冻结期（小时，0=不冻结）
 	SettingKeyAffiliateRebateDurationDays      = "affiliate_rebate_duration_days"      // 返利有效期（天，0=永久）
 	SettingKeyAffiliateRebatePerInviteeCap     = "affiliate_rebate_per_invitee_cap"    // 单人返利上限（0=无上限）
+	SettingKeyAffiliateRebateTiers             = "affiliate_rebate_tiers"              // 有效邀请人数阶梯返利比例（JSON 数组）
 
 	// 邮件服务设置
 	SettingKeySMTPHost     = "smtp_host"      // SMTP服务器地址

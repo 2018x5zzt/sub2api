@@ -138,6 +138,7 @@ export interface UserAffiliateDetail {
   aff_code: string
   inviter_id?: number | null
   aff_count: number
+  effective_invitee_count?: number
   aff_quota: number
   aff_frozen_quota: number
   aff_history_quota: number
