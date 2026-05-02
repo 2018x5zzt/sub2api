@@ -208,6 +208,9 @@ func (s *RedeemService) CreateCode(ctx context.Context, code *RedeemCode) error 
 	if code.Type != RedeemTypeInvitation && code.Value == 0 {
 		return errors.New("value must not be zero")
 	}
+	if err := validateSubscriptionRedeemCodeShape(code); err != nil {
+		return err
+	}
 	if code.Status == "" {
 		code.Status = StatusUnused
 	}
@@ -433,6 +436,9 @@ func validateSubscriptionRedeemCodeShape(redeemCode *RedeemCode) error {
 	}
 	if redeemCode.ProductID != nil {
 		return nil
+	}
+	if IsCommercialRechargeRedeem(redeemCode) {
+		return infraerrors.BadRequest("REDEEM_CODE_INVALID", "commercial subscription redeem code requires product_id")
 	}
 	if redeemCode.GroupID != nil {
 		return nil

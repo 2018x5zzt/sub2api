@@ -62,15 +62,15 @@ func TestCreateAndRedeem_TypeDefaultsToBalance(t *testing.T) {
 		"omitting type should default to balance and pass validation")
 }
 
-func TestCreateAndRedeem_SubscriptionRequiresGroupID(t *testing.T) {
+func TestCreateAndRedeem_SubscriptionRequiresProductIDForPositiveGrant(t *testing.T) {
 	h := newCreateAndRedeemHandler()
 	code := postCreateAndRedeemValidation(t, h, map[string]any{
-		"code":          "test-sub-no-group",
+		"code":          "test-sub-group-only-positive",
 		"type":          "subscription",
 		"value":         29.9,
 		"user_id":       1,
+		"group_id":      5,
 		"validity_days": 30,
-		// group_id 缺失
 	})
 
 	assert.Equal(t, http.StatusBadRequest, code)
@@ -111,14 +111,14 @@ func TestCreateAndRedeem_SubscriptionRequiresNonZeroValidityDays(t *testing.T) {
 }
 
 func TestCreateAndRedeem_SubscriptionValidParamsPassValidation(t *testing.T) {
-	groupID := int64(5)
+	productID := int64(88)
 	h := newCreateAndRedeemHandler()
 	code := postCreateAndRedeemValidation(t, h, map[string]any{
 		"code":          "test-sub-valid",
 		"type":          "subscription",
 		"value":         29.9,
 		"user_id":       1,
-		"group_id":      groupID,
+		"product_id":    productID,
 		"validity_days": 31,
 	})
 

@@ -151,12 +151,17 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 	}
 
 	if req.Type == "subscription" {
-		if (req.GroupID == nil) == (req.ProductID == nil) {
-			response.BadRequest(c, "exactly one of group_id or product_id is required for subscription type")
-			return
-		}
 		if req.ValidityDays == 0 {
 			response.BadRequest(c, "validity_days must not be zero for subscription type")
+			return
+		}
+		if req.ValidityDays > 0 {
+			if req.ProductID == nil || req.GroupID != nil {
+				response.BadRequest(c, "product_id is required for positive subscription redeem grants")
+				return
+			}
+		} else if req.GroupID == nil || req.ProductID != nil {
+			response.BadRequest(c, "group_id is required for negative subscription adjustments")
 			return
 		}
 	}
@@ -175,6 +180,7 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 			Type:         req.Type,
 			Value:        req.Value,
 			Status:       service.StatusUnused,
+			SourceType:   service.RedeemSourceCommercial,
 			Notes:        req.Notes,
 			GroupID:      req.GroupID,
 			ProductID:    req.ProductID,

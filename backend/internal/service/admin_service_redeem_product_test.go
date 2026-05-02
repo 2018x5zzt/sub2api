@@ -123,6 +123,7 @@ func TestAdminServiceGenerateSubscriptionCardCodesKeepsValidityDaysOnSameProduct
 		require.NotNil(t, repo.created[i].ProductID)
 		require.Equal(t, int64(88), *repo.created[i].ProductID)
 		require.Equal(t, days, repo.created[i].ValidityDays)
+		require.Equal(t, RedeemSourceCommercial, repo.created[i].SourceType)
 	}
 }
 

@@ -65,6 +65,34 @@ func TestValidateSubscriptionRedeemCodeAllowsHistoricalProductCodeWithLegacyGrou
 	}
 }
 
+func TestValidateSubscriptionRedeemCodeRejectsCommercialGroupOnlyCode(t *testing.T) {
+	groupID := int64(21)
+
+	err := validateSubscriptionRedeemCodeShape(&RedeemCode{
+		Type:       RedeemTypeSubscription,
+		SourceType: RedeemSourceCommercial,
+		GroupID:    &groupID,
+	})
+
+	if err == nil {
+		t.Fatal("validateSubscriptionRedeemCodeShape returned nil, want error")
+	}
+}
+
+func TestValidateSubscriptionRedeemCodeAllowsSystemGrantLegacyGroupCode(t *testing.T) {
+	groupID := int64(21)
+
+	err := validateSubscriptionRedeemCodeShape(&RedeemCode{
+		Type:       RedeemTypeSubscription,
+		SourceType: RedeemSourceSystemGrant,
+		GroupID:    &groupID,
+	})
+
+	if err != nil {
+		t.Fatalf("validateSubscriptionRedeemCodeShape returned error: %v", err)
+	}
+}
+
 func TestRedeemServiceCreateSubscriptionCardCodeConvertsMappedLegacyGroupToProduct(t *testing.T) {
 	groupID := int64(21)
 	repo := &redeemCreateRepoStub{}

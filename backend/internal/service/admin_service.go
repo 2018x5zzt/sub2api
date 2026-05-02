@@ -2787,6 +2787,7 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			code.GroupID = input.GroupID
 			code.ProductID = input.ProductID
 			code.ValidityDays = input.ValidityDays
+			code.SourceType = RedeemSourceCommercial
 			if code.ValidityDays <= 0 {
 				code.ValidityDays = 30 // 默认30天
 			}

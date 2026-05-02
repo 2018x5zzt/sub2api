@@ -6,6 +6,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
 
 type productSubscriptionRepoStub struct {
@@ -67,6 +69,10 @@ func (r *productSubscriptionRepoStub) ListProductBindings(context.Context, int64
 
 func (r *productSubscriptionRepoStub) ListProductSubscriptions(context.Context, int64) ([]UserProductSubscription, error) {
 	return nil, nil
+}
+
+func (r *productSubscriptionRepoStub) ListUserProductSubscriptionsForAdmin(context.Context, AdminProductSubscriptionListParams) ([]AdminProductSubscriptionListItem, *pagination.PaginationResult, error) {
+	return nil, &pagination.PaginationResult{}, nil
 }
 
 func (r *productSubscriptionRepoStub) AssignOrExtendProductSubscription(_ context.Context, input *AssignProductSubscriptionInput) (*UserProductSubscription, bool, error) {

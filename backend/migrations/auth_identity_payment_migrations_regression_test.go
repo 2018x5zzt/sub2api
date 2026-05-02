@@ -162,3 +162,14 @@ func TestMigration141ConvergesLegacyGroupSubscriptionsToProducts(t *testing.T) {
 	require.Contains(t, sql, "deleted_at = NOW()")
 	require.Contains(t, sql, "Soft-deleted after convergence to product subscription")
 }
+
+func TestMigration143DisablesMigratedProductSubscriptionPlans(t *testing.T) {
+	content, err := FS.ReadFile("143_disable_migrated_product_subscription_plans.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "UPDATE subscription_plans")
+	require.Contains(t, sql, "for_sale = FALSE")
+	require.Contains(t, sql, "Migrated from xlabapi subscription product")
+	require.Contains(t, sql, "price = 0")
+}
