@@ -68,6 +68,9 @@ func RegisterAdminRoutes(
 		// 订阅管理
 		registerSubscriptionRoutes(admin, h)
 
+		// 产品订阅管理
+		registerSubscriptionProductRoutes(admin, h)
+
 		// 使用记录管理
 		registerUsageRoutes(admin, h)
 
@@ -104,6 +107,19 @@ func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	apiKeys := admin.Group("/api-keys")
 	{
 		apiKeys.PUT("/:id", h.Admin.APIKey.UpdateGroup)
+	}
+}
+
+func registerSubscriptionProductRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	products := admin.Group("/subscription-products")
+	{
+		products.GET("", h.Admin.SubscriptionProduct.List)
+		products.POST("", h.Admin.SubscriptionProduct.Create)
+		products.PUT("/:id", h.Admin.SubscriptionProduct.Update)
+		products.GET("/:id/bindings", h.Admin.SubscriptionProduct.ListBindings)
+		products.PUT("/:id/bindings", h.Admin.SubscriptionProduct.SyncBindings)
+		products.GET("/:id/subscriptions", h.Admin.SubscriptionProduct.ListSubscriptions)
+		products.POST("/:id/assign", h.Admin.SubscriptionProduct.Assign)
 	}
 }
 

@@ -6,19 +6,53 @@ import (
 )
 
 const (
-	SubscriptionProductStatusActive        = "active"
-	SubscriptionProductBindingStatusActive = "active"
+	SubscriptionProductStatusDraft    = "draft"
+	SubscriptionProductStatusActive   = "active"
+	SubscriptionProductStatusDisabled = "disabled"
+
+	SubscriptionProductBindingStatusActive   = "active"
+	SubscriptionProductBindingStatusInactive = "inactive"
 )
 
 type SubscriptionProduct struct {
 	ID                  int64
 	Code                string
 	Name                string
+	Description         string
 	Status              string
 	DefaultValidityDays int
 	DailyLimitUSD       float64
 	WeeklyLimitUSD      float64
 	MonthlyLimitUSD     float64
+	SortOrder           int
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type CreateSubscriptionProductInput struct {
+	Code        string
+	Name        string
+	Description string
+	Status      string
+
+	DefaultValidityDays int
+	DailyLimitUSD       float64
+	WeeklyLimitUSD      float64
+	MonthlyLimitUSD     float64
+	SortOrder           int
+}
+
+type UpdateSubscriptionProductInput struct {
+	Code        *string
+	Name        *string
+	Description *string
+	Status      *string
+
+	DefaultValidityDays *int
+	DailyLimitUSD       *float64
+	WeeklyLimitUSD      *float64
+	MonthlyLimitUSD     *float64
+	SortOrder           *int
 }
 
 func (p *SubscriptionProduct) HasDailyLimit() bool {
@@ -88,6 +122,38 @@ type UserProductSubscription struct {
 
 	DailyCarryoverInUSD        float64
 	DailyCarryoverRemainingUSD float64
+
+	AssignedBy *int64
+	AssignedAt time.Time
+	Notes      string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+type SubscriptionProductBindingInput struct {
+	GroupID         int64
+	DebitMultiplier float64
+	Status          string
+	SortOrder       int
+}
+
+type SubscriptionProductBindingDetail struct {
+	ProductID       int64
+	GroupID         int64
+	GroupName       string
+	DebitMultiplier float64
+	Status          string
+	SortOrder       int
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type AssignProductSubscriptionInput struct {
+	UserID       int64
+	ProductID    int64
+	ValidityDays int
+	AssignedBy   int64
+	Notes        string
 }
 
 func (s *UserProductSubscription) IsActive() bool {
@@ -159,8 +225,39 @@ type ProductSettlementContext struct {
 	Subscription *UserProductSubscription
 }
 
+type SubscriptionProductGroupSummary struct {
+	GroupID         int64
+	GroupName       string
+	DebitMultiplier float64
+	Status          string
+	SortOrder       int
+}
+
+type ActiveSubscriptionProduct struct {
+	Product      SubscriptionProduct
+	Subscription UserProductSubscription
+	Groups       []SubscriptionProductGroupSummary
+}
+
+type SubscriptionProductSummary struct {
+	ActiveCount          int
+	TotalMonthlyUsageUSD float64
+	TotalMonthlyLimitUSD float64
+	Products             []ActiveSubscriptionProduct
+}
+
 type ProductSubscriptionRepository interface {
 	GetActiveProductSubscriptionByUserAndGroupID(ctx context.Context, userID, groupID int64) (*SubscriptionProductBinding, *UserProductSubscription, error)
+	ListActiveProductsByUserID(ctx context.Context, userID int64) ([]ActiveSubscriptionProduct, error)
+	ListVisibleGroupsByUserID(ctx context.Context, userID int64) ([]Group, error)
+	ListProducts(ctx context.Context) ([]SubscriptionProduct, error)
+	ResolveActiveProductByGroupID(ctx context.Context, groupID int64) (*SubscriptionProduct, error)
+	CreateProduct(ctx context.Context, input *CreateSubscriptionProductInput) (*SubscriptionProduct, error)
+	UpdateProduct(ctx context.Context, productID int64, input *UpdateSubscriptionProductInput) (*SubscriptionProduct, error)
+	ListProductBindings(ctx context.Context, productID int64) ([]SubscriptionProductBindingDetail, error)
+	SyncProductBindings(ctx context.Context, productID int64, inputs []SubscriptionProductBindingInput) ([]SubscriptionProductBindingDetail, error)
+	ListProductSubscriptions(ctx context.Context, productID int64) ([]UserProductSubscription, error)
+	AssignOrExtendProductSubscription(ctx context.Context, input *AssignProductSubscriptionInput) (*UserProductSubscription, bool, error)
 }
 
 func maxFloat64(a, b float64) float64 {

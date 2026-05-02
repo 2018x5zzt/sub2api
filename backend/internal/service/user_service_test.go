@@ -105,7 +105,11 @@ func (m *mockUserRepo) GetByID(ctx context.Context, _ int64) (*User, error) {
 	return &User{}, nil
 }
 func (m *mockUserRepo) GetByEmail(context.Context, string) (*User, error) { return &User{}, nil }
-func (m *mockUserRepo) GetFirstAdmin(context.Context) (*User, error)      { return &User{}, nil }
+func (m *mockUserRepo) GetByInviteCode(context.Context, string) (*User, error) {
+	return nil, ErrUserNotFound
+}
+func (m *mockUserRepo) ExistsByInviteCode(context.Context, string) (bool, error) { return false, nil }
+func (m *mockUserRepo) GetFirstAdmin(context.Context) (*User, error)             { return &User{}, nil }
 func (m *mockUserRepo) Update(ctx context.Context, user *User) error {
 	m.updateCalls++
 	if m.updateFn != nil {
@@ -113,7 +117,8 @@ func (m *mockUserRepo) Update(ctx context.Context, user *User) error {
 	}
 	return nil
 }
-func (m *mockUserRepo) Delete(context.Context, int64) error { return nil }
+func (m *mockUserRepo) UpdateInviterBinding(context.Context, int64, *int64) error { return nil }
+func (m *mockUserRepo) Delete(context.Context, int64) error                       { return nil }
 func (m *mockUserRepo) GetUserAvatar(ctx context.Context, userID int64) (*UserAvatar, error) {
 	if m.getAvatarFn != nil {
 		return m.getAvatarFn(ctx, userID)
@@ -200,6 +205,9 @@ func (m *mockUserRepo) RemoveGroupFromAllowedGroups(context.Context, int64) (int
 	return 0, nil
 }
 func (m *mockUserRepo) AddGroupToAllowedGroups(context.Context, int64, int64) error { return nil }
+func (m *mockUserRepo) CountInviteesByInviter(context.Context, int64) (int64, error) {
+	return 0, nil
+}
 func (m *mockUserRepo) ListUserAuthIdentities(context.Context, int64) ([]UserAuthIdentityRecord, error) {
 	out := make([]UserAuthIdentityRecord, len(m.identities))
 	copy(out, m.identities)

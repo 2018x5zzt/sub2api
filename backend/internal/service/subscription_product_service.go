@@ -34,6 +34,108 @@ func (s *SubscriptionProductService) GetActiveProductSubscription(ctx context.Co
 	return &ProductSettlementContext{Binding: binding, Subscription: sub}, nil
 }
 
+func (s *SubscriptionProductService) ListActiveUserProducts(ctx context.Context, userID int64) ([]ActiveSubscriptionProduct, error) {
+	if s == nil || s.repo == nil {
+		return []ActiveSubscriptionProduct{}, nil
+	}
+	return s.repo.ListActiveProductsByUserID(ctx, userID)
+}
+
+func (s *SubscriptionProductService) ListVisibleGroups(ctx context.Context, userID int64) ([]Group, error) {
+	if s == nil || s.repo == nil {
+		return []Group{}, nil
+	}
+	return s.repo.ListVisibleGroupsByUserID(ctx, userID)
+}
+
+func (s *SubscriptionProductService) ListProducts(ctx context.Context) ([]SubscriptionProduct, error) {
+	if s == nil || s.repo == nil {
+		return []SubscriptionProduct{}, nil
+	}
+	return s.repo.ListProducts(ctx)
+}
+
+func (s *SubscriptionProductService) ResolveActiveProductByGroupID(ctx context.Context, groupID int64) (*SubscriptionProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, ErrSubscriptionNotFound
+	}
+	if groupID <= 0 {
+		return nil, ErrSubscriptionNotFound
+	}
+	return s.repo.ResolveActiveProductByGroupID(ctx, groupID)
+}
+
+func (s *SubscriptionProductService) CreateProduct(ctx context.Context, input *CreateSubscriptionProductInput) (*SubscriptionProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, ErrProductSubscriptionAssignerUnavailable
+	}
+	if input == nil {
+		return nil, ErrSubscriptionNilInput
+	}
+	return s.repo.CreateProduct(ctx, input)
+}
+
+func (s *SubscriptionProductService) UpdateProduct(ctx context.Context, productID int64, input *UpdateSubscriptionProductInput) (*SubscriptionProduct, error) {
+	if s == nil || s.repo == nil {
+		return nil, ErrProductSubscriptionAssignerUnavailable
+	}
+	if input == nil {
+		return nil, ErrSubscriptionNilInput
+	}
+	return s.repo.UpdateProduct(ctx, productID, input)
+}
+
+func (s *SubscriptionProductService) SyncProductBindings(ctx context.Context, productID int64, inputs []SubscriptionProductBindingInput) ([]SubscriptionProductBindingDetail, error) {
+	if s == nil || s.repo == nil {
+		return []SubscriptionProductBindingDetail{}, nil
+	}
+	return s.repo.SyncProductBindings(ctx, productID, inputs)
+}
+
+func (s *SubscriptionProductService) ListProductBindings(ctx context.Context, productID int64) ([]SubscriptionProductBindingDetail, error) {
+	if s == nil || s.repo == nil {
+		return []SubscriptionProductBindingDetail{}, nil
+	}
+	return s.repo.ListProductBindings(ctx, productID)
+}
+
+func (s *SubscriptionProductService) ListProductSubscriptions(ctx context.Context, productID int64) ([]UserProductSubscription, error) {
+	if s == nil || s.repo == nil {
+		return []UserProductSubscription{}, nil
+	}
+	return s.repo.ListProductSubscriptions(ctx, productID)
+}
+
+func (s *SubscriptionProductService) GetUserProductSummary(ctx context.Context, userID int64) (*SubscriptionProductSummary, error) {
+	products, err := s.ListActiveUserProducts(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	summary := &SubscriptionProductSummary{
+		ActiveCount: len(products),
+		Products:    products,
+	}
+	for _, item := range products {
+		summary.TotalMonthlyUsageUSD += item.Subscription.MonthlyUsageUSD
+		summary.TotalMonthlyLimitUSD += item.Product.MonthlyLimitUSD
+	}
+	return summary, nil
+}
+
+func (s *SubscriptionProductService) GetUserProductProgress(ctx context.Context, userID int64) (*SubscriptionProductSummary, error) {
+	return s.GetUserProductSummary(ctx, userID)
+}
+
+func (s *SubscriptionProductService) AssignOrExtendProductSubscription(ctx context.Context, input *AssignProductSubscriptionInput) (*UserProductSubscription, bool, error) {
+	if s == nil || s.repo == nil {
+		return nil, false, ErrProductSubscriptionAssignerUnavailable
+	}
+	if input == nil {
+		return nil, false, ErrSubscriptionNilInput
+	}
+	return s.repo.AssignOrExtendProductSubscription(ctx, input)
+}
+
 func (s *SubscriptionProductService) CheckProductLimits(settlement *ProductSettlementContext, additionalDebitCost float64) error {
 	if settlement == nil || settlement.Binding == nil || settlement.Subscription == nil {
 		return ErrSubscriptionNotFound

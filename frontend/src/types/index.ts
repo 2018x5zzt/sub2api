@@ -1209,6 +1209,7 @@ export interface RedeemCode {
   created_at: string
   updated_at?: string
   group_id?: number | null // 订阅类型专用
+  product_id?: number | null // 产品订阅类型专用
   validity_days?: number // 订阅类型专用
   user?: User
   group?: Group // 关联的分组
@@ -1219,6 +1220,7 @@ export interface GenerateRedeemCodesRequest {
   type: RedeemCodeType
   value: number
   group_id?: number | null // 订阅类型专用
+  product_id?: number | null // 产品订阅类型专用
   validity_days?: number // 订阅类型专用
 }
 
@@ -1423,6 +1425,125 @@ export interface UserSubscription {
   expires_at: string | null
   user?: User
   group?: Group
+}
+
+export interface SubscriptionProductGroup {
+  group_id: number
+  group_name: string
+  debit_multiplier: number
+  status: string
+  sort_order: number
+}
+
+export interface ActiveSubscriptionProduct {
+  product_id: number
+  subscription_id: number
+  code: string
+  name: string
+  description: string
+  status: 'active' | 'expired' | 'revoked' | string
+  expires_at: string | null
+  daily_usage_usd: number
+  weekly_usage_usd: number
+  monthly_usage_usd: number
+  daily_limit_usd: number
+  weekly_limit_usd: number
+  monthly_limit_usd: number
+  daily_carryover_in_usd: number
+  daily_carryover_remaining_usd: number
+  groups: SubscriptionProductGroup[]
+}
+
+export interface SubscriptionProductSummary {
+  active_count: number
+  total_monthly_usage_usd: number
+  total_monthly_limit_usd: number
+  products: ActiveSubscriptionProduct[]
+}
+
+export interface AdminSubscriptionProduct {
+  id: number
+  code: string
+  name: string
+  description: string
+  status: 'draft' | 'active' | 'disabled' | string
+  default_validity_days: number
+  daily_limit_usd: number
+  weekly_limit_usd: number
+  monthly_limit_usd: number
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminSubscriptionProductBinding {
+  product_id: number
+  group_id: number
+  group_name: string
+  debit_multiplier: number
+  status: 'active' | 'inactive' | string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminUserProductSubscription {
+  id: number
+  user_id: number
+  product_id: number
+  starts_at: string
+  expires_at: string
+  status: 'active' | 'expired' | 'revoked' | string
+  daily_window_start: string | null
+  weekly_window_start: string | null
+  monthly_window_start: string | null
+  daily_usage_usd: number
+  weekly_usage_usd: number
+  monthly_usage_usd: number
+  daily_carryover_in_usd: number
+  daily_carryover_remaining_usd: number
+  assigned_by: number | null
+  assigned_at: string
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateSubscriptionProductRequest {
+  code: string
+  name: string
+  description?: string
+  status?: string
+  default_validity_days?: number
+  daily_limit_usd?: number
+  weekly_limit_usd?: number
+  monthly_limit_usd?: number
+  sort_order?: number
+}
+
+export interface UpdateSubscriptionProductRequest {
+  code?: string
+  name?: string
+  description?: string
+  status?: string
+  default_validity_days?: number
+  daily_limit_usd?: number
+  weekly_limit_usd?: number
+  monthly_limit_usd?: number
+  sort_order?: number
+}
+
+export interface SyncSubscriptionProductBindingRequest {
+  group_id: number
+  debit_multiplier?: number
+  status?: string
+  sort_order?: number
+}
+
+export interface AssignProductSubscriptionRequest {
+  user_id: number
+  validity_days?: number
+  notes?: string
 }
 
 export interface SubscriptionProgress {

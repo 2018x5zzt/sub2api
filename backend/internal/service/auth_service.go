@@ -80,6 +80,10 @@ type DefaultSubscriptionAssigner interface {
 	AssignOrExtendSubscription(ctx context.Context, input *AssignSubscriptionInput) (*UserSubscription, bool, error)
 }
 
+type LegacyGroupProductResolver interface {
+	ResolveActiveProductIDByGroupID(ctx context.Context, groupID int64) (int64, bool, error)
+}
+
 type signupGrantPlan struct {
 	Balance       float64
 	Concurrency   int

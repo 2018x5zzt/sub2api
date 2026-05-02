@@ -3,10 +3,15 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
@@ -17,6 +22,13 @@ type subscriptionProductRepository struct {
 
 func NewSubscriptionProductRepository(client *dbent.Client, sqlDB *sql.DB) service.ProductSubscriptionRepository {
 	return &subscriptionProductRepository{client: client, sql: sqlDB}
+}
+
+func (r *subscriptionProductRepository) execForContext(ctx context.Context) sqlExecutor {
+	if tx := dbent.TxFromContext(ctx); tx != nil {
+		return tx.Client()
+	}
+	return r.sql
 }
 
 func (r *subscriptionProductRepository) GetActiveProductSubscriptionByUserAndGroupID(ctx context.Context, userID, groupID int64) (*service.SubscriptionProductBinding, *service.UserProductSubscription, error) {
@@ -119,9 +131,1065 @@ LIMIT 1
 	return &binding, &sub, nil
 }
 
+func (r *subscriptionProductRepository) ListActiveProductsByUserID(ctx context.Context, userID int64) ([]service.ActiveSubscriptionProduct, error) {
+	rows, err := r.sql.QueryContext(ctx, `
+SELECT
+	ups.id,
+	ups.user_id,
+	ups.product_id,
+	ups.starts_at,
+	ups.expires_at,
+	ups.status,
+	ups.daily_window_start,
+	ups.weekly_window_start,
+	ups.monthly_window_start,
+	ups.daily_usage_usd,
+	ups.weekly_usage_usd,
+	ups.monthly_usage_usd,
+	ups.daily_carryover_in_usd,
+	ups.daily_carryover_remaining_usd,
+	ups.assigned_by,
+	ups.assigned_at,
+	ups.notes,
+	ups.created_at,
+	ups.updated_at,
+	sp.id,
+	sp.code,
+	sp.name,
+	COALESCE(sp.description, ''),
+	sp.status,
+	sp.default_validity_days,
+	sp.daily_limit_usd,
+	sp.weekly_limit_usd,
+	sp.monthly_limit_usd,
+	sp.sort_order,
+	sp.created_at,
+	sp.updated_at
+FROM user_product_subscriptions ups
+JOIN subscription_products sp
+	ON sp.id = ups.product_id
+	AND sp.deleted_at IS NULL
+	AND sp.status = 'active'
+WHERE ups.user_id = $1
+  AND ups.status = 'active'
+  AND ups.expires_at > NOW()
+  AND ups.deleted_at IS NULL
+ORDER BY sp.sort_order ASC, ups.expires_at DESC, ups.id DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	items := make([]service.ActiveSubscriptionProduct, 0)
+	productIDs := make([]int64, 0)
+	for rows.Next() {
+		var item service.ActiveSubscriptionProduct
+		var dailyWindowStart, weeklyWindowStart, monthlyWindowStart sql.NullTime
+		var assignedBy sql.NullInt64
+		var notes sql.NullString
+		if err := rows.Scan(
+			&item.Subscription.ID,
+			&item.Subscription.UserID,
+			&item.Subscription.ProductID,
+			&item.Subscription.StartsAt,
+			&item.Subscription.ExpiresAt,
+			&item.Subscription.Status,
+			&dailyWindowStart,
+			&weeklyWindowStart,
+			&monthlyWindowStart,
+			&item.Subscription.DailyUsageUSD,
+			&item.Subscription.WeeklyUsageUSD,
+			&item.Subscription.MonthlyUsageUSD,
+			&item.Subscription.DailyCarryoverInUSD,
+			&item.Subscription.DailyCarryoverRemainingUSD,
+			&assignedBy,
+			&item.Subscription.AssignedAt,
+			&notes,
+			&item.Subscription.CreatedAt,
+			&item.Subscription.UpdatedAt,
+			&item.Product.ID,
+			&item.Product.Code,
+			&item.Product.Name,
+			&item.Product.Description,
+			&item.Product.Status,
+			&item.Product.DefaultValidityDays,
+			&item.Product.DailyLimitUSD,
+			&item.Product.WeeklyLimitUSD,
+			&item.Product.MonthlyLimitUSD,
+			&item.Product.SortOrder,
+			&item.Product.CreatedAt,
+			&item.Product.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		item.Subscription.DailyWindowStart = nullableTimePtr(dailyWindowStart)
+		item.Subscription.WeeklyWindowStart = nullableTimePtr(weeklyWindowStart)
+		item.Subscription.MonthlyWindowStart = nullableTimePtr(monthlyWindowStart)
+		if assignedBy.Valid {
+			v := assignedBy.Int64
+			item.Subscription.AssignedBy = &v
+		}
+		item.Subscription.Notes = notes.String
+		item.Groups = []service.SubscriptionProductGroupSummary{}
+		items = append(items, item)
+		productIDs = append(productIDs, item.Product.ID)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return []service.ActiveSubscriptionProduct{}, nil
+	}
+
+	groupsByProduct, err := r.productGroupsByProductID(ctx, productIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		if groups := groupsByProduct[items[i].Product.ID]; groups != nil {
+			items[i].Groups = groups
+		}
+	}
+	return items, nil
+}
+
+func (r *subscriptionProductRepository) ListVisibleGroupsByUserID(ctx context.Context, userID int64) ([]service.Group, error) {
+	rows, err := r.sql.QueryContext(ctx, `
+SELECT DISTINCT
+	g.id,
+	g.name,
+	COALESCE(g.description, ''),
+	g.platform,
+	g.rate_multiplier,
+	g.is_exclusive,
+	g.status,
+	g.subscription_type,
+	g.daily_limit_usd,
+	g.weekly_limit_usd,
+	g.monthly_limit_usd,
+	g.default_validity_days,
+	g.sort_order,
+	g.created_at,
+	g.updated_at
+FROM user_product_subscriptions ups
+JOIN subscription_products sp
+	ON sp.id = ups.product_id
+	AND sp.deleted_at IS NULL
+	AND sp.status = 'active'
+JOIN subscription_product_groups spg
+	ON spg.product_id = sp.id
+	AND spg.deleted_at IS NULL
+	AND spg.status = 'active'
+JOIN groups g
+	ON g.id = spg.group_id
+	AND g.deleted_at IS NULL
+	AND g.status = 'active'
+WHERE ups.user_id = $1
+  AND ups.status = 'active'
+  AND ups.expires_at > NOW()
+  AND ups.deleted_at IS NULL
+ORDER BY g.sort_order ASC, g.id ASC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	groups := make([]service.Group, 0)
+	for rows.Next() {
+		var g service.Group
+		var dailyLimit, weeklyLimit, monthlyLimit sql.NullFloat64
+		if err := rows.Scan(
+			&g.ID,
+			&g.Name,
+			&g.Description,
+			&g.Platform,
+			&g.RateMultiplier,
+			&g.IsExclusive,
+			&g.Status,
+			&g.SubscriptionType,
+			&dailyLimit,
+			&weeklyLimit,
+			&monthlyLimit,
+			&g.DefaultValidityDays,
+			&g.SortOrder,
+			&g.CreatedAt,
+			&g.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		g.DailyLimitUSD = nullableFloat64Ptr(dailyLimit)
+		g.WeeklyLimitUSD = nullableFloat64Ptr(weeklyLimit)
+		g.MonthlyLimitUSD = nullableFloat64Ptr(monthlyLimit)
+		g.Hydrated = true
+		groups = append(groups, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return groups, nil
+}
+
+func (r *subscriptionProductRepository) productGroupsByProductID(ctx context.Context, productIDs []int64) (map[int64][]service.SubscriptionProductGroupSummary, error) {
+	out := make(map[int64][]service.SubscriptionProductGroupSummary, len(productIDs))
+	if len(productIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.sql.QueryContext(ctx, `
+SELECT
+	spg.product_id,
+	spg.group_id,
+	g.name,
+	spg.debit_multiplier,
+	spg.status,
+	spg.sort_order
+FROM subscription_product_groups spg
+JOIN groups g
+	ON g.id = spg.group_id
+	AND g.deleted_at IS NULL
+WHERE spg.product_id = ANY($1)
+  AND spg.deleted_at IS NULL
+  AND spg.status = 'active'
+ORDER BY spg.product_id ASC, spg.sort_order ASC, spg.group_id ASC`, pqInt64Array(productIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var productID int64
+		var group service.SubscriptionProductGroupSummary
+		if err := rows.Scan(
+			&productID,
+			&group.GroupID,
+			&group.GroupName,
+			&group.DebitMultiplier,
+			&group.Status,
+			&group.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		out[productID] = append(out[productID], group)
+	}
+	return out, rows.Err()
+}
+
+func (r *subscriptionProductRepository) ListProducts(ctx context.Context) ([]service.SubscriptionProduct, error) {
+	rows, err := r.execForContext(ctx).QueryContext(ctx, `
+SELECT
+	id,
+	code,
+	name,
+	COALESCE(description, ''),
+	status,
+	default_validity_days,
+	daily_limit_usd,
+	weekly_limit_usd,
+	monthly_limit_usd,
+	sort_order,
+	created_at,
+	updated_at
+FROM subscription_products
+WHERE deleted_at IS NULL
+ORDER BY sort_order ASC, id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	products := make([]service.SubscriptionProduct, 0)
+	for rows.Next() {
+		var product service.SubscriptionProduct
+		if err := rows.Scan(
+			&product.ID,
+			&product.Code,
+			&product.Name,
+			&product.Description,
+			&product.Status,
+			&product.DefaultValidityDays,
+			&product.DailyLimitUSD,
+			&product.WeeklyLimitUSD,
+			&product.MonthlyLimitUSD,
+			&product.SortOrder,
+			&product.CreatedAt,
+			&product.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		products = append(products, product)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return products, nil
+}
+
+func (r *subscriptionProductRepository) ResolveActiveProductByGroupID(ctx context.Context, groupID int64) (*service.SubscriptionProduct, error) {
+	if groupID <= 0 {
+		return nil, service.ErrSubscriptionNotFound
+	}
+	exec := r.execForContext(ctx)
+	var product service.SubscriptionProduct
+	err := scanSingleRow(ctx, exec, `
+SELECT
+	sp.id,
+	sp.code,
+	sp.name,
+	COALESCE(sp.description, ''),
+	sp.status,
+	sp.default_validity_days,
+	sp.daily_limit_usd,
+	sp.weekly_limit_usd,
+	sp.monthly_limit_usd,
+	sp.sort_order,
+	sp.created_at,
+	sp.updated_at
+FROM subscription_product_groups spg
+JOIN subscription_products sp
+	ON sp.id = spg.product_id
+	AND sp.deleted_at IS NULL
+	AND sp.status = 'active'
+WHERE spg.group_id = $1
+  AND spg.deleted_at IS NULL
+  AND spg.status = 'active'
+ORDER BY sp.sort_order ASC, spg.sort_order ASC, sp.id ASC
+LIMIT 1`, []any{groupID},
+		&product.ID,
+		&product.Code,
+		&product.Name,
+		&product.Description,
+		&product.Status,
+		&product.DefaultValidityDays,
+		&product.DailyLimitUSD,
+		&product.WeeklyLimitUSD,
+		&product.MonthlyLimitUSD,
+		&product.SortOrder,
+		&product.CreatedAt,
+		&product.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, service.ErrSubscriptionNotFound
+		}
+		return nil, fmt.Errorf("resolve subscription product by group: %w", err)
+	}
+	return &product, nil
+}
+
+func (r *subscriptionProductRepository) CreateProduct(ctx context.Context, input *service.CreateSubscriptionProductInput) (*service.SubscriptionProduct, error) {
+	if input == nil {
+		return nil, service.ErrSubscriptionNilInput
+	}
+	code := strings.TrimSpace(input.Code)
+	name := strings.TrimSpace(input.Name)
+	if code == "" || name == "" {
+		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "code and name are required")
+	}
+	status, err := normalizeSubscriptionProductStatus(input.Status)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateProductLimits(input.DailyLimitUSD, input.WeeklyLimitUSD, input.MonthlyLimitUSD); err != nil {
+		return nil, err
+	}
+	validityDays := normalizeProductValidityDays(input.DefaultValidityDays, 30)
+
+	var createdID int64
+	err = scanSingleRow(ctx, r.execForContext(ctx), `
+INSERT INTO subscription_products (
+	code,
+	name,
+	description,
+	status,
+	default_validity_days,
+	daily_limit_usd,
+	weekly_limit_usd,
+	monthly_limit_usd,
+	sort_order,
+	created_at,
+	updated_at
+) VALUES ($1, $2, NULLIF($3, ''), $4, $5, $6, $7, $8, $9, NOW(), NOW())
+RETURNING id`, []any{
+		code,
+		name,
+		strings.TrimSpace(input.Description),
+		status,
+		validityDays,
+		input.DailyLimitUSD,
+		input.WeeklyLimitUSD,
+		input.MonthlyLimitUSD,
+		input.SortOrder,
+	}, &createdID)
+	if err != nil {
+		return nil, fmt.Errorf("create subscription product: %w", err)
+	}
+	return r.getProductByID(ctx, r.execForContext(ctx), createdID)
+}
+
+func (r *subscriptionProductRepository) UpdateProduct(ctx context.Context, productID int64, input *service.UpdateSubscriptionProductInput) (*service.SubscriptionProduct, error) {
+	if productID <= 0 {
+		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "product_id is required")
+	}
+	if input == nil {
+		return nil, service.ErrSubscriptionNilInput
+	}
+
+	exec := r.execForContext(ctx)
+	if _, err := r.getProductByID(ctx, exec, productID); err != nil {
+		return nil, err
+	}
+
+	sets := []string{"updated_at = NOW()"}
+	args := make([]any, 0, 10)
+	addSet := func(field string, value any) {
+		args = append(args, value)
+		sets = append(sets, fmt.Sprintf("%s = $%d", field, len(args)))
+	}
+
+	if input.Code != nil {
+		code := strings.TrimSpace(*input.Code)
+		if code == "" {
+			return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "code cannot be empty")
+		}
+		addSet("code", code)
+	}
+	if input.Name != nil {
+		name := strings.TrimSpace(*input.Name)
+		if name == "" {
+			return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "name cannot be empty")
+		}
+		addSet("name", name)
+	}
+	if input.Description != nil {
+		addSet("description", strings.TrimSpace(*input.Description))
+	}
+	if input.Status != nil {
+		status, err := normalizeSubscriptionProductStatus(*input.Status)
+		if err != nil {
+			return nil, err
+		}
+		addSet("status", status)
+	}
+	if input.DefaultValidityDays != nil {
+		if *input.DefaultValidityDays <= 0 || *input.DefaultValidityDays > service.MaxValidityDays {
+			return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "default_validity_days is out of range")
+		}
+		addSet("default_validity_days", *input.DefaultValidityDays)
+	}
+	if input.DailyLimitUSD != nil {
+		if *input.DailyLimitUSD < 0 {
+			return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "daily_limit_usd cannot be negative")
+		}
+		addSet("daily_limit_usd", *input.DailyLimitUSD)
+	}
+	if input.WeeklyLimitUSD != nil {
+		if *input.WeeklyLimitUSD < 0 {
+			return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "weekly_limit_usd cannot be negative")
+		}
+		addSet("weekly_limit_usd", *input.WeeklyLimitUSD)
+	}
+	if input.MonthlyLimitUSD != nil {
+		if *input.MonthlyLimitUSD < 0 {
+			return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "monthly_limit_usd cannot be negative")
+		}
+		addSet("monthly_limit_usd", *input.MonthlyLimitUSD)
+	}
+	if input.SortOrder != nil {
+		addSet("sort_order", *input.SortOrder)
+	}
+
+	args = append(args, productID)
+	if _, err := exec.ExecContext(ctx, `
+UPDATE subscription_products
+SET `+strings.Join(sets, ", ")+`
+WHERE id = $`+strconv.Itoa(len(args))+`
+  AND deleted_at IS NULL`, args...); err != nil {
+		return nil, fmt.Errorf("update subscription product: %w", err)
+	}
+	return r.getProductByID(ctx, exec, productID)
+}
+
+func (r *subscriptionProductRepository) SyncProductBindings(ctx context.Context, productID int64, inputs []service.SubscriptionProductBindingInput) ([]service.SubscriptionProductBindingDetail, error) {
+	if productID <= 0 {
+		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT_BINDINGS", "product_id is required")
+	}
+	exec := r.execForContext(ctx)
+	if _, err := r.getProductByID(ctx, exec, productID); err != nil {
+		return nil, err
+	}
+
+	seen := make(map[int64]struct{}, len(inputs))
+	for _, input := range inputs {
+		normalized, err := normalizeProductBindingInput(input)
+		if err != nil {
+			return nil, err
+		}
+		seen[normalized.GroupID] = struct{}{}
+		var existingID int64
+		err = scanSingleRow(ctx, exec, `
+SELECT id
+FROM subscription_product_groups
+WHERE product_id = $1
+  AND group_id = $2
+  AND deleted_at IS NULL
+ORDER BY id DESC
+LIMIT 1`, []any{productID, normalized.GroupID}, &existingID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("get subscription product binding: %w", err)
+		}
+		if err == nil {
+			if _, err := exec.ExecContext(ctx, `
+UPDATE subscription_product_groups
+SET debit_multiplier = $1,
+    status = $2,
+    sort_order = $3,
+    updated_at = NOW()
+WHERE id = $4`, normalized.DebitMultiplier, normalized.Status, normalized.SortOrder, existingID); err != nil {
+				return nil, fmt.Errorf("update subscription product binding: %w", err)
+			}
+			continue
+		}
+		if _, err := exec.ExecContext(ctx, `
+INSERT INTO subscription_product_groups (
+	product_id,
+	group_id,
+	debit_multiplier,
+	status,
+	sort_order,
+	created_at,
+	updated_at
+) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`, productID, normalized.GroupID, normalized.DebitMultiplier, normalized.Status, normalized.SortOrder); err != nil {
+			return nil, fmt.Errorf("create subscription product binding: %w", err)
+		}
+	}
+
+	existingRows, err := exec.QueryContext(ctx, `
+SELECT group_id
+FROM subscription_product_groups
+WHERE product_id = $1
+  AND deleted_at IS NULL
+  AND status <> $2`, productID, service.SubscriptionProductBindingStatusInactive)
+	if err != nil {
+		return nil, fmt.Errorf("list subscription product bindings: %w", err)
+	}
+	defer func() { _ = existingRows.Close() }()
+	for existingRows.Next() {
+		var groupID int64
+		if err := existingRows.Scan(&groupID); err != nil {
+			return nil, err
+		}
+		if _, ok := seen[groupID]; ok {
+			continue
+		}
+		if _, err := exec.ExecContext(ctx, `
+UPDATE subscription_product_groups
+SET status = $1,
+    updated_at = NOW()
+WHERE product_id = $2
+  AND group_id = $3
+  AND deleted_at IS NULL`, service.SubscriptionProductBindingStatusInactive, productID, groupID); err != nil {
+			return nil, fmt.Errorf("deactivate subscription product binding: %w", err)
+		}
+	}
+	if err := existingRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return r.listProductBindingDetails(ctx, exec, productID)
+}
+
+func (r *subscriptionProductRepository) ListProductBindings(ctx context.Context, productID int64) ([]service.SubscriptionProductBindingDetail, error) {
+	if productID <= 0 {
+		return nil, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT_BINDINGS", "product_id is required")
+	}
+	exec := r.execForContext(ctx)
+	if _, err := r.getProductByID(ctx, exec, productID); err != nil {
+		return nil, err
+	}
+	return r.listProductBindingDetails(ctx, exec, productID)
+}
+
+func (r *subscriptionProductRepository) ListProductSubscriptions(ctx context.Context, productID int64) ([]service.UserProductSubscription, error) {
+	if productID <= 0 {
+		return nil, infraerrors.BadRequest("INVALID_PRODUCT_SUBSCRIPTION_LIST", "product_id is required")
+	}
+	rows, err := r.execForContext(ctx).QueryContext(ctx, `
+SELECT
+	id,
+	user_id,
+	product_id,
+	starts_at,
+	expires_at,
+	status,
+	daily_window_start,
+	weekly_window_start,
+	monthly_window_start,
+	daily_usage_usd,
+	weekly_usage_usd,
+	monthly_usage_usd,
+	daily_carryover_in_usd,
+	daily_carryover_remaining_usd,
+	assigned_by,
+	assigned_at,
+	notes,
+	created_at,
+	updated_at
+FROM user_product_subscriptions
+WHERE product_id = $1
+  AND deleted_at IS NULL
+ORDER BY expires_at DESC, id DESC`, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	subs := make([]service.UserProductSubscription, 0)
+	for rows.Next() {
+		sub, err := scanUserProductSubscriptionFromRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		subs = append(subs, *sub)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return subs, nil
+}
+
+func (r *subscriptionProductRepository) AssignOrExtendProductSubscription(ctx context.Context, input *service.AssignProductSubscriptionInput) (*service.UserProductSubscription, bool, error) {
+	if input == nil {
+		return nil, false, service.ErrSubscriptionNilInput
+	}
+	if input.UserID <= 0 || input.ProductID <= 0 {
+		return nil, false, infraerrors.BadRequest("INVALID_PRODUCT_SUBSCRIPTION_ASSIGNMENT", "user_id and product_id are required")
+	}
+
+	exec := r.execForContext(ctx)
+	validityDays := input.ValidityDays
+	if validityDays <= 0 {
+		var defaultDays int
+		err := scanSingleRow(ctx, exec, `
+SELECT default_validity_days
+FROM subscription_products
+WHERE id = $1
+  AND deleted_at IS NULL
+  AND status = 'active'
+LIMIT 1`, []any{input.ProductID}, &defaultDays)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, false, service.ErrSubscriptionNotFound
+			}
+			return nil, false, fmt.Errorf("get subscription product: %w", err)
+		}
+		validityDays = defaultDays
+	}
+	if validityDays <= 0 {
+		validityDays = 30
+	}
+
+	var existing service.UserProductSubscription
+	var existingNotes sql.NullString
+	var existingDailyWindow, existingWeeklyWindow, existingMonthlyWindow sql.NullTime
+	err := scanSingleRow(ctx, exec, `
+SELECT
+	id,
+	user_id,
+	product_id,
+	starts_at,
+	expires_at,
+	status,
+	daily_window_start,
+	weekly_window_start,
+	monthly_window_start,
+	daily_usage_usd,
+	weekly_usage_usd,
+	monthly_usage_usd,
+	daily_carryover_in_usd,
+	daily_carryover_remaining_usd,
+	assigned_by,
+	assigned_at,
+	notes,
+	created_at,
+	updated_at
+FROM user_product_subscriptions
+WHERE user_id = $1
+  AND product_id = $2
+  AND deleted_at IS NULL
+ORDER BY id DESC
+LIMIT 1`, []any{input.UserID, input.ProductID},
+		&existing.ID,
+		&existing.UserID,
+		&existing.ProductID,
+		&existing.StartsAt,
+		&existing.ExpiresAt,
+		&existing.Status,
+		&existingDailyWindow,
+		&existingWeeklyWindow,
+		&existingMonthlyWindow,
+		&existing.DailyUsageUSD,
+		&existing.WeeklyUsageUSD,
+		&existing.MonthlyUsageUSD,
+		&existing.DailyCarryoverInUSD,
+		&existing.DailyCarryoverRemainingUSD,
+		&existing.AssignedBy,
+		&existing.AssignedAt,
+		&existingNotes,
+		&existing.CreatedAt,
+		&existing.UpdatedAt,
+	)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, false, fmt.Errorf("get user product subscription: %w", err)
+	}
+	if err == nil {
+		now := time.Now()
+		base := existing.ExpiresAt
+		if base.Before(now) {
+			base = now
+		}
+		newExpiresAt := base.AddDate(0, 0, validityDays)
+		newNotes := appendSubscriptionNotes(existingNotes.String, input.Notes)
+		if _, err := exec.ExecContext(ctx, `
+UPDATE user_product_subscriptions
+SET starts_at = CASE WHEN starts_at > NOW() THEN NOW() ELSE starts_at END,
+    expires_at = $1,
+    status = 'active',
+    assigned_by = NULLIF($2, 0),
+    assigned_at = NOW(),
+    notes = $3,
+    updated_at = NOW()
+WHERE id = $4`, newExpiresAt, input.AssignedBy, newNotes, existing.ID); err != nil {
+			return nil, false, fmt.Errorf("extend user product subscription: %w", err)
+		}
+		sub, getErr := r.getUserProductSubscriptionByID(ctx, exec, existing.ID)
+		return sub, true, getErr
+	}
+
+	var productExists int
+	if err := scanSingleRow(ctx, exec, `
+SELECT 1
+FROM subscription_products
+WHERE id = $1
+  AND deleted_at IS NULL
+  AND status = 'active'
+LIMIT 1`, []any{input.ProductID}, &productExists); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, false, service.ErrSubscriptionNotFound
+		}
+		return nil, false, fmt.Errorf("get subscription product: %w", err)
+	}
+
+	now := time.Now()
+	expiresAt := now.AddDate(0, 0, validityDays)
+	var createdID int64
+	err = scanSingleRow(ctx, exec, `
+INSERT INTO user_product_subscriptions (
+	user_id,
+	product_id,
+	starts_at,
+	expires_at,
+	status,
+	assigned_by,
+	assigned_at,
+	notes,
+	created_at,
+	updated_at
+) VALUES ($1, $2, $3, $4, 'active', NULLIF($5, 0), NOW(), $6, NOW(), NOW())
+RETURNING id`, []any{input.UserID, input.ProductID, now, expiresAt, input.AssignedBy, strings.TrimSpace(input.Notes)}, &createdID)
+	if err != nil {
+		return nil, false, fmt.Errorf("create user product subscription: %w", err)
+	}
+	sub, getErr := r.getUserProductSubscriptionByID(ctx, exec, createdID)
+	return sub, false, getErr
+}
+
+func (r *subscriptionProductRepository) getUserProductSubscriptionByID(ctx context.Context, exec sqlExecutor, id int64) (*service.UserProductSubscription, error) {
+	var sub service.UserProductSubscription
+	var dailyWindow, weeklyWindow, monthlyWindow sql.NullTime
+	var assignedBy sql.NullInt64
+	var notes sql.NullString
+	err := scanSingleRow(ctx, exec, `
+SELECT
+	id,
+	user_id,
+	product_id,
+	starts_at,
+	expires_at,
+	status,
+	daily_window_start,
+	weekly_window_start,
+	monthly_window_start,
+	daily_usage_usd,
+	weekly_usage_usd,
+	monthly_usage_usd,
+	daily_carryover_in_usd,
+	daily_carryover_remaining_usd,
+	assigned_by,
+	assigned_at,
+	notes,
+	created_at,
+	updated_at
+FROM user_product_subscriptions
+WHERE id = $1
+  AND deleted_at IS NULL`, []any{id},
+		&sub.ID,
+		&sub.UserID,
+		&sub.ProductID,
+		&sub.StartsAt,
+		&sub.ExpiresAt,
+		&sub.Status,
+		&dailyWindow,
+		&weeklyWindow,
+		&monthlyWindow,
+		&sub.DailyUsageUSD,
+		&sub.WeeklyUsageUSD,
+		&sub.MonthlyUsageUSD,
+		&sub.DailyCarryoverInUSD,
+		&sub.DailyCarryoverRemainingUSD,
+		&assignedBy,
+		&sub.AssignedAt,
+		&notes,
+		&sub.CreatedAt,
+		&sub.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, service.ErrSubscriptionNotFound
+		}
+		return nil, fmt.Errorf("get user product subscription: %w", err)
+	}
+	sub.DailyWindowStart = nullableTimePtr(dailyWindow)
+	sub.WeeklyWindowStart = nullableTimePtr(weeklyWindow)
+	sub.MonthlyWindowStart = nullableTimePtr(monthlyWindow)
+	if assignedBy.Valid {
+		v := assignedBy.Int64
+		sub.AssignedBy = &v
+	}
+	sub.Notes = notes.String
+	return &sub, nil
+}
+
+func (r *subscriptionProductRepository) getProductByID(ctx context.Context, exec sqlExecutor, id int64) (*service.SubscriptionProduct, error) {
+	var product service.SubscriptionProduct
+	err := scanSingleRow(ctx, exec, `
+SELECT
+	id,
+	code,
+	name,
+	COALESCE(description, ''),
+	status,
+	default_validity_days,
+	daily_limit_usd,
+	weekly_limit_usd,
+	monthly_limit_usd,
+	sort_order,
+	created_at,
+	updated_at
+FROM subscription_products
+WHERE id = $1
+  AND deleted_at IS NULL`, []any{id},
+		&product.ID,
+		&product.Code,
+		&product.Name,
+		&product.Description,
+		&product.Status,
+		&product.DefaultValidityDays,
+		&product.DailyLimitUSD,
+		&product.WeeklyLimitUSD,
+		&product.MonthlyLimitUSD,
+		&product.SortOrder,
+		&product.CreatedAt,
+		&product.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, service.ErrSubscriptionNotFound
+		}
+		return nil, fmt.Errorf("get subscription product: %w", err)
+	}
+	return &product, nil
+}
+
+func (r *subscriptionProductRepository) listProductBindingDetails(ctx context.Context, exec sqlExecutor, productID int64) ([]service.SubscriptionProductBindingDetail, error) {
+	rows, err := exec.QueryContext(ctx, `
+SELECT
+	spg.product_id,
+	spg.group_id,
+	g.name,
+	spg.debit_multiplier,
+	spg.status,
+	spg.sort_order,
+	spg.created_at,
+	spg.updated_at
+FROM subscription_product_groups spg
+JOIN groups g
+	ON g.id = spg.group_id
+	AND g.deleted_at IS NULL
+WHERE spg.product_id = $1
+  AND spg.deleted_at IS NULL
+ORDER BY spg.sort_order ASC, spg.group_id ASC`, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	bindings := make([]service.SubscriptionProductBindingDetail, 0)
+	for rows.Next() {
+		var binding service.SubscriptionProductBindingDetail
+		if err := rows.Scan(
+			&binding.ProductID,
+			&binding.GroupID,
+			&binding.GroupName,
+			&binding.DebitMultiplier,
+			&binding.Status,
+			&binding.SortOrder,
+			&binding.CreatedAt,
+			&binding.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		bindings = append(bindings, binding)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return bindings, nil
+}
+
+type userProductSubscriptionScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanUserProductSubscriptionFromRows(row userProductSubscriptionScanner) (*service.UserProductSubscription, error) {
+	var sub service.UserProductSubscription
+	var dailyWindow, weeklyWindow, monthlyWindow sql.NullTime
+	var assignedBy sql.NullInt64
+	var notes sql.NullString
+	if err := row.Scan(
+		&sub.ID,
+		&sub.UserID,
+		&sub.ProductID,
+		&sub.StartsAt,
+		&sub.ExpiresAt,
+		&sub.Status,
+		&dailyWindow,
+		&weeklyWindow,
+		&monthlyWindow,
+		&sub.DailyUsageUSD,
+		&sub.WeeklyUsageUSD,
+		&sub.MonthlyUsageUSD,
+		&sub.DailyCarryoverInUSD,
+		&sub.DailyCarryoverRemainingUSD,
+		&assignedBy,
+		&sub.AssignedAt,
+		&notes,
+		&sub.CreatedAt,
+		&sub.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	sub.DailyWindowStart = nullableTimePtr(dailyWindow)
+	sub.WeeklyWindowStart = nullableTimePtr(weeklyWindow)
+	sub.MonthlyWindowStart = nullableTimePtr(monthlyWindow)
+	if assignedBy.Valid {
+		v := assignedBy.Int64
+		sub.AssignedBy = &v
+	}
+	sub.Notes = notes.String
+	return &sub, nil
+}
+
+func normalizeSubscriptionProductStatus(status string) (string, error) {
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return service.SubscriptionProductStatusDraft, nil
+	}
+	switch status {
+	case service.SubscriptionProductStatusDraft, service.SubscriptionProductStatusActive, service.SubscriptionProductStatusDisabled:
+		return status, nil
+	default:
+		return "", infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT_STATUS", "invalid subscription product status")
+	}
+}
+
+func normalizeProductValidityDays(days, fallback int) int {
+	if days <= 0 {
+		days = fallback
+	}
+	if days <= 0 {
+		days = 30
+	}
+	if days > service.MaxValidityDays {
+		return service.MaxValidityDays
+	}
+	return days
+}
+
+func normalizeProductBindingInput(input service.SubscriptionProductBindingInput) (service.SubscriptionProductBindingInput, error) {
+	if input.GroupID <= 0 {
+		return input, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT_BINDINGS", "group_id is required")
+	}
+	if input.DebitMultiplier <= 0 {
+		input.DebitMultiplier = 1
+	}
+	input.Status = strings.TrimSpace(input.Status)
+	if input.Status == "" {
+		input.Status = service.SubscriptionProductBindingStatusActive
+	}
+	switch input.Status {
+	case service.SubscriptionProductBindingStatusActive, service.SubscriptionProductBindingStatusInactive:
+		return input, nil
+	default:
+		return input, infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT_BINDING_STATUS", "invalid subscription product binding status")
+	}
+}
+
+func validateProductLimits(daily, weekly, monthly float64) error {
+	if daily < 0 {
+		return infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "daily_limit_usd cannot be negative")
+	}
+	if weekly < 0 {
+		return infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "weekly_limit_usd cannot be negative")
+	}
+	if monthly < 0 {
+		return infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT", "monthly_limit_usd cannot be negative")
+	}
+	return nil
+}
+
+func appendSubscriptionNotes(existing, next string) string {
+	existing = strings.TrimSpace(existing)
+	next = strings.TrimSpace(next)
+	if existing == "" {
+		return next
+	}
+	if next == "" {
+		return existing
+	}
+	return existing + "\n" + next
+}
+
 func nullableTimePtr(v sql.NullTime) *time.Time {
 	if !v.Valid {
 		return nil
 	}
 	return &v.Time
+}
+
+func nullableFloat64Ptr(v sql.NullFloat64) *float64 {
+	if !v.Valid {
+		return nil
+	}
+	return &v.Float64
+}
+
+type pqInt64Array []int64
+
+func (a pqInt64Array) Value() (driver.Value, error) {
+	if len(a) == 0 {
+		return "{}", nil
+	}
+	parts := make([]string, len(a))
+	for i, v := range a {
+		parts[i] = strconv.FormatInt(v, 10)
+	}
+	return "{" + strings.Join(parts, ",") + "}", nil
 }

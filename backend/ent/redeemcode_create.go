@@ -156,6 +156,20 @@ func (_c *RedeemCodeCreate) SetNillableGroupID(v *int64) *RedeemCodeCreate {
 	return _c
 }
 
+// SetProductID sets the "product_id" field.
+func (_c *RedeemCodeCreate) SetProductID(v int64) *RedeemCodeCreate {
+	_c.mutation.SetProductID(v)
+	return _c
+}
+
+// SetNillableProductID sets the "product_id" field if the given value is not nil.
+func (_c *RedeemCodeCreate) SetNillableProductID(v *int64) *RedeemCodeCreate {
+	if v != nil {
+		_c.SetProductID(*v)
+	}
+	return _c
+}
+
 // SetValidityDays sets the "validity_days" field.
 func (_c *RedeemCodeCreate) SetValidityDays(v int) *RedeemCodeCreate {
 	_c.mutation.SetValidityDays(v)
@@ -356,6 +370,10 @@ func (_c *RedeemCodeCreate) createSpec() (*RedeemCode, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(redeemcode.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
+	}
+	if value, ok := _c.mutation.ProductID(); ok {
+		_spec.SetField(redeemcode.FieldProductID, field.TypeInt64, value)
+		_node.ProductID = &value
 	}
 	if value, ok := _c.mutation.ValidityDays(); ok {
 		_spec.SetField(redeemcode.FieldValidityDays, field.TypeInt, value)
@@ -585,6 +603,30 @@ func (u *RedeemCodeUpsert) ClearGroupID() *RedeemCodeUpsert {
 	return u
 }
 
+// SetProductID sets the "product_id" field.
+func (u *RedeemCodeUpsert) SetProductID(v int64) *RedeemCodeUpsert {
+	u.Set(redeemcode.FieldProductID, v)
+	return u
+}
+
+// UpdateProductID sets the "product_id" field to the value that was provided on create.
+func (u *RedeemCodeUpsert) UpdateProductID() *RedeemCodeUpsert {
+	u.SetExcluded(redeemcode.FieldProductID)
+	return u
+}
+
+// AddProductID adds v to the "product_id" field.
+func (u *RedeemCodeUpsert) AddProductID(v int64) *RedeemCodeUpsert {
+	u.Add(redeemcode.FieldProductID, v)
+	return u
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (u *RedeemCodeUpsert) ClearProductID() *RedeemCodeUpsert {
+	u.SetNull(redeemcode.FieldProductID)
+	return u
+}
+
 // SetValidityDays sets the "validity_days" field.
 func (u *RedeemCodeUpsert) SetValidityDays(v int) *RedeemCodeUpsert {
 	u.Set(redeemcode.FieldValidityDays, v)
@@ -806,6 +848,34 @@ func (u *RedeemCodeUpsertOne) UpdateGroupID() *RedeemCodeUpsertOne {
 func (u *RedeemCodeUpsertOne) ClearGroupID() *RedeemCodeUpsertOne {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetProductID sets the "product_id" field.
+func (u *RedeemCodeUpsertOne) SetProductID(v int64) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetProductID(v)
+	})
+}
+
+// AddProductID adds v to the "product_id" field.
+func (u *RedeemCodeUpsertOne) AddProductID(v int64) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.AddProductID(v)
+	})
+}
+
+// UpdateProductID sets the "product_id" field to the value that was provided on create.
+func (u *RedeemCodeUpsertOne) UpdateProductID() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateProductID()
+	})
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (u *RedeemCodeUpsertOne) ClearProductID() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.ClearProductID()
 	})
 }
 
@@ -1199,6 +1269,34 @@ func (u *RedeemCodeUpsertBulk) UpdateGroupID() *RedeemCodeUpsertBulk {
 func (u *RedeemCodeUpsertBulk) ClearGroupID() *RedeemCodeUpsertBulk {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetProductID sets the "product_id" field.
+func (u *RedeemCodeUpsertBulk) SetProductID(v int64) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetProductID(v)
+	})
+}
+
+// AddProductID adds v to the "product_id" field.
+func (u *RedeemCodeUpsertBulk) AddProductID(v int64) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.AddProductID(v)
+	})
+}
+
+// UpdateProductID sets the "product_id" field to the value that was provided on create.
+func (u *RedeemCodeUpsertBulk) UpdateProductID() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateProductID()
+	})
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (u *RedeemCodeUpsertBulk) ClearProductID() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.ClearProductID()
 	})
 }
 

@@ -48,6 +48,16 @@ func (s *RedeemCodeRepoSuite) createGroup(name string) *dbent.Group {
 	return g
 }
 
+func (s *RedeemCodeRepoSuite) createSubscriptionProduct(code string) int64 {
+	var productID int64
+	err := scanSingleRow(s.ctx, s.client, `
+INSERT INTO subscription_products (code, name, status, default_validity_days)
+VALUES ($1, $2, 'active', 30)
+RETURNING id`, []any{code, code + " name"}, &productID)
+	s.Require().NoError(err, "create subscription product")
+	return productID
+}
+
 // --- Create / CreateBatch / GetByID / GetByCode ---
 
 func (s *RedeemCodeRepoSuite) TestCreate() {
@@ -65,6 +75,39 @@ func (s *RedeemCodeRepoSuite) TestCreate() {
 	got, err := s.repo.GetByID(s.ctx, code.ID)
 	s.Require().NoError(err, "GetByID")
 	s.Require().Equal("TEST-CREATE", got.Code)
+}
+
+func (s *RedeemCodeRepoSuite) TestCreateWithProductIDPersistsAndCanBeCleared() {
+	productID := s.createSubscriptionProduct("prd-" + uniqueTestValue(s.T(), "redeem")[:20])
+	code := &service.RedeemCode{
+		Code:         "TEST-CREATE-PRODUCT",
+		Type:         service.RedeemTypeSubscription,
+		Status:       service.StatusUnused,
+		ProductID:    &productID,
+		ValidityDays: 14,
+	}
+
+	err := s.repo.Create(s.ctx, code)
+	s.Require().NoError(err, "Create")
+
+	got, err := s.repo.GetByCode(s.ctx, "TEST-CREATE-PRODUCT")
+	s.Require().NoError(err, "GetByCode")
+	s.Require().NotNil(got.ProductID)
+	s.Require().Equal(productID, *got.ProductID)
+
+	list, _, err := s.repo.ListWithFilters(s.ctx, pagination.PaginationParams{Page: 1, PageSize: 10}, service.RedeemTypeSubscription, "", "TEST-CREATE-PRODUCT")
+	s.Require().NoError(err, "ListWithFilters")
+	s.Require().Len(list, 1)
+	s.Require().NotNil(list[0].ProductID)
+	s.Require().Equal(productID, *list[0].ProductID)
+
+	got.ProductID = nil
+	err = s.repo.Update(s.ctx, got)
+	s.Require().NoError(err, "Update clear product_id")
+
+	cleared, err := s.repo.GetByID(s.ctx, got.ID)
+	s.Require().NoError(err, "GetByID after clear")
+	s.Require().Nil(cleared.ProductID)
 }
 
 func (s *RedeemCodeRepoSuite) TestCreateBatch() {

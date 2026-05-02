@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/gemini"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
 // AvailableGroupRef 渠道视图中关联分组的简要信息。
@@ -82,6 +86,9 @@ func (s *ChannelService) ListAvailable(ctx context.Context) ([]AvailableChannel,
 		ch.normalizeBillingModelSource()
 
 		supported := ch.SupportedModels()
+		if len(supported) == 0 && !ch.RestrictModels {
+			supported = defaultSupportedModelsForGroupPlatforms(groups)
+		}
 		s.fillGlobalPricingFallback(supported)
 
 		out = append(out, AvailableChannel{
@@ -146,4 +153,54 @@ func nonZeroPtr(v float64) *float64 {
 		return nil
 	}
 	return &v
+}
+
+func defaultSupportedModelsForGroupPlatforms(groups []AvailableGroupRef) []SupportedModel {
+	platformSet := make(map[string]struct{}, len(groups))
+	for _, group := range groups {
+		platform := strings.TrimSpace(group.Platform)
+		if platform == "" {
+			continue
+		}
+		platformSet[platform] = struct{}{}
+	}
+	return defaultSupportedModelsForPlatforms(platformSet)
+}
+
+func defaultSupportedModelsForPlatforms(platforms map[string]struct{}) []SupportedModel {
+	models := make([]SupportedModel, 0)
+	for platform := range platforms {
+		modelIDs := defaultModelIDsForPlatform(platform)
+		for _, id := range modelIDs {
+			models = append(models, SupportedModel{
+				Name:     id,
+				Platform: platform,
+			})
+		}
+	}
+	sort.SliceStable(models, func(i, j int) bool {
+		if models[i].Platform != models[j].Platform {
+			return models[i].Platform < models[j].Platform
+		}
+		return strings.ToLower(models[i].Name) < strings.ToLower(models[j].Name)
+	})
+	return models
+}
+
+func defaultModelIDsForPlatform(platform string) []string {
+	switch platform {
+	case PlatformOpenAI:
+		return openai.DefaultModelIDs()
+	case PlatformAnthropic:
+		return claude.DefaultModelIDs()
+	case PlatformGemini:
+		models := gemini.DefaultModels()
+		ids := make([]string, 0, len(models))
+		for _, model := range models {
+			ids = append(ids, strings.TrimPrefix(model.Name, "models/"))
+		}
+		return ids
+	default:
+		return nil
+	}
 }

@@ -34,6 +34,8 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldProductID holds the string denoting the product_id field in the database.
+	FieldProductID = "product_id"
 	// FieldValidityDays holds the string denoting the validity_days field in the database.
 	FieldValidityDays = "validity_days"
 	// EdgeUser holds the string denoting the user edge name in mutations.
@@ -71,6 +73,7 @@ var Columns = []string{
 	FieldNotes,
 	FieldCreatedAt,
 	FieldGroupID,
+	FieldProductID,
 	FieldValidityDays,
 }
 
@@ -163,6 +166,11 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
+}
+
+// ByProductID orders the results by the product_id field.
+func ByProductID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldProductID, opts...).ToFunc()
 }
 
 // ByValidityDays orders the results by the validity_days field.

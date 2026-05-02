@@ -34,6 +34,12 @@ func (s *userHandlerRepoStub) GetByEmail(context.Context, string) (*service.User
 	cloned := *s.user
 	return &cloned, nil
 }
+func (s *userHandlerRepoStub) GetByInviteCode(context.Context, string) (*service.User, error) {
+	return nil, service.ErrUserNotFound
+}
+func (s *userHandlerRepoStub) ExistsByInviteCode(context.Context, string) (bool, error) {
+	return false, nil
+}
 func (s *userHandlerRepoStub) GetFirstAdmin(context.Context) (*service.User, error) {
 	cloned := *s.user
 	return &cloned, nil
@@ -41,6 +47,9 @@ func (s *userHandlerRepoStub) GetFirstAdmin(context.Context) (*service.User, err
 func (s *userHandlerRepoStub) Update(_ context.Context, user *service.User) error {
 	cloned := *user
 	s.user = &cloned
+	return nil
+}
+func (s *userHandlerRepoStub) UpdateInviterBinding(context.Context, int64, *int64) error {
 	return nil
 }
 func (s *userHandlerRepoStub) Delete(context.Context, int64) error { return nil }
@@ -93,6 +102,9 @@ func (s *userHandlerRepoStub) RemoveGroupFromAllowedGroups(context.Context, int6
 }
 func (s *userHandlerRepoStub) AddGroupToAllowedGroups(context.Context, int64, int64) error {
 	return nil
+}
+func (s *userHandlerRepoStub) CountInviteesByInviter(context.Context, int64) (int64, error) {
+	return 0, nil
 }
 func (s *userHandlerRepoStub) GetLatestUsedAtByUserIDs(context.Context, []int64) (map[int64]*time.Time, error) {
 	return map[int64]*time.Time{}, nil
@@ -270,19 +282,19 @@ func TestUserHandlerGetProfileReturnsLegacyCompatibilityFields(t *testing.T) {
 			AvatarURL:    "https://cdn.example.com/linuxdo.png",
 			AvatarSource: "remote_url",
 		},
-			identities: []service.UserAuthIdentityRecord{
-				{
-					ProviderType:    "linuxdo",
-					ProviderKey:     "linuxdo",
-					ProviderSubject: "linuxdo-subject-21",
-					VerifiedAt:      &verifiedAt,
-					Metadata: map[string]any{
-						"username":   "linuxdo-handle",
-						"avatar_url": "https://cdn.example.com/linuxdo.png",
-					},
+		identities: []service.UserAuthIdentityRecord{
+			{
+				ProviderType:    "linuxdo",
+				ProviderKey:     "linuxdo",
+				ProviderSubject: "linuxdo-subject-21",
+				VerifiedAt:      &verifiedAt,
+				Metadata: map[string]any{
+					"username":   "linuxdo-handle",
+					"avatar_url": "https://cdn.example.com/linuxdo.png",
 				},
 			},
-		}
+		},
+	}
 	handler := NewUserHandler(service.NewUserService(repo, nil, nil, nil), nil, nil, nil, nil)
 
 	recorder := httptest.NewRecorder()

@@ -334,6 +334,7 @@ type RedeemCode struct {
 	CreatedAt time.Time  `json:"created_at"`
 
 	GroupID      *int64 `json:"group_id"`
+	ProductID    *int64 `json:"product_id"`
 	ValidityDays int    `json:"validity_days"`
 
 	// Notes is only populated for admin_balance/admin_concurrency types

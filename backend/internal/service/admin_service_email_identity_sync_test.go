@@ -56,6 +56,14 @@ func (s *emailSyncRepoStub) GetByEmail(_ context.Context, _ string) (*User, erro
 	return nil, ErrUserNotFound
 }
 
+func (s *emailSyncRepoStub) GetByInviteCode(context.Context, string) (*User, error) {
+	return nil, ErrUserNotFound
+}
+
+func (s *emailSyncRepoStub) ExistsByInviteCode(context.Context, string) (bool, error) {
+	return false, nil
+}
+
 func (s *emailSyncRepoStub) GetFirstAdmin(context.Context) (*User, error) {
 	return nil, fmt.Errorf("unexpected GetFirstAdmin call")
 }
@@ -64,6 +72,10 @@ func (s *emailSyncRepoStub) Update(_ context.Context, user *User) error {
 	s.updateCalls++
 	s.updated = append(s.updated, user)
 	s.user = user
+	return nil
+}
+
+func (s *emailSyncRepoStub) UpdateInviterBinding(context.Context, int64, *int64) error {
 	return nil
 }
 
@@ -114,6 +126,10 @@ func (s *emailSyncRepoStub) RemoveGroupFromAllowedGroups(context.Context, int64)
 }
 
 func (s *emailSyncRepoStub) AddGroupToAllowedGroups(context.Context, int64, int64) error { return nil }
+
+func (s *emailSyncRepoStub) CountInviteesByInviter(context.Context, int64) (int64, error) {
+	return 0, nil
+}
 
 func (s *emailSyncRepoStub) RemoveGroupFromUserAllowedGroups(context.Context, int64, int64) error {
 	return nil

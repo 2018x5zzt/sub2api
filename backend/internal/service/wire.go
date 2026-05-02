@@ -417,13 +417,64 @@ func ProvideAPIKeyService(
 	groupRepo GroupRepository,
 	userSubRepo UserSubscriptionRepository,
 	userGroupRateRepo UserGroupRateRepository,
+	subscriptionProductService *SubscriptionProductService,
 	cache APIKeyCache,
 	cfg *config.Config,
 	billingCacheService *BillingCacheService,
 ) *APIKeyService {
 	svc := NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, userGroupRateRepo, cache, cfg)
+	svc.SetProductVisibleGroupsLister(subscriptionProductService)
 	svc.SetRateLimitCacheInvalidator(billingCacheService)
 	return svc
+}
+
+func ProvideRedeemService(
+	redeemRepo RedeemCodeRepository,
+	userRepo UserRepository,
+	subscriptionService *SubscriptionService,
+	subscriptionAssigner DefaultSubscriptionAssigner,
+	cache RedeemCache,
+	billingCacheService *BillingCacheService,
+	entClient *dbent.Client,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	subscriptionProductService *SubscriptionProductService,
+) *RedeemService {
+	svc := NewRedeemService(
+		redeemRepo,
+		userRepo,
+		subscriptionService,
+		cache,
+		billingCacheService,
+		entClient,
+		authCacheInvalidator,
+		subscriptionProductService,
+	)
+	svc.subscriptionAssigner = subscriptionAssigner
+	return svc
+}
+
+func ProvidePaymentService(
+	entClient *dbent.Client,
+	registry *payment.Registry,
+	loadBalancer payment.LoadBalancer,
+	redeemService *RedeemService,
+	subscriptionService *SubscriptionService,
+	subscriptionAssigner DefaultSubscriptionAssigner,
+	configService *PaymentConfigService,
+	userRepo UserRepository,
+	groupRepo GroupRepository,
+	affiliateService *AffiliateService,
+) *PaymentService {
+	svc := NewPaymentService(entClient, registry, loadBalancer, redeemService, subscriptionService, configService, userRepo, groupRepo, affiliateService)
+	svc.SetSubscriptionAssigner(subscriptionAssigner)
+	return svc
+}
+
+func ProvideProductAwareSubscriptionAssigner(
+	subscriptionService *SubscriptionService,
+	subscriptionProductService *SubscriptionProductService,
+) *ProductAwareSubscriptionAssigner {
+	return NewProductAwareSubscriptionAssigner(subscriptionService, subscriptionProductService)
 }
 
 // ProviderSet is the Wire provider set for all services
@@ -436,7 +487,7 @@ var ProviderSet = wire.NewSet(
 	NewGroupService,
 	NewAccountService,
 	NewProxyService,
-	NewRedeemService,
+	ProvideRedeemService,
 	NewPromoService,
 	NewUsageService,
 	NewDashboardService,
@@ -467,6 +518,7 @@ var ProviderSet = wire.NewSet(
 	NewAccountTestService,
 	ProvideSettingService,
 	NewDataManagementService,
+	ProvidePaymentService,
 	ProvideBackupService,
 	ProvideOpsSystemLogSink,
 	NewOpsService,
@@ -479,7 +531,8 @@ var ProviderSet = wire.NewSet(
 	ProvideEmailQueueService,
 	NewTurnstileService,
 	NewSubscriptionService,
-	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
+	ProvideProductAwareSubscriptionAssigner,
+	wire.Bind(new(DefaultSubscriptionAssigner), new(*ProductAwareSubscriptionAssigner)),
 	ProvideInviteService,
 	ProvideConcurrencyService,
 	ProvideUserMessageQueueService,
@@ -512,7 +565,6 @@ var ProviderSet = wire.NewSet(
 	NewModelPricingResolver,
 	NewAffiliateService,
 	ProvidePaymentConfigService,
-	NewPaymentService,
 	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,
 	ProvideChannelMonitorService,

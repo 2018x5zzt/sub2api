@@ -757,6 +757,14 @@ func (s *emailBindUserRepoStub) GetByEmail(_ context.Context, email string) (*se
 	return cloneEmailBindUser(user), nil
 }
 
+func (s *emailBindUserRepoStub) GetByInviteCode(context.Context, string) (*service.User, error) {
+	return nil, service.ErrUserNotFound
+}
+
+func (s *emailBindUserRepoStub) ExistsByInviteCode(context.Context, string) (bool, error) {
+	return false, nil
+}
+
 func (s *emailBindUserRepoStub) GetFirstAdmin(context.Context) (*service.User, error) {
 	panic("unexpected GetFirstAdmin call")
 }
@@ -772,6 +780,10 @@ func (s *emailBindUserRepoStub) Update(_ context.Context, user *service.User) er
 	cloned := cloneEmailBindUser(user)
 	s.usersByID[user.ID] = cloned
 	s.usersByEmail[cloned.Email] = cloned
+	return nil
+}
+
+func (s *emailBindUserRepoStub) UpdateInviterBinding(context.Context, int64, *int64) error {
 	return nil
 }
 
@@ -810,8 +822,8 @@ func (s *emailBindUserRepoStub) UpdateUserLastActiveAt(context.Context, int64, t
 }
 
 func (s *emailBindUserRepoStub) UpdateBalance(context.Context, int64, float64) error { return nil }
-func (s *emailBindUserRepoStub) DeductBalance(context.Context, int64, float64) error  { return nil }
-func (s *emailBindUserRepoStub) UpdateConcurrency(context.Context, int64, int) error   { return nil }
+func (s *emailBindUserRepoStub) DeductBalance(context.Context, int64, float64) error { return nil }
+func (s *emailBindUserRepoStub) UpdateConcurrency(context.Context, int64, int) error { return nil }
 
 func (s *emailBindUserRepoStub) ExistsByEmail(_ context.Context, email string) (bool, error) {
 	s.mu.Lock()
@@ -826,6 +838,10 @@ func (s *emailBindUserRepoStub) RemoveGroupFromAllowedGroups(context.Context, in
 
 func (s *emailBindUserRepoStub) AddGroupToAllowedGroups(context.Context, int64, int64) error {
 	return nil
+}
+
+func (s *emailBindUserRepoStub) CountInviteesByInviter(context.Context, int64) (int64, error) {
+	return 0, nil
 }
 
 func (s *emailBindUserRepoStub) RemoveGroupFromUserAllowedGroups(context.Context, int64, int64) error {

@@ -30,6 +30,9 @@
 
 用途：原子完成“创建兑换码 + 兑换到指定用户”。
 
+适用场景：外部支付系统在支付成功回调后直接给用户到账。例如外部系统知道
+Sub2API `user_id`，并希望支付成功后立刻发放余额、并发或订阅权益。
+
 请求头：
 - `x-api-key`
 - `Idempotency-Key`
@@ -64,6 +67,55 @@ curl -X POST "${BASE}/api/v1/admin/redeem-codes/create-and-redeem" \
     "notes":"sub2apipay order: cm1234567890"
   }'
 ```
+
+### 1.1) 发卡密模式：预生成兑换码，链动小铺发码，用户回 Sub2API 兑换
+
+如果支付页面使用链动小铺这类“买后发卡密”的模式，推荐不要在支付回调里调用
+`create-and-redeem`。正确流程是：
+
+1. 管理员在 Sub2API 后台预生成未使用兑换码。
+2. 将导出的卡密导入链动小铺商品库存。
+3. 用户在链动小铺购买后收到卡密。
+4. 用户回到 Sub2API 的兑换页面输入卡密。
+5. Sub2API 根据兑换码类型发放余额、并发或产品订阅权益。
+
+生成订阅卡密的接口：
+
+`POST /api/v1/admin/redeem-codes/generate`
+
+旧版兼容写法仍可传 `group_id`：
+
+```json
+{
+  "count": 100,
+  "type": "subscription",
+  "value": 1,
+  "group_id": 21,
+  "validity_days": 30
+}
+```
+
+当前版本会在生成时尽量把已绑定产品的旧 `group_id` 自动转换成 `product_id`，
+使后续用户兑换时发放 `user_product_subscriptions`，不再新增旧
+`user_subscriptions` 分组订阅数据。
+
+新产品订阅写法也可以直接传 `product_id`：
+
+```json
+{
+  "count": 100,
+  "type": "subscription",
+  "value": 1,
+  "product_id": 88,
+  "validity_days": 30
+}
+```
+
+注意：
+- `group_id` 和 `product_id` 对订阅卡密二选一，不能同时传。
+- `validity_days` 为正数时表示增加订阅天数。
+- 产品订阅卡密不支持负数 `validity_days`；退款/扣减仍应走人工处理或旧分组兼容逻辑。
+- 链动小铺只需要保存并发放 `code` 字段，用户兑换动作由 Sub2API 完成。
 
 ### 2) 查询用户（可选前置校验）
 `GET /api/v1/admin/users/:id`
@@ -150,6 +202,9 @@ Note: Admin JWT can also access admin routes, but Admin API Key is recommended f
 
 Use case: atomically create a redeem code and redeem it to a target user.
 
+Use this when an external payment system fulfills the entitlement immediately
+after a successful payment callback.
+
 Headers:
 - `x-api-key`
 - `Idempotency-Key`
@@ -184,6 +239,58 @@ curl -X POST "${BASE}/api/v1/admin/redeem-codes/create-and-redeem" \
     "notes":"sub2apipay order: cm1234567890"
   }'
 ```
+
+### 1.1) Card-code delivery mode: pre-generate codes, sell them externally, redeem in Sub2API
+
+For external shops that deliver card codes after purchase, do not call
+`create-and-redeem` from the payment callback. The recommended flow is:
+
+1. Admin pre-generates unused redeem codes in Sub2API.
+2. Export the codes and import them into the external shop inventory.
+3. The user buys the product and receives a card code.
+4. The user returns to Sub2API and redeems that code.
+5. Sub2API grants balance, concurrency, or product subscription entitlements
+   based on the redeem code type.
+
+Generate subscription card codes:
+
+`POST /api/v1/admin/redeem-codes/generate`
+
+Legacy-compatible request using `group_id`:
+
+```json
+{
+  "count": 100,
+  "type": "subscription",
+  "value": 1,
+  "group_id": 21,
+  "validity_days": 30
+}
+```
+
+When the group is bound to an active subscription product, Sub2API converts the
+legacy `group_id` to `product_id` at generation time. Later user redemption
+grants `user_product_subscriptions` instead of creating new legacy
+`user_subscriptions` rows.
+
+Product-native request:
+
+```json
+{
+  "count": 100,
+  "type": "subscription",
+  "value": 1,
+  "product_id": 88,
+  "validity_days": 30
+}
+```
+
+Notes:
+- For subscription card codes, provide exactly one of `group_id` or `product_id`.
+- Positive `validity_days` extends the subscription.
+- Product subscription card codes do not support negative `validity_days`; handle
+  refunds or deductions manually or through legacy group compatibility paths.
+- The external shop only needs to deliver the `code`; redemption happens in Sub2API.
 
 ### 2) Query User (optional pre-check)
 `GET /api/v1/admin/users/:id`

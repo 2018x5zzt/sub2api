@@ -192,12 +192,17 @@ type RateLimitCacheInvalidator interface {
 	InvalidateAPIKeyRateLimit(ctx context.Context, keyID int64) error
 }
 
+type ProductVisibleGroupsLister interface {
+	ListVisibleGroups(ctx context.Context, userID int64) ([]Group, error)
+}
+
 type APIKeyService struct {
 	apiKeyRepo            APIKeyRepository
 	userRepo              UserRepository
 	groupRepo             GroupRepository
 	userSubRepo           UserSubscriptionRepository
 	userGroupRateRepo     UserGroupRateRepository
+	productVisibleGroups  ProductVisibleGroupsLister
 	cache                 APIKeyCache
 	rateLimitCacheInvalid RateLimitCacheInvalidator // optional: invalidate Redis rate limit cache
 	cfg                   *config.Config
@@ -235,6 +240,10 @@ func NewAPIKeyService(
 // Called after construction (e.g. in wire) to avoid circular dependencies.
 func (s *APIKeyService) SetRateLimitCacheInvalidator(inv RateLimitCacheInvalidator) {
 	s.rateLimitCacheInvalid = inv
+}
+
+func (s *APIKeyService) SetProductVisibleGroupsLister(lister ProductVisibleGroupsLister) {
+	s.productVisibleGroups = lister
 }
 
 func (s *APIKeyService) compileAPIKeyIPRules(apiKey *APIKey) {
@@ -313,16 +322,35 @@ func (s *APIKeyService) incrementAPIKeyErrorCount(ctx context.Context, userID in
 }
 
 // canUserBindGroup 检查用户是否可以绑定指定分组
-// 对于订阅类型分组：检查用户是否有有效订阅
+// 对于订阅类型分组：检查用户是否有产品订阅或旧版分组订阅
 // 对于标准类型分组：使用原有的 AllowedGroups 和 IsExclusive 逻辑
-func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) bool {
-	// 订阅类型分组：需要有效订阅
+func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) (bool, error) {
 	if group.IsSubscriptionType() {
-		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
-		return err == nil // 有有效订阅则允许
+		var productErr error
+		if s.productVisibleGroups != nil {
+			productGroups, err := s.productVisibleGroups.ListVisibleGroups(ctx, user.ID)
+			if err != nil {
+				productErr = fmt.Errorf("list product subscription groups: %w", err)
+			} else {
+				for _, productGroup := range productGroups {
+					if productGroup.ID == group.ID {
+						return true, nil
+					}
+				}
+			}
+		}
+		if s.userSubRepo != nil {
+			if _, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID); err == nil {
+				return true, nil
+			}
+		}
+		if productErr != nil {
+			return false, productErr
+		}
+		return false, nil
 	}
 	// 标准类型分组：使用原有逻辑
-	return user.CanBindGroup(group.ID, group.IsExclusive)
+	return user.CanBindGroup(group.ID, group.IsExclusive), nil
 }
 
 // Create 创建API Key
@@ -354,8 +382,11 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 			return nil, fmt.Errorf("get group: %w", err)
 		}
 
-		// 检查用户是否可以绑定该分组
-		if !s.canUserBindGroup(ctx, user, group) {
+		canBind, err := s.canUserBindGroup(ctx, user, group)
+		if err != nil {
+			return nil, err
+		}
+		if !canBind {
 			return nil, ErrGroupNotAllowed
 		}
 	}
@@ -553,7 +584,11 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 			return nil, fmt.Errorf("get group: %w", err)
 		}
 
-		if !s.canUserBindGroup(ctx, user, group) {
+		canBind, err := s.canUserBindGroup(ctx, user, group)
+		if err != nil {
+			return nil, err
+		}
+		if !canBind {
 			return nil, ErrGroupNotAllowed
 		}
 
@@ -762,6 +797,15 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 	subscribedGroupIDs := make(map[int64]bool)
 	for _, sub := range activeSubscriptions {
 		subscribedGroupIDs[sub.GroupID] = true
+	}
+	if s.productVisibleGroups != nil {
+		productGroups, err := s.productVisibleGroups.ListVisibleGroups(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("list product subscription groups: %w", err)
+		}
+		for _, group := range productGroups {
+			subscribedGroupIDs[group.ID] = true
+		}
 	}
 
 	// 过滤出用户有权限的分组

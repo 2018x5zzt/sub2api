@@ -9,7 +9,7 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="subscriptions.length === 0" class="card p-12 text-center">
+      <div v-else-if="subscriptionProducts.length === 0 && visibleSubscriptions.length === 0" class="card p-12 text-center">
         <div
           class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
         >
@@ -26,7 +26,155 @@
       <!-- Subscriptions Grid -->
       <div v-else class="grid gap-6 lg:grid-cols-2">
         <div
-          v-for="subscription in subscriptions"
+          v-for="product in subscriptionProducts"
+          :key="`product-${product.subscription_id}`"
+          class="overflow-hidden rounded-2xl border border-emerald-200 bg-white dark:border-emerald-900/50 dark:bg-dark-800"
+        >
+          <div
+            class="flex items-center justify-between border-b border-gray-100 p-4 dark:border-dark-700"
+          >
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <h3 class="truncate font-semibold text-gray-900 dark:text-white">
+                  {{ product.name }}
+                </h3>
+                <span
+                  class="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                >
+                  {{ product.code }}
+                </span>
+              </div>
+              <p v-if="product.description" class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">
+                {{ product.description }}
+              </p>
+            </div>
+            <span
+              :class="[
+                'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium',
+                product.status === 'active'
+                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                  : product.status === 'expired'
+                    ? 'bg-gray-100 text-gray-600 dark:bg-dark-700 dark:text-gray-400'
+                    : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+              ]"
+            >
+              {{ t(`userSubscriptions.status.${product.status}`) }}
+            </span>
+          </div>
+
+          <div class="space-y-4 p-4">
+            <div v-if="product.expires_at" class="flex items-center justify-between text-sm">
+              <span class="text-gray-500 dark:text-dark-400">{{ t('userSubscriptions.expires') }}</span>
+              <span :class="getExpirationClass(product.expires_at)">
+                {{ formatExpirationDate(product.expires_at) }}
+              </span>
+            </div>
+            <div v-else class="flex items-center justify-between text-sm">
+              <span class="text-gray-500 dark:text-dark-400">{{ t('userSubscriptions.expires') }}</span>
+              <span class="text-gray-700 dark:text-gray-300">{{ t('userSubscriptions.noExpiration') }}</span>
+            </div>
+
+            <div v-if="product.daily_limit_usd" class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('userSubscriptions.daily') }}
+                </span>
+                <span class="text-sm text-gray-500 dark:text-dark-400">
+                  ${{ (product.daily_usage_usd || 0).toFixed(2) }} / ${{
+                    getProductDailyDisplayLimit(product).toFixed(2)
+                  }}
+                </span>
+              </div>
+              <div class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
+                  :class="getProgressBarClass(product.daily_usage_usd, getProductDailyDisplayLimit(product))"
+                  :style="{ width: getProgressWidth(product.daily_usage_usd, getProductDailyDisplayLimit(product)) }"
+                ></div>
+              </div>
+              <p
+                v-if="hasProductDailyCarryover(product)"
+                class="text-xs text-gray-500 dark:text-dark-400"
+              >
+                {{ formatProductDailyQuotaBreakdown(product) }}
+              </p>
+            </div>
+
+            <div v-if="product.weekly_limit_usd" class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('userSubscriptions.weekly') }}
+                </span>
+                <span class="text-sm text-gray-500 dark:text-dark-400">
+                  ${{ (product.weekly_usage_usd || 0).toFixed(2) }} / ${{ product.weekly_limit_usd.toFixed(2) }}
+                </span>
+              </div>
+              <div class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
+                  :class="getProgressBarClass(product.weekly_usage_usd, product.weekly_limit_usd)"
+                  :style="{ width: getProgressWidth(product.weekly_usage_usd, product.weekly_limit_usd) }"
+                ></div>
+              </div>
+            </div>
+
+            <div v-if="product.monthly_limit_usd" class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('userSubscriptions.monthly') }}
+                </span>
+                <span class="text-sm text-gray-500 dark:text-dark-400">
+                  ${{ (product.monthly_usage_usd || 0).toFixed(2) }} / ${{ product.monthly_limit_usd.toFixed(2) }}
+                </span>
+              </div>
+              <div class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
+                  :class="getProgressBarClass(product.monthly_usage_usd, product.monthly_limit_usd)"
+                  :style="{ width: getProgressWidth(product.monthly_usage_usd, product.monthly_limit_usd) }"
+                ></div>
+              </div>
+            </div>
+
+            <div
+              v-if="!product.daily_limit_usd && !product.weekly_limit_usd && !product.monthly_limit_usd"
+              class="flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 py-6 dark:from-emerald-900/20 dark:to-teal-900/20"
+            >
+              <div class="flex items-center gap-3">
+                <span class="text-4xl text-emerald-600 dark:text-emerald-400">∞</span>
+                <div>
+                  <p class="text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                    {{ t('userSubscriptions.unlimited') }}
+                  </p>
+                  <p class="text-xs text-emerald-600/70 dark:text-emerald-400/70">
+                    {{ t('userSubscriptions.unlimitedDesc') }}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="product.groups.length" class="space-y-2 border-t border-gray-100 pt-4 dark:border-dark-700">
+              <p class="text-xs font-medium text-gray-500 dark:text-dark-400">
+                {{ t('userSubscriptions.visibleGroups') }}
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <span
+                  v-for="group in product.groups"
+                  :key="group.group_id"
+                  class="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-700 dark:border-dark-600 dark:text-gray-300"
+                >
+                  <span class="truncate">{{ group.group_name }}</span>
+                  <span class="shrink-0 text-gray-400">
+                    {{ t('userSubscriptions.groupMultiplier', { multiplier: group.debit_multiplier }) }}
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-for="subscription in visibleSubscriptions"
           :key="subscription.id"
           class="overflow-hidden rounded-2xl border bg-white dark:bg-dark-800"
           :class="platformBorderClass(subscription.group?.platform || '')"
@@ -246,12 +394,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import subscriptionsAPI from '@/api/subscriptions'
-import type { UserSubscription } from '@/types'
+import subscriptionProductsAPI from '@/api/subscriptionProducts'
+import type { ActiveSubscriptionProduct, UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateOnly } from '@/utils/format'
@@ -272,12 +421,32 @@ const router = useRouter()
 const appStore = useAppStore()
 
 const subscriptions = ref<UserSubscription[]>([])
+const subscriptionProducts = ref<ActiveSubscriptionProduct[]>([])
 const loading = ref(true)
+
+const productGroupIDs = computed(() => {
+  const ids = new Set<number>()
+  for (const product of subscriptionProducts.value) {
+    for (const group of product.groups || []) {
+      ids.add(group.group_id)
+    }
+  }
+  return ids
+})
+
+const visibleSubscriptions = computed(() =>
+  subscriptions.value.filter((subscription) => !productGroupIDs.value.has(subscription.group_id))
+)
 
 async function loadSubscriptions() {
   try {
     loading.value = true
-    subscriptions.value = await subscriptionsAPI.getMySubscriptions()
+    const [legacySubscriptions, products] = await Promise.all([
+      subscriptionsAPI.getMySubscriptions(),
+      subscriptionProductsAPI.getActive()
+    ])
+    subscriptions.value = legacySubscriptions
+    subscriptionProducts.value = products
   } catch (error) {
     console.error('Failed to load subscriptions:', error)
     appStore.showError(t('userSubscriptions.failedToLoad'))
@@ -298,6 +467,22 @@ function getProgressBarClass(used: number | undefined, limit: number | null | un
   if (percentage >= 90) return 'bg-red-500'
   if (percentage >= 70) return 'bg-orange-500'
   return 'bg-green-500'
+}
+
+function getProductDailyDisplayLimit(product: ActiveSubscriptionProduct): number {
+  return (product.daily_limit_usd || 0) + (product.daily_carryover_in_usd || 0)
+}
+
+function hasProductDailyCarryover(product: ActiveSubscriptionProduct): boolean {
+  return (product.daily_carryover_in_usd || 0) > 0
+}
+
+function formatProductDailyQuotaBreakdown(product: ActiveSubscriptionProduct): string {
+  return t('userSubscriptions.dailyQuotaBreakdown', {
+    carryover: (product.daily_carryover_in_usd || 0).toFixed(2),
+    today: (product.daily_limit_usd || 0).toFixed(2),
+    total: getProductDailyDisplayLimit(product).toFixed(2)
+  })
 }
 
 function formatExpirationDate(expiresAt: string): string {

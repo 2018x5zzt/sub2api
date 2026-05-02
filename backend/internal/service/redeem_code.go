@@ -20,6 +20,7 @@ type RedeemCode struct {
 	CreatedAt  time.Time
 
 	GroupID      *int64
+	ProductID    *int64
 	ValidityDays int
 
 	User  *User

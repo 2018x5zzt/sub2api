@@ -180,6 +180,15 @@ func TestIsMigrationChecksumCompatible(t *testing.T) {
 		}
 	})
 
+	t.Run("140生产历史checksum可兼容当前不可变版本", func(t *testing.T) {
+		ok := isMigrationChecksumCompatible(
+			"140_restore_shared_subscription_products.sql",
+			"1355f6dd2f1f850707ccd915a2989a049b44df8baae8846b78a835bc80ddb150",
+			"e88e5d84273b555fa481d0a3fe604c4e445e1b48bed4049600eb06346e2528e1",
+		)
+		require.True(t, ok)
+	})
+
 	t.Run("119未知checksum不兼容", func(t *testing.T) {
 		ok := isMigrationChecksumCompatible(
 			"119_enforce_payment_orders_out_trade_no_unique.sql",

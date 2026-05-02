@@ -175,3 +175,31 @@ func TestListAvailable_DefaultsEmptyBillingModelSource(t *testing.T) {
 	require.Equal(t, BillingModelSourceChannelMapped, byName["empty"])
 	require.Equal(t, BillingModelSourceUpstream, byName["explicit"])
 }
+
+func TestListAvailable_OpenAIUnrestrictedChannelUsesDefaultModelCatalog(t *testing.T) {
+	channels := []Channel{{
+		ID:             1,
+		Name:           "GPT Plus/Team",
+		Status:         StatusActive,
+		RestrictModels: false,
+		GroupIDs:       []int64{10},
+	}}
+	groupRepo := &stubGroupRepoForAvailable{
+		activeGroups: []Group{{ID: 10, Name: "gpt team", Platform: "openai", Status: StatusActive}},
+	}
+	svc := newAvailableChannelService(channels, groupRepo)
+
+	out, err := svc.ListAvailable(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.NotEmpty(t, out[0].SupportedModels)
+	names := make([]string, 0, len(out[0].SupportedModels))
+	for _, model := range out[0].SupportedModels {
+		names = append(names, model.Name)
+		require.Equal(t, "openai", model.Platform)
+	}
+	require.Contains(t, names, "gpt-5.5")
+	require.Contains(t, names, "gpt-5.4")
+	require.Contains(t, names, "gpt-5.3-codex")
+}

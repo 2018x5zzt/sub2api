@@ -119,6 +119,13 @@ func RegisterUserRoutes(
 			subscriptions.GET("/summary", h.Subscription.GetSummary)
 		}
 
+		subscriptionProducts := authenticated.Group("/subscription-products")
+		{
+			subscriptionProducts.GET("/active", h.SubscriptionProduct.GetActive)
+			subscriptionProducts.GET("/progress", h.SubscriptionProduct.GetProgress)
+			subscriptionProducts.GET("/summary", h.SubscriptionProduct.GetSummary)
+		}
+
 		// 渠道监控（用户只读）
 		monitors := authenticated.Group("/channel-monitors")
 		{

@@ -68,6 +68,18 @@ func (s *userRepoStub) GetByEmail(ctx context.Context, email string) (*User, err
 	return nil, ErrUserNotFound
 }
 
+func (s *userRepoStub) GetByInviteCode(ctx context.Context, code string) (*User, error) {
+	panic("unexpected GetByInviteCode call")
+}
+
+func (s *userRepoStub) ExistsByInviteCode(ctx context.Context, code string) (bool, error) {
+	panic("unexpected ExistsByInviteCode call")
+}
+
+func (s *userRepoStub) CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error) {
+	panic("unexpected CountInviteesByInviter call")
+}
+
 func (s *userRepoStub) GetFirstAdmin(ctx context.Context) (*User, error) {
 	panic("unexpected GetFirstAdmin call")
 }
@@ -80,6 +92,10 @@ func (s *userRepoStub) Update(ctx context.Context, user *User) error {
 	s.usersByEmail[user.Email] = user
 	s.user = user
 	return nil
+}
+
+func (s *userRepoStub) UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error {
+	panic("unexpected UpdateInviterBinding call")
 }
 
 func (s *userRepoStub) Delete(ctx context.Context, id int64) error {

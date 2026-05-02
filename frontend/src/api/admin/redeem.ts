@@ -58,16 +58,22 @@ export async function getById(id: number): Promise<RedeemCode> {
  * @param count - Number of codes to generate
  * @param type - Type of redeem code
  * @param value - Value of the code
- * @param groupId - Group ID (required for subscription type)
- * @param validityDays - Validity days (for subscription type)
+ * @param optionsOrGroupId - Product subscription options or legacy Group ID
+ * @param legacyValidityDays - Validity days for legacy group calls
  * @returns Array of generated redeem codes
  */
+export interface GenerateRedeemCodesOptions {
+  groupId?: number | null
+  productId?: number | null
+  validityDays?: number
+}
+
 export async function generate(
   count: number,
   type: RedeemCodeType,
   value: number,
-  groupId?: number | null,
-  validityDays?: number
+  optionsOrGroupId?: GenerateRedeemCodesOptions | number | null,
+  legacyValidityDays?: number
 ): Promise<RedeemCode[]> {
   const payload: GenerateRedeemCodesRequest = {
     count,
@@ -77,9 +83,17 @@ export async function generate(
 
   // 订阅类型专用字段
   if (type === 'subscription') {
-    payload.group_id = groupId
-    if (validityDays && validityDays > 0) {
-      payload.validity_days = validityDays
+    const options =
+      typeof optionsOrGroupId === 'object'
+        ? optionsOrGroupId
+        : { groupId: optionsOrGroupId, validityDays: legacyValidityDays }
+    if (options?.productId != null) {
+      payload.product_id = options.productId
+    } else {
+      payload.group_id = options?.groupId
+    }
+    if (options?.validityDays && options.validityDays > 0) {
+      payload.validity_days = options.validityDays
     }
   }
 
