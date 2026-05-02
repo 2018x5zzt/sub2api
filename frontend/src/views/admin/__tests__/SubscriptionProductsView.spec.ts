@@ -103,13 +103,13 @@ describe('admin SubscriptionProductsView', () => {
           product_code: 'gpt_daily_45',
           product_name: 'GPT 订阅每天45刀',
           daily_limit_usd: 45,
-          daily_usage_usd: 12.5,
-          weekly_usage_usd: 25,
-          monthly_usage_usd: 50,
+          daily_usage_usd: 0,
+          weekly_usage_usd: 0,
+          monthly_usage_usd: 0,
           daily_carryover_in_usd: 8,
           daily_carryover_remaining_usd: 3,
-          carryover_used_usd: 5,
-          fresh_daily_usage_usd: 7.5,
+          carryover_used_usd: 0,
+          fresh_daily_usage_usd: 0,
           starts_at: '2026-05-01T00:00:00Z',
           expires_at: '2026-06-01T00:00:00Z',
           status: 'active',
@@ -171,8 +171,11 @@ describe('admin SubscriptionProductsView', () => {
     expect(wrapper.get('[data-test="row-count"]').text()).toBe('1')
     expect(wrapper.text()).toContain('user@example.com')
     expect(wrapper.text()).toContain('GPT 订阅每天45刀')
-    expect(wrapper.text()).toContain('$12.50')
+    expect(wrapper.text()).toContain('$0.00 / $45.00')
+    expect(wrapper.text()).toContain('Weekly: $0.00')
+    expect(wrapper.text()).toContain('Monthly: $0.00')
     expect(wrapper.text()).toContain('$8.00')
-    expect(wrapper.text()).toContain('$7.50')
+    expect(wrapper.text()).toContain('Used: $0.00')
+    expect(wrapper.text()).toContain('$3.00')
   })
 })

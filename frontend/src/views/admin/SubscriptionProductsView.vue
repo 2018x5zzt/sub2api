@@ -117,22 +117,22 @@
 
           <template #cell-daily_usage="{ row }">
             <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
-              <div>{{ formatUSD(row.daily_usage_usd) }} / {{ formatUSD(row.daily_limit_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.weekly', 'Weekly') }}: {{ formatUSD(row.weekly_usage_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}: {{ formatUSD(row.monthly_usage_usd) }}</div>
+              <div>{{ formatUsageUSD(row.daily_usage_usd) }} / {{ formatLimitUSD(row.daily_limit_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.weekly', 'Weekly') }}: {{ formatUsageUSD(row.weekly_usage_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}: {{ formatUsageUSD(row.monthly_usage_usd) }}</div>
             </div>
           </template>
 
           <template #cell-carryover="{ row }">
             <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
-              <div>{{ t('admin.subscriptionProducts.carryoverIn', 'In') }}: {{ formatUSD(row.daily_carryover_in_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.carryoverUsed', 'Used') }}: {{ formatUSD(row.carryover_used_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.carryoverRemaining', 'Remaining') }}: {{ formatUSD(row.daily_carryover_remaining_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.carryoverIn', 'In') }}: {{ formatUsageUSD(row.daily_carryover_in_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.carryoverUsed', 'Used') }}: {{ formatUsageUSD(row.carryover_used_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.carryoverRemaining', 'Remaining') }}: {{ formatUsageUSD(row.daily_carryover_remaining_usd) }}</div>
             </div>
           </template>
 
           <template #cell-fresh_daily_usage="{ value }">
-            {{ formatUSD(value) }}
+            {{ formatUsageUSD(value) }}
           </template>
 
           <template #cell-period="{ row }">
@@ -168,9 +168,9 @@
 
           <template #cell-limits="{ row }">
             <div class="min-w-[210px] space-y-1 text-xs text-gray-600 dark:text-gray-300">
-              <div>{{ t('admin.subscriptionProducts.daily', 'Daily') }}: {{ formatUSD(row.daily_limit_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.weekly', 'Weekly') }}: {{ formatUSD(row.weekly_limit_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}: {{ formatUSD(row.monthly_limit_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.daily', 'Daily') }}: {{ formatLimitUSD(row.daily_limit_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.weekly', 'Weekly') }}: {{ formatLimitUSD(row.weekly_limit_usd) }}</div>
+              <div>{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}: {{ formatLimitUSD(row.monthly_limit_usd) }}</div>
             </div>
           </template>
 
@@ -415,8 +415,8 @@
         <template #cell-expires_at="{ value }">{{ formatDateOnly(value) }}</template>
         <template #cell-usage="{ row }">
           <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
-            <div>{{ t('admin.subscriptionProducts.daily', 'Daily') }}: {{ formatUSD(row.daily_usage_usd) }}</div>
-            <div>{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}: {{ formatUSD(row.monthly_usage_usd) }}</div>
+            <div>{{ t('admin.subscriptionProducts.daily', 'Daily') }}: {{ formatUsageUSD(row.daily_usage_usd) }}</div>
+            <div>{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}: {{ formatUsageUSD(row.monthly_usage_usd) }}</div>
           </div>
         </template>
       </DataTable>
@@ -921,7 +921,11 @@ function refreshActiveTab() {
   void loadProducts()
 }
 
-function formatUSD(value: number | null | undefined): string {
+function formatUsageUSD(value: number | null | undefined): string {
+  return `$${Number(value || 0).toFixed(2)}`
+}
+
+function formatLimitUSD(value: number | null | undefined): string {
   const amount = Number(value || 0)
   return amount > 0 ? `$${amount.toFixed(2)}` : t('admin.subscriptionProducts.unlimited', 'Unlimited')
 }
