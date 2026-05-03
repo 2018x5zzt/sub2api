@@ -156,9 +156,9 @@ func ResponsesEventToChatChunks(evt *ResponsesStreamEvent, state *ResponsesEvent
 		return resToChatHandleOutputItemAdded(evt, state)
 	case "response.function_call_arguments.delta":
 		return resToChatHandleFuncArgsDelta(evt, state)
-	case "response.reasoning_summary_text.delta":
+	case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
 		return resToChatHandleReasoningDelta(evt, state)
-	case "response.reasoning_summary_text.done":
+	case "response.reasoning_summary_text.done", "response.reasoning_text.done":
 		return nil
 	case "response.completed", "response.incomplete", "response.failed":
 		return resToChatHandleCompleted(evt, state)
@@ -426,7 +426,7 @@ func (a *BufferedResponseAccumulator) ProcessEvent(event *ResponsesStreamEvent) 
 				_, _ = a.funcCalls[idx].Args.WriteString(event.Delta)
 			}
 		}
-	case "response.reasoning_summary_text.delta":
+	case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
 		if event.Delta != "" {
 			_, _ = a.reasoning.WriteString(event.Delta)
 		}

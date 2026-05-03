@@ -208,9 +208,9 @@ func ResponsesEventToAnthropicEvents(
 		return resToAnthHandleFuncArgsDone(evt, state)
 	case "response.output_item.done":
 		return resToAnthHandleOutputItemDone(evt, state)
-	case "response.reasoning_summary_text.delta":
+	case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
 		return resToAnthHandleReasoningDelta(evt, state)
-	case "response.reasoning_summary_text.done":
+	case "response.reasoning_summary_text.done", "response.reasoning_text.done":
 		return resToAnthHandleBlockDone(state)
 	case "response.completed", "response.incomplete", "response.failed":
 		return resToAnthHandleCompleted(evt, state)

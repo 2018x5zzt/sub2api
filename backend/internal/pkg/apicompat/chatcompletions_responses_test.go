@@ -755,6 +755,25 @@ func TestResponsesEventToChatChunks_ReasoningDelta(t *testing.T) {
 	require.Len(t, chunks, 0)
 }
 
+func TestResponsesEventToChatChunks_ReasoningTextDelta(t *testing.T) {
+	state := NewResponsesEventToChatState()
+	state.Model = "gpt-5.5"
+	state.SentRole = true
+
+	chunks := ResponsesEventToChatChunks(&ResponsesStreamEvent{
+		Type:  "response.reasoning_text.delta",
+		Delta: "Thinking with the new event...",
+	}, state)
+	require.Len(t, chunks, 1)
+	require.NotNil(t, chunks[0].Choices[0].Delta.ReasoningContent)
+	assert.Equal(t, "Thinking with the new event...", *chunks[0].Choices[0].Delta.ReasoningContent)
+
+	chunks = ResponsesEventToChatChunks(&ResponsesStreamEvent{
+		Type: "response.reasoning_text.done",
+	}, state)
+	require.Len(t, chunks, 0)
+}
+
 func TestResponsesEventToChatChunks_ReasoningThenTextAutoCloseTag(t *testing.T) {
 	state := NewResponsesEventToChatState()
 	state.Model = "gpt-4o"
@@ -983,6 +1002,22 @@ func TestBufferedResponseAccumulator_Reasoning(t *testing.T) {
 
 	acc.ProcessEvent(&ResponsesStreamEvent{Type: "response.reasoning_summary_text.delta", Delta: "Step 1: "})
 	acc.ProcessEvent(&ResponsesStreamEvent{Type: "response.reasoning_summary_text.delta", Delta: "think about it"})
+
+	assert.True(t, acc.HasContent())
+
+	output := acc.BuildOutput()
+	require.Len(t, output, 1)
+	assert.Equal(t, "reasoning", output[0].Type)
+	require.Len(t, output[0].Summary, 1)
+	assert.Equal(t, "summary_text", output[0].Summary[0].Type)
+	assert.Equal(t, "Step 1: think about it", output[0].Summary[0].Text)
+}
+
+func TestBufferedResponseAccumulator_ReasoningText(t *testing.T) {
+	acc := NewBufferedResponseAccumulator()
+
+	acc.ProcessEvent(&ResponsesStreamEvent{Type: "response.reasoning_text.delta", Delta: "Step 1: "})
+	acc.ProcessEvent(&ResponsesStreamEvent{Type: "response.reasoning_text.delta", Delta: "think about it"})
 
 	assert.True(t, acc.HasContent())
 
