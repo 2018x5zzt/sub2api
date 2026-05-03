@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -34,4 +35,11 @@ func TestCountEffectiveInviteesIncludesCommercialAndSubscriptionRedeems(t *testi
 	require.NoError(t, err)
 	require.Equal(t, int64(64), count)
 	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestAffiliateUserOverviewSQLIncludesMaturedFrozenQuota(t *testing.T) {
+	query := strings.Join(strings.Fields(affiliateUserOverviewSQL), " ")
+
+	require.Contains(t, query, "ua.aff_quota + COALESCE(matured.matured_frozen_quota, 0)")
+	require.Contains(t, query, "frozen_until <= NOW()")
 }
