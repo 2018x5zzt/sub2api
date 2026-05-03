@@ -347,20 +347,21 @@ export default {
     usage: '使用记录',
     redeem: '兑换',
     affiliate: '邀请返利',
+    affiliateManagement: '邀请返利',
+    affiliateInviteRecords: '邀请记录',
+    affiliateRebateRecords: '返利记录',
+    affiliateTransferRecords: '提取记录',
     profile: '个人资料',
     users: '用户管理',
     groups: '分组管理',
     channels: '渠道管理',
     availableChannels: '可用渠道',
-    subscriptions: '产品订阅',
-    subscriptionManagement: '订阅管理',
-    subscriptionProductConfig: '产品配置',
+    subscriptions: '订阅管理',
     accounts: '账号管理',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
     ops: '运维监控',
     promoCodes: '优惠码',
-    modelHub: '模型广场',
     settings: '系统设置',
     myAccount: '我的账户',
     lightMode: '浅色模式',
@@ -782,48 +783,6 @@ export default {
       quota_exhausted: '额度耗尽',
       expired: '已过期'
     }
-  },
-
-  modelHub: {
-    eyebrow: '按分组查看模型',
-    title: '模型广场',
-    description: '查看当前账号可访问分组下支持的模型，并直接复制模型名称用于客户端或脚本配置。',
-    searchLabel: '搜索',
-    searchPlaceholder: '搜索模型名、显示名或分组名',
-    platformFilterLabel: '平台筛选',
-    groupFilterLabel: '分组筛选',
-    allPlatforms: '全部平台',
-    allGroups: '全部分组',
-    groupsLabel: '可用分组',
-    uniqueModelsLabel: '去重模型',
-    visibleModelsLabel: '当前可见模型',
-    platformsLabel: '覆盖平台',
-    sourceDefault: '平台默认模型',
-    sourceMapping: '按账号映射聚合',
-    sourceMixed: '默认模型 + 账号映射',
-    pricingComputedWithRate: '以下价格已按当前分组倍率 {rate}x 计算',
-    rateShort: '倍率',
-    inputPriceShort: '输入',
-    outputPriceShort: '输出',
-    defaultPriceShort: '默认',
-    perMillionTokens: '/ 百万 Token',
-    perRequest: '/ 次',
-    perImage: '/ 张',
-    pricingUnavailable: '暂无可用定价',
-    copyVisible: '复制当前结果',
-    copyGroup: '复制本组模型',
-    copiedModel: '已复制模型名称',
-    copiedGroup: '已复制本组模型',
-    copiedVisible: '已复制当前筛选结果',
-    modelCount: '{count} 个模型',
-    inputPrice: '输入',
-    outputPrice: '输出',
-    clearFilters: '清空筛选',
-    emptyTitle: '没有可展示的模型',
-    emptyDescription: '当前筛选条件下没有匹配的分组或模型。',
-    noModelsInGroup: '这个分组当前没有可展示的模型。',
-    loadFailedTitle: '模型列表加载失败',
-    loadFailedDescription: '请稍后刷新重试。'
   },
 
   // Usage
@@ -1526,6 +1485,224 @@ export default {
       }
     },
 
+    dataManagement: {
+      title: '数据管理',
+      description: '统一管理数据管理代理状态、对象存储配置和备份任务',
+      agent: {
+        title: '数据管理代理状态',
+        description: '系统会自动探测固定 Unix Socket，仅在可连通时启用数据管理功能。',
+        enabled: '数据管理代理已就绪，可继续进行数据管理操作。',
+        disabled: '数据管理代理不可用，当前仅可查看诊断信息。',
+        socketPath: 'Socket 路径',
+        version: '版本',
+        status: '状态',
+        uptime: '运行时长',
+        reasonLabel: '不可用原因',
+        reason: {
+          DATA_MANAGEMENT_AGENT_SOCKET_MISSING: '未检测到数据管理 Socket 文件',
+          DATA_MANAGEMENT_AGENT_UNAVAILABLE: '数据管理代理不可连通',
+          BACKUP_AGENT_SOCKET_MISSING: '未检测到备份 Socket 文件',
+          BACKUP_AGENT_UNAVAILABLE: '备份代理不可连通',
+          UNKNOWN: '未知原因'
+        }
+      },
+      sections: {
+        config: {
+          title: '备份配置',
+          description: '配置备份源、保留策略与 S3 存储参数。'
+        },
+        s3: {
+          title: 'S3 对象存储',
+          description: '配置并测试备份产物上传到标准 S3 对象存储。'
+        },
+        backup: {
+          title: '备份操作',
+          description: '触发 PostgreSQL、Redis 与全量备份任务。'
+        },
+        history: {
+          title: '备份历史',
+          description: '查看备份任务执行状态、错误与产物信息。'
+        }
+      },
+      form: {
+        sourceMode: '源模式',
+        backupRoot: '备份根目录',
+        activePostgresProfile: '当前激活 PostgreSQL 配置',
+        activeRedisProfile: '当前激活 Redis 配置',
+        activeS3Profile: '当前激活 S3 账号',
+        retentionDays: '保留天数',
+        keepLast: '至少保留最近任务数',
+        uploadToS3: '上传到 S3',
+        useActivePostgresProfile: '使用当前激活 PostgreSQL 配置',
+        useActiveRedisProfile: '使用当前激活 Redis 配置',
+        useActiveS3Profile: '使用当前激活账号',
+        idempotencyKey: '幂等键（可选）',
+        secretConfigured: '已配置，留空不变',
+        source: {
+          profileID: '配置 ID（唯一）',
+          profileName: '配置名称',
+          setActive: '创建后立即设为激活配置'
+        },
+        postgres: {
+          title: 'PostgreSQL',
+          host: '主机',
+          port: '端口',
+          user: '用户名',
+          password: '密码',
+          database: '数据库',
+          sslMode: 'SSL 模式',
+          containerName: '容器名（docker_exec 模式）'
+        },
+        redis: {
+          title: 'Redis',
+          addr: '地址（host:port）',
+          username: '用户名',
+          password: '密码',
+          db: '数据库编号',
+          containerName: '容器名（docker_exec 模式）'
+        },
+        s3: {
+          enabled: '启用 S3 上传',
+          profileID: '账号 ID（唯一）',
+          profileName: '账号名称',
+          endpoint: 'Endpoint（可选）',
+          region: 'Region',
+          bucket: 'Bucket',
+          accessKeyID: 'Access Key ID',
+          secretAccessKey: 'Secret Access Key',
+          prefix: '对象前缀',
+          forcePathStyle: '强制 path-style',
+          useSSL: '使用 SSL',
+          setActive: '创建后立即设为激活账号'
+        }
+      },
+      sourceProfiles: {
+        createTitle: '创建数据源配置',
+        editTitle: '编辑数据源配置',
+        empty: '暂无配置，请先创建',
+        deleteConfirm: '确定删除配置 {profileID} 吗？',
+        columns: {
+          profile: '配置',
+          active: '激活状态',
+          connection: '连接信息',
+          database: '数据库',
+          updatedAt: '更新时间',
+          actions: '操作'
+        }
+      },
+      s3Profiles: {
+        createTitle: '创建 S3 账号',
+        editTitle: '编辑 S3 账号',
+        empty: '暂无 S3 账号，请先创建',
+        editHint: '点击“编辑”将在右侧抽屉中修改账号信息。',
+        deleteConfirm: '确定删除 S3 账号 {profileID} 吗？',
+        columns: {
+          profile: '账号',
+          active: '激活状态',
+          storage: '存储配置',
+          updatedAt: '更新时间',
+          actions: '操作'
+        }
+      },
+      history: {
+        total: '共 {count} 条',
+        empty: '暂无备份任务',
+        columns: {
+          jobID: '任务 ID',
+          type: '类型',
+          status: '状态',
+          triggeredBy: '触发人',
+          pgProfile: 'PostgreSQL 配置',
+          redisProfile: 'Redis 配置',
+          s3Profile: 'S3 账号',
+          finishedAt: '完成时间',
+          artifact: '产物',
+          error: '错误'
+        },
+        status: {
+          queued: '排队中',
+          running: '执行中',
+          succeeded: '成功',
+          failed: '失败',
+          partial_succeeded: '部分成功'
+        }
+      },
+      actions: {
+        refresh: '刷新状态',
+        disabledHint: '请先启动 datamanagementd 并确认 Socket 可连通。',
+        reloadConfig: '加载配置',
+        reloadSourceProfiles: '刷新数据源配置',
+        reloadProfiles: '刷新账号列表',
+        newSourceProfile: '新建数据源配置',
+        saveConfig: '保存配置',
+        configSaved: '配置保存成功',
+        testS3: '测试 S3 连接',
+        s3TestOK: 'S3 连接测试成功',
+        s3TestFailed: 'S3 连接测试失败',
+        newProfile: '新建账号',
+        saveProfile: '保存账号',
+        activateProfile: '设为激活',
+        profileIDRequired: '请输入账号 ID',
+        profileNameRequired: '请输入账号名称',
+        profileSelectRequired: '请先选择要编辑的账号',
+        profileCreated: 'S3 账号创建成功',
+        profileSaved: 'S3 账号保存成功',
+        profileActivated: 'S3 账号已切换为激活',
+        profileDeleted: 'S3 账号删除成功',
+        sourceProfileCreated: '数据源配置创建成功',
+        sourceProfileSaved: '数据源配置保存成功',
+        sourceProfileActivated: '数据源配置已切换为激活',
+        sourceProfileDeleted: '数据源配置删除成功',
+        createBackup: '创建备份任务',
+        jobCreated: '备份任务已创建：{jobID}（{status}）',
+        refreshJobs: '刷新任务',
+        loadMore: '加载更多'
+      }
+    },
+
+    affiliates: {
+      invitesDescription: '查看全站邀请关系和被邀请用户累计返利',
+      rebatesDescription: '查看每一笔产生返利的充值订单',
+      transfersDescription: '查看返利额度转入账户余额的提取流水',
+      errors: {
+        loadFailed: '加载邀请返利记录失败'
+      },
+      records: {
+        search: '搜索',
+        searchPlaceholder: '邮箱、用户名、用户 ID、订单号',
+        startAt: '开始日期',
+        endAt: '结束日期',
+        inviter: '邀请人',
+        invitee: '被邀请人',
+        user: '用户',
+        affCode: '邀请码',
+        order: '订单',
+        totalRebate: '累计返利',
+        orderAmount: '充值金额',
+        payAmount: '支付金额',
+        rebateAmount: '返利金额',
+        paymentType: '支付方式',
+        orderStatus: '订单状态',
+        transferAmount: '提取金额',
+        currentBalance: '当前余额',
+        remainingQuota: '剩余可提取',
+        frozenQuota: '冻结返利',
+        historyQuota: '历史返利',
+        invitedAt: '邀请时间',
+        rebatedAt: '返利时间',
+        transferredAt: '提取时间'
+      },
+      overview: {
+        title: '用户返利概览',
+        affCode: '邀请码',
+        rebateRate: '返利比例',
+        invitedCount: '邀请人数',
+        rebatedInviteeCount: '已产生返利人数',
+        availableQuota: '可提余额',
+        historyQuota: '历史返利'
+      }
+    },
+
     // Users Management
     users: {
       title: '用户管理',
@@ -1783,104 +1960,6 @@ export default {
         failedToReorder: '更新排序失败',
         keyExists: '属性键已存在',
         dragToReorder: '拖拽排序'
-      }
-    },
-
-    // Subscription Product Config
-    subscriptionProductConfig: {
-      title: '产品配置',
-      description: '创建和管理订阅产品、分组绑定',
-    },
-
-    // Subscription Products (User Subscriptions)
-    subscriptionProducts: {
-      title: '订阅管理',
-      description: '查看和管理用户的产品订阅',
-      searchPlaceholder: '搜索产品',
-      searchSubscriptionsPlaceholder: '搜索用户或产品',
-      allStatus: '全部状态',
-      allProducts: '全部产品',
-      userSubscriptionsTab: '用户订阅',
-      productConfigTab: '产品配置',
-      createProduct: '创建产品',
-      editProduct: '编辑产品',
-      bindGroups: '绑定分组',
-      assignUser: '分配用户',
-      viewSubscriptions: '查看订阅',
-      emptyTitle: '暂无产品订阅',
-      emptyDescription: '创建产品后，可让多个分组共享同一套订阅额度。',
-      daily: '每日',
-      weekly: '每周',
-      monthly: '每月',
-      family: '产品族',
-      unlimited: '不限',
-      carryoverIn: '结转',
-      carryoverUsed: '已用',
-      carryoverRemaining: '剩余',
-      daysRemaining: '剩余 {n} 天',
-      expiresToday: '今日到期',
-      daysExpired: '已过期 {n} 天',
-      resetQuota: '重置配额',
-      resetQuotaDesc: '选择要重置为零的用量窗口。',
-      quotaReset: '配额已重置',
-      resetQuotaError: '重置配额失败',
-      adjusted: '订阅已调整',
-      adjustError: '调整订阅失败',
-      revoked: '订阅已撤销',
-      revokeError: '撤销订阅失败',
-      revokeConfirm: '确定要撤销该订阅吗？此操作不可撤回。',
-      bindingsTitle: '绑定分组：{name}',
-      addBinding: '添加绑定',
-      selectGroup: '选择分组',
-      subscriptionsTitle: '产品订阅：{name}',
-      loadError: '加载产品失败',
-      saveError: '保存产品失败',
-      created: '产品已创建',
-      updated: '产品已更新',
-      bindingsLoadError: '加载绑定失败',
-      duplicateGroup: '分组绑定重复',
-      bindingsSaved: '绑定已保存',
-      bindingsSaveError: '保存绑定失败',
-      selectUserRequired: '请选择用户',
-      assigned: '产品订阅已分配',
-      assignError: '分配产品订阅失败',
-      subscriptionsLoadError: '加载产品订阅失败',
-      columns: {
-        user: '用户',
-        product: '产品',
-        status: '状态',
-        dailyUsage: '每日用量',
-        carryover: '结转',
-        freshDailyUsage: '今日新用量',
-        period: '周期',
-        notes: '备注',
-        limits: '额度',
-        defaultValidity: '有效天数',
-        description: '描述',
-        expiresAt: '过期时间',
-        usage: '用量'
-      },
-      form: {
-        code: '编码',
-        name: '名称',
-        status: '状态',
-        productFamily: '产品族',
-        validityDays: '有效天数',
-        dailyLimit: '每日额度 USD',
-        weeklyLimit: '每周额度 USD',
-        monthlyLimit: '每月额度 USD',
-        sortOrder: '排序',
-        description: '描述',
-        user: '用户',
-        notes: '备注'
-      },
-      status: {
-        active: '启用',
-        draft: '草稿',
-        disabled: '停用',
-        inactive: '未启用',
-        expired: '已过期',
-        revoked: '已撤销'
       }
     },
 
@@ -3859,11 +3938,8 @@ export default {
       failedToCopy: '复制失败',
       selectGroup: '选择分组',
       selectGroupPlaceholder: '选择订阅分组',
-      selectProduct: '选择产品',
-      selectProductPlaceholder: '选择订阅产品',
       validityDays: '有效天数',
       groupRequired: '请选择订阅分组',
-      productRequired: '请选择订阅产品',
       days: '天',
       status: {
         unused: '未使用',
@@ -5931,20 +6007,6 @@ export default {
     }
   },
 
-  // Product Subscription Mini (Header component)
-  productSubscription: {
-    title: '产品订阅',
-    viewDetails: '查看产品订阅详情',
-    activeCount: '{count} 个有效订阅',
-    daily: '日',
-    weekly: '周',
-    monthly: '月',
-    carryover: '结转',
-    daysRemaining: '剩余 {days} 天',
-    expired: '已过期',
-    expiresToday: '今天到期',
-  },
-
   // Subscription Progress (Header component)
   subscriptionProgress: {
     title: '我的订阅',
@@ -5953,9 +6015,6 @@ export default {
     daily: '每日',
     weekly: '每周',
     monthly: '每月',
-    visibleGroups: '包含分组',
-    groupMultiplier: '{multiplier}x',
-    dailyQuotaBreakdown: '昨日结转 ${carryover} + 今日 ${today} = 今日可用 ${total}',
     daysRemaining: '剩余 {days} 天',
     expired: '已过期',
     expiresToday: '今天到期',
@@ -6058,22 +6117,7 @@ export default {
     expiresOn: '{date} 到期',
     resetIn: '{time} 后重置',
     windowNotActive: '等待首次使用',
-    usageOf: '已用 {used} / {limit}',
-    balanceFallback: {
-      title: '订阅消耗完时，自动消耗余额',
-      description: '开启后，产品订阅额度耗尽且分组存在余额兜底映射时，会在你设置的上限内自动改用余额。',
-      limit: '余额兜底上限',
-      usage: '已用 ${used}，剩余 ${remaining}',
-      setLimitHint: '请设置一个大于 0 的上限以启用余额兜底'
-    },
-    keyReminder: {
-      title: '激活后建议新建分组专用 API Key',
-      description: '这样可以避免继续误用旧 key 的余额或限额，并按分组隔离你的订阅用量。',
-      action: '去生成 API Key'
-    },
-    visibleGroups: '包含分组',
-    groupMultiplier: '{multiplier}x',
-    dailyQuotaBreakdown: '昨日结转 ${carryover} + 今日 ${today} = 今日可用 ${total}'
+    usageOf: '已用 {used} / {limit}'
   },
 
   // Onboarding Tour

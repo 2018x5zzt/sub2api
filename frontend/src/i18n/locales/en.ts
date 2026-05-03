@@ -347,20 +347,21 @@ export default {
     usage: 'Usage',
     redeem: 'Redeem',
     affiliate: 'Affiliate Rebates',
+    affiliateManagement: 'Affiliate Rebates',
+    affiliateInviteRecords: 'Invite Records',
+    affiliateRebateRecords: 'Rebate Records',
+    affiliateTransferRecords: 'Transfer Records',
     profile: 'Profile',
     users: 'Users',
     groups: 'Groups',
     channels: 'Channels',
     availableChannels: 'Available Channels',
-    subscriptions: 'Product Subscriptions',
-    subscriptionManagement: 'Subscription Management',
-    subscriptionProductConfig: 'Product Config',
+    subscriptions: 'Subscriptions',
     accounts: 'Accounts',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
     promoCodes: 'Promo Codes',
-    modelHub: 'Model Hub',
     settings: 'Settings',
     myAccount: 'My Account',
     lightMode: 'Light Mode',
@@ -778,48 +779,6 @@ export default {
       quota_exhausted: 'Quota Exhausted',
       expired: 'Expired',
     },
-  },
-
-  modelHub: {
-    eyebrow: 'Models by Group',
-    title: 'Model Hub',
-    description: 'Browse the models available in your accessible groups and copy model names directly for clients or scripts.',
-    searchLabel: 'Search',
-    searchPlaceholder: 'Search by model, display name, or group',
-    platformFilterLabel: 'Platform Filter',
-    groupFilterLabel: 'Group Filter',
-    allPlatforms: 'All Platforms',
-    allGroups: 'All Groups',
-    groupsLabel: 'Available Groups',
-    uniqueModelsLabel: 'Unique Models',
-    visibleModelsLabel: 'Visible Models',
-    platformsLabel: 'Platforms',
-    sourceDefault: 'Platform defaults',
-    sourceMapping: 'Account mapping aggregate',
-    sourceMixed: 'Defaults + account mappings',
-    pricingComputedWithRate: 'Prices below already include the current group rate multiplier {rate}x',
-    rateShort: 'Rate',
-    inputPriceShort: 'Input',
-    outputPriceShort: 'Output',
-    defaultPriceShort: 'Default',
-    perMillionTokens: '/ 1M tokens',
-    perRequest: '/ request',
-    perImage: '/ image',
-    pricingUnavailable: 'Pricing unavailable',
-    copyVisible: 'Copy visible results',
-    copyGroup: 'Copy group models',
-    copiedModel: 'Model name copied',
-    copiedGroup: 'Group model list copied',
-    copiedVisible: 'Visible results copied',
-    modelCount: '{count} models',
-    inputPrice: 'Input',
-    outputPrice: 'Output',
-    clearFilters: 'Clear filters',
-    emptyTitle: 'No models to display',
-    emptyDescription: 'No groups or models match the current filters.',
-    noModelsInGroup: 'No models are currently available for this group.',
-    loadFailedTitle: 'Failed to load model list',
-    loadFailedDescription: 'Refresh and try again in a moment.'
   },
 
   // Usage
@@ -1505,6 +1464,224 @@ export default {
       }
     },
 
+    dataManagement: {
+      title: 'Data Management',
+      description: 'Manage data management agent status, object storage settings, and backup jobs in one place',
+      agent: {
+        title: 'Data Management Agent Status',
+        description: 'The system probes a fixed Unix socket and enables data management only when reachable.',
+        enabled: 'Data management agent is ready. Data management operations are available.',
+        disabled: 'Data management agent is unavailable. Only diagnostic information is available now.',
+        socketPath: 'Socket Path',
+        version: 'Version',
+        status: 'Status',
+        uptime: 'Uptime',
+        reasonLabel: 'Unavailable Reason',
+        reason: {
+          DATA_MANAGEMENT_AGENT_SOCKET_MISSING: 'Data management socket file is missing',
+          DATA_MANAGEMENT_AGENT_UNAVAILABLE: 'Data management agent is unreachable',
+          BACKUP_AGENT_SOCKET_MISSING: 'Backup socket file is missing',
+          BACKUP_AGENT_UNAVAILABLE: 'Backup agent is unreachable',
+          UNKNOWN: 'Unknown reason'
+        }
+      },
+      sections: {
+        config: {
+          title: 'Backup Configuration',
+          description: 'Configure backup source, retention policy, and S3 settings.'
+        },
+        s3: {
+          title: 'S3 Object Storage',
+          description: 'Configure and test uploads of backup artifacts to a standard S3-compatible storage.'
+        },
+        backup: {
+          title: 'Backup Operations',
+          description: 'Trigger PostgreSQL, Redis, and full backup jobs.'
+        },
+        history: {
+          title: 'Backup History',
+          description: 'Review backup job status, errors, and artifact metadata.'
+        }
+      },
+      form: {
+        sourceMode: 'Source Mode',
+        backupRoot: 'Backup Root',
+        activePostgresProfile: 'Active PostgreSQL Profile',
+        activeRedisProfile: 'Active Redis Profile',
+        activeS3Profile: 'Active S3 Profile',
+        retentionDays: 'Retention Days',
+        keepLast: 'Keep Last Jobs',
+        uploadToS3: 'Upload to S3',
+        useActivePostgresProfile: 'Use Active PostgreSQL Profile',
+        useActiveRedisProfile: 'Use Active Redis Profile',
+        useActiveS3Profile: 'Use Active Profile',
+        idempotencyKey: 'Idempotency Key (Optional)',
+        secretConfigured: 'Configured already, leave empty to keep unchanged',
+        source: {
+          profileID: 'Profile ID (Unique)',
+          profileName: 'Profile Name',
+          setActive: 'Set as active after creation'
+        },
+        postgres: {
+          title: 'PostgreSQL',
+          host: 'Host',
+          port: 'Port',
+          user: 'User',
+          password: 'Password',
+          database: 'Database',
+          sslMode: 'SSL Mode',
+          containerName: 'Container Name (docker_exec mode)'
+        },
+        redis: {
+          title: 'Redis',
+          addr: 'Address (host:port)',
+          username: 'Username',
+          password: 'Password',
+          db: 'Database Index',
+          containerName: 'Container Name (docker_exec mode)'
+        },
+        s3: {
+          enabled: 'Enable S3 Upload',
+          profileID: 'Profile ID (Unique)',
+          profileName: 'Profile Name',
+          endpoint: 'Endpoint (Optional)',
+          region: 'Region',
+          bucket: 'Bucket',
+          accessKeyID: 'Access Key ID',
+          secretAccessKey: 'Secret Access Key',
+          prefix: 'Object Prefix',
+          forcePathStyle: 'Force Path Style',
+          useSSL: 'Use SSL',
+          setActive: 'Set as active after creation'
+        }
+      },
+      sourceProfiles: {
+        createTitle: 'Create Source Profile',
+        editTitle: 'Edit Source Profile',
+        empty: 'No source profiles yet, create one first',
+        deleteConfirm: 'Delete source profile {profileID}?',
+        columns: {
+          profile: 'Profile',
+          active: 'Active',
+          connection: 'Connection',
+          database: 'Database',
+          updatedAt: 'Updated At',
+          actions: 'Actions'
+        }
+      },
+      s3Profiles: {
+        createTitle: 'Create S3 Profile',
+        editTitle: 'Edit S3 Profile',
+        empty: 'No S3 profiles yet, create one first',
+        editHint: 'Click "Edit" to modify profile details in the right drawer.',
+        deleteConfirm: 'Delete S3 profile {profileID}?',
+        columns: {
+          profile: 'Profile',
+          active: 'Active',
+          storage: 'Storage',
+          updatedAt: 'Updated At',
+          actions: 'Actions'
+        }
+      },
+      history: {
+        total: '{count} jobs',
+        empty: 'No backup jobs yet',
+        columns: {
+          jobID: 'Job ID',
+          type: 'Type',
+          status: 'Status',
+          triggeredBy: 'Triggered By',
+          pgProfile: 'PostgreSQL Profile',
+          redisProfile: 'Redis Profile',
+          s3Profile: 'S3 Profile',
+          finishedAt: 'Finished At',
+          artifact: 'Artifact',
+          error: 'Error'
+        },
+        status: {
+          queued: 'Queued',
+          running: 'Running',
+          succeeded: 'Succeeded',
+          failed: 'Failed',
+          partial_succeeded: 'Partial Succeeded'
+        }
+      },
+      actions: {
+        refresh: 'Refresh Status',
+        disabledHint: 'Start datamanagementd first and ensure the socket is reachable.',
+        reloadConfig: 'Reload Config',
+        reloadSourceProfiles: 'Reload Source Profiles',
+        reloadProfiles: 'Reload Profiles',
+        newSourceProfile: 'New Source Profile',
+        saveConfig: 'Save Config',
+        configSaved: 'Configuration saved',
+        testS3: 'Test S3 Connection',
+        s3TestOK: 'S3 connection test succeeded',
+        s3TestFailed: 'S3 connection test failed',
+        newProfile: 'New Profile',
+        saveProfile: 'Save Profile',
+        activateProfile: 'Activate',
+        profileIDRequired: 'Profile ID is required',
+        profileNameRequired: 'Profile name is required',
+        profileSelectRequired: 'Select a profile to edit first',
+        profileCreated: 'S3 profile created',
+        profileSaved: 'S3 profile saved',
+        profileActivated: 'S3 profile activated',
+        profileDeleted: 'S3 profile deleted',
+        sourceProfileCreated: 'Source profile created',
+        sourceProfileSaved: 'Source profile saved',
+        sourceProfileActivated: 'Source profile activated',
+        sourceProfileDeleted: 'Source profile deleted',
+        createBackup: 'Create Backup Job',
+        jobCreated: 'Backup job created: {jobID} ({status})',
+        refreshJobs: 'Refresh Jobs',
+        loadMore: 'Load More'
+      }
+    },
+
+    affiliates: {
+      invitesDescription: 'View site-wide inviter and invitee relationships',
+      rebatesDescription: 'View recharge orders that generated affiliate rebates',
+      transfersDescription: 'View affiliate quota transfers into account balance',
+      errors: {
+        loadFailed: 'Failed to load affiliate records'
+      },
+      records: {
+        search: 'Search',
+        searchPlaceholder: 'Email, username, user ID, or order number',
+        startAt: 'Start date',
+        endAt: 'End date',
+        inviter: 'Inviter',
+        invitee: 'Invitee',
+        user: 'User',
+        affCode: 'Invite Code',
+        order: 'Order',
+        totalRebate: 'Total Rebate',
+        orderAmount: 'Top-up Amount',
+        payAmount: 'Paid Amount',
+        rebateAmount: 'Rebate Amount',
+        paymentType: 'Payment Method',
+        orderStatus: 'Order Status',
+        transferAmount: 'Transfer Amount',
+        currentBalance: 'Current Balance',
+        remainingQuota: 'Remaining Quota',
+        frozenQuota: 'Frozen Rebate',
+        historyQuota: 'Historical Rebate',
+        invitedAt: 'Invited At',
+        rebatedAt: 'Rebated At',
+        transferredAt: 'Transferred At'
+      },
+      overview: {
+        title: 'Affiliate User Overview',
+        affCode: 'Invite Code',
+        rebateRate: 'Rebate Rate',
+        invitedCount: 'Invited Users',
+        rebatedInviteeCount: 'Rebated Invitees',
+        availableQuota: 'Available Quota',
+        historyQuota: 'Historical Rebate'
+      }
+    },
+
     // Users
     users: {
       title: 'User Management',
@@ -1730,104 +1907,6 @@ export default {
         failedToReorder: 'Failed to update order',
         keyExists: 'Attribute key already exists',
         dragToReorder: 'Drag to reorder'
-      }
-    },
-
-    // Subscription Product Config
-    subscriptionProductConfig: {
-      title: 'Product Config',
-      description: 'Create and manage subscription products and group bindings',
-    },
-
-    // Subscription Products (User Subscriptions)
-    subscriptionProducts: {
-      title: 'Subscription Management',
-      description: 'View and manage user product subscriptions',
-      searchPlaceholder: 'Search products',
-      searchSubscriptionsPlaceholder: 'Search users or products',
-      allStatus: 'All Status',
-      allProducts: 'All Products',
-      userSubscriptionsTab: 'User Subscriptions',
-      productConfigTab: 'Product Config',
-      createProduct: 'Create Product',
-      editProduct: 'Edit Product',
-      bindGroups: 'Bind Groups',
-      assignUser: 'Assign User',
-      viewSubscriptions: 'View Subscriptions',
-      emptyTitle: 'No Product Subscriptions',
-      emptyDescription: 'Create a product to share quota across multiple groups.',
-      daily: 'Daily',
-      weekly: 'Weekly',
-      monthly: 'Monthly',
-      family: 'Family',
-      unlimited: 'Unlimited',
-      carryoverIn: 'In',
-      carryoverUsed: 'Used',
-      carryoverRemaining: 'Remaining',
-      daysRemaining: '{n} days remaining',
-      expiresToday: 'Expires today',
-      daysExpired: 'Expired {n} days ago',
-      resetQuota: 'Reset Quota',
-      resetQuotaDesc: 'Select which usage windows to reset to zero.',
-      quotaReset: 'Quota reset successfully',
-      resetQuotaError: 'Failed to reset quota',
-      adjusted: 'Subscription adjusted',
-      adjustError: 'Failed to adjust subscription',
-      revoked: 'Subscription revoked',
-      revokeError: 'Failed to revoke subscription',
-      revokeConfirm: 'Are you sure you want to revoke this subscription? This action cannot be undone.',
-      bindingsTitle: 'Bind Groups: {name}',
-      addBinding: 'Add Binding',
-      selectGroup: 'Select group',
-      subscriptionsTitle: 'Product Subscriptions: {name}',
-      loadError: 'Failed to load products',
-      saveError: 'Failed to save product',
-      created: 'Product created',
-      updated: 'Product updated',
-      bindingsLoadError: 'Failed to load bindings',
-      duplicateGroup: 'Duplicate group binding',
-      bindingsSaved: 'Bindings saved',
-      bindingsSaveError: 'Failed to save bindings',
-      selectUserRequired: 'Please select a user',
-      assigned: 'Product subscription assigned',
-      assignError: 'Failed to assign product subscription',
-      subscriptionsLoadError: 'Failed to load subscriptions',
-      columns: {
-        user: 'User',
-        product: 'Product',
-        status: 'Status',
-        dailyUsage: 'Daily Usage',
-        carryover: 'Carryover',
-        freshDailyUsage: 'Fresh Today',
-        period: 'Period',
-        notes: 'Notes',
-        limits: 'Limits',
-        defaultValidity: 'Validity Days',
-        description: 'Description',
-        expiresAt: 'Expires At',
-        usage: 'Usage'
-      },
-      form: {
-        code: 'Code',
-        name: 'Name',
-        status: 'Status',
-        productFamily: 'Product Family',
-        validityDays: 'Validity Days',
-        dailyLimit: 'Daily Limit USD',
-        weeklyLimit: 'Weekly Limit USD',
-        monthlyLimit: 'Monthly Limit USD',
-        sortOrder: 'Sort Order',
-        description: 'Description',
-        user: 'User',
-        notes: 'Notes'
-      },
-      status: {
-        active: 'Active',
-        draft: 'Draft',
-        disabled: 'Disabled',
-        inactive: 'Inactive',
-        expired: 'Expired',
-        revoked: 'Revoked'
       }
     },
 
@@ -3741,11 +3820,8 @@ export default {
       },
       selectGroup: 'Select Group',
       selectGroupPlaceholder: 'Choose a subscription group',
-      selectProduct: 'Select Product',
-      selectProductPlaceholder: 'Choose a subscription product',
       validityDays: 'Validity Days',
       groupRequired: 'Please select a subscription group',
-      productRequired: 'Please select a subscription product',
       days: ' days',
       status: {
         unused: 'Unused',
@@ -5771,20 +5847,6 @@ export default {
     }
   },
 
-  // Product Subscription Mini (Header component)
-  productSubscription: {
-    title: 'Product Subscriptions',
-    viewDetails: 'View product subscription details',
-    activeCount: '{count} active subscription(s)',
-    daily: 'D',
-    weekly: 'W',
-    monthly: 'M',
-    carryover: 'Carryover',
-    daysRemaining: '{days}d left',
-    expired: 'Expired',
-    expiresToday: 'Expires today',
-  },
-
   // Subscription Progress (Header component)
   subscriptionProgress: {
     title: 'My Subscriptions',
@@ -5893,29 +5955,11 @@ export default {
     daily: 'Daily',
     weekly: 'Weekly',
     monthly: 'Monthly',
-    visibleGroups: 'Included groups',
-    groupMultiplier: '{multiplier}x',
-    dailyQuotaBreakdown:
-      'Yesterday carryover ${carryover} + today ${today} = today available ${total}',
     daysRemaining: '{days} days remaining',
     expiresOn: 'Expires on {date}',
     resetIn: 'Resets in {time}',
     windowNotActive: 'Awaiting first use',
-    usageOf: '{used} of {limit}',
-    balanceFallback: {
-      title: 'Use balance automatically when subscription quota is exhausted',
-      description:
-        'When enabled, requests switch to balance billing within your cap after product subscription quota is exhausted and the group has a balance fallback mapping.',
-      limit: 'Balance fallback cap',
-      usage: 'Used ${used}, remaining ${remaining}',
-      setLimitHint: 'Set a cap greater than 0 to enable balance fallback'
-    },
-    keyReminder: {
-      title: 'Create a dedicated API key after activation',
-      description:
-        'This avoids accidentally reusing an old key’s balance or limits and keeps your subscription usage isolated by group.',
-      action: 'Go to API Keys'
-    }
+    usageOf: '{used} of {limit}'
   },
 
   // Onboarding Tour
