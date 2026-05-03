@@ -76,6 +76,7 @@ func (s *GatewayService) ForwardAsChatCompletions(
 		}
 	}
 	anthropicReq.Model = mappedModel
+	implicitReasoningEffort := applyClaudeImplicitThinkingModelDefaults(anthropicReq)
 
 	logger.L().Debug("gateway forward_as_chat_completions: model mapping applied",
 		zap.Int64("account_id", account.ID),
@@ -180,6 +181,9 @@ func (s *GatewayService) ForwardAsChatCompletions(
 
 	// 13. Extract reasoning effort from CC request body
 	reasoningEffort := extractCCReasoningEffortFromBody(body)
+	if reasoningEffort == nil {
+		reasoningEffort = implicitReasoningEffort
+	}
 
 	// 14. Handle normal response
 	// Read Anthropic SSE → convert to Responses events → convert to CC format

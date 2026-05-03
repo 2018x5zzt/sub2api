@@ -73,6 +73,10 @@ func (s *GatewayService) ForwardAsResponses(
 		}
 	}
 	anthropicReq.Model = mappedModel
+	implicitReasoningEffort := applyClaudeImplicitThinkingModelDefaults(anthropicReq)
+	if reasoningEffort == nil {
+		reasoningEffort = implicitReasoningEffort
+	}
 
 	logger.L().Debug("gateway forward_as_responses: model mapping applied",
 		zap.Int64("account_id", account.ID),

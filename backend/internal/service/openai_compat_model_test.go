@@ -75,6 +75,66 @@ func TestApplyOpenAICompatModelNormalization(t *testing.T) {
 	})
 }
 
+func TestApplyClaudeImplicitThinkingModelDefaults(t *testing.T) {
+	t.Parallel()
+
+	t.Run("opus 4.6 defaults to max thinking", func(t *testing.T) {
+		req := &apicompat.AnthropicRequest{Model: "claude-opus-4-6", MaxTokens: 1024}
+
+		got := applyClaudeImplicitThinkingModelDefaults(req)
+
+		require.NotNil(t, got)
+		require.Equal(t, "xhigh", *got)
+		require.NotNil(t, req.OutputConfig)
+		require.Equal(t, "max", req.OutputConfig.Effort)
+		require.NotNil(t, req.Thinking)
+		require.Equal(t, "enabled", req.Thinking.Type)
+		require.Equal(t, BudgetRectifyBudgetTokens, req.Thinking.BudgetTokens)
+		require.Equal(t, BudgetRectifyMaxTokens, req.MaxTokens)
+	})
+
+	t.Run("explicit output config wins", func(t *testing.T) {
+		req := &apicompat.AnthropicRequest{
+			Model:        "claude-opus-4-6",
+			MaxTokens:    1024,
+			OutputConfig: &apicompat.AnthropicOutputConfig{Effort: "medium"},
+		}
+
+		got := applyClaudeImplicitThinkingModelDefaults(req)
+
+		require.Nil(t, got)
+		require.Equal(t, "medium", req.OutputConfig.Effort)
+		require.Nil(t, req.Thinking)
+		require.Equal(t, 1024, req.MaxTokens)
+	})
+
+	t.Run("explicit thinking wins", func(t *testing.T) {
+		req := &apicompat.AnthropicRequest{
+			Model:     "claude-opus-4-6",
+			MaxTokens: 4096,
+			Thinking:  &apicompat.AnthropicThinking{Type: "enabled", BudgetTokens: 5000},
+		}
+
+		got := applyClaudeImplicitThinkingModelDefaults(req)
+
+		require.Nil(t, got)
+		require.Nil(t, req.OutputConfig)
+		require.Equal(t, 5000, req.Thinking.BudgetTokens)
+		require.Equal(t, 4096, req.MaxTokens)
+	})
+
+	t.Run("other models are untouched", func(t *testing.T) {
+		req := &apicompat.AnthropicRequest{Model: "claude-sonnet-4-6", MaxTokens: 1024}
+
+		got := applyClaudeImplicitThinkingModelDefaults(req)
+
+		require.Nil(t, got)
+		require.Nil(t, req.OutputConfig)
+		require.Nil(t, req.Thinking)
+		require.Equal(t, 1024, req.MaxTokens)
+	})
+}
+
 func TestForwardAsAnthropic_NormalizesRoutingAndEffortForGpt54XHigh(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
