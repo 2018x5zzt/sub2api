@@ -28,6 +28,7 @@ type User struct {
 	SubscriptionBalanceFallbackEnabled  bool               `json:"subscription_balance_fallback_enabled"`
 	SubscriptionBalanceFallbackLimitUSD float64            `json:"subscription_balance_fallback_limit_usd"`
 	SubscriptionBalanceFallbackUsedUSD  float64            `json:"subscription_balance_fallback_used_usd"`
+	SubscriptionBalanceFallbackGroupID  *int64             `json:"subscription_balance_fallback_group_id"`
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制），仅在所用分组未设置 rpm_limit 时作为兜底生效。
 	RPMLimit int `json:"rpm_limit"`
@@ -49,20 +50,21 @@ type AdminUser struct {
 }
 
 type APIKey struct {
-	ID          int64      `json:"id"`
-	UserID      int64      `json:"user_id"`
-	Key         string     `json:"key"`
-	Name        string     `json:"name"`
-	GroupID     *int64     `json:"group_id"`
-	Status      string     `json:"status"`
-	IPWhitelist []string   `json:"ip_whitelist"`
-	IPBlacklist []string   `json:"ip_blacklist"`
-	LastUsedAt  *time.Time `json:"last_used_at"`
-	Quota       float64    `json:"quota"`      // Quota limit in USD (0 = unlimited)
-	QuotaUsed   float64    `json:"quota_used"` // Used quota amount in USD
-	ExpiresAt   *time.Time `json:"expires_at"` // Expiration time (nil = never expires)
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID                        int64      `json:"id"`
+	UserID                    int64      `json:"user_id"`
+	Key                       string     `json:"key"`
+	Name                      string     `json:"name"`
+	GroupID                   *int64     `json:"group_id"`
+	SubscriptionProductFamily *string    `json:"subscription_product_family"`
+	Status                    string     `json:"status"`
+	IPWhitelist               []string   `json:"ip_whitelist"`
+	IPBlacklist               []string   `json:"ip_blacklist"`
+	LastUsedAt                *time.Time `json:"last_used_at"`
+	Quota                     float64    `json:"quota"`      // Quota limit in USD (0 = unlimited)
+	QuotaUsed                 float64    `json:"quota_used"` // Used quota amount in USD
+	ExpiresAt                 *time.Time `json:"expires_at"` // Expiration time (nil = never expires)
+	CreatedAt                 time.Time  `json:"created_at"`
+	UpdatedAt                 time.Time  `json:"updated_at"`
 
 	// Rate limit fields
 	RateLimit5h   float64    `json:"rate_limit_5h"`

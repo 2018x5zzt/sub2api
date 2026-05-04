@@ -67,3 +67,55 @@ func TestAdminService_UpdateUser_NoInvalidateWhenRPMLimitUnchanged(t *testing.T)
 	require.NoError(t, err)
 	require.Empty(t, invalidator.userIDs, "只改 username 不应触发认证缓存失效")
 }
+
+func TestAdminService_UpdateUser_ValidatesFallbackGroupAuthorization(t *testing.T) {
+	groupID := int64(88)
+	enabled := true
+	limit := 5.0
+	base := &userRepoStub{user: &User{ID: 42, Email: "u@example.com"}}
+	repo := &rpmUserRepoStub{userRepoStub: base}
+	svc := &adminServiceImpl{
+		userRepo:       repo,
+		groupRepo:      &groupRepoStubForAdmin{getByID: &Group{ID: groupID, Name: "exclusive", Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, IsExclusive: true}},
+		redeemCodeRepo: &redeemRepoStub{},
+	}
+
+	_, err := svc.UpdateUser(context.Background(), 42, &UpdateUserInput{
+		SubscriptionBalanceFallbackEnabled:  &enabled,
+		SubscriptionBalanceFallbackLimitUSD: &limit,
+		SubscriptionBalanceFallbackGroupID:  &groupID,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not authorized")
+	require.Nil(t, repo.lastUpdated)
+}
+
+func TestAdminService_UpdateUser_UpdatesFallbackSettings(t *testing.T) {
+	groupID := int64(89)
+	enabled := true
+	limit := 5.0
+	used := 1.25
+	base := &userRepoStub{user: &User{ID: 42, Email: "u@example.com", AllowedGroups: []int64{groupID}}}
+	repo := &rpmUserRepoStub{userRepoStub: base}
+	invalidator := &authCacheInvalidatorStub{}
+	svc := &adminServiceImpl{
+		userRepo:             repo,
+		groupRepo:            &groupRepoStubForAdmin{getByID: &Group{ID: groupID, Name: "exclusive", Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, IsExclusive: true}},
+		redeemCodeRepo:       &redeemRepoStub{},
+		authCacheInvalidator: invalidator,
+	}
+
+	updated, err := svc.UpdateUser(context.Background(), 42, &UpdateUserInput{
+		SubscriptionBalanceFallbackEnabled:  &enabled,
+		SubscriptionBalanceFallbackLimitUSD: &limit,
+		SubscriptionBalanceFallbackUsedUSD:  &used,
+		SubscriptionBalanceFallbackGroupID:  &groupID,
+	})
+	require.NoError(t, err)
+	require.True(t, updated.SubscriptionBalanceFallbackEnabled)
+	require.Equal(t, 5.0, updated.SubscriptionBalanceFallbackLimitUSD)
+	require.Equal(t, 1.25, updated.SubscriptionBalanceFallbackUsedUSD)
+	require.NotNil(t, updated.SubscriptionBalanceFallbackGroupID)
+	require.Equal(t, groupID, *updated.SubscriptionBalanceFallbackGroupID)
+	require.Equal(t, []int64{42}, invalidator.userIDs)
+}

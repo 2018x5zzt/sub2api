@@ -80,12 +80,15 @@ func APIKeyAuthWithProductSubscriptionGoogle(
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 		var productSettlement *service.ProductSettlementContext
+		productSubscriptionChecked := false
 		subscriptionBalanceFallback := false
 		if isSubscriptionType && productSubscriptionService != nil {
-			settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
+			productSubscriptionChecked = true
+			settlement, productErr := productSubscriptionService.GetActiveProductSubscriptionForFamily(
 				c.Request.Context(),
 				apiKey.User.ID,
 				apiKey.Group.ID,
+				apiKey.SubscriptionProductFamily,
 			)
 			if productErr == nil {
 				productSettlement = settlement
@@ -101,6 +104,9 @@ func APIKeyAuthWithProductSubscriptionGoogle(
 			} else if !errors.Is(productErr, service.ErrSubscriptionNotFound) {
 				abortWithGoogleError(c, 403, productErr.Error())
 				return
+			} else {
+				abortWithGoogleError(c, 403, "No active subscription found for this group")
+				return
 			}
 		}
 		if productSettlement != nil {
@@ -111,10 +117,21 @@ func APIKeyAuthWithProductSubscriptionGoogle(
 					errors.Is(err, service.ErrMonthlyLimitExceeded) {
 					status = 429
 				}
-				abortWithGoogleError(c, status, err.Error())
-				return
+				if isSubscriptionLimitError(err) {
+					if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
+						apiKey = fallbackAPIKey
+						productSettlement = nil
+						subscriptionBalanceFallback = true
+					} else {
+						abortWithGoogleError(c, status, err.Error())
+						return
+					}
+				} else {
+					abortWithGoogleError(c, status, err.Error())
+					return
+				}
 			}
-		} else if isSubscriptionType && subscriptionService != nil {
+		} else if isSubscriptionType && !productSubscriptionChecked && subscriptionService != nil {
 			subscription, err := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,
@@ -165,7 +182,7 @@ func APIKeyAuthWithProductSubscriptionGoogle(
 				}
 			}
 		} else {
-			if apiKey.User.Balance <= 0 {
+			if apiKey.User.Balance < 0 {
 				abortWithGoogleError(c, 403, "Insufficient account balance")
 				return
 			}

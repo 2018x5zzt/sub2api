@@ -44,6 +44,10 @@ func (APIKey) Fields() []ent.Field {
 		field.Int64("group_id").
 			Optional().
 			Nillable(),
+		field.String("subscription_product_family").
+			MaxLen(64).
+			Optional().
+			Nillable(),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
@@ -138,6 +142,7 @@ func (APIKey) Indexes() []ent.Index {
 		// key 字段已在 Fields() 中声明 Unique()，无需重复索引
 		index.Fields("user_id"),
 		index.Fields("group_id"),
+		index.Fields("subscription_product_family"),
 		index.Fields("status"),
 		index.Fields("deleted_at"),
 		index.Fields("last_used_at"),

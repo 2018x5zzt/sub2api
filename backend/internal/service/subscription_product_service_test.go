@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -16,12 +17,18 @@ type productSubscriptionRepoStub struct {
 	products        []ActiveSubscriptionProduct
 	groups          []Group
 	resolvedProduct *SubscriptionProduct
+	requestedFamily *string
+	err             error
 	assigned        *UserProductSubscription
 	assignInputs    []AssignProductSubscriptionInput
 	reused          bool
 }
 
-func (r *productSubscriptionRepoStub) GetActiveProductSubscriptionByUserAndGroupID(context.Context, int64, int64) (*SubscriptionProductBinding, *UserProductSubscription, error) {
+func (r *productSubscriptionRepoStub) GetActiveProductSubscriptionByUserAndGroupID(_ context.Context, _ int64, _ int64, productFamily *string) (*SubscriptionProductBinding, *UserProductSubscription, error) {
+	r.requestedFamily = productFamily
+	if r.err != nil {
+		return nil, nil, r.err
+	}
 	if r.binding == nil || r.sub == nil {
 		return nil, nil, ErrSubscriptionNotFound
 	}
@@ -73,6 +80,18 @@ func (r *productSubscriptionRepoStub) ListProductSubscriptions(context.Context, 
 
 func (r *productSubscriptionRepoStub) ListUserProductSubscriptionsForAdmin(context.Context, AdminProductSubscriptionListParams) ([]AdminProductSubscriptionListItem, *pagination.PaginationResult, error) {
 	return nil, &pagination.PaginationResult{}, nil
+}
+
+func (r *productSubscriptionRepoStub) AdjustProductSubscription(context.Context, int64, *AdjustProductSubscriptionInput) (*UserProductSubscription, error) {
+	return nil, nil
+}
+
+func (r *productSubscriptionRepoStub) ResetProductSubscriptionQuota(context.Context, int64, *ResetProductSubscriptionQuotaInput) (*UserProductSubscription, error) {
+	return nil, nil
+}
+
+func (r *productSubscriptionRepoStub) RevokeProductSubscription(context.Context, int64) error {
+	return nil
 }
 
 func (r *productSubscriptionRepoStub) AssignOrExtendProductSubscription(_ context.Context, input *AssignProductSubscriptionInput) (*UserProductSubscription, bool, error) {
@@ -142,7 +161,45 @@ func TestSubscriptionProductServiceListActiveUserProductsReturnsSharedProductGro
 	}
 }
 
-func TestNormalizeExpiredProductSubscriptionWindowResetsMonthlyOnCalendarMonthBoundary(t *testing.T) {
+func TestSubscriptionProductServicePassesExplicitProductFamilyToRepository(t *testing.T) {
+	t.Parallel()
+
+	repo := &productSubscriptionRepoStub{
+		binding: &SubscriptionProductBinding{
+			ProductStatus: SubscriptionProductStatusActive,
+			BindingStatus: SubscriptionProductBindingStatusActive,
+		},
+		sub: &UserProductSubscription{
+			Status:    SubscriptionStatusActive,
+			ExpiresAt: time.Now().Add(24 * time.Hour),
+		},
+	}
+	svc := NewSubscriptionProductService(repo)
+	family := "image"
+
+	_, err := svc.GetActiveProductSubscriptionForFamily(context.Background(), 7, 30, &family)
+
+	if err != nil {
+		t.Fatalf("GetActiveProductSubscriptionForFamily returned error: %v", err)
+	}
+	if repo.requestedFamily == nil || *repo.requestedFamily != family {
+		t.Fatalf("requested family = %v, want %q", repo.requestedFamily, family)
+	}
+}
+
+func TestSubscriptionProductServiceReturnsFamilyRequired(t *testing.T) {
+	t.Parallel()
+
+	svc := NewSubscriptionProductService(&productSubscriptionRepoStub{err: ErrProductFamilyRequired})
+
+	_, err := svc.GetActiveProductSubscriptionForFamily(context.Background(), 7, 30, nil)
+
+	if !errors.Is(err, ErrProductFamilyRequired) {
+		t.Fatalf("err = %v, want ErrProductFamilyRequired", err)
+	}
+}
+
+func TestNormalizeExpiredProductSubscriptionWindowKeepsMonthlyOnCalendarMonthBoundary(t *testing.T) {
 	t.Parallel()
 
 	location := time.UTC
@@ -159,14 +216,99 @@ func TestNormalizeExpiredProductSubscriptionWindowResetsMonthlyOnCalendarMonthBo
 	NormalizeExpiredProductSubscriptionWindowForRepository(sub, product, now)
 
 	if sub.MonthlyWindowStart == nil {
-		t.Fatal("MonthlyWindowStart is nil, want current calendar month start")
+		t.Fatal("MonthlyWindowStart is nil, want original rolling window start")
 	}
-	wantWindow := time.Date(2026, 5, 1, 0, 0, 0, 0, location)
+	if !sub.MonthlyWindowStart.Equal(previousMonthWindow) {
+		t.Fatalf("MonthlyWindowStart = %s, want %s", sub.MonthlyWindowStart.Format(time.RFC3339), previousMonthWindow.Format(time.RFC3339))
+	}
+	if sub.MonthlyUsageUSD != 149 {
+		t.Fatalf("MonthlyUsageUSD = %v, want 149", sub.MonthlyUsageUSD)
+	}
+}
+
+func TestNormalizeExpiredProductSubscriptionWindowResetsMonthlyAfterRollingThirtyDays(t *testing.T) {
+	t.Parallel()
+
+	location := time.UTC
+	previousWindow := time.Date(2026, 4, 1, 9, 30, 0, 0, location)
+	now := previousWindow.Add(31 * 24 * time.Hour)
+	sub := &UserProductSubscription{
+		Status:             SubscriptionStatusActive,
+		ExpiresAt:          now.Add(24 * time.Hour),
+		MonthlyWindowStart: &previousWindow,
+		MonthlyUsageUSD:    149,
+	}
+	product := &SubscriptionProduct{MonthlyLimitUSD: 150}
+
+	NormalizeExpiredProductSubscriptionWindowForRepository(sub, product, now)
+
+	wantWindow := previousWindow.Add(30 * 24 * time.Hour)
+	if sub.MonthlyWindowStart == nil {
+		t.Fatal("MonthlyWindowStart is nil, want next rolling 30 day start")
+	}
 	if !sub.MonthlyWindowStart.Equal(wantWindow) {
 		t.Fatalf("MonthlyWindowStart = %s, want %s", sub.MonthlyWindowStart.Format(time.RFC3339), wantWindow.Format(time.RFC3339))
 	}
 	if sub.MonthlyUsageUSD != 0 {
 		t.Fatalf("MonthlyUsageUSD = %v, want 0", sub.MonthlyUsageUSD)
+	}
+}
+
+func TestNormalizeExpiredProductSubscriptionWindowResetsDailyAtBeijingMidnight(t *testing.T) {
+	t.Parallel()
+
+	windowStart := time.Date(2026, 5, 3, 16, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 5, 4, 16, 30, 0, 0, time.UTC)
+	sub := &UserProductSubscription{
+		Status:             SubscriptionStatusActive,
+		ExpiresAt:          now.Add(24 * time.Hour),
+		DailyWindowStart:   &windowStart,
+		DailyUsageUSD:      9,
+		WeeklyWindowStart:  &windowStart,
+		WeeklyUsageUSD:     9,
+		MonthlyWindowStart: &windowStart,
+		MonthlyUsageUSD:    9,
+	}
+	product := &SubscriptionProduct{DailyLimitUSD: 10, WeeklyLimitUSD: 100, MonthlyLimitUSD: 300}
+
+	NormalizeExpiredProductSubscriptionWindowForRepository(sub, product, now)
+
+	wantDaily := time.Date(2026, 5, 4, 16, 0, 0, 0, time.UTC)
+	if sub.DailyWindowStart == nil {
+		t.Fatal("DailyWindowStart is nil, want Beijing midnight in UTC")
+	}
+	if !sub.DailyWindowStart.Equal(wantDaily) {
+		t.Fatalf("DailyWindowStart = %s, want %s", sub.DailyWindowStart.Format(time.RFC3339), wantDaily.Format(time.RFC3339))
+	}
+	if sub.DailyUsageUSD != 0 {
+		t.Fatalf("DailyUsageUSD = %v, want 0", sub.DailyUsageUSD)
+	}
+}
+
+func TestNormalizeExpiredProductSubscriptionWindowRollsWeeklyFromCurrentStart(t *testing.T) {
+	t.Parallel()
+
+	windowStart := time.Date(2026, 5, 1, 9, 30, 0, 0, time.UTC)
+	now := windowStart.Add(8 * 24 * time.Hour)
+	sub := &UserProductSubscription{
+		Status:            SubscriptionStatusActive,
+		ExpiresAt:         now.Add(24 * time.Hour),
+		WeeklyWindowStart: &windowStart,
+		WeeklyUsageUSD:    77,
+	}
+	product := &SubscriptionProduct{WeeklyLimitUSD: 100}
+
+	NormalizeExpiredProductSubscriptionWindowForRepository(sub, product, now)
+
+	wantWindow := windowStart.Add(7 * 24 * time.Hour)
+	if sub.WeeklyWindowStart == nil {
+		t.Fatal("WeeklyWindowStart is nil, want next rolling 7 day start")
+	}
+	if !sub.WeeklyWindowStart.Equal(wantWindow) {
+		t.Fatalf("WeeklyWindowStart = %s, want %s", sub.WeeklyWindowStart.Format(time.RFC3339), wantWindow.Format(time.RFC3339))
+	}
+	if sub.WeeklyUsageUSD != 0 {
+		t.Fatalf("WeeklyUsageUSD = %v, want 0", sub.WeeklyUsageUSD)
 	}
 }
 

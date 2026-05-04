@@ -3,10 +3,13 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 )
+
+var beijingLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
 
 type SubscriptionProductService struct {
 	repo ProductSubscriptionRepository
@@ -17,10 +20,14 @@ func NewSubscriptionProductService(repo ProductSubscriptionRepository) *Subscrip
 }
 
 func (s *SubscriptionProductService) GetActiveProductSubscription(ctx context.Context, userID, groupID int64) (*ProductSettlementContext, error) {
+	return s.GetActiveProductSubscriptionForFamily(ctx, userID, groupID, nil)
+}
+
+func (s *SubscriptionProductService) GetActiveProductSubscriptionForFamily(ctx context.Context, userID, groupID int64, productFamily *string) (*ProductSettlementContext, error) {
 	if s == nil || s.repo == nil {
 		return nil, ErrSubscriptionNotFound
 	}
-	binding, sub, err := s.repo.GetActiveProductSubscriptionByUserAndGroupID(ctx, userID, groupID)
+	binding, sub, err := s.repo.GetActiveProductSubscriptionByUserAndGroupID(ctx, userID, groupID, productFamily)
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +55,37 @@ func (s *SubscriptionProductService) ListVisibleGroups(ctx context.Context, user
 		return []Group{}, nil
 	}
 	return s.repo.ListVisibleGroupsByUserID(ctx, userID)
+}
+
+func (s *SubscriptionProductService) ListVisibleProductFamilies(ctx context.Context, userID, groupID int64) ([]string, error) {
+	products, err := s.ListActiveUserProducts(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{})
+	families := make([]string, 0)
+	for _, item := range products {
+		matchesGroup := false
+		for _, group := range item.Groups {
+			if group.GroupID == groupID {
+				matchesGroup = true
+				break
+			}
+		}
+		if !matchesGroup {
+			continue
+		}
+		family := strings.TrimSpace(item.Product.ProductFamily)
+		if family == "" {
+			family = "default"
+		}
+		if _, ok := seen[family]; ok {
+			continue
+		}
+		seen[family] = struct{}{}
+		families = append(families, family)
+	}
+	return families, nil
 }
 
 func (s *SubscriptionProductService) ListProducts(ctx context.Context) ([]SubscriptionProduct, error) {
@@ -145,6 +183,43 @@ func (s *SubscriptionProductService) AssignOrExtendProductSubscription(ctx conte
 	return s.repo.AssignOrExtendProductSubscription(ctx, input)
 }
 
+func (s *SubscriptionProductService) AdjustProductSubscription(ctx context.Context, subscriptionID int64, input *AdjustProductSubscriptionInput) (*UserProductSubscription, error) {
+	if s == nil || s.repo == nil {
+		return nil, ErrProductSubscriptionAssignerUnavailable
+	}
+	if subscriptionID <= 0 || input == nil {
+		return nil, ErrSubscriptionNilInput
+	}
+	if input.Status != nil {
+		switch *input.Status {
+		case SubscriptionStatusActive, SubscriptionStatusExpired, ProductSubscriptionStatusRevoked:
+		default:
+			return nil, ErrSubscriptionInvalid
+		}
+	}
+	return s.repo.AdjustProductSubscription(ctx, subscriptionID, input)
+}
+
+func (s *SubscriptionProductService) ResetProductSubscriptionQuota(ctx context.Context, subscriptionID int64, input *ResetProductSubscriptionQuotaInput) (*UserProductSubscription, error) {
+	if s == nil || s.repo == nil {
+		return nil, ErrProductSubscriptionAssignerUnavailable
+	}
+	if subscriptionID <= 0 || input == nil || (!input.Daily && !input.Weekly && !input.Monthly) {
+		return nil, ErrSubscriptionNilInput
+	}
+	return s.repo.ResetProductSubscriptionQuota(ctx, subscriptionID, input)
+}
+
+func (s *SubscriptionProductService) RevokeProductSubscription(ctx context.Context, subscriptionID int64) error {
+	if s == nil || s.repo == nil {
+		return ErrProductSubscriptionAssignerUnavailable
+	}
+	if subscriptionID <= 0 {
+		return ErrSubscriptionNilInput
+	}
+	return s.repo.RevokeProductSubscription(ctx, subscriptionID)
+}
+
 func (s *SubscriptionProductService) CheckProductLimits(settlement *ProductSettlementContext, additionalDebitCost float64) error {
 	if settlement == nil || settlement.Binding == nil || settlement.Subscription == nil {
 		return ErrSubscriptionNotFound
@@ -168,8 +243,8 @@ func normalizeExpiredProductSubscriptionWindow(sub *UserProductSubscription, pro
 	if sub == nil {
 		return
 	}
-	if sub.NeedsDailyReset() {
-		windowStart := startOfDay(now)
+	windowStart := beijingStartOfDay(now)
+	if productSubscriptionDailyWindowExpired(sub.DailyWindowStart, now) {
 		if product != nil && product.HasDailyLimit() {
 			carryoverConsumed := maxFloat64(sub.DailyCarryoverInUSD-sub.DailyCarryoverRemainingUSD, 0)
 			freshUsed := maxFloat64(sub.DailyUsageUSD-carryoverConsumed, 0)
@@ -193,23 +268,50 @@ func normalizeExpiredProductSubscriptionWindow(sub *UserProductSubscription, pro
 			sub.DailyCarryoverRemainingUSD = 0
 		}
 	}
-	if sub.NeedsWeeklyReset() {
-		windowStart := startOfDay(now)
-		sub.WeeklyWindowStart = &windowStart
+	if productSubscriptionRollingWindowExpired(sub.WeeklyWindowStart, now, 7*24*time.Hour) {
+		weeklyStart := productSubscriptionNextRollingWindowStart(sub.WeeklyWindowStart, now, 7*24*time.Hour)
+		sub.WeeklyWindowStart = &weeklyStart
 		sub.WeeklyUsageUSD = 0
 	}
 	if productSubscriptionMonthlyWindowExpired(sub.MonthlyWindowStart, now) {
-		windowStart := startOfDay(now)
-		sub.MonthlyWindowStart = &windowStart
+		monthlyStart := productSubscriptionNextRollingWindowStart(sub.MonthlyWindowStart, now, 30*24*time.Hour)
+		sub.MonthlyWindowStart = &monthlyStart
 		sub.MonthlyUsageUSD = 0
 	}
 }
 
-func productSubscriptionMonthlyWindowExpired(windowStart *time.Time, now time.Time) bool {
+func productSubscriptionDailyWindowExpired(windowStart *time.Time, now time.Time) bool {
 	if windowStart == nil {
 		return false
 	}
-	return now.Sub(*windowStart) >= 30*24*time.Hour
+	return !beijingStartOfDay(now).Equal(beijingStartOfDay(*windowStart))
+}
+
+func productSubscriptionMonthlyWindowExpired(windowStart *time.Time, now time.Time) bool {
+	return productSubscriptionRollingWindowExpired(windowStart, now, 30*24*time.Hour)
+}
+
+func productSubscriptionRollingWindowExpired(windowStart *time.Time, now time.Time, window time.Duration) bool {
+	return windowStart != nil && !now.Before(windowStart.Add(window))
+}
+
+func productSubscriptionNextRollingWindowStart(windowStart *time.Time, now time.Time, window time.Duration) time.Time {
+	if windowStart == nil {
+		return now
+	}
+	if now.Before(*windowStart) {
+		return *windowStart
+	}
+	next := *windowStart
+	for !now.Before(next.Add(window)) {
+		next = next.Add(window)
+	}
+	return next
+}
+
+func beijingStartOfDay(t time.Time) time.Time {
+	inBeijing := t.In(beijingLocation)
+	return time.Date(inBeijing.Year(), inBeijing.Month(), inBeijing.Day(), 0, 0, 0, 0, beijingLocation)
 }
 
 func NormalizeExpiredProductSubscriptionWindowForRepository(sub *UserProductSubscription, product *SubscriptionProduct, now time.Time) {

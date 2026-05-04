@@ -20,13 +20,15 @@ import (
 )
 
 var (
-	ErrAPIKeyNotFound     = infraerrors.NotFound("API_KEY_NOT_FOUND", "api key not found")
-	ErrGroupNotAllowed    = infraerrors.Forbidden("GROUP_NOT_ALLOWED", "user is not allowed to bind this group")
-	ErrAPIKeyExists       = infraerrors.Conflict("API_KEY_EXISTS", "api key already exists")
-	ErrAPIKeyTooShort     = infraerrors.BadRequest("API_KEY_TOO_SHORT", "api key must be at least 16 characters")
-	ErrAPIKeyInvalidChars = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
-	ErrAPIKeyRateLimited  = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
-	ErrInvalidIPPattern   = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
+	ErrAPIKeyNotFound          = infraerrors.NotFound("API_KEY_NOT_FOUND", "api key not found")
+	ErrGroupNotAllowed         = infraerrors.Forbidden("GROUP_NOT_ALLOWED", "user is not allowed to bind this group")
+	ErrAPIKeyExists            = infraerrors.Conflict("API_KEY_EXISTS", "api key already exists")
+	ErrAPIKeyTooShort          = infraerrors.BadRequest("API_KEY_TOO_SHORT", "api key must be at least 16 characters")
+	ErrAPIKeyInvalidChars      = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
+	ErrProductFamilyRequired   = infraerrors.BadRequest("PRODUCT_FAMILY_REQUIRED", "subscription product family is required for this group")
+	ErrProductFamilyNotAllowed = infraerrors.Forbidden("PRODUCT_FAMILY_NOT_ALLOWED", "subscription product family is not available for this group")
+	ErrAPIKeyRateLimited       = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
+	ErrInvalidIPPattern        = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
 	// ErrAPIKeyExpired        = infraerrors.Forbidden("API_KEY_EXPIRED", "api key has expired")
 	ErrAPIKeyExpired = infraerrors.Forbidden("API_KEY_EXPIRED", "api key 已过期")
 	// ErrAPIKeyQuotaExhausted = infraerrors.TooManyRequests("API_KEY_QUOTA_EXHAUSTED", "api key quota exhausted")
@@ -149,11 +151,12 @@ type APIKeyAuthCacheInvalidator interface {
 
 // CreateAPIKeyRequest 创建API Key请求
 type CreateAPIKeyRequest struct {
-	Name        string   `json:"name"`
-	GroupID     *int64   `json:"group_id"`
-	CustomKey   *string  `json:"custom_key"`   // 可选的自定义key
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
+	Name                      string   `json:"name"`
+	GroupID                   *int64   `json:"group_id"`
+	SubscriptionProductFamily *string  `json:"subscription_product_family"`
+	CustomKey                 *string  `json:"custom_key"`   // 可选的自定义key
+	IPWhitelist               []string `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist               []string `json:"ip_blacklist"` // IP 黑名单
 
 	// Quota fields
 	Quota         float64 `json:"quota"`           // Quota limit in USD (0 = unlimited)
@@ -167,11 +170,12 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
-	Name        *string  `json:"name"`
-	GroupID     *int64   `json:"group_id"`
-	Status      *string  `json:"status"`
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
+	Name                      *string  `json:"name"`
+	GroupID                   *int64   `json:"group_id"`
+	SubscriptionProductFamily *string  `json:"subscription_product_family"`
+	Status                    *string  `json:"status"`
+	IPWhitelist               []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
+	IPBlacklist               []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
 
 	// Quota fields
 	Quota           *float64   `json:"quota"`       // Quota limit in USD (nil = no change, 0 = unlimited)
@@ -194,6 +198,7 @@ type RateLimitCacheInvalidator interface {
 
 type ProductVisibleGroupsLister interface {
 	ListVisibleGroups(ctx context.Context, userID int64) ([]Group, error)
+	ListVisibleProductFamilies(ctx context.Context, userID, groupID int64) ([]string, error)
 }
 
 type APIKeyService struct {
@@ -360,6 +365,61 @@ func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group 
 	return user.CanBindGroup(group.ID, group.IsExclusive), nil
 }
 
+func (s *APIKeyService) resolveAPIKeySubscriptionProductFamily(ctx context.Context, userID int64, group *Group, requested *string) (*string, error) {
+	if group == nil || !group.IsSubscriptionType() {
+		return nil, nil
+	}
+	if s.productVisibleGroups == nil {
+		return nil, nil
+	}
+	families, err := s.productVisibleGroups.ListVisibleProductFamilies(ctx, userID, group.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list product subscription families: %w", err)
+	}
+	normalizedFamilies := normalizeProductFamilyList(families)
+	requestedFamily := ""
+	if requested != nil {
+		requestedFamily = normalizeProductFamilyName(*requested)
+	}
+	if requestedFamily != "" {
+		for _, family := range normalizedFamilies {
+			if family == requestedFamily {
+				return &family, nil
+			}
+		}
+		return nil, ErrProductFamilyNotAllowed
+	}
+	if len(normalizedFamilies) == 1 {
+		family := normalizedFamilies[0]
+		return &family, nil
+	}
+	if len(normalizedFamilies) > 1 {
+		return nil, ErrProductFamilyRequired
+	}
+	return nil, nil
+}
+
+func normalizeProductFamilyList(families []string) []string {
+	seen := make(map[string]struct{}, len(families))
+	out := make([]string, 0, len(families))
+	for _, family := range families {
+		normalized := normalizeProductFamilyName(family)
+		if normalized == "" {
+			normalized = "default"
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	return out
+}
+
+func normalizeProductFamilyName(family string) string {
+	return strings.TrimSpace(family)
+}
+
 // Create 创建API Key
 func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIKeyRequest) (*APIKey, error) {
 	// 验证用户存在
@@ -396,6 +456,11 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		if !canBind {
 			return nil, ErrGroupNotAllowed
 		}
+		family, err := s.resolveAPIKeySubscriptionProductFamily(ctx, user.ID, group, req.SubscriptionProductFamily)
+		if err != nil {
+			return nil, err
+		}
+		req.SubscriptionProductFamily = family
 	}
 
 	var key string
@@ -435,18 +500,19 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 
 	// 创建API Key记录
 	apiKey := &APIKey{
-		UserID:      userID,
-		Key:         key,
-		Name:        req.Name,
-		GroupID:     req.GroupID,
-		Status:      StatusActive,
-		IPWhitelist: req.IPWhitelist,
-		IPBlacklist: req.IPBlacklist,
-		Quota:       req.Quota,
-		QuotaUsed:   0,
-		RateLimit5h: req.RateLimit5h,
-		RateLimit1d: req.RateLimit1d,
-		RateLimit7d: req.RateLimit7d,
+		UserID:                    userID,
+		Key:                       key,
+		Name:                      req.Name,
+		GroupID:                   req.GroupID,
+		SubscriptionProductFamily: req.SubscriptionProductFamily,
+		Status:                    StatusActive,
+		IPWhitelist:               req.IPWhitelist,
+		IPBlacklist:               req.IPBlacklist,
+		Quota:                     req.Quota,
+		QuotaUsed:                 0,
+		RateLimit5h:               req.RateLimit5h,
+		RateLimit1d:               req.RateLimit1d,
+		RateLimit7d:               req.RateLimit7d,
 	}
 
 	// Set expiration time if specified
@@ -579,6 +645,7 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 		apiKey.Name = *req.Name
 	}
 
+	groupChanged := false
 	if req.GroupID != nil {
 		// 验证分组权限
 		user, err := s.userRepo.GetByID(ctx, userID)
@@ -600,6 +667,31 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 		}
 
 		apiKey.GroupID = req.GroupID
+		groupChanged = true
+	}
+
+	if groupChanged || req.SubscriptionProductFamily != nil {
+		groupID := int64(0)
+		if apiKey.GroupID != nil {
+			groupID = *apiKey.GroupID
+		}
+		if groupID > 0 {
+			user, err := s.userRepo.GetByID(ctx, userID)
+			if err != nil {
+				return nil, fmt.Errorf("get user: %w", err)
+			}
+			group, err := s.groupRepo.GetByID(ctx, groupID)
+			if err != nil {
+				return nil, fmt.Errorf("get group: %w", err)
+			}
+			family, err := s.resolveAPIKeySubscriptionProductFamily(ctx, user.ID, group, req.SubscriptionProductFamily)
+			if err != nil {
+				return nil, err
+			}
+			apiKey.SubscriptionProductFamily = family
+		} else {
+			apiKey.SubscriptionProductFamily = nil
+		}
 	}
 
 	if req.Status != nil {

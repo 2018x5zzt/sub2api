@@ -276,6 +276,9 @@
                   </template>
                 </Select>
               </div>
+              <p v-if="!generateForm.product_id" class="text-xs text-amber-600 dark:text-amber-300">
+                {{ t('admin.redeem.productRequired') }}
+              </p>
               <div>
                 <label class="input-label">{{ t('admin.redeem.validityDays') }}</label>
                 <input

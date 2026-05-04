@@ -67,7 +67,7 @@ func (s redeemProductAwareAssignerStub) ListProducts(context.Context) ([]Subscri
 	return out, nil
 }
 
-func TestAdminServiceGenerateSubscriptionCardCodesConvertsMappedLegacyGroupToProduct(t *testing.T) {
+func TestAdminServiceGenerateSubscriptionCardCodesRejectsMissingProductID(t *testing.T) {
 	t.Parallel()
 
 	groupID := int64(21)
@@ -75,13 +75,6 @@ func TestAdminServiceGenerateSubscriptionCardCodesConvertsMappedLegacyGroupToPro
 	svc := &adminServiceImpl{
 		redeemCodeRepo: repo,
 		groupRepo:      &subscriptionGroupRepoStub{group: &Group{ID: groupID, Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
-		defaultSubAssigner: redeemProductAwareAssignerStub{
-			groupID:   groupID,
-			productID: 88,
-			products: []SubscriptionProduct{
-				{ID: 88, Status: SubscriptionProductStatusActive, DefaultValidityDays: 30},
-			},
-		},
 	}
 
 	codes, err := svc.GenerateRedeemCodes(context.Background(), &GenerateRedeemCodesInput{
@@ -91,52 +84,9 @@ func TestAdminServiceGenerateSubscriptionCardCodesConvertsMappedLegacyGroupToPro
 		ValidityDays: 30,
 	})
 
-	require.NoError(t, err)
-	require.Len(t, codes, 1)
-	require.Len(t, repo.created, 1)
-	require.Nil(t, repo.created[0].GroupID)
-	require.NotNil(t, repo.created[0].ProductID)
-	require.Equal(t, int64(88), *repo.created[0].ProductID)
-	require.Equal(t, 30, repo.created[0].ValidityDays)
-}
-
-func TestAdminServiceGenerateSubscriptionCardCodesKeepsValidityDaysOnSameProduct(t *testing.T) {
-	t.Parallel()
-
-	groupID := int64(21)
-	repo := &redeemCreateRepoStub{}
-	svc := &adminServiceImpl{
-		redeemCodeRepo: repo,
-		groupRepo:      &subscriptionGroupRepoStub{group: &Group{ID: groupID, Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
-		defaultSubAssigner: redeemProductAwareAssignerStub{
-			groupID:   groupID,
-			productID: 88,
-			products: []SubscriptionProduct{
-				{ID: 88, Status: SubscriptionProductStatusActive, DefaultValidityDays: 7},
-			},
-		},
-	}
-
-	for _, days := range []int{1, 7, 30} {
-		codes, err := svc.GenerateRedeemCodes(context.Background(), &GenerateRedeemCodesInput{
-			Count:        1,
-			Type:         RedeemTypeSubscription,
-			GroupID:      &groupID,
-			ValidityDays: days,
-		})
-
-		require.NoError(t, err)
-		require.Len(t, codes, 1)
-	}
-
-	require.Len(t, repo.created, 3)
-	for i, days := range []int{1, 7, 30} {
-		require.Nil(t, repo.created[i].GroupID)
-		require.NotNil(t, repo.created[i].ProductID)
-		require.Equal(t, int64(88), *repo.created[i].ProductID)
-		require.Equal(t, days, repo.created[i].ValidityDays)
-		require.Equal(t, RedeemSourceCommercial, repo.created[i].SourceType)
-	}
+	require.Error(t, err)
+	require.Nil(t, codes)
+	require.Empty(t, repo.created)
 }
 
 func TestAdminServiceGenerateSubscriptionCardCodesRejectsUnknownProduct(t *testing.T) {

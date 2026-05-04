@@ -126,12 +126,21 @@ func (r *apiKeyAvailableGroupsSubscriptionRepo) ListActiveByUserID(context.Conte
 }
 
 type apiKeyProductVisibleGroupsStub struct {
-	groups []Group
+	groups   []Group
+	families map[int64][]string
 }
 
 func (s *apiKeyProductVisibleGroupsStub) ListVisibleGroups(ctx context.Context, userID int64) ([]Group, error) {
 	out := make([]Group, len(s.groups))
 	copy(out, s.groups)
+	return out, nil
+}
+
+func (s *apiKeyProductVisibleGroupsStub) ListVisibleProductFamilies(ctx context.Context, userID, groupID int64) ([]string, error) {
+	if s.families == nil {
+		return nil, nil
+	}
+	out := append([]string{}, s.families[groupID]...)
 	return out, nil
 }
 
@@ -295,6 +304,125 @@ func TestAPIKeyServiceCreateAllowsProductSubscriptionGroup(t *testing.T) {
 	require.Equal(t, productGroupID, *repo.created[0].GroupID)
 }
 
+func TestAPIKeyServiceCreateAutoBindsOnlyProductFamily(t *testing.T) {
+	productGroupID := int64(30)
+	repo := &apiKeyProductBindRepo{}
+	svc := NewAPIKeyService(
+		repo,
+		&apiKeyAvailableGroupsUserRepo{user: &User{ID: 7}},
+		&apiKeyProductBindGroupRepo{group: &Group{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		&apiKeyAvailableGroupsSubscriptionRepo{},
+		nil,
+		nil,
+		&config.Config{},
+	)
+	svc.productVisibleGroups = &apiKeyProductVisibleGroupsStub{
+		groups:   []Group{{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		families: map[int64][]string{productGroupID: {"gpt"}},
+	}
+
+	key, err := svc.Create(context.Background(), 7, CreateAPIKeyRequest{
+		Name:      "product key",
+		GroupID:   &productGroupID,
+		CustomKey: stringPtrForProductBind("custom-product-family-key"),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, key.SubscriptionProductFamily)
+	require.Equal(t, "gpt", *key.SubscriptionProductFamily)
+	require.Len(t, repo.created, 1)
+	require.NotNil(t, repo.created[0].SubscriptionProductFamily)
+	require.Equal(t, "gpt", *repo.created[0].SubscriptionProductFamily)
+}
+
+func TestAPIKeyServiceCreateRequiresProductFamilyWhenMultipleFamiliesAreVisible(t *testing.T) {
+	productGroupID := int64(30)
+	repo := &apiKeyProductBindRepo{}
+	svc := NewAPIKeyService(
+		repo,
+		&apiKeyAvailableGroupsUserRepo{user: &User{ID: 7}},
+		&apiKeyProductBindGroupRepo{group: &Group{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		&apiKeyAvailableGroupsSubscriptionRepo{},
+		nil,
+		nil,
+		&config.Config{},
+	)
+	svc.productVisibleGroups = &apiKeyProductVisibleGroupsStub{
+		groups:   []Group{{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		families: map[int64][]string{productGroupID: {"gpt", "image"}},
+	}
+
+	key, err := svc.Create(context.Background(), 7, CreateAPIKeyRequest{
+		Name:      "product key",
+		GroupID:   &productGroupID,
+		CustomKey: stringPtrForProductBind("custom-product-family-required-key"),
+	})
+	require.Error(t, err)
+	require.Nil(t, key)
+	require.Empty(t, repo.created)
+}
+
+func TestAPIKeyServiceCreateAcceptsExplicitVisibleProductFamily(t *testing.T) {
+	productGroupID := int64(30)
+	family := "image"
+	repo := &apiKeyProductBindRepo{}
+	svc := NewAPIKeyService(
+		repo,
+		&apiKeyAvailableGroupsUserRepo{user: &User{ID: 7}},
+		&apiKeyProductBindGroupRepo{group: &Group{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		&apiKeyAvailableGroupsSubscriptionRepo{},
+		nil,
+		nil,
+		&config.Config{},
+	)
+	svc.productVisibleGroups = &apiKeyProductVisibleGroupsStub{
+		groups:   []Group{{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		families: map[int64][]string{productGroupID: {"gpt", "image"}},
+	}
+
+	key, err := svc.Create(context.Background(), 7, CreateAPIKeyRequest{
+		Name:                      "product key",
+		GroupID:                   &productGroupID,
+		SubscriptionProductFamily: &family,
+		CustomKey:                 stringPtrForProductBind("custom-product-family-explicit-key"),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, key.SubscriptionProductFamily)
+	require.Equal(t, family, *key.SubscriptionProductFamily)
+	require.Len(t, repo.created, 1)
+	require.NotNil(t, repo.created[0].SubscriptionProductFamily)
+	require.Equal(t, family, *repo.created[0].SubscriptionProductFamily)
+}
+
+func TestAPIKeyServiceCreateRejectsUnknownExplicitProductFamily(t *testing.T) {
+	productGroupID := int64(30)
+	repo := &apiKeyProductBindRepo{}
+	svc := NewAPIKeyService(
+		repo,
+		&apiKeyAvailableGroupsUserRepo{user: &User{ID: 7}},
+		&apiKeyProductBindGroupRepo{group: &Group{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		&apiKeyAvailableGroupsSubscriptionRepo{},
+		nil,
+		nil,
+		&config.Config{},
+	)
+	svc.productVisibleGroups = &apiKeyProductVisibleGroupsStub{
+		groups:   []Group{{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		families: map[int64][]string{productGroupID: {"gpt"}},
+	}
+
+	family := "image"
+	key, err := svc.Create(context.Background(), 7, CreateAPIKeyRequest{
+		Name:                      "product key",
+		GroupID:                   &productGroupID,
+		SubscriptionProductFamily: &family,
+		CustomKey:                 stringPtrForProductBind("custom-product-family-invalid-key"),
+	})
+	require.Error(t, err)
+	require.Nil(t, key)
+	require.Empty(t, repo.created)
+	require.ErrorIs(t, err, ErrProductFamilyNotAllowed)
+}
+
 func TestAPIKeyServiceUpdateAllowsProductSubscriptionGroup(t *testing.T) {
 	productGroupID := int64(30)
 	repo := &apiKeyProductBindRepo{
@@ -320,6 +448,80 @@ func TestAPIKeyServiceUpdateAllowsProductSubscriptionGroup(t *testing.T) {
 	require.Len(t, repo.updated, 1)
 	require.NotNil(t, repo.updated[0].GroupID)
 	require.Equal(t, productGroupID, *repo.updated[0].GroupID)
+}
+
+func TestAPIKeyServiceUpdateChangesProductFamilyWhenGroupUnchanged(t *testing.T) {
+	productGroupID := int64(30)
+	oldFamily := "gpt"
+	newFamily := "image"
+	repo := &apiKeyProductBindRepo{
+		apiKey: &APIKey{
+			ID:                        99,
+			UserID:                    7,
+			Key:                       "existing-key",
+			Name:                      "old",
+			Status:                    StatusActive,
+			GroupID:                   &productGroupID,
+			SubscriptionProductFamily: &oldFamily,
+		},
+	}
+	svc := NewAPIKeyService(
+		repo,
+		&apiKeyAvailableGroupsUserRepo{user: &User{ID: 7}},
+		&apiKeyProductBindGroupRepo{group: &Group{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		&apiKeyAvailableGroupsSubscriptionRepo{},
+		nil,
+		nil,
+		&config.Config{},
+	)
+	svc.productVisibleGroups = &apiKeyProductVisibleGroupsStub{
+		groups:   []Group{{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		families: map[int64][]string{productGroupID: {"gpt", "image"}},
+	}
+
+	key, err := svc.Update(context.Background(), 99, 7, UpdateAPIKeyRequest{SubscriptionProductFamily: &newFamily})
+
+	require.NoError(t, err)
+	require.NotNil(t, key.SubscriptionProductFamily)
+	require.Equal(t, newFamily, *key.SubscriptionProductFamily)
+	require.Len(t, repo.updated, 1)
+	require.NotNil(t, repo.updated[0].SubscriptionProductFamily)
+	require.Equal(t, newFamily, *repo.updated[0].SubscriptionProductFamily)
+}
+
+func TestAPIKeyServiceUpdateRequiresProductFamilyWhenGroupUnchangedAndMultipleFamiliesVisible(t *testing.T) {
+	productGroupID := int64(30)
+	oldFamily := "gpt"
+	repo := &apiKeyProductBindRepo{
+		apiKey: &APIKey{
+			ID:                        99,
+			UserID:                    7,
+			Key:                       "existing-key",
+			Name:                      "old",
+			Status:                    StatusActive,
+			GroupID:                   &productGroupID,
+			SubscriptionProductFamily: &oldFamily,
+		},
+	}
+	svc := NewAPIKeyService(
+		repo,
+		&apiKeyAvailableGroupsUserRepo{user: &User{ID: 7}},
+		&apiKeyProductBindGroupRepo{group: &Group{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		&apiKeyAvailableGroupsSubscriptionRepo{},
+		nil,
+		nil,
+		&config.Config{},
+	)
+	svc.productVisibleGroups = &apiKeyProductVisibleGroupsStub{
+		groups:   []Group{{ID: productGroupID, Name: "product-sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		families: map[int64][]string{productGroupID: {"gpt", "image"}},
+	}
+
+	key, err := svc.Update(context.Background(), 99, 7, UpdateAPIKeyRequest{SubscriptionProductFamily: stringPtrForProductBind(" ")})
+
+	require.ErrorIs(t, err, ErrProductFamilyRequired)
+	require.Nil(t, key)
+	require.Empty(t, repo.updated)
 }
 
 func groupIDs(groups []Group) []int64 {

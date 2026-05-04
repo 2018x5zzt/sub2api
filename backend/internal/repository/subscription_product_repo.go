@@ -32,7 +32,11 @@ func (r *subscriptionProductRepository) execForContext(ctx context.Context) sqlE
 	return r.sql
 }
 
-func (r *subscriptionProductRepository) GetActiveProductSubscriptionByUserAndGroupID(ctx context.Context, userID, groupID int64) (*service.SubscriptionProductBinding, *service.UserProductSubscription, error) {
+func (r *subscriptionProductRepository) GetActiveProductSubscriptionByUserAndGroupID(ctx context.Context, userID, groupID int64, productFamily *string) (*service.SubscriptionProductBinding, *service.UserProductSubscription, error) {
+	normalizedFamily := ""
+	if productFamily != nil {
+		normalizedFamily = normalizeProductFamily(*productFamily)
+	}
 	rows, err := r.sql.QueryContext(ctx, `
 SELECT
 	sp.id,
@@ -82,8 +86,9 @@ JOIN user_product_subscriptions ups
 WHERE spg.group_id = $2
   AND spg.deleted_at IS NULL
   AND spg.status = 'active'
+  AND ($3 = '' OR sp.product_family = $3)
 ORDER BY sp.product_family ASC, sp.sort_order ASC, ups.starts_at ASC, ups.id ASC
-`, userID, groupID)
+`, userID, groupID, normalizedFamily)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -91,6 +96,9 @@ ORDER BY sp.product_family ASC, sp.sort_order ASC, ups.starts_at ASC, ups.id ASC
 
 	var firstFamily string
 	var firstLimitErr error
+	var firstAvailableBinding *service.SubscriptionProductBinding
+	var firstAvailableSub *service.UserProductSubscription
+	seenFamilies := make(map[string]struct{})
 	seen := false
 	for rows.Next() {
 		seen = true
@@ -143,6 +151,10 @@ ORDER BY sp.product_family ASC, sp.sort_order ASC, ups.starts_at ASC, ups.id ASC
 		if family == "" {
 			family = "default"
 		}
+		seenFamilies[family] = struct{}{}
+		if normalizedFamily == "" && len(seenFamilies) > 1 {
+			return nil, nil, service.ErrProductFamilyRequired
+		}
 		if family != firstFamily {
 			break
 		}
@@ -157,13 +169,36 @@ ORDER BY sp.product_family ASC, sp.sort_order ASC, ups.starts_at ASC, ups.id ASC
 			}
 			continue
 		}
-		return &binding, &sub, nil
+		if normalizedFamily != "" {
+			return &binding, &sub, nil
+		}
+		if firstAvailableBinding == nil {
+			bindingCopy := binding
+			subCopy := sub
+			firstAvailableBinding = &bindingCopy
+			firstAvailableSub = &subCopy
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, nil, err
 	}
+	if normalizedFamily == "" {
+		switch len(seenFamilies) {
+		case 0:
+			// handled below
+		case 1:
+			if firstAvailableBinding != nil && firstAvailableSub != nil {
+				return firstAvailableBinding, firstAvailableSub, nil
+			}
+		default:
+			return nil, nil, service.ErrProductFamilyRequired
+		}
+	}
 	if !seen {
 		return nil, nil, service.ErrSubscriptionNotFound
+	}
+	if firstAvailableBinding != nil && firstAvailableSub != nil {
+		return firstAvailableBinding, firstAvailableSub, nil
 	}
 	if firstLimitErr != nil {
 		return nil, nil, firstLimitErr
@@ -360,9 +395,9 @@ ORDER BY g.sort_order ASC, g.id ASC`, userID)
 		); err != nil {
 			return nil, err
 		}
-		g.DailyLimitUSD = nullableFloat64Ptr(dailyLimit)
-		g.WeeklyLimitUSD = nullableFloat64Ptr(weeklyLimit)
-		g.MonthlyLimitUSD = nullableFloat64Ptr(monthlyLimit)
+		g.DailyLimitUSD = nullableProductFloat64Ptr(dailyLimit)
+		g.WeeklyLimitUSD = nullableProductFloat64Ptr(weeklyLimit)
+		g.MonthlyLimitUSD = nullableProductFloat64Ptr(monthlyLimit)
 		g.Hydrated = true
 		groups = append(groups, g)
 	}
@@ -670,6 +705,14 @@ func (r *subscriptionProductRepository) SyncProductBindings(ctx context.Context,
 		return nil, err
 	}
 
+	groupIDs := make([]int64, 0, len(inputs))
+	for _, input := range inputs {
+		groupIDs = append(groupIDs, input.GroupID)
+	}
+	if err := r.ensureSubscriptionGroups(ctx, exec, groupIDs); err != nil {
+		return nil, err
+	}
+
 	seen := make(map[int64]struct{}, len(inputs))
 	for _, input := range inputs {
 		normalized, err := normalizeProductBindingInput(input)
@@ -748,6 +791,45 @@ WHERE product_id = $2
 	}
 
 	return r.listProductBindingDetails(ctx, exec, productID)
+}
+
+func (r *subscriptionProductRepository) ensureSubscriptionGroups(ctx context.Context, exec sqlExecutor, groupIDs []int64) error {
+	if len(groupIDs) == 0 {
+		return nil
+	}
+	rows, err := exec.QueryContext(ctx, `
+SELECT id, subscription_type
+FROM groups
+WHERE id = ANY($1)
+  AND deleted_at IS NULL`, pqInt64Array(groupIDs))
+	if err != nil {
+		return fmt.Errorf("validate subscription product bindings: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	found := make(map[int64]string, len(groupIDs))
+	for rows.Next() {
+		var groupID int64
+		var subscriptionType string
+		if err := rows.Scan(&groupID, &subscriptionType); err != nil {
+			return err
+		}
+		found[groupID] = subscriptionType
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, groupID := range groupIDs {
+		subscriptionType, ok := found[groupID]
+		if !ok {
+			return infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT_BINDINGS", fmt.Sprintf("group %d not found", groupID))
+		}
+		if strings.TrimSpace(subscriptionType) != service.SubscriptionTypeSubscription {
+			return infraerrors.BadRequest("INVALID_SUBSCRIPTION_PRODUCT_BINDINGS", "subscription product bindings can only target subscription groups")
+		}
+	}
+	return nil
 }
 
 func (r *subscriptionProductRepository) ListProductBindings(ctx context.Context, productID int64) ([]service.SubscriptionProductBindingDetail, error) {
@@ -1151,6 +1233,94 @@ RETURNING id`, []any{input.UserID, input.ProductID, now, expiresAt, input.Assign
 	return sub, false, getErr
 }
 
+func (r *subscriptionProductRepository) AdjustProductSubscription(ctx context.Context, subscriptionID int64, input *service.AdjustProductSubscriptionInput) (*service.UserProductSubscription, error) {
+	if subscriptionID <= 0 || input == nil {
+		return nil, infraerrors.BadRequest("INVALID_PRODUCT_SUBSCRIPTION", "subscription_id is required")
+	}
+	sets := []string{"updated_at = NOW()"}
+	args := make([]any, 0, 4)
+	addSet := func(field string, value any) {
+		args = append(args, value)
+		sets = append(sets, fmt.Sprintf("%s = $%d", field, len(args)))
+	}
+	if input.ExpiresAt != nil {
+		addSet("expires_at", *input.ExpiresAt)
+	}
+	if input.Status != nil {
+		addSet("status", strings.TrimSpace(*input.Status))
+	}
+	if input.Notes != nil {
+		addSet("notes", strings.TrimSpace(*input.Notes))
+	}
+	if len(sets) == 1 {
+		return r.getUserProductSubscriptionByID(ctx, r.execForContext(ctx), subscriptionID)
+	}
+	args = append(args, subscriptionID)
+	if _, err := r.execForContext(ctx).ExecContext(ctx, `
+UPDATE user_product_subscriptions
+SET `+strings.Join(sets, ", ")+`
+WHERE id = $`+strconv.Itoa(len(args))+`
+  AND deleted_at IS NULL`, args...); err != nil {
+		return nil, fmt.Errorf("adjust user product subscription: %w", err)
+	}
+	return r.getUserProductSubscriptionByID(ctx, r.execForContext(ctx), subscriptionID)
+}
+
+func (r *subscriptionProductRepository) ResetProductSubscriptionQuota(ctx context.Context, subscriptionID int64, input *service.ResetProductSubscriptionQuotaInput) (*service.UserProductSubscription, error) {
+	if subscriptionID <= 0 || input == nil || (!input.Daily && !input.Weekly && !input.Monthly) {
+		return nil, infraerrors.BadRequest("INVALID_PRODUCT_SUBSCRIPTION_RESET", "at least one quota window must be selected")
+	}
+	sets := []string{"updated_at = NOW()"}
+	if input.Daily {
+		sets = append(sets,
+			"daily_usage_usd = 0",
+			"daily_carryover_in_usd = 0",
+			"daily_carryover_remaining_usd = 0",
+			"daily_window_start = date_trunc('day', NOW() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai'",
+		)
+	}
+	if input.Weekly {
+		sets = append(sets,
+			"weekly_usage_usd = 0",
+			"weekly_window_start = NOW()",
+		)
+	}
+	if input.Monthly {
+		sets = append(sets,
+			"monthly_usage_usd = 0",
+			"monthly_window_start = NOW()",
+		)
+	}
+	if _, err := r.execForContext(ctx).ExecContext(ctx, `
+UPDATE user_product_subscriptions
+SET `+strings.Join(sets, ", ")+`
+WHERE id = $1
+  AND deleted_at IS NULL`, subscriptionID); err != nil {
+		return nil, fmt.Errorf("reset user product subscription quota: %w", err)
+	}
+	return r.getUserProductSubscriptionByID(ctx, r.execForContext(ctx), subscriptionID)
+}
+
+func (r *subscriptionProductRepository) RevokeProductSubscription(ctx context.Context, subscriptionID int64) error {
+	if subscriptionID <= 0 {
+		return infraerrors.BadRequest("INVALID_PRODUCT_SUBSCRIPTION", "subscription_id is required")
+	}
+	result, err := r.execForContext(ctx).ExecContext(ctx, `
+UPDATE user_product_subscriptions
+SET status = $1,
+    updated_at = NOW()
+WHERE id = $2
+  AND deleted_at IS NULL`, service.ProductSubscriptionStatusRevoked, subscriptionID)
+	if err != nil {
+		return fmt.Errorf("revoke user product subscription: %w", err)
+	}
+	affected, _ := result.RowsAffected()
+	if affected == 0 {
+		return service.ErrSubscriptionNotFound
+	}
+	return nil
+}
+
 func (r *subscriptionProductRepository) getUserProductSubscriptionByID(ctx context.Context, exec sqlExecutor, id int64) (*service.UserProductSubscription, error) {
 	var sub service.UserProductSubscription
 	var dailyWindow, weeklyWindow, monthlyWindow sql.NullTime
@@ -1450,7 +1620,7 @@ func nullableTimePtr(v sql.NullTime) *time.Time {
 	return &v.Time
 }
 
-func nullableFloat64Ptr(v sql.NullFloat64) *float64 {
+func nullableProductFloat64Ptr(v sql.NullFloat64) *float64 {
 	if !v.Valid {
 		return nil
 	}

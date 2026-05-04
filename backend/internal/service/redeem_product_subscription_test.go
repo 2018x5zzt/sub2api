@@ -72,7 +72,7 @@ func TestRedeemServiceAssignProductSubscriptionFromRedeemUsesRedeemCodeValidityD
 	}
 }
 
-func TestValidateSubscriptionRedeemCodeAllowsHistoricalProductCodeWithLegacyGroupID(t *testing.T) {
+func TestValidateSubscriptionRedeemCodeAllowsProductCodeWithHistoricalLegacyGroupID(t *testing.T) {
 	productID := int64(88)
 	groupID := int64(21)
 
@@ -87,21 +87,7 @@ func TestValidateSubscriptionRedeemCodeAllowsHistoricalProductCodeWithLegacyGrou
 	}
 }
 
-func TestValidateSubscriptionRedeemCodeRejectsCommercialGroupOnlyCode(t *testing.T) {
-	groupID := int64(21)
-
-	err := validateSubscriptionRedeemCodeShape(&RedeemCode{
-		Type:       RedeemTypeSubscription,
-		SourceType: RedeemSourceCommercial,
-		GroupID:    &groupID,
-	})
-
-	if err == nil {
-		t.Fatal("validateSubscriptionRedeemCodeShape returned nil, want error")
-	}
-}
-
-func TestValidateSubscriptionRedeemCodeAllowsSystemGrantLegacyGroupCode(t *testing.T) {
+func TestValidateSubscriptionRedeemCodeRejectsGroupOnlyCode(t *testing.T) {
 	groupID := int64(21)
 
 	err := validateSubscriptionRedeemCodeShape(&RedeemCode{
@@ -110,18 +96,15 @@ func TestValidateSubscriptionRedeemCodeAllowsSystemGrantLegacyGroupCode(t *testi
 		GroupID:    &groupID,
 	})
 
-	if err != nil {
-		t.Fatalf("validateSubscriptionRedeemCodeShape returned error: %v", err)
+	if err == nil {
+		t.Fatal("validateSubscriptionRedeemCodeShape returned nil, want error")
 	}
 }
 
-func TestRedeemServiceCreateSubscriptionCardCodeConvertsMappedLegacyGroupToProduct(t *testing.T) {
+func TestRedeemServiceCreateSubscriptionCardCodeRejectsMissingProductID(t *testing.T) {
 	groupID := int64(21)
 	repo := &redeemCreateRepoStub{}
-	svc := &RedeemService{
-		redeemRepo:           repo,
-		subscriptionAssigner: redeemProductAwareAssignerStub{groupID: groupID, productID: 88},
-	}
+	svc := &RedeemService{redeemRepo: repo}
 
 	err := svc.CreateCode(context.Background(), &RedeemCode{
 		Code:         "GROUP-COMPAT",
@@ -131,17 +114,10 @@ func TestRedeemServiceCreateSubscriptionCardCodeConvertsMappedLegacyGroupToProdu
 		GroupID:      &groupID,
 		ValidityDays: 30,
 	})
-	if err != nil {
-		t.Fatalf("CreateCode returned error: %v", err)
+	if err == nil {
+		t.Fatal("CreateCode returned nil, want error")
 	}
-	if len(repo.created) != 1 {
-		t.Fatalf("created codes = %d, want 1", len(repo.created))
-	}
-	got := repo.created[0]
-	if got.GroupID != nil {
-		t.Fatalf("GroupID = %v, want nil after product conversion", *got.GroupID)
-	}
-	if got.ProductID == nil || *got.ProductID != 88 {
-		t.Fatalf("ProductID = %v, want 88", got.ProductID)
+	if len(repo.created) != 0 {
+		t.Fatalf("created codes = %d, want 0", len(repo.created))
 	}
 }

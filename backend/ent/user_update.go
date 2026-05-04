@@ -512,6 +512,33 @@ func (_u *UserUpdate) AddSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpda
 	return _u
 }
 
+// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
+func (_u *UserUpdate) SetSubscriptionBalanceFallbackGroupID(v int64) *UserUpdate {
+	_u.mutation.ResetSubscriptionBalanceFallbackGroupID()
+	_u.mutation.SetSubscriptionBalanceFallbackGroupID(v)
+	return _u
+}
+
+// SetNillableSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableSubscriptionBalanceFallbackGroupID(v *int64) *UserUpdate {
+	if v != nil {
+		_u.SetSubscriptionBalanceFallbackGroupID(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionBalanceFallbackGroupID adds value to the "subscription_balance_fallback_group_id" field.
+func (_u *UserUpdate) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpdate {
+	_u.mutation.AddSubscriptionBalanceFallbackGroupID(v)
+	return _u
+}
+
+// ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
+func (_u *UserUpdate) ClearSubscriptionBalanceFallbackGroupID() *UserUpdate {
+	_u.mutation.ClearSubscriptionBalanceFallbackGroupID()
+	return _u
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (_u *UserUpdate) SetRpmLimit(v int) *UserUpdate {
 	_u.mutation.ResetRpmLimit()
@@ -1192,6 +1219,15 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedSubscriptionBalanceFallbackUsedUsd(); ok {
 		_spec.AddField(user.FieldSubscriptionBalanceFallbackUsedUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.SubscriptionBalanceFallbackGroupID(); ok {
+		_spec.SetField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionBalanceFallbackGroupID(); ok {
+		_spec.AddField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.SubscriptionBalanceFallbackGroupIDCleared() {
+		_spec.ClearField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
@@ -2244,6 +2280,33 @@ func (_u *UserUpdateOne) AddSubscriptionBalanceFallbackUsedUsd(v float64) *UserU
 	return _u
 }
 
+// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
+func (_u *UserUpdateOne) SetSubscriptionBalanceFallbackGroupID(v int64) *UserUpdateOne {
+	_u.mutation.ResetSubscriptionBalanceFallbackGroupID()
+	_u.mutation.SetSubscriptionBalanceFallbackGroupID(v)
+	return _u
+}
+
+// SetNillableSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableSubscriptionBalanceFallbackGroupID(v *int64) *UserUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionBalanceFallbackGroupID(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionBalanceFallbackGroupID adds value to the "subscription_balance_fallback_group_id" field.
+func (_u *UserUpdateOne) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpdateOne {
+	_u.mutation.AddSubscriptionBalanceFallbackGroupID(v)
+	return _u
+}
+
+// ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
+func (_u *UserUpdateOne) ClearSubscriptionBalanceFallbackGroupID() *UserUpdateOne {
+	_u.mutation.ClearSubscriptionBalanceFallbackGroupID()
+	return _u
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (_u *UserUpdateOne) SetRpmLimit(v int) *UserUpdateOne {
 	_u.mutation.ResetRpmLimit()
@@ -2954,6 +3017,15 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.AddedSubscriptionBalanceFallbackUsedUsd(); ok {
 		_spec.AddField(user.FieldSubscriptionBalanceFallbackUsedUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.SubscriptionBalanceFallbackGroupID(); ok {
+		_spec.SetField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionBalanceFallbackGroupID(); ok {
+		_spec.AddField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.SubscriptionBalanceFallbackGroupIDCleared() {
+		_spec.ClearField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)

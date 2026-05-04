@@ -71,6 +71,8 @@ const (
 	FieldSubscriptionBalanceFallbackLimitUsd = "subscription_balance_fallback_limit_usd"
 	// FieldSubscriptionBalanceFallbackUsedUsd holds the string denoting the subscription_balance_fallback_used_usd field in the database.
 	FieldSubscriptionBalanceFallbackUsedUsd = "subscription_balance_fallback_used_usd"
+	// FieldSubscriptionBalanceFallbackGroupID holds the string denoting the subscription_balance_fallback_group_id field in the database.
+	FieldSubscriptionBalanceFallbackGroupID = "subscription_balance_fallback_group_id"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
 	FieldRpmLimit = "rpm_limit"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
@@ -223,6 +225,7 @@ var Columns = []string{
 	FieldSubscriptionBalanceFallbackEnabled,
 	FieldSubscriptionBalanceFallbackLimitUsd,
 	FieldSubscriptionBalanceFallbackUsedUsd,
+	FieldSubscriptionBalanceFallbackGroupID,
 	FieldRpmLimit,
 }
 
@@ -450,6 +453,11 @@ func BySubscriptionBalanceFallbackLimitUsd(opts ...sql.OrderTermOption) OrderOpt
 // BySubscriptionBalanceFallbackUsedUsd orders the results by the subscription_balance_fallback_used_usd field.
 func BySubscriptionBalanceFallbackUsedUsd(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionBalanceFallbackUsedUsd, opts...).ToFunc()
+}
+
+// BySubscriptionBalanceFallbackGroupID orders the results by the subscription_balance_fallback_group_id field.
+func BySubscriptionBalanceFallbackGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionBalanceFallbackGroupID, opts...).ToFunc()
 }
 
 // ByRpmLimit orders the results by the rpm_limit field.

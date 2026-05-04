@@ -44,6 +44,26 @@
           </div>
           <div v-if="fallbackEnabled" class="border-t border-gray-100 bg-gray-50/50 px-5 py-4 dark:border-dark-700 dark:bg-dark-800/50">
             <div class="flex flex-wrap items-end gap-4">
+              <label class="block w-56">
+                <span class="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  {{ t('userSubscriptions.balanceFallback.group', 'Balance group') }}
+                </span>
+                <select
+                  v-model.number="fallbackGroupId"
+                  class="input"
+                  :disabled="savingFallback"
+                  @change="saveBalanceFallbackSettings"
+                >
+                  <option :value="null">{{ t('userSubscriptions.balanceFallback.selectGroup', 'Select balance group') }}</option>
+                  <option
+                    v-for="option in fallbackGroupOptions"
+                    :key="option.value"
+                    :value="option.value"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
               <label class="block w-48">
                 <span class="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   {{ t('userSubscriptions.balanceFallback.limit', '余额兜底上限') }}
@@ -68,6 +88,9 @@
                 {{ t('userSubscriptions.balanceFallback.setLimitHint', '请设置一个大于 0 的上限以启用余额兜底') }}
               </span>
             </div>
+            <p class="mt-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+              {{ t('userSubscriptions.balanceFallback.negativeBalanceHint', 'If your balance becomes negative, future requests will be blocked until you recharge.') }}
+            </p>
           </div>
         </div>
 
@@ -339,8 +362,9 @@ import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import subscriptionsAPI from '@/api/subscriptions'
 import subscriptionProductsAPI from '@/api/subscriptionProducts'
+import userGroupsAPI from '@/api/groups'
 import { updateProfile } from '@/api/user'
-import type { ActiveSubscriptionProduct, UserSubscription } from '@/types'
+import type { ActiveSubscriptionProduct, Group, UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
@@ -398,13 +422,23 @@ const authStore = useAuthStore()
 
 const subscriptions = ref<UserSubscription[]>([])
 const subscriptionProducts = ref<ActiveSubscriptionProduct[]>([])
+const selectableGroups = ref<Group[]>([])
 const loading = ref(true)
 const savingFallback = ref(false)
 const fallbackEnabled = ref(false)
 const fallbackLimit = ref(0)
+const fallbackGroupId = ref<number | null>(null)
 
 const fallbackUsed = computed(() => authStore.user?.subscription_balance_fallback_used_usd || 0)
 const fallbackRemaining = computed(() => Math.max((fallbackLimit.value || 0) - fallbackUsed.value, 0))
+const fallbackGroupOptions = computed(() => {
+  return selectableGroups.value
+    .filter((group) => group.status === 'active' && group.subscription_type !== 'subscription')
+    .map((group) => ({
+      value: group.id,
+      label: group.name || `Group #${group.id}`
+    }))
+})
 
 const productGroupIDs = computed(() => {
   const ids = new Set<number>()
@@ -423,15 +457,18 @@ const visibleSubscriptions = computed(() =>
 async function loadSubscriptions() {
   try {
     loading.value = true
-    const [legacySubscriptions, products, profile] = await Promise.all([
+    const [legacySubscriptions, products, profile, groups] = await Promise.all([
       subscriptionsAPI.getActiveSubscriptions(),
       subscriptionProductsAPI.getActive(),
-      authStore.refreshUser()
+      authStore.refreshUser(),
+      userGroupsAPI.getAvailable()
     ])
     subscriptions.value = legacySubscriptions
     subscriptionProducts.value = products
+    selectableGroups.value = groups
     fallbackEnabled.value = Boolean(profile.subscription_balance_fallback_enabled)
     fallbackLimit.value = profile.subscription_balance_fallback_limit_usd || 0
+    fallbackGroupId.value = profile.subscription_balance_fallback_group_id || null
   } catch (error) {
     console.error('Failed to load subscriptions:', error)
     appStore.showError(t('userSubscriptions.failedToLoad'))
@@ -441,6 +478,19 @@ async function loadSubscriptions() {
 }
 
 async function saveBalanceFallbackSettings() {
+  const hasPositiveLimit = (fallbackLimit.value || 0) > 0
+  const hasFallbackGroup = !!fallbackGroupId.value
+
+  if (fallbackEnabled.value && !hasFallbackGroup) {
+    appStore.showError(t('userSubscriptions.balanceFallback.groupRequired', 'Please select a balance group'))
+    fallbackEnabled.value = false
+    return
+  }
+  if (fallbackEnabled.value && !hasPositiveLimit) {
+    appStore.showError(t('userSubscriptions.balanceFallback.limitRequired', 'Please set a positive fallback limit'))
+    fallbackEnabled.value = false
+    return
+  }
   savingFallback.value = true
   try {
     if (!fallbackEnabled.value && fallbackLimit.value < 0) {
@@ -448,17 +498,20 @@ async function saveBalanceFallbackSettings() {
     }
     const updated = await updateProfile({
       subscription_balance_fallback_enabled: fallbackEnabled.value,
-      subscription_balance_fallback_limit_usd: Math.max(fallbackLimit.value || 0, 0)
+      subscription_balance_fallback_limit_usd: Math.max(fallbackLimit.value || 0, 0),
+      subscription_balance_fallback_group_id: fallbackEnabled.value ? fallbackGroupId.value : null
     })
     authStore.user = updated
     fallbackEnabled.value = Boolean(updated.subscription_balance_fallback_enabled)
     fallbackLimit.value = updated.subscription_balance_fallback_limit_usd || 0
+    fallbackGroupId.value = updated.subscription_balance_fallback_group_id || null
     appStore.showSuccess(t('common.saved'))
   } catch (error) {
     console.error('Failed to save subscription balance fallback:', error)
     appStore.showError(t('common.error'))
     fallbackEnabled.value = Boolean(authStore.user?.subscription_balance_fallback_enabled)
     fallbackLimit.value = authStore.user?.subscription_balance_fallback_limit_usd || 0
+    fallbackGroupId.value = authStore.user?.subscription_balance_fallback_group_id || null
   } finally {
     savingFallback.value = false
   }

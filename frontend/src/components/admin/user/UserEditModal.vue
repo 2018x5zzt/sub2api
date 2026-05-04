@@ -49,6 +49,38 @@
         />
         <p class="input-hint">{{ t('admin.users.form.rpmLimitHint') }}</p>
       </div>
+      <div class="space-y-4 rounded-xl border border-gray-200 p-4 dark:border-dark-700">
+        <label class="flex items-center justify-between gap-3">
+          <span>
+            <span class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              {{ t('admin.users.fallback.enabled', '订阅额度不足时用余额兜底') }}
+            </span>
+            <span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.users.fallback.enabledHint', '管理员可代用户开启、关闭并设置余额兜底额度。') }}
+            </span>
+          </span>
+          <input v-model="form.subscription_balance_fallback_enabled" type="checkbox" class="checkbox" />
+        </label>
+        <div v-if="form.subscription_balance_fallback_enabled" class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label class="input-label">{{ t('admin.users.fallback.group', '余额兜底分组') }}</label>
+            <select v-model.number="form.subscription_balance_fallback_group_id" class="input">
+              <option :value="null">{{ t('admin.users.fallback.selectGroup', '选择标准分组') }}</option>
+              <option v-for="group in fallbackGroupOptions" :key="group.id" :value="group.id">
+                {{ group.name }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="input-label">{{ t('admin.users.fallback.limit', '累计上限 USD') }}</label>
+            <input v-model.number="form.subscription_balance_fallback_limit_usd" type="number" min="0" step="0.01" class="input" />
+          </div>
+          <div>
+            <label class="input-label">{{ t('admin.users.fallback.used', '已用 USD') }}</label>
+            <input v-model.number="form.subscription_balance_fallback_used_usd" type="number" min="0" step="0.01" class="input" />
+          </div>
+        </div>
+      </div>
       <UserAttributeForm v-model="form.customAttributes" :user-id="user?.id" />
     </form>
     <template #footer>
@@ -63,12 +95,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { computed, ref, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useClipboard } from '@/composables/useClipboard'
 import { adminAPI } from '@/api/admin'
-import type { AdminUser, UserAttributeValuesMap } from '@/types'
+import type { AdminGroup, AdminUser, UserAttributeValuesMap } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import UserAttributeForm from '@/components/user/UserAttributeForm.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -78,14 +110,53 @@ const emit = defineEmits(['close', 'success'])
 const { t } = useI18n(); const appStore = useAppStore(); const { copyToClipboard } = useClipboard()
 
 const submitting = ref(false); const passwordCopied = ref(false)
-const form = reactive({ email: '', password: '', username: '', notes: '', concurrency: 1, rpm_limit: 0, customAttributes: {} as UserAttributeValuesMap })
+const groups = ref<AdminGroup[]>([])
+const form = reactive({
+  email: '',
+  password: '',
+  username: '',
+  notes: '',
+  concurrency: 1,
+  rpm_limit: 0,
+  subscription_balance_fallback_enabled: false,
+  subscription_balance_fallback_limit_usd: 0,
+  subscription_balance_fallback_used_usd: 0,
+  subscription_balance_fallback_group_id: null as number | null,
+  customAttributes: {} as UserAttributeValuesMap
+})
+
+const fallbackGroupOptions = computed(() =>
+  groups.value.filter(group => group.status === 'active' && group.subscription_type === 'standard')
+)
 
 watch(() => props.user, (u) => {
   if (u) {
-    Object.assign(form, { email: u.email, password: '', username: u.username || '', notes: u.notes || '', concurrency: u.concurrency, rpm_limit: u.rpm_limit ?? 0, customAttributes: {} })
+    Object.assign(form, {
+      email: u.email,
+      password: '',
+      username: u.username || '',
+      notes: u.notes || '',
+      concurrency: u.concurrency,
+      rpm_limit: u.rpm_limit ?? 0,
+      subscription_balance_fallback_enabled: !!u.subscription_balance_fallback_enabled,
+      subscription_balance_fallback_limit_usd: u.subscription_balance_fallback_limit_usd ?? 0,
+      subscription_balance_fallback_used_usd: u.subscription_balance_fallback_used_usd ?? 0,
+      subscription_balance_fallback_group_id: u.subscription_balance_fallback_group_id ?? null,
+      customAttributes: {}
+    })
     passwordCopied.value = false
+    void loadGroups()
   }
 }, { immediate: true })
+
+const loadGroups = async () => {
+  if (groups.value.length > 0) return
+  try {
+    groups.value = await adminAPI.groups.getAll()
+  } catch {
+    groups.value = []
+  }
+}
 
 const generatePassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%^&*'
@@ -107,9 +178,29 @@ const handleUpdateUser = async () => {
     appStore.showError(t('admin.users.concurrencyMin'))
     return
   }
+  if (form.subscription_balance_fallback_enabled) {
+    if (!form.subscription_balance_fallback_group_id) {
+      appStore.showError(t('admin.users.fallback.groupRequired', '请选择余额兜底分组'))
+      return
+    }
+    if (form.subscription_balance_fallback_limit_usd <= 0) {
+      appStore.showError(t('admin.users.fallback.limitRequired', '余额兜底上限必须大于 0'))
+      return
+    }
+  }
   submitting.value = true
   try {
-    const data: any = { email: form.email, username: form.username, notes: form.notes, concurrency: form.concurrency, rpm_limit: form.rpm_limit }
+    const data: any = {
+      email: form.email,
+      username: form.username,
+      notes: form.notes,
+      concurrency: form.concurrency,
+      rpm_limit: form.rpm_limit,
+      subscription_balance_fallback_enabled: form.subscription_balance_fallback_enabled,
+      subscription_balance_fallback_limit_usd: Number(form.subscription_balance_fallback_limit_usd || 0),
+      subscription_balance_fallback_used_usd: Number(form.subscription_balance_fallback_used_usd || 0),
+      subscription_balance_fallback_group_id: form.subscription_balance_fallback_group_id || null
+    }
     if (form.password.trim()) data.password = form.password.trim()
     await adminAPI.users.update(props.user.id, data)
     if (Object.keys(form.customAttributes).length > 0) await adminAPI.userAttributes.updateUserAttributeValues(props.user.id, form.customAttributes)

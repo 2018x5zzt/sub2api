@@ -73,6 +73,8 @@ type User struct {
 	SubscriptionBalanceFallbackLimitUsd float64 `json:"subscription_balance_fallback_limit_usd,omitempty"`
 	// SubscriptionBalanceFallbackUsedUsd holds the value of the "subscription_balance_fallback_used_usd" field.
 	SubscriptionBalanceFallbackUsedUsd float64 `json:"subscription_balance_fallback_used_usd,omitempty"`
+	// SubscriptionBalanceFallbackGroupID holds the value of the "subscription_balance_fallback_group_id" field.
+	SubscriptionBalanceFallbackGroupID *int64 `json:"subscription_balance_fallback_group_id,omitempty"`
 	// RpmLimit holds the value of the "rpm_limit" field.
 	RpmLimit int `json:"rpm_limit,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -240,7 +242,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case user.FieldBalance, user.FieldBalanceNotifyThreshold, user.FieldTotalRecharged, user.FieldSubscriptionBalanceFallbackLimitUsd, user.FieldSubscriptionBalanceFallbackUsedUsd:
 			values[i] = new(sql.NullFloat64)
-		case user.FieldID, user.FieldConcurrency, user.FieldInvitedByUserID, user.FieldRpmLimit:
+		case user.FieldID, user.FieldConcurrency, user.FieldInvitedByUserID, user.FieldSubscriptionBalanceFallbackGroupID, user.FieldRpmLimit:
 			values[i] = new(sql.NullInt64)
 		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldInviteCode, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldSignupSource, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails:
 			values[i] = new(sql.NullString)
@@ -443,6 +445,13 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field subscription_balance_fallback_used_usd", values[i])
 			} else if value.Valid {
 				_m.SubscriptionBalanceFallbackUsedUsd = value.Float64
+			}
+		case user.FieldSubscriptionBalanceFallbackGroupID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_balance_fallback_group_id", values[i])
+			} else if value.Valid {
+				_m.SubscriptionBalanceFallbackGroupID = new(int64)
+				*_m.SubscriptionBalanceFallbackGroupID = value.Int64
 			}
 		case user.FieldRpmLimit:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -652,6 +661,11 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("subscription_balance_fallback_used_usd=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionBalanceFallbackUsedUsd))
+	builder.WriteString(", ")
+	if v := _m.SubscriptionBalanceFallbackGroupID; v != nil {
+		builder.WriteString("subscription_balance_fallback_group_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("rpm_limit=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RpmLimit))

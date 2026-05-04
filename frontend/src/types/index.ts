@@ -96,6 +96,7 @@ export interface User {
   subscription_balance_fallback_enabled: boolean
   subscription_balance_fallback_limit_usd: number
   subscription_balance_fallback_used_usd: number
+  subscription_balance_fallback_group_id: number | null
   subscriptions?: UserSubscription[] // User's active subscriptions
   last_active_at?: string | null
   created_at: string
@@ -544,6 +545,7 @@ export interface ApiKey {
   key: string
   name: string
   group_id: number | null
+  subscription_product_family: string | null
   status: 'active' | 'inactive' | 'quota_exhausted' | 'expired'
   ip_whitelist: string[]
   ip_blacklist: string[]
@@ -571,6 +573,7 @@ export interface ApiKey {
 export interface CreateApiKeyRequest {
   name: string
   group_id?: number | null
+  subscription_product_family?: string | null
   custom_key?: string // Optional custom API Key
   ip_whitelist?: string[]
   ip_blacklist?: string[]
@@ -584,6 +587,7 @@ export interface CreateApiKeyRequest {
 export interface UpdateApiKeyRequest {
   name?: string
   group_id?: number | null
+  subscription_product_family?: string | null
   status?: 'active' | 'inactive'
   ip_whitelist?: string[]
   ip_blacklist?: string[]
@@ -1400,6 +1404,10 @@ export interface UpdateUserRequest {
   concurrency?: number
   status?: 'active' | 'disabled'
   allowed_groups?: number[] | null
+  subscription_balance_fallback_enabled?: boolean
+  subscription_balance_fallback_limit_usd?: number
+  subscription_balance_fallback_used_usd?: number
+  subscription_balance_fallback_group_id?: number | null
   // 用户专属分组倍率配置 (group_id -> rate_multiplier | null)
   // null 表示删除该分组的专属倍率
   group_rates?: Record<number, number | null>
@@ -1434,6 +1442,8 @@ export interface SubscriptionProductGroup {
   group_id: number
   group_name: string
   group_platform: string
+  balance_fallback_group_id?: number | null
+  balance_fallback_group_name?: string | null
   debit_multiplier: number
   status: string
   sort_order: number

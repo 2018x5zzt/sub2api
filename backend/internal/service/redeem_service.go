@@ -437,13 +437,7 @@ func validateSubscriptionRedeemCodeShape(redeemCode *RedeemCode) error {
 	if redeemCode.ProductID != nil {
 		return nil
 	}
-	if IsCommercialRechargeRedeem(redeemCode) {
-		return infraerrors.BadRequest("REDEEM_CODE_INVALID", "commercial subscription redeem code requires product_id")
-	}
-	if redeemCode.GroupID != nil {
-		return nil
-	}
-	return infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing product_id or group_id")
+	return infraerrors.BadRequest("PRODUCT_REDEEM_CODE_INVALID", "product subscription redeem code requires product_id")
 }
 
 func (s *RedeemService) assignProductSubscriptionFromRedeem(ctx context.Context, userID int64, redeemCode *RedeemCode) error {

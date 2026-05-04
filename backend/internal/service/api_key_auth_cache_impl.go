@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 8 // v8: added subscription balance fallback settings and group mapping
+const apiKeyAuthSnapshotVersion = 10 // v10: auth snapshot includes allowed_groups for user-selected balance fallback authorization
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -206,19 +206,20 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		return nil
 	}
 	snapshot := &APIKeyAuthSnapshot{
-		Version:     apiKeyAuthSnapshotVersion,
-		APIKeyID:    apiKey.ID,
-		UserID:      apiKey.UserID,
-		GroupID:     apiKey.GroupID,
-		Status:      apiKey.Status,
-		IPWhitelist: apiKey.IPWhitelist,
-		IPBlacklist: apiKey.IPBlacklist,
-		Quota:       apiKey.Quota,
-		QuotaUsed:   apiKey.QuotaUsed,
-		ExpiresAt:   apiKey.ExpiresAt,
-		RateLimit5h: apiKey.RateLimit5h,
-		RateLimit1d: apiKey.RateLimit1d,
-		RateLimit7d: apiKey.RateLimit7d,
+		Version:                   apiKeyAuthSnapshotVersion,
+		APIKeyID:                  apiKey.ID,
+		UserID:                    apiKey.UserID,
+		GroupID:                   apiKey.GroupID,
+		SubscriptionProductFamily: apiKey.SubscriptionProductFamily,
+		Status:                    apiKey.Status,
+		IPWhitelist:               apiKey.IPWhitelist,
+		IPBlacklist:               apiKey.IPBlacklist,
+		Quota:                     apiKey.Quota,
+		QuotaUsed:                 apiKey.QuotaUsed,
+		ExpiresAt:                 apiKey.ExpiresAt,
+		RateLimit5h:               apiKey.RateLimit5h,
+		RateLimit1d:               apiKey.RateLimit1d,
+		RateLimit7d:               apiKey.RateLimit7d,
 		User: APIKeyAuthUserSnapshot{
 			ID:                                  apiKey.User.ID,
 			Status:                              apiKey.User.Status,
@@ -227,6 +228,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			Concurrency:                         apiKey.User.Concurrency,
 			Email:                               apiKey.User.Email,
 			Username:                            apiKey.User.Username,
+			AllowedGroups:                       append([]int64(nil), apiKey.User.AllowedGroups...),
 			BalanceNotifyEnabled:                apiKey.User.BalanceNotifyEnabled,
 			BalanceNotifyThresholdType:          apiKey.User.BalanceNotifyThresholdType,
 			BalanceNotifyThreshold:              apiKey.User.BalanceNotifyThreshold,
@@ -235,6 +237,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			SubscriptionBalanceFallbackEnabled:  apiKey.User.SubscriptionBalanceFallbackEnabled,
 			SubscriptionBalanceFallbackLimitUSD: apiKey.User.SubscriptionBalanceFallbackLimitUSD,
 			SubscriptionBalanceFallbackUsedUSD:  apiKey.User.SubscriptionBalanceFallbackUsedUSD,
+			SubscriptionBalanceFallbackGroupID:  apiKey.User.SubscriptionBalanceFallbackGroupID,
 			RPMLimit:                            apiKey.User.RPMLimit,
 		},
 	}
@@ -283,19 +286,20 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		return nil
 	}
 	apiKey := &APIKey{
-		ID:          snapshot.APIKeyID,
-		UserID:      snapshot.UserID,
-		GroupID:     snapshot.GroupID,
-		Key:         key,
-		Status:      snapshot.Status,
-		IPWhitelist: snapshot.IPWhitelist,
-		IPBlacklist: snapshot.IPBlacklist,
-		Quota:       snapshot.Quota,
-		QuotaUsed:   snapshot.QuotaUsed,
-		ExpiresAt:   snapshot.ExpiresAt,
-		RateLimit5h: snapshot.RateLimit5h,
-		RateLimit1d: snapshot.RateLimit1d,
-		RateLimit7d: snapshot.RateLimit7d,
+		ID:                        snapshot.APIKeyID,
+		UserID:                    snapshot.UserID,
+		GroupID:                   snapshot.GroupID,
+		SubscriptionProductFamily: snapshot.SubscriptionProductFamily,
+		Key:                       key,
+		Status:                    snapshot.Status,
+		IPWhitelist:               snapshot.IPWhitelist,
+		IPBlacklist:               snapshot.IPBlacklist,
+		Quota:                     snapshot.Quota,
+		QuotaUsed:                 snapshot.QuotaUsed,
+		ExpiresAt:                 snapshot.ExpiresAt,
+		RateLimit5h:               snapshot.RateLimit5h,
+		RateLimit1d:               snapshot.RateLimit1d,
+		RateLimit7d:               snapshot.RateLimit7d,
 		User: &User{
 			ID:                                  snapshot.User.ID,
 			Status:                              snapshot.User.Status,
@@ -304,6 +308,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			Concurrency:                         snapshot.User.Concurrency,
 			Email:                               snapshot.User.Email,
 			Username:                            snapshot.User.Username,
+			AllowedGroups:                       append([]int64(nil), snapshot.User.AllowedGroups...),
 			BalanceNotifyEnabled:                snapshot.User.BalanceNotifyEnabled,
 			BalanceNotifyThresholdType:          snapshot.User.BalanceNotifyThresholdType,
 			BalanceNotifyThreshold:              snapshot.User.BalanceNotifyThreshold,
@@ -312,6 +317,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			SubscriptionBalanceFallbackEnabled:  snapshot.User.SubscriptionBalanceFallbackEnabled,
 			SubscriptionBalanceFallbackLimitUSD: snapshot.User.SubscriptionBalanceFallbackLimitUSD,
 			SubscriptionBalanceFallbackUsedUSD:  snapshot.User.SubscriptionBalanceFallbackUsedUSD,
+			SubscriptionBalanceFallbackGroupID:  snapshot.User.SubscriptionBalanceFallbackGroupID,
 			RPMLimit:                            snapshot.User.RPMLimit,
 			UserGroupRPMOverride:                snapshot.User.UserGroupRPMOverride,
 		},

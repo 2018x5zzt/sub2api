@@ -80,7 +80,7 @@ export async function assign(
 
 export async function adjustSubscription(
   subscriptionId: number,
-  payload: { daily_limit_usd?: number; expires_at?: string; notes?: string }
+  payload: { expires_at?: string; notes?: string; status?: string }
 ): Promise<AdminUserProductSubscription> {
   const { data } = await apiClient.put<AdminUserProductSubscription>(
     `/admin/product-subscriptions/${subscriptionId}/adjust`,

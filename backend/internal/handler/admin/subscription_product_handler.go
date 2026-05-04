@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -20,6 +21,9 @@ type subscriptionProductAdminService interface {
 	ListProductSubscriptions(ctx context.Context, productID int64) ([]service.UserProductSubscription, error)
 	ListUserProductSubscriptionsForAdmin(ctx context.Context, params service.AdminProductSubscriptionListParams) ([]service.AdminProductSubscriptionListItem, *pagination.PaginationResult, error)
 	AssignOrExtendProductSubscription(ctx context.Context, input *service.AssignProductSubscriptionInput) (*service.UserProductSubscription, bool, error)
+	AdjustProductSubscription(ctx context.Context, subscriptionID int64, input *service.AdjustProductSubscriptionInput) (*service.UserProductSubscription, error)
+	ResetProductSubscriptionQuota(ctx context.Context, subscriptionID int64, input *service.ResetProductSubscriptionQuotaInput) (*service.UserProductSubscription, error)
+	RevokeProductSubscription(ctx context.Context, subscriptionID int64) error
 }
 
 type SubscriptionProductHandler struct {
@@ -71,6 +75,18 @@ type assignProductSubscriptionRequest struct {
 	UserID       int64  `json:"user_id" binding:"required,gt=0"`
 	ValidityDays int    `json:"validity_days" binding:"omitempty,min=1,max=36500"`
 	Notes        string `json:"notes"`
+}
+
+type adjustProductSubscriptionRequest struct {
+	ExpiresAt *string `json:"expires_at"`
+	Status    *string `json:"status" binding:"omitempty,oneof=active expired revoked"`
+	Notes     *string `json:"notes"`
+}
+
+type resetProductSubscriptionQuotaRequest struct {
+	Daily   bool `json:"daily"`
+	Weekly  bool `json:"weekly"`
+	Monthly bool `json:"monthly"`
 }
 
 func (h *SubscriptionProductHandler) List(c *gin.Context) {
@@ -250,4 +266,76 @@ func (h *SubscriptionProductHandler) Assign(c *gin.Context) {
 		"subscription": dto.AdminUserProductSubscriptionsFromService([]service.UserProductSubscription{*subscription})[0],
 		"reused":       reused,
 	})
+}
+
+func (h *SubscriptionProductHandler) AdjustSubscription(c *gin.Context) {
+	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid product subscription ID")
+		return
+	}
+	var req adjustProductSubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	var expiresAt *time.Time
+	if req.ExpiresAt != nil && *req.ExpiresAt != "" {
+		parsed, err := time.Parse(time.RFC3339, *req.ExpiresAt)
+		if err != nil {
+			parsedDate, dateErr := time.Parse("2006-01-02", *req.ExpiresAt)
+			if dateErr != nil {
+				response.BadRequest(c, "Invalid expires_at format")
+				return
+			}
+			parsed = parsedDate
+		}
+		expiresAt = &parsed
+	}
+	subscription, err := h.subscriptionProductService.AdjustProductSubscription(c.Request.Context(), subscriptionID, &service.AdjustProductSubscriptionInput{
+		ExpiresAt: expiresAt,
+		Status:    req.Status,
+		Notes:     req.Notes,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.AdminUserProductSubscriptionsFromService([]service.UserProductSubscription{*subscription})[0])
+}
+
+func (h *SubscriptionProductHandler) ResetSubscriptionQuota(c *gin.Context) {
+	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid product subscription ID")
+		return
+	}
+	var req resetProductSubscriptionQuotaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	subscription, err := h.subscriptionProductService.ResetProductSubscriptionQuota(c.Request.Context(), subscriptionID, &service.ResetProductSubscriptionQuotaInput{
+		Daily:   req.Daily,
+		Weekly:  req.Weekly,
+		Monthly: req.Monthly,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.AdminUserProductSubscriptionsFromService([]service.UserProductSubscription{*subscription})[0])
+}
+
+func (h *SubscriptionProductHandler) RevokeSubscription(c *gin.Context) {
+	subscriptionID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid product subscription ID")
+		return
+	}
+	if err := h.subscriptionProductService.RevokeProductSubscription(c.Request.Context(), subscriptionID); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "Product subscription revoked"})
 }

@@ -409,6 +409,20 @@ func (_c *UserCreate) SetNillableSubscriptionBalanceFallbackUsedUsd(v *float64) 
 	return _c
 }
 
+// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
+func (_c *UserCreate) SetSubscriptionBalanceFallbackGroupID(v int64) *UserCreate {
+	_c.mutation.SetSubscriptionBalanceFallbackGroupID(v)
+	return _c
+}
+
+// SetNillableSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field if the given value is not nil.
+func (_c *UserCreate) SetNillableSubscriptionBalanceFallbackGroupID(v *int64) *UserCreate {
+	if v != nil {
+		_c.SetSubscriptionBalanceFallbackGroupID(*v)
+	}
+	return _c
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (_c *UserCreate) SetRpmLimit(v int) *UserCreate {
 	_c.mutation.SetRpmLimit(v)
@@ -956,6 +970,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SubscriptionBalanceFallbackUsedUsd(); ok {
 		_spec.SetField(user.FieldSubscriptionBalanceFallbackUsedUsd, field.TypeFloat64, value)
 		_node.SubscriptionBalanceFallbackUsedUsd = value
+	}
+	if value, ok := _c.mutation.SubscriptionBalanceFallbackGroupID(); ok {
+		_spec.SetField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64, value)
+		_node.SubscriptionBalanceFallbackGroupID = &value
 	}
 	if value, ok := _c.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
@@ -1629,6 +1647,30 @@ func (u *UserUpsert) AddSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpser
 	return u
 }
 
+// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
+func (u *UserUpsert) SetSubscriptionBalanceFallbackGroupID(v int64) *UserUpsert {
+	u.Set(user.FieldSubscriptionBalanceFallbackGroupID, v)
+	return u
+}
+
+// UpdateSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field to the value that was provided on create.
+func (u *UserUpsert) UpdateSubscriptionBalanceFallbackGroupID() *UserUpsert {
+	u.SetExcluded(user.FieldSubscriptionBalanceFallbackGroupID)
+	return u
+}
+
+// AddSubscriptionBalanceFallbackGroupID adds v to the "subscription_balance_fallback_group_id" field.
+func (u *UserUpsert) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpsert {
+	u.Add(user.FieldSubscriptionBalanceFallbackGroupID, v)
+	return u
+}
+
+// ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
+func (u *UserUpsert) ClearSubscriptionBalanceFallbackGroupID() *UserUpsert {
+	u.SetNull(user.FieldSubscriptionBalanceFallbackGroupID)
+	return u
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (u *UserUpsert) SetRpmLimit(v int) *UserUpsert {
 	u.Set(user.FieldRpmLimit, v)
@@ -2179,6 +2221,34 @@ func (u *UserUpsertOne) AddSubscriptionBalanceFallbackUsedUsd(v float64) *UserUp
 func (u *UserUpsertOne) UpdateSubscriptionBalanceFallbackUsedUsd() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateSubscriptionBalanceFallbackUsedUsd()
+	})
+}
+
+// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
+func (u *UserUpsertOne) SetSubscriptionBalanceFallbackGroupID(v int64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetSubscriptionBalanceFallbackGroupID(v)
+	})
+}
+
+// AddSubscriptionBalanceFallbackGroupID adds v to the "subscription_balance_fallback_group_id" field.
+func (u *UserUpsertOne) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddSubscriptionBalanceFallbackGroupID(v)
+	})
+}
+
+// UpdateSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateSubscriptionBalanceFallbackGroupID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateSubscriptionBalanceFallbackGroupID()
+	})
+}
+
+// ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
+func (u *UserUpsertOne) ClearSubscriptionBalanceFallbackGroupID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearSubscriptionBalanceFallbackGroupID()
 	})
 }
 
@@ -2901,6 +2971,34 @@ func (u *UserUpsertBulk) AddSubscriptionBalanceFallbackUsedUsd(v float64) *UserU
 func (u *UserUpsertBulk) UpdateSubscriptionBalanceFallbackUsedUsd() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateSubscriptionBalanceFallbackUsedUsd()
+	})
+}
+
+// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
+func (u *UserUpsertBulk) SetSubscriptionBalanceFallbackGroupID(v int64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetSubscriptionBalanceFallbackGroupID(v)
+	})
+}
+
+// AddSubscriptionBalanceFallbackGroupID adds v to the "subscription_balance_fallback_group_id" field.
+func (u *UserUpsertBulk) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddSubscriptionBalanceFallbackGroupID(v)
+	})
+}
+
+// UpdateSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateSubscriptionBalanceFallbackGroupID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateSubscriptionBalanceFallbackGroupID()
+	})
+}
+
+// ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
+func (u *UserUpsertBulk) ClearSubscriptionBalanceFallbackGroupID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearSubscriptionBalanceFallbackGroupID()
 	})
 }
 

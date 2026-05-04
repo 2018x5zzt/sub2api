@@ -4,15 +4,16 @@ import "time"
 
 // APIKeyAuthSnapshot API Key 认证缓存快照（仅包含认证所需字段）
 type APIKeyAuthSnapshot struct {
-	Version     int                      `json:"version"`
-	APIKeyID    int64                    `json:"api_key_id"`
-	UserID      int64                    `json:"user_id"`
-	GroupID     *int64                   `json:"group_id,omitempty"`
-	Status      string                   `json:"status"`
-	IPWhitelist []string                 `json:"ip_whitelist,omitempty"`
-	IPBlacklist []string                 `json:"ip_blacklist,omitempty"`
-	User        APIKeyAuthUserSnapshot   `json:"user"`
-	Group       *APIKeyAuthGroupSnapshot `json:"group,omitempty"`
+	Version                   int                      `json:"version"`
+	APIKeyID                  int64                    `json:"api_key_id"`
+	UserID                    int64                    `json:"user_id"`
+	GroupID                   *int64                   `json:"group_id,omitempty"`
+	SubscriptionProductFamily *string                  `json:"subscription_product_family,omitempty"`
+	Status                    string                   `json:"status"`
+	IPWhitelist               []string                 `json:"ip_whitelist,omitempty"`
+	IPBlacklist               []string                 `json:"ip_blacklist,omitempty"`
+	User                      APIKeyAuthUserSnapshot   `json:"user"`
+	Group                     *APIKeyAuthGroupSnapshot `json:"group,omitempty"`
 
 	// Quota fields for API Key independent quota feature
 	Quota     float64 `json:"quota"`      // Quota limit in USD (0 = unlimited)
@@ -29,11 +30,12 @@ type APIKeyAuthSnapshot struct {
 
 // APIKeyAuthUserSnapshot 用户快照
 type APIKeyAuthUserSnapshot struct {
-	ID          int64   `json:"id"`
-	Status      string  `json:"status"`
-	Role        string  `json:"role"`
-	Balance     float64 `json:"balance"`
-	Concurrency int     `json:"concurrency"`
+	ID            int64   `json:"id"`
+	Status        string  `json:"status"`
+	Role          string  `json:"role"`
+	Balance       float64 `json:"balance"`
+	Concurrency   int     `json:"concurrency"`
+	AllowedGroups []int64 `json:"allowed_groups,omitempty"`
 
 	// Balance notification fields (required for CheckBalanceAfterDeduction)
 	Email                               string             `json:"email"`
@@ -46,6 +48,7 @@ type APIKeyAuthUserSnapshot struct {
 	SubscriptionBalanceFallbackEnabled  bool               `json:"subscription_balance_fallback_enabled"`
 	SubscriptionBalanceFallbackLimitUSD float64            `json:"subscription_balance_fallback_limit_usd"`
 	SubscriptionBalanceFallbackUsedUSD  float64            `json:"subscription_balance_fallback_used_usd"`
+	SubscriptionBalanceFallbackGroupID  *int64             `json:"subscription_balance_fallback_group_id,omitempty"`
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制）；用于 billing_cache_service.checkRPM 兜底判断。
 	RPMLimit int `json:"rpm_limit"`

@@ -99,6 +99,7 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		SetSubscriptionBalanceFallbackEnabled(userIn.SubscriptionBalanceFallbackEnabled).
 		SetSubscriptionBalanceFallbackLimitUsd(userIn.SubscriptionBalanceFallbackLimitUSD).
 		SetSubscriptionBalanceFallbackUsedUsd(userIn.SubscriptionBalanceFallbackUsedUSD).
+		SetNillableSubscriptionBalanceFallbackGroupID(userIn.SubscriptionBalanceFallbackGroupID).
 		SetRpmLimit(userIn.RPMLimit).
 		Save(txCtx)
 	if err != nil {
@@ -255,6 +256,7 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetSubscriptionBalanceFallbackEnabled(userIn.SubscriptionBalanceFallbackEnabled).
 		SetSubscriptionBalanceFallbackLimitUsd(userIn.SubscriptionBalanceFallbackLimitUSD).
 		SetSubscriptionBalanceFallbackUsedUsd(userIn.SubscriptionBalanceFallbackUsedUSD).
+		SetNillableSubscriptionBalanceFallbackGroupID(userIn.SubscriptionBalanceFallbackGroupID).
 		SetRpmLimit(userIn.RPMLimit)
 	if userIn.SignupSource != "" {
 		updateOp = updateOp.SetSignupSource(userIn.SignupSource)

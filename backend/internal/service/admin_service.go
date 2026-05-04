@@ -136,15 +136,19 @@ type CreateUserInput struct {
 }
 
 type UpdateUserInput struct {
-	Email         string
-	Password      string
-	Username      *string
-	Notes         *string
-	Balance       *float64 // 使用指针区分"未提供"和"设置为0"
-	Concurrency   *int     // 使用指针区分"未提供"和"设置为0"
-	RPMLimit      *int     // 使用指针区分"未提供"和"设置为0"
-	Status        string
-	AllowedGroups *[]int64 // 使用指针区分"未提供"和"设置为空数组"
+	Email                               string
+	Password                            string
+	Username                            *string
+	Notes                               *string
+	Balance                             *float64 // 使用指针区分"未提供"和"设置为0"
+	Concurrency                         *int     // 使用指针区分"未提供"和"设置为0"
+	RPMLimit                            *int     // 使用指针区分"未提供"和"设置为0"
+	Status                              string
+	AllowedGroups                       *[]int64 // 使用指针区分"未提供"和"设置为空数组"
+	SubscriptionBalanceFallbackEnabled  *bool
+	SubscriptionBalanceFallbackLimitUSD *float64
+	SubscriptionBalanceFallbackUsedUSD  *float64
+	SubscriptionBalanceFallbackGroupID  *int64
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]*rate，nil 表示删除该分组的专属倍率
 	GroupRates map[int64]*float64
@@ -755,6 +759,10 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	oldStatus := user.Status
 	oldRole := user.Role
 	oldRPMLimit := user.RPMLimit
+	oldFallbackEnabled := user.SubscriptionBalanceFallbackEnabled
+	oldFallbackLimit := user.SubscriptionBalanceFallbackLimitUSD
+	oldFallbackUsed := user.SubscriptionBalanceFallbackUsedUSD
+	oldFallbackGroupID := user.SubscriptionBalanceFallbackGroupID
 
 	if input.Email != "" {
 		user.Email = input.Email
@@ -787,6 +795,31 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if input.AllowedGroups != nil {
 		user.AllowedGroups = *input.AllowedGroups
 	}
+	if input.SubscriptionBalanceFallbackEnabled != nil {
+		user.SubscriptionBalanceFallbackEnabled = *input.SubscriptionBalanceFallbackEnabled
+	}
+	if input.SubscriptionBalanceFallbackLimitUSD != nil {
+		if *input.SubscriptionBalanceFallbackLimitUSD < 0 {
+			return nil, errors.New("subscription balance fallback limit must be >= 0")
+		}
+		user.SubscriptionBalanceFallbackLimitUSD = *input.SubscriptionBalanceFallbackLimitUSD
+	}
+	if input.SubscriptionBalanceFallbackUsedUSD != nil {
+		if *input.SubscriptionBalanceFallbackUsedUSD < 0 {
+			return nil, errors.New("subscription balance fallback used amount must be >= 0")
+		}
+		user.SubscriptionBalanceFallbackUsedUSD = *input.SubscriptionBalanceFallbackUsedUSD
+	}
+	if input.SubscriptionBalanceFallbackGroupID != nil {
+		if *input.SubscriptionBalanceFallbackGroupID <= 0 {
+			user.SubscriptionBalanceFallbackGroupID = nil
+		} else {
+			user.SubscriptionBalanceFallbackGroupID = input.SubscriptionBalanceFallbackGroupID
+		}
+	}
+	if err := validateSubscriptionBalanceFallbackConfig(ctx, s.groupRepo, user); err != nil {
+		return nil, err
+	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
@@ -802,7 +835,11 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if s.authCacheInvalidator != nil {
 		// RPMLimit 直接参与 billing_cache_service.checkRPM 的三级级联，
 		// 不失效缓存会让修改在一个 L2 TTL 内失去效果。
-		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit {
+		fallbackChanged := user.SubscriptionBalanceFallbackEnabled != oldFallbackEnabled ||
+			user.SubscriptionBalanceFallbackLimitUSD != oldFallbackLimit ||
+			user.SubscriptionBalanceFallbackUsedUSD != oldFallbackUsed ||
+			int64PtrValue(user.SubscriptionBalanceFallbackGroupID) != int64PtrValue(oldFallbackGroupID)
+		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || input.AllowedGroups != nil || fallbackChanged {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
 		}
 	}
@@ -829,6 +866,13 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	}
 
 	return user, nil
+}
+
+func int64PtrValue(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }
 
 func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
@@ -2943,35 +2987,18 @@ func (s *adminServiceImpl) GetRedeemCode(ctx context.Context, id int64) (*Redeem
 }
 
 func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *GenerateRedeemCodesInput) ([]RedeemCode, error) {
-	// 订阅卡密支持新产品订阅 product_id，并保留旧 group_id 兼容入口。
+	// 订阅卡密必须显式绑定新产品订阅 product_id，避免用 group_id 猜产品。
 	var productDefaultValidityDays int
 	if input.Type == RedeemTypeSubscription {
-		if (input.GroupID == nil) == (input.ProductID == nil) {
-			return nil, errors.New("exactly one of group_id or product_id is required for subscription type")
+		if input.ProductID == nil {
+			return nil, errors.New("product_id is required for subscription type")
 		}
-		if input.GroupID != nil {
-			// 验证分组存在且为订阅类型
-			group, err := s.groupRepo.GetByID(ctx, *input.GroupID)
-			if err != nil {
-				return nil, fmt.Errorf("group not found: %w", err)
-			}
-			if !group.IsSubscriptionType() {
-				return nil, errors.New("group must be subscription type")
-			}
-			if productID, ok, err := s.resolveProductIDForLegacyGroup(ctx, *input.GroupID); err != nil {
-				return nil, err
-			} else if ok {
-				input.ProductID = &productID
-				input.GroupID = nil
-			}
+		product, err := s.getRedeemProduct(ctx, *input.ProductID)
+		if err != nil {
+			return nil, err
 		}
-		if input.ProductID != nil {
-			product, err := s.getRedeemProduct(ctx, *input.ProductID)
-			if err != nil {
-				return nil, err
-			}
-			productDefaultValidityDays = product.DefaultValidityDays
-		}
+		productDefaultValidityDays = product.DefaultValidityDays
+		input.GroupID = nil
 	}
 
 	codes := make([]RedeemCode, 0, input.Count)

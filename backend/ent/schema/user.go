@@ -128,6 +128,9 @@ func (User) Fields() []ent.Field {
 		field.Float("subscription_balance_fallback_used_usd").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
+		field.Int64("subscription_balance_fallback_group_id").
+			Optional().
+			Nillable(),
 
 		// 用户级每分钟请求数上限（0 = 不限制）。仅当所在分组未设置 rpm_limit 时作为兜底生效。
 		field.Int("rpm_limit").
@@ -160,6 +163,7 @@ func (User) Indexes() []ent.Index {
 		index.Fields("invite_code"),
 		index.Fields("invited_by_user_id"),
 		index.Fields("status"),
+		index.Fields("subscription_balance_fallback_group_id"),
 		index.Fields("deleted_at"),
 	}
 }

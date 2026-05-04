@@ -10,6 +10,7 @@ const {
   updateProfileMock,
   showError,
   showSuccess,
+  getAvailableGroups,
   authStore,
   routerPush
 } = vi.hoisted(() => ({
@@ -19,6 +20,7 @@ const {
   updateProfileMock: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
+  getAvailableGroups: vi.fn(),
   routerPush: vi.fn(),
   authStore: {
     user: null as any,
@@ -39,6 +41,15 @@ vi.mock('@/api/subscriptionProducts', () => ({
   },
   subscriptionProductsAPI: {
     getActive: getActiveProducts
+  }
+}))
+
+vi.mock('@/api/groups', () => ({
+  default: {
+    getAvailable: getAvailableGroups
+  },
+  userGroupsAPI: {
+    getAvailable: getAvailableGroups
   }
 }))
 
@@ -83,6 +94,9 @@ vi.mock('vue-i18n', async () => {
         if (key === 'userSubscriptions.groupMultiplier') return `${params?.multiplier}x`
         if (key === 'userSubscriptions.balanceFallback.title') return 'Use balance automatically when subscription quota is exhausted'
         if (key === 'userSubscriptions.balanceFallback.description') return 'Fallback description'
+        if (key === 'userSubscriptions.balanceFallback.group') return 'Balance group'
+        if (key === 'userSubscriptions.balanceFallback.selectGroup') return 'Select balance group'
+        if (key === 'userSubscriptions.balanceFallback.negativeBalanceHint') return 'Negative balance blocks future requests until recharge.'
         if (key === 'userSubscriptions.balanceFallback.limit') return 'Balance fallback cap'
         if (key === 'userSubscriptions.balanceFallback.usage') return `Used $${params?.used}, remaining $${params?.remaining}`
         if (key === 'userSubscriptions.keyReminder.title') return '激活后建议新建分组专用 API Key'
@@ -105,11 +119,13 @@ describe('SubscriptionsView product subscriptions', () => {
     getMySubscriptions.mockResolvedValue([])
     getActiveSubscriptions.mockResolvedValue([])
     getActiveProducts.mockResolvedValue([])
+    getAvailableGroups.mockResolvedValue([])
     routerPush.mockReset()
     authStore.user = {
       subscription_balance_fallback_enabled: false,
       subscription_balance_fallback_limit_usd: 0,
-      subscription_balance_fallback_used_usd: 0
+      subscription_balance_fallback_used_usd: 0,
+      subscription_balance_fallback_group_id: null
     }
     authStore.refreshUser.mockResolvedValue(authStore.user)
     updateProfileMock.mockResolvedValue(authStore.user)
@@ -178,6 +194,90 @@ describe('SubscriptionsView product subscriptions', () => {
     expect(text).toContain('激活后建议新建分组专用 API Key')
     await wrapper.get('button').trigger('click')
     expect(routerPush).toHaveBeenCalledWith('/keys')
+  })
+
+  it('requires enabled balance fallback to choose a standard balance group and positive limit', async () => {
+    authStore.user = {
+      subscription_balance_fallback_enabled: true,
+      subscription_balance_fallback_limit_usd: 12,
+      subscription_balance_fallback_used_usd: 3.5,
+      subscription_balance_fallback_group_id: 11
+    }
+    authStore.refreshUser.mockResolvedValue(authStore.user)
+    getActiveProducts.mockResolvedValue([
+      {
+        product_id: 101,
+        subscription_id: 501,
+        code: 'gpt_daily_45',
+        name: 'GPT Daily 45',
+        description: '',
+        expires_at: null,
+        status: 'active',
+        daily_usage_usd: 0,
+        weekly_usage_usd: 0,
+        monthly_usage_usd: 0,
+        daily_limit_usd: 45,
+        weekly_limit_usd: 0,
+        monthly_limit_usd: 0,
+        daily_carryover_in_usd: 0,
+        daily_carryover_remaining_usd: 0,
+        groups: [
+          {
+            group_id: 21,
+            group_name: 'Subscription Pool',
+            group_platform: 'openai',
+            balance_fallback_group_id: 11,
+            balance_fallback_group_name: 'Balance Pool',
+            debit_multiplier: 1,
+            status: 'active',
+            sort_order: 1
+          }
+        ]
+      }
+    ])
+    getAvailableGroups.mockResolvedValue([
+      { id: 11, name: 'Balance Pool', status: 'active', subscription_type: 'standard' }
+    ])
+
+    const wrapper = mount(SubscriptionsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('Balance Pool')
+    expect(text).toContain('Used $3.50, remaining $8.50')
+    expect(text).toContain('Negative balance blocks future requests until recharge.')
+
+    const vm = wrapper.vm as unknown as {
+      fallbackLimit: number
+      fallbackGroupId: number | null
+      fallbackEnabled: boolean
+      saveBalanceFallbackSettings: () => Promise<void>
+    }
+    vm.fallbackLimit = 0
+    await vm.saveBalanceFallbackSettings()
+    expect(updateProfileMock).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalled()
+    expect(vm.fallbackEnabled).toBe(false)
+
+    showError.mockClear()
+    vm.fallbackEnabled = true
+    vm.fallbackLimit = 12
+    vm.fallbackGroupId = 11
+    await vm.saveBalanceFallbackSettings()
+
+    expect(updateProfileMock).toHaveBeenCalledWith({
+      subscription_balance_fallback_enabled: true,
+      subscription_balance_fallback_limit_usd: 12,
+      subscription_balance_fallback_group_id: 11
+    })
   })
 
   it('hides legacy group subscriptions covered by an active product', async () => {

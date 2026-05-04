@@ -492,9 +492,451 @@ func TestAPIKeyAuthTouchesLastUsedInStandardMode(t *testing.T) {
 	require.Equal(t, 1, touchCalls)
 }
 
+func TestAPIKeyAuthBlocksOnlyNegativeStandardBalance(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	for _, tc := range []struct {
+		name       string
+		balance    float64
+		wantStatus int
+	}{
+		{name: "zero balance allowed for current request", balance: 0, wantStatus: http.StatusOK},
+		{name: "negative balance blocked", balance: -0.01, wantStatus: http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			user := &service.User{
+				ID:          7,
+				Role:        service.RoleUser,
+				Status:      service.StatusActive,
+				Balance:     tc.balance,
+				Concurrency: 3,
+			}
+			apiKey := &service.APIKey{
+				ID:     100,
+				UserID: user.ID,
+				Key:    "balance-key",
+				Status: service.StatusActive,
+				User:   user,
+			}
+			apiKeyRepo := &stubApiKeyRepo{
+				getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+					if key != apiKey.Key {
+						return nil, service.ErrAPIKeyNotFound
+					}
+					clone := *apiKey
+					return &clone, nil
+				},
+			}
+
+			cfg := &config.Config{RunMode: config.RunModeStandard}
+			apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+			router := newAuthTestRouter(apiKeyService, nil, cfg)
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/t", nil)
+			req.Header.Set("x-api-key", apiKey.Key)
+			router.ServeHTTP(w, req)
+
+			require.Equal(t, tc.wantStatus, w.Code)
+		})
+	}
+}
+
+func TestAPIKeyAuthProductSubscriptionDoesNotFallbackToLegacySubscription(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	group := &service.Group{
+		ID:               30,
+		Name:             "product-sub",
+		Status:           service.StatusActive,
+		Hydrated:         true,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+	}
+	user := &service.User{
+		ID:          7,
+		Role:        service.RoleUser,
+		Status:      service.StatusActive,
+		Balance:     10,
+		Concurrency: 3,
+	}
+	apiKey := &service.APIKey{
+		ID:      100,
+		UserID:  user.ID,
+		Key:     "product-key",
+		Status:  service.StatusActive,
+		User:    user,
+		Group:   group,
+		GroupID: &group.ID,
+	}
+	apiKeyRepo := &stubApiKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != apiKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *apiKey
+			return &clone, nil
+		},
+	}
+	legacyRepoCalls := 0
+	legacyRepo := &stubUserSubscriptionRepo{
+		getActive: func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
+			legacyRepoCalls++
+			return &service.UserSubscription{
+				ID:        55,
+				UserID:    userID,
+				GroupID:   groupID,
+				Status:    service.SubscriptionStatusActive,
+				ExpiresAt: time.Now().Add(time.Hour),
+			}, nil
+		},
+	}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+	subscriptionService := service.NewSubscriptionService(nil, legacyRepo, nil, nil, cfg)
+	productSubscriptionService := service.NewSubscriptionProductService(&stubProductSubscriptionRepo{err: service.ErrSubscriptionNotFound})
+	router := newAuthTestRouterWithProduct(apiKeyService, subscriptionService, productSubscriptionService, cfg)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Code)
+	require.Contains(t, w.Body.String(), "SUBSCRIPTION_NOT_FOUND")
+	require.Zero(t, legacyRepoCalls)
+}
+
+func TestAPIKeyAuthProductSubscriptionPassesAPIKeyFamily(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	family := "image"
+	group := &service.Group{
+		ID:               30,
+		Name:             "product-sub",
+		Status:           service.StatusActive,
+		Hydrated:         true,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+	}
+	user := &service.User{
+		ID:          7,
+		Role:        service.RoleUser,
+		Status:      service.StatusActive,
+		Balance:     10,
+		Concurrency: 3,
+	}
+	apiKey := &service.APIKey{
+		ID:                        100,
+		UserID:                    user.ID,
+		Key:                       "product-family-key",
+		Status:                    service.StatusActive,
+		User:                      user,
+		Group:                     group,
+		GroupID:                   &group.ID,
+		SubscriptionProductFamily: &family,
+	}
+	apiKeyRepo := &stubApiKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != apiKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *apiKey
+			return &clone, nil
+		},
+	}
+	productRepo := &stubProductSubscriptionRepo{
+		binding: &service.SubscriptionProductBinding{
+			ProductID:     88,
+			GroupID:       group.ID,
+			ProductStatus: service.SubscriptionProductStatusActive,
+			BindingStatus: service.SubscriptionProductBindingStatusActive,
+		},
+		sub: &service.UserProductSubscription{
+			ID:        99,
+			UserID:    user.ID,
+			ProductID: 88,
+			Status:    service.SubscriptionStatusActive,
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
+	productSubscriptionService := service.NewSubscriptionProductService(productRepo)
+	router := newAuthTestRouterWithProduct(apiKeyService, nil, productSubscriptionService, cfg)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NotNil(t, productRepo.requestedFamily)
+	require.Equal(t, family, *productRepo.requestedFamily)
+}
+
+func TestAPIKeyAuthProductLimitUsesSelectedBalanceFallbackGroup(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	subGroup := &service.Group{
+		ID:               30,
+		Name:             "product-sub",
+		Status:           service.StatusActive,
+		Hydrated:         true,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+	}
+	fallbackGroup := &service.Group{
+		ID:               40,
+		Name:             "fallback-balance",
+		Status:           service.StatusActive,
+		Hydrated:         true,
+		SubscriptionType: service.SubscriptionTypeStandard,
+		IsExclusive:      true,
+	}
+	user := &service.User{
+		ID:                                  7,
+		Role:                                service.RoleUser,
+		Status:                              service.StatusActive,
+		Balance:                             10,
+		Concurrency:                         3,
+		AllowedGroups:                       []int64{fallbackGroup.ID},
+		SubscriptionBalanceFallbackEnabled:  true,
+		SubscriptionBalanceFallbackLimitUSD: 5,
+		SubscriptionBalanceFallbackGroupID:  &fallbackGroup.ID,
+	}
+	apiKey := &service.APIKey{
+		ID:      100,
+		UserID:  user.ID,
+		Key:     "product-limit-fallback-key",
+		Status:  service.StatusActive,
+		User:    user,
+		Group:   subGroup,
+		GroupID: &subGroup.ID,
+	}
+	apiKeyRepo := &stubApiKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != apiKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *apiKey
+			return &clone, nil
+		},
+	}
+	productRepo := &stubProductSubscriptionRepo{
+		binding: &service.SubscriptionProductBinding{
+			ProductID:     88,
+			GroupID:       subGroup.ID,
+			ProductStatus: service.SubscriptionProductStatusActive,
+			BindingStatus: service.SubscriptionProductBindingStatusActive,
+			DailyLimitUSD: 1,
+		},
+		sub: &service.UserProductSubscription{
+			ID:               99,
+			UserID:           user.ID,
+			ProductID:        88,
+			Status:           service.SubscriptionStatusActive,
+			ExpiresAt:        time.Now().Add(time.Hour),
+			DailyWindowStart: ptrTime(time.Now()),
+			DailyUsageUSD:    1.01,
+		},
+	}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(
+		apiKeyRepo,
+		nil,
+		&stubGroupRepo{groups: map[int64]*service.Group{fallbackGroup.ID: fallbackGroup}},
+		nil,
+		nil,
+		nil,
+		cfg,
+	)
+	productSubscriptionService := service.NewSubscriptionProductService(productRepo)
+	router := gin.New()
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddlewareWithProductSubscription(apiKeyService, nil, productSubscriptionService, cfg)))
+	router.GET("/t", func(c *gin.Context) {
+		got, ok := GetAPIKeyFromContext(c)
+		if !ok || got.Group == nil || got.Group.ID != fallbackGroup.ID || !service.SubscriptionBalanceFallbackFromContext(c.Request.Context()) {
+			c.JSON(http.StatusInternalServerError, gin.H{"ok": false})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestAPIKeyAuthProductLimitBlocksFallbackWithoutSelectedGroupAuthorization(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	subGroup := &service.Group{
+		ID:               30,
+		Name:             "product-sub",
+		Status:           service.StatusActive,
+		Hydrated:         true,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+	}
+	fallbackGroup := &service.Group{
+		ID:               40,
+		Name:             "fallback-balance",
+		Status:           service.StatusActive,
+		Hydrated:         true,
+		SubscriptionType: service.SubscriptionTypeStandard,
+		IsExclusive:      true,
+	}
+	user := &service.User{
+		ID:                                  7,
+		Role:                                service.RoleUser,
+		Status:                              service.StatusActive,
+		Balance:                             10,
+		Concurrency:                         3,
+		AllowedGroups:                       []int64{},
+		SubscriptionBalanceFallbackEnabled:  true,
+		SubscriptionBalanceFallbackLimitUSD: 5,
+		SubscriptionBalanceFallbackGroupID:  &fallbackGroup.ID,
+	}
+	apiKey := &service.APIKey{
+		ID:      100,
+		UserID:  user.ID,
+		Key:     "product-limit-fallback-unauthorized-key",
+		Status:  service.StatusActive,
+		User:    user,
+		Group:   subGroup,
+		GroupID: &subGroup.ID,
+	}
+	apiKeyRepo := &stubApiKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != apiKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *apiKey
+			return &clone, nil
+		},
+	}
+	productRepo := &stubProductSubscriptionRepo{
+		binding: &service.SubscriptionProductBinding{
+			ProductID:     88,
+			GroupID:       subGroup.ID,
+			ProductStatus: service.SubscriptionProductStatusActive,
+			BindingStatus: service.SubscriptionProductBindingStatusActive,
+			DailyLimitUSD: 1,
+		},
+		sub: &service.UserProductSubscription{
+			ID:               99,
+			UserID:           user.ID,
+			ProductID:        88,
+			Status:           service.SubscriptionStatusActive,
+			ExpiresAt:        time.Now().Add(time.Hour),
+			DailyWindowStart: ptrTime(time.Now()),
+			DailyUsageUSD:    1.01,
+		},
+	}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(
+		apiKeyRepo,
+		nil,
+		&stubGroupRepo{groups: map[int64]*service.Group{fallbackGroup.ID: fallbackGroup}},
+		nil,
+		nil,
+		nil,
+		cfg,
+	)
+	productSubscriptionService := service.NewSubscriptionProductService(productRepo)
+	router := newAuthTestRouterWithProduct(apiKeyService, nil, productSubscriptionService, cfg)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusTooManyRequests, w.Code)
+	require.Contains(t, w.Body.String(), "USAGE_LIMIT_EXCEEDED")
+}
+
+func TestAPIKeyAuthProductLimitBlocksFallbackWhenBalanceNegative(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	subGroup := &service.Group{
+		ID:               30,
+		Name:             "product-sub",
+		Status:           service.StatusActive,
+		Hydrated:         true,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+	}
+	fallbackGroup := &service.Group{
+		ID:               40,
+		Name:             "fallback-balance",
+		Status:           service.StatusActive,
+		Hydrated:         true,
+		SubscriptionType: service.SubscriptionTypeStandard,
+		IsExclusive:      true,
+	}
+	user := &service.User{
+		ID:                                  7,
+		Role:                                service.RoleUser,
+		Status:                              service.StatusActive,
+		Balance:                             -0.01,
+		Concurrency:                         3,
+		AllowedGroups:                       []int64{fallbackGroup.ID},
+		SubscriptionBalanceFallbackEnabled:  true,
+		SubscriptionBalanceFallbackLimitUSD: 5,
+		SubscriptionBalanceFallbackGroupID:  &fallbackGroup.ID,
+	}
+	apiKey := &service.APIKey{
+		ID:      100,
+		UserID:  user.ID,
+		Key:     "product-limit-fallback-negative-key",
+		Status:  service.StatusActive,
+		User:    user,
+		Group:   subGroup,
+		GroupID: &subGroup.ID,
+	}
+	apiKeyRepo := &stubApiKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != apiKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *apiKey
+			return &clone, nil
+		},
+	}
+	productRepo := &stubProductSubscriptionRepo{err: service.ErrDailyLimitExceeded}
+	cfg := &config.Config{RunMode: config.RunModeStandard}
+	apiKeyService := service.NewAPIKeyService(
+		apiKeyRepo,
+		nil,
+		&stubGroupRepo{groups: map[int64]*service.Group{fallbackGroup.ID: fallbackGroup}},
+		nil,
+		nil,
+		nil,
+		cfg,
+	)
+	productSubscriptionService := service.NewSubscriptionProductService(productRepo)
+	router := newAuthTestRouterWithProduct(apiKeyService, nil, productSubscriptionService, cfg)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/t", nil)
+	req.Header.Set("x-api-key", apiKey.Key)
+	router.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusTooManyRequests, w.Code)
+	require.Contains(t, w.Body.String(), "USAGE_LIMIT_EXCEEDED")
+}
+
 func newAuthTestRouter(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, cfg)))
+	router.GET("/t", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	return router
+}
+
+func newAuthTestRouterWithProduct(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, productSubscriptionService *service.SubscriptionProductService, cfg *config.Config) *gin.Engine {
+	router := gin.New()
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddlewareWithProductSubscription(apiKeyService, subscriptionService, productSubscriptionService, cfg)))
 	router.GET("/t", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
@@ -707,4 +1149,128 @@ func (r *stubUserSubscriptionRepo) IncrementUsage(ctx context.Context, id int64,
 
 func (r *stubUserSubscriptionRepo) BatchUpdateExpiredStatus(ctx context.Context) (int64, error) {
 	return 0, errors.New("not implemented")
+}
+
+type stubProductSubscriptionRepo struct {
+	binding         *service.SubscriptionProductBinding
+	sub             *service.UserProductSubscription
+	err             error
+	requestedFamily *string
+}
+
+func (r *stubProductSubscriptionRepo) GetActiveProductSubscriptionByUserAndGroupID(_ context.Context, _ int64, _ int64, productFamily *string) (*service.SubscriptionProductBinding, *service.UserProductSubscription, error) {
+	r.requestedFamily = productFamily
+	if r.err != nil {
+		return nil, nil, r.err
+	}
+	if r.binding == nil || r.sub == nil {
+		return nil, nil, service.ErrSubscriptionNotFound
+	}
+	binding := *r.binding
+	sub := *r.sub
+	return &binding, &sub, nil
+}
+
+func (r *stubProductSubscriptionRepo) ListActiveProductsByUserID(context.Context, int64) ([]service.ActiveSubscriptionProduct, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) ListVisibleGroupsByUserID(context.Context, int64) ([]service.Group, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) ListProducts(context.Context) ([]service.SubscriptionProduct, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) ResolveActiveProductByGroupID(context.Context, int64) (*service.SubscriptionProduct, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) CreateProduct(context.Context, *service.CreateSubscriptionProductInput) (*service.SubscriptionProduct, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) UpdateProduct(context.Context, int64, *service.UpdateSubscriptionProductInput) (*service.SubscriptionProduct, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) ListProductBindings(context.Context, int64) ([]service.SubscriptionProductBindingDetail, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) SyncProductBindings(context.Context, int64, []service.SubscriptionProductBindingInput) ([]service.SubscriptionProductBindingDetail, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) ListProductSubscriptions(context.Context, int64) ([]service.UserProductSubscription, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) ListUserProductSubscriptionsForAdmin(context.Context, service.AdminProductSubscriptionListParams) ([]service.AdminProductSubscriptionListItem, *pagination.PaginationResult, error) {
+	return nil, nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) AssignOrExtendProductSubscription(context.Context, *service.AssignProductSubscriptionInput) (*service.UserProductSubscription, bool, error) {
+	return nil, false, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) AdjustProductSubscription(context.Context, int64, *service.AdjustProductSubscriptionInput) (*service.UserProductSubscription, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) ResetProductSubscriptionQuota(context.Context, int64, *service.ResetProductSubscriptionQuotaInput) (*service.UserProductSubscription, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubProductSubscriptionRepo) RevokeProductSubscription(context.Context, int64) error {
+	return errors.New("not implemented")
+}
+
+type stubGroupRepo struct {
+	groups map[int64]*service.Group
+}
+
+func (r *stubGroupRepo) Create(context.Context, *service.Group) error {
+	return errors.New("not implemented")
+}
+func (r *stubGroupRepo) GetByID(_ context.Context, id int64) (*service.Group, error) {
+	if group := r.groups[id]; group != nil {
+		cp := *group
+		return &cp, nil
+	}
+	return nil, service.ErrGroupNotFound
+}
+func (r *stubGroupRepo) GetByIDLite(ctx context.Context, id int64) (*service.Group, error) {
+	return r.GetByID(ctx, id)
+}
+func (r *stubGroupRepo) Update(context.Context, *service.Group) error {
+	return errors.New("not implemented")
+}
+func (r *stubGroupRepo) Delete(context.Context, int64) error {
+	return errors.New("not implemented")
+}
+func (r *stubGroupRepo) DeleteCascade(context.Context, int64) ([]int64, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubGroupRepo) List(context.Context, pagination.PaginationParams) ([]service.Group, *pagination.PaginationResult, error) {
+	return nil, nil, errors.New("not implemented")
+}
+func (r *stubGroupRepo) ListWithFilters(context.Context, pagination.PaginationParams, string, string, string, *bool) ([]service.Group, *pagination.PaginationResult, error) {
+	return nil, nil, errors.New("not implemented")
+}
+func (r *stubGroupRepo) ListActive(context.Context) ([]service.Group, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubGroupRepo) ListActiveByPlatform(context.Context, string) ([]service.Group, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubGroupRepo) ExistsByName(context.Context, string) (bool, error) {
+	return false, errors.New("not implemented")
+}
+func (r *stubGroupRepo) GetAccountCount(context.Context, int64) (int64, int64, error) {
+	return 0, 0, errors.New("not implemented")
+}
+func (r *stubGroupRepo) DeleteAccountGroupsByGroupID(context.Context, int64) (int64, error) {
+	return 0, errors.New("not implemented")
+}
+func (r *stubGroupRepo) GetAccountIDsByGroupIDs(context.Context, []int64) ([]int64, error) {
+	return nil, errors.New("not implemented")
+}
+func (r *stubGroupRepo) BindAccountsToGroup(context.Context, int64, []int64) error {
+	return errors.New("not implemented")
+}
+func (r *stubGroupRepo) UpdateSortOrders(context.Context, []service.GroupSortOrderUpdate) error {
+	return errors.New("not implemented")
+}
+
+func ptrTime(v time.Time) *time.Time {
+	return &v
 }

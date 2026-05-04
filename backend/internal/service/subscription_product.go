@@ -12,6 +12,8 @@ const (
 	SubscriptionProductStatusActive   = "active"
 	SubscriptionProductStatusDisabled = "disabled"
 
+	ProductSubscriptionStatusRevoked = "revoked"
+
 	SubscriptionProductBindingStatusActive   = "active"
 	SubscriptionProductBindingStatusInactive = "inactive"
 )
@@ -188,6 +190,18 @@ type AssignProductSubscriptionInput struct {
 	Notes        string
 }
 
+type AdjustProductSubscriptionInput struct {
+	ExpiresAt *time.Time
+	Status    *string
+	Notes     *string
+}
+
+type ResetProductSubscriptionQuotaInput struct {
+	Daily   bool
+	Weekly  bool
+	Monthly bool
+}
+
 func (s *UserProductSubscription) IsActive() bool {
 	return s != nil && s.Status == SubscriptionStatusActive && time.Now().Before(s.ExpiresAt)
 }
@@ -196,7 +210,7 @@ func (s *UserProductSubscription) NeedsDailyReset() bool {
 	if s == nil || s.DailyWindowStart == nil {
 		return false
 	}
-	return time.Since(*s.DailyWindowStart) >= 24*time.Hour
+	return !beijingStartOfDay(time.Now()).Equal(beijingStartOfDay(*s.DailyWindowStart))
 }
 
 func (s *UserProductSubscription) NeedsWeeklyReset() bool {
@@ -280,7 +294,7 @@ type SubscriptionProductSummary struct {
 }
 
 type ProductSubscriptionRepository interface {
-	GetActiveProductSubscriptionByUserAndGroupID(ctx context.Context, userID, groupID int64) (*SubscriptionProductBinding, *UserProductSubscription, error)
+	GetActiveProductSubscriptionByUserAndGroupID(ctx context.Context, userID, groupID int64, productFamily *string) (*SubscriptionProductBinding, *UserProductSubscription, error)
 	ListActiveProductsByUserID(ctx context.Context, userID int64) ([]ActiveSubscriptionProduct, error)
 	ListVisibleGroupsByUserID(ctx context.Context, userID int64) ([]Group, error)
 	ListProducts(ctx context.Context) ([]SubscriptionProduct, error)
@@ -292,6 +306,9 @@ type ProductSubscriptionRepository interface {
 	ListProductSubscriptions(ctx context.Context, productID int64) ([]UserProductSubscription, error)
 	ListUserProductSubscriptionsForAdmin(ctx context.Context, params AdminProductSubscriptionListParams) ([]AdminProductSubscriptionListItem, *pagination.PaginationResult, error)
 	AssignOrExtendProductSubscription(ctx context.Context, input *AssignProductSubscriptionInput) (*UserProductSubscription, bool, error)
+	AdjustProductSubscription(ctx context.Context, subscriptionID int64, input *AdjustProductSubscriptionInput) (*UserProductSubscription, error)
+	ResetProductSubscriptionQuota(ctx context.Context, subscriptionID int64, input *ResetProductSubscriptionQuotaInput) (*UserProductSubscription, error)
+	RevokeProductSubscription(ctx context.Context, subscriptionID int64) error
 }
 
 func maxFloat64(a, b float64) float64 {

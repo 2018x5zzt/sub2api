@@ -8,12 +8,18 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
+const beijingDayStartSQL = "date_trunc('day', NOW() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai'"
+
+func beijingDayStartSQLFromColumn(column string) string {
+	return "date_trunc('day', " + column + " AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai'"
+}
+
 type subscriptionUsageSQLExecutor interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subscriptionUsageSQLExecutor, productSubscriptionID int64, costUSD float64) error {
-	const updateSQL = `
+	updateSQL := `
 		WITH prepared AS (
 			SELECT
 				ups.id,
@@ -28,12 +34,10 @@ func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subsc
 				ups.daily_carryover_in_usd,
 				ups.daily_carryover_remaining_usd,
 				COALESCE(sp.daily_limit_usd, 0) AS daily_limit_usd,
-				date_trunc('day', NOW()) AS today_start,
-				date_trunc('week', NOW()) AS week_start,
-				date_trunc('day', NOW()) AS month_start,
+				` + beijingDayStartSQL + ` AS today_start,
 				CASE
 					WHEN ups.daily_window_start IS NULL THEN true
-					WHEN ups.daily_window_start + INTERVAL '24 hours' <= NOW() THEN true
+					WHEN ` + beijingDayStartSQL + ` > (` + beijingDayStartSQLFromColumn("ups.daily_window_start") + `) THEN true
 					ELSE false
 				END AS should_advance_daily,
 				CASE
@@ -48,8 +52,8 @@ func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subsc
 				END AS should_advance_monthly,
 				CASE
 					WHEN ups.daily_window_start IS NULL THEN 0
-					WHEN ups.daily_window_start + INTERVAL '24 hours' <= NOW()
-						THEN GREATEST(CAST(EXTRACT(EPOCH FROM (date_trunc('day', NOW()) - ups.daily_window_start)) / 86400 AS bigint), 0)
+					WHEN ` + beijingDayStartSQL + ` > (` + beijingDayStartSQLFromColumn("ups.daily_window_start") + `)
+						THEN GREATEST(CAST(EXTRACT(EPOCH FROM (` + beijingDayStartSQL + ` - (` + beijingDayStartSQLFromColumn("ups.daily_window_start") + `))) / 86400 AS bigint), 0)
 					ELSE 0
 				END AS elapsed_days,
 				GREATEST(ups.daily_carryover_in_usd - ups.daily_carryover_remaining_usd, 0) AS carryover_consumed,
@@ -71,7 +75,8 @@ func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subsc
 					ELSE daily_usage_usd
 				END AS base_daily_usage,
 				CASE
-					WHEN should_advance_weekly THEN week_start
+					WHEN should_advance_weekly AND weekly_window_start IS NOT NULL THEN weekly_window_start + (FLOOR(EXTRACT(EPOCH FROM (NOW() - weekly_window_start)) / EXTRACT(EPOCH FROM INTERVAL '7 days')) * INTERVAL '7 days')
+					WHEN should_advance_weekly THEN NOW()
 					ELSE weekly_window_start
 				END AS next_weekly_window_start,
 				CASE
@@ -79,7 +84,8 @@ func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subsc
 					ELSE weekly_usage_usd
 				END AS base_weekly_usage,
 				CASE
-					WHEN should_advance_monthly THEN month_start
+					WHEN should_advance_monthly AND monthly_window_start IS NOT NULL THEN monthly_window_start + (FLOOR(EXTRACT(EPOCH FROM (NOW() - monthly_window_start)) / EXTRACT(EPOCH FROM INTERVAL '30 days')) * INTERVAL '30 days')
+					WHEN should_advance_monthly THEN NOW()
 					ELSE monthly_window_start
 				END AS next_monthly_window_start,
 				CASE
@@ -196,12 +202,12 @@ func listProductDebitCandidates(ctx context.Context, tx *sql.Tx, userID, product
 				COALESCE(sp.monthly_limit_usd, 0) AS monthly_limit_usd,
 				CASE
 					WHEN ups.daily_window_start IS NULL THEN 0
-					WHEN ups.daily_window_start + INTERVAL '24 hours' <= NOW()
-						THEN GREATEST(CAST(EXTRACT(EPOCH FROM (date_trunc('day', NOW()) - ups.daily_window_start)) / 86400 AS bigint), 0)
+					WHEN `+beijingDayStartSQL+` > (`+beijingDayStartSQLFromColumn("ups.daily_window_start")+`)
+						THEN GREATEST(CAST(EXTRACT(EPOCH FROM (`+beijingDayStartSQL+` - (`+beijingDayStartSQLFromColumn("ups.daily_window_start")+`))) / 86400 AS bigint), 0)
 					ELSE 0
 				END AS elapsed_days,
 				CASE
-					WHEN ups.daily_window_start IS NULL OR ups.daily_window_start + INTERVAL '24 hours' <= NOW()
+					WHEN ups.daily_window_start IS NULL OR `+beijingDayStartSQL+` > (`+beijingDayStartSQLFromColumn("ups.daily_window_start")+`)
 						THEN 0
 					ELSE ups.daily_usage_usd
 				END AS base_daily_usage,
@@ -216,11 +222,11 @@ func listProductDebitCandidates(ctx context.Context, tx *sql.Tx, userID, product
 					ELSE ups.monthly_usage_usd
 				END AS base_monthly_usage,
 				CASE
-					WHEN ups.daily_window_start IS NULL OR ups.daily_window_start + INTERVAL '24 hours' > NOW()
+					WHEN ups.daily_window_start IS NULL OR `+beijingDayStartSQL+` = (`+beijingDayStartSQLFromColumn("ups.daily_window_start")+`)
 						THEN ups.daily_carryover_in_usd
 					WHEN ups.status = $4
-						AND ups.expires_at > date_trunc('day', NOW())
-						AND GREATEST(CAST(EXTRACT(EPOCH FROM (date_trunc('day', NOW()) - ups.daily_window_start)) / 86400 AS bigint), 0) = 1
+						AND ups.expires_at > `+beijingDayStartSQL+`
+						AND GREATEST(CAST(EXTRACT(EPOCH FROM (`+beijingDayStartSQL+` - (`+beijingDayStartSQLFromColumn("ups.daily_window_start")+`))) / 86400 AS bigint), 0) = 1
 						THEN GREATEST(COALESCE(sp.daily_limit_usd, 0) - GREATEST(ups.daily_usage_usd - GREATEST(ups.daily_carryover_in_usd - ups.daily_carryover_remaining_usd, 0), 0), 0)
 					ELSE 0
 				END AS effective_carryover

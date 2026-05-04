@@ -126,6 +126,33 @@ func TestSubscriptionProductRepositoryAdminProductManagement(t *testing.T) {
 	require.Equal(t, user.ID, subs[0].UserID)
 }
 
+func TestSubscriptionProductRepositorySyncProductBindingsRejectsStandardGroup(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewSubscriptionProductRepository(client, integrationDB)
+
+	standardGroup, err := client.Group.Create().
+		SetName(uniqueTestValue(t, "product-standard-binding")).
+		SetStatus(service.StatusActive).
+		SetSubscriptionType(service.SubscriptionTypeStandard).
+		Save(ctx)
+	require.NoError(t, err)
+
+	product, err := repo.CreateProduct(ctx, &service.CreateSubscriptionProductInput{
+		Code:          "reject-standard-" + uuid.NewString(),
+		Name:          "reject standard product",
+		Status:        service.SubscriptionProductStatusActive,
+		DailyLimitUSD: 12,
+	})
+	require.NoError(t, err)
+
+	_, err = repo.SyncProductBindings(ctx, product.ID, []service.SubscriptionProductBindingInput{
+		{GroupID: standardGroup.ID, DebitMultiplier: 1, Status: service.SubscriptionProductBindingStatusActive},
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "subscription groups")
+}
+
 func TestSubscriptionProductRepositoryListActiveProductsNormalizesRolling30DayUsage(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
@@ -448,7 +475,7 @@ func TestSubscriptionProductRepositorySelectsEligibleProductByFamilyPriority(t *
 	`, userID, exhaustedProductID, nextProductID, now)
 	require.NoError(t, err)
 
-	binding, sub, err := repo.GetActiveProductSubscriptionByUserAndGroupID(ctx, userID, groupID)
+	binding, sub, err := repo.GetActiveProductSubscriptionByUserAndGroupID(ctx, userID, groupID, nil)
 	require.NoError(t, err)
 	require.Equal(t, nextProductID, binding.ProductID)
 	require.Equal(t, nextProductID, sub.ProductID)
@@ -501,7 +528,7 @@ func TestSubscriptionProductRepositoryDoesNotFallbackAcrossProductFamilies(t *te
 	`, userID, exhaustedProductID, otherFamilyProductID, now)
 	require.NoError(t, err)
 
-	_, _, err = repo.GetActiveProductSubscriptionByUserAndGroupID(ctx, userID, groupID)
+	_, _, err = repo.GetActiveProductSubscriptionByUserAndGroupID(ctx, userID, groupID, nil)
 	require.ErrorIs(t, err, service.ErrDailyLimitExceeded)
 }
 

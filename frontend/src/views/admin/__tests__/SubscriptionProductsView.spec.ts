@@ -7,10 +7,16 @@ const {
   listProducts,
   listUserSubscriptions,
   getAllGroups,
+  adjustSubscription,
+  resetSubscriptionQuota,
+  revokeSubscription,
 } = vi.hoisted(() => ({
   listProducts: vi.fn(),
   listUserSubscriptions: vi.fn(),
   getAllGroups: vi.fn(),
+  adjustSubscription: vi.fn(),
+  resetSubscriptionQuota: vi.fn(),
+  revokeSubscription: vi.fn(),
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -24,6 +30,9 @@ vi.mock('@/api/admin', () => ({
       syncBindings: vi.fn(),
       listSubscriptions: vi.fn(),
       assign: vi.fn(),
+      adjustSubscription,
+      resetSubscriptionQuota,
+      revokeSubscription,
     },
     groups: {
       getAll: getAllGroups,
@@ -60,9 +69,7 @@ const DataTableStub = {
       <div v-for="row in data" :key="row.id" data-test="row">
         <slot name="cell-user" :row="row" :value="row.user_email" />
         <slot name="cell-product" :row="row" :value="row.product_name" />
-        <slot name="cell-daily_usage" :row="row" />
-        <slot name="cell-carryover" :row="row" />
-        <slot name="cell-fresh_daily_usage" :row="row" :value="row.fresh_daily_usage_usd" />
+        <slot name="cell-usage" :row="row" />
       </div>
     </div>
   `,
@@ -74,6 +81,9 @@ describe('admin SubscriptionProductsView', () => {
     listProducts.mockReset()
     listUserSubscriptions.mockReset()
     getAllGroups.mockReset()
+    adjustSubscription.mockReset()
+    resetSubscriptionQuota.mockReset()
+    revokeSubscription.mockReset()
 
     listProducts.mockResolvedValue([
       {
@@ -129,6 +139,9 @@ describe('admin SubscriptionProductsView', () => {
       pages: 1,
     })
     getAllGroups.mockResolvedValue([])
+    adjustSubscription.mockResolvedValue({})
+    resetSubscriptionQuota.mockResolvedValue({})
+    revokeSubscription.mockResolvedValue({})
   })
 
   it('defaults to the per-user product subscription usage table', async () => {
@@ -161,21 +174,67 @@ describe('admin SubscriptionProductsView', () => {
     expect(columns).toEqual([
       'user',
       'product',
-      'status',
-      'daily_usage',
-      'carryover',
-      'fresh_daily_usage',
+      'usage',
       'period',
-      'notes',
+      'status',
+      'actions',
     ])
     expect(wrapper.get('[data-test="row-count"]').text()).toBe('1')
     expect(wrapper.text()).toContain('user@example.com')
     expect(wrapper.text()).toContain('GPT 订阅每天45刀')
-    expect(wrapper.text()).toContain('$0.00 / $45.00')
-    expect(wrapper.text()).toContain('Weekly: $0.00')
-    expect(wrapper.text()).toContain('Monthly: $0.00')
+    expect(wrapper.text()).toContain('Daily$0.00 / $45.00')
+    expect(wrapper.text()).toContain('Weekly$0.00 / $315.00')
+    expect(wrapper.text()).toContain('Monthly$0.00 / $1350.00')
     expect(wrapper.text()).toContain('$8.00')
-    expect(wrapper.text()).toContain('Used: $0.00')
-    expect(wrapper.text()).toContain('$3.00')
+  })
+
+  it('calls product subscription action endpoints without per-user daily limit in adjust payload', async () => {
+    const wrapper = mount(SubscriptionProductsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: {
+            template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>',
+          },
+          DataTable: DataTableStub,
+          Pagination: true,
+          BaseDialog: true,
+          EmptyState: true,
+          Select: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const subscription = (wrapper.vm as any).userSubscriptions[0]
+
+    ;(wrapper.vm as any).openAdjustDialog(subscription)
+    ;(wrapper.vm as any).adjustForm.expires_at = '2026-06-15'
+    ;(wrapper.vm as any).adjustForm.notes = 'extended by support'
+    await (wrapper.vm as any).submitAdjust()
+
+    expect(adjustSubscription).toHaveBeenCalledWith(66, {
+      expires_at: '2026-06-15',
+      notes: 'extended by support',
+    })
+
+    ;(wrapper.vm as any).openResetQuotaDialog(subscription)
+    ;(wrapper.vm as any).resetQuotaForm.daily = true
+    ;(wrapper.vm as any).resetQuotaForm.weekly = false
+    ;(wrapper.vm as any).resetQuotaForm.monthly = true
+    await (wrapper.vm as any).submitResetQuota()
+
+    expect(resetSubscriptionQuota).toHaveBeenCalledWith(66, {
+      daily: true,
+      weekly: false,
+      monthly: true,
+    })
+
+    ;(wrapper.vm as any).openRevokeConfirm(subscription)
+    await (wrapper.vm as any).submitRevoke()
+
+    expect(revokeSubscription).toHaveBeenCalledWith(66)
   })
 })

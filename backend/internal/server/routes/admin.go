@@ -53,7 +53,6 @@ func RegisterAdminRoutes(
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
-
 		// 数据库备份恢复
 		registerBackupRoutes(admin, h)
 
@@ -110,6 +109,9 @@ func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 func registerSubscriptionProductRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	admin.GET("/product-subscriptions", h.Admin.SubscriptionProduct.ListAllSubscriptions)
+	admin.PUT("/product-subscriptions/:id/adjust", h.Admin.SubscriptionProduct.AdjustSubscription)
+	admin.POST("/product-subscriptions/:id/reset-quota", h.Admin.SubscriptionProduct.ResetSubscriptionQuota)
+	admin.DELETE("/product-subscriptions/:id", h.Admin.SubscriptionProduct.RevokeSubscription)
 
 	products := admin.Group("/subscription-products")
 	{
@@ -443,7 +445,6 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.POST("/web-search-emulation/reset-usage", h.Admin.Setting.ResetWebSearchUsage)
 	}
 }
-
 
 func registerBackupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	backup := admin.Group("/backups")

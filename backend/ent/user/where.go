@@ -195,6 +195,11 @@ func SubscriptionBalanceFallbackUsedUsd(v float64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldSubscriptionBalanceFallbackUsedUsd, v))
 }
 
+// SubscriptionBalanceFallbackGroupID applies equality check predicate on the "subscription_balance_fallback_group_id" field. It's identical to SubscriptionBalanceFallbackGroupIDEQ.
+func SubscriptionBalanceFallbackGroupID(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldSubscriptionBalanceFallbackGroupID, v))
+}
+
 // RpmLimit applies equality check predicate on the "rpm_limit" field. It's identical to RpmLimitEQ.
 func RpmLimit(v int) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldRpmLimit, v))
@@ -1593,6 +1598,56 @@ func SubscriptionBalanceFallbackUsedUsdLT(v float64) predicate.User {
 // SubscriptionBalanceFallbackUsedUsdLTE applies the LTE predicate on the "subscription_balance_fallback_used_usd" field.
 func SubscriptionBalanceFallbackUsedUsdLTE(v float64) predicate.User {
 	return predicate.User(sql.FieldLTE(FieldSubscriptionBalanceFallbackUsedUsd, v))
+}
+
+// SubscriptionBalanceFallbackGroupIDEQ applies the EQ predicate on the "subscription_balance_fallback_group_id" field.
+func SubscriptionBalanceFallbackGroupIDEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldSubscriptionBalanceFallbackGroupID, v))
+}
+
+// SubscriptionBalanceFallbackGroupIDNEQ applies the NEQ predicate on the "subscription_balance_fallback_group_id" field.
+func SubscriptionBalanceFallbackGroupIDNEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldSubscriptionBalanceFallbackGroupID, v))
+}
+
+// SubscriptionBalanceFallbackGroupIDIn applies the In predicate on the "subscription_balance_fallback_group_id" field.
+func SubscriptionBalanceFallbackGroupIDIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldIn(FieldSubscriptionBalanceFallbackGroupID, vs...))
+}
+
+// SubscriptionBalanceFallbackGroupIDNotIn applies the NotIn predicate on the "subscription_balance_fallback_group_id" field.
+func SubscriptionBalanceFallbackGroupIDNotIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldSubscriptionBalanceFallbackGroupID, vs...))
+}
+
+// SubscriptionBalanceFallbackGroupIDGT applies the GT predicate on the "subscription_balance_fallback_group_id" field.
+func SubscriptionBalanceFallbackGroupIDGT(v int64) predicate.User {
+	return predicate.User(sql.FieldGT(FieldSubscriptionBalanceFallbackGroupID, v))
+}
+
+// SubscriptionBalanceFallbackGroupIDGTE applies the GTE predicate on the "subscription_balance_fallback_group_id" field.
+func SubscriptionBalanceFallbackGroupIDGTE(v int64) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldSubscriptionBalanceFallbackGroupID, v))
+}
+
+// SubscriptionBalanceFallbackGroupIDLT applies the LT predicate on the "subscription_balance_fallback_group_id" field.
+func SubscriptionBalanceFallbackGroupIDLT(v int64) predicate.User {
+	return predicate.User(sql.FieldLT(FieldSubscriptionBalanceFallbackGroupID, v))
+}
+
+// SubscriptionBalanceFallbackGroupIDLTE applies the LTE predicate on the "subscription_balance_fallback_group_id" field.
+func SubscriptionBalanceFallbackGroupIDLTE(v int64) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldSubscriptionBalanceFallbackGroupID, v))
+}
+
+// SubscriptionBalanceFallbackGroupIDIsNil applies the IsNil predicate on the "subscription_balance_fallback_group_id" field.
+func SubscriptionBalanceFallbackGroupIDIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldSubscriptionBalanceFallbackGroupID))
+}
+
+// SubscriptionBalanceFallbackGroupIDNotNil applies the NotNil predicate on the "subscription_balance_fallback_group_id" field.
+func SubscriptionBalanceFallbackGroupIDNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldSubscriptionBalanceFallbackGroupID))
 }
 
 // RpmLimitEQ applies the EQ predicate on the "rpm_limit" field.

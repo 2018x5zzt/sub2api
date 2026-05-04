@@ -177,6 +177,7 @@ type UpdateProfileRequest struct {
 	BalanceNotifyThreshold              *float64 `json:"balance_notify_threshold"`
 	SubscriptionBalanceFallbackEnabled  *bool    `json:"subscription_balance_fallback_enabled"`
 	SubscriptionBalanceFallbackLimitUSD *float64 `json:"subscription_balance_fallback_limit_usd"`
+	SubscriptionBalanceFallbackGroupID  *int64   `json:"subscription_balance_fallback_group_id"`
 }
 
 type UserAvatar struct {
@@ -210,6 +211,7 @@ type ChangePasswordRequest struct {
 // UserService 用户服务
 type UserService struct {
 	userRepo             UserRepository
+	groupRepo            GroupRepository
 	settingRepo          SettingRepository
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 	billingCache         BillingCache
@@ -218,13 +220,22 @@ type UserService struct {
 }
 
 // NewUserService 创建用户服务实例
-func NewUserService(userRepo UserRepository, settingRepo SettingRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache) *UserService {
+func NewUserService(userRepo UserRepository, settingRepo SettingRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache, groupRepo ...GroupRepository) *UserService {
+	var fallbackGroupRepo GroupRepository
+	if len(groupRepo) > 0 {
+		fallbackGroupRepo = groupRepo[0]
+	}
 	return &UserService{
 		userRepo:             userRepo,
+		groupRepo:            fallbackGroupRepo,
 		settingRepo:          settingRepo,
 		authCacheInvalidator: authCacheInvalidator,
 		billingCache:         billingCache,
 	}
+}
+
+func ProvideUserService(userRepo UserRepository, settingRepo SettingRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache, groupRepo GroupRepository) *UserService {
+	return NewUserService(userRepo, settingRepo, authCacheInvalidator, billingCache, groupRepo)
 }
 
 // GetFirstAdmin 获取首个管理员用户（用于 Admin API Key 认证）
@@ -392,7 +403,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req Updat
 		}); err != nil {
 			return nil, err
 		}
-		if s.authCacheInvalidator != nil && updated != nil && (updated.Concurrency != oldConcurrency || req.SubscriptionBalanceFallbackEnabled != nil || req.SubscriptionBalanceFallbackLimitUSD != nil) {
+		if s.authCacheInvalidator != nil && updated != nil && (updated.Concurrency != oldConcurrency || req.SubscriptionBalanceFallbackEnabled != nil || req.SubscriptionBalanceFallbackLimitUSD != nil || req.SubscriptionBalanceFallbackGroupID != nil) {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 		}
 		return updated, nil
@@ -402,7 +413,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req Updat
 	if err != nil {
 		return nil, err
 	}
-	if s.authCacheInvalidator != nil && (updated.Concurrency != oldConcurrency || req.SubscriptionBalanceFallbackEnabled != nil || req.SubscriptionBalanceFallbackLimitUSD != nil) {
+	if s.authCacheInvalidator != nil && (updated.Concurrency != oldConcurrency || req.SubscriptionBalanceFallbackEnabled != nil || req.SubscriptionBalanceFallbackLimitUSD != nil || req.SubscriptionBalanceFallbackGroupID != nil) {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
 	return updated, nil
@@ -463,6 +474,16 @@ func (s *UserService) updateProfile(ctx context.Context, userID int64, req Updat
 		} else {
 			user.SubscriptionBalanceFallbackLimitUSD = *req.SubscriptionBalanceFallbackLimitUSD
 		}
+	}
+	if req.SubscriptionBalanceFallbackGroupID != nil {
+		if *req.SubscriptionBalanceFallbackGroupID <= 0 {
+			user.SubscriptionBalanceFallbackGroupID = nil
+		} else {
+			user.SubscriptionBalanceFallbackGroupID = req.SubscriptionBalanceFallbackGroupID
+		}
+	}
+	if err := validateSubscriptionBalanceFallbackConfig(ctx, s.groupRepo, user); err != nil {
+		return nil, oldConcurrency, err
 	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {

@@ -4,19 +4,21 @@ import { nextTick } from 'vue'
 
 import RedeemView from '../RedeemView.vue'
 
-const { redeemList, listProducts } = vi.hoisted(() => ({
+const { redeemList, listProducts, redeemGenerate, showError } = vi.hoisted(() => ({
   redeemList: vi.fn(),
   listProducts: vi.fn(),
+  redeemGenerate: vi.fn(),
+  showError: vi.fn(),
 }))
 
 vi.mock('@/api/admin', () => ({
-  adminAPI: {
-    redeem: {
-      list: redeemList,
-      generate: vi.fn(),
-      exportCodes: vi.fn(),
-      delete: vi.fn(),
-      batchDelete: vi.fn(),
+    adminAPI: {
+      redeem: {
+        list: redeemList,
+        generate: redeemGenerate,
+        exportCodes: vi.fn(),
+        delete: vi.fn(),
+        batchDelete: vi.fn(),
     },
     subscriptionProducts: {
       list: listProducts,
@@ -26,7 +28,7 @@ vi.mock('@/api/admin', () => ({
 
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
-    showError: vi.fn(),
+    showError,
     showSuccess: vi.fn(),
     showInfo: vi.fn(),
   }),
@@ -97,5 +99,56 @@ describe('admin RedeemView', () => {
     await nextTick()
 
     expect(vm.generateForm.validity_days).toBe(7)
+  })
+
+  it('keeps subscription code generation blocked until a product is selected', async () => {
+    redeemList.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
+    listProducts.mockResolvedValue([
+      {
+        id: 88,
+        code: 'gpt_weekly_45',
+        name: 'GPT weekly',
+        description: '',
+        status: 'active',
+        product_family: 'gpt_shared',
+        default_validity_days: 7,
+        daily_limit_usd: 45,
+        weekly_limit_usd: 315,
+        monthly_limit_usd: 0,
+        sort_order: 1,
+        created_at: '2026-05-01T00:00:00Z',
+        updated_at: '2026-05-01T00:00:00Z',
+      },
+    ])
+
+    const wrapper = mount(RedeemView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          TablePageLayout: {
+            template: '<div><slot name="filters" /><slot name="table" /><slot name="pagination" /></div>',
+          },
+          DataTable: true,
+          Pagination: true,
+          ConfirmDialog: true,
+          Select: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as { generateForm: { type: string; product_id: number | null }; handleGenerateCodes: () => Promise<void> }
+    vm.generateForm.type = 'subscription'
+    await nextTick()
+    vm.generateForm.product_id = null
+    await nextTick()
+
+    await vm.handleGenerateCodes()
+
+    expect(redeemGenerate).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalledWith('admin.redeem.productRequired')
   })
 })

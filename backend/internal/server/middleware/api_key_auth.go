@@ -146,13 +146,16 @@ func apiKeyAuthWithSubscription(
 		var subscription *service.UserSubscription
 		var productSettlement *service.ProductSettlementContext
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+		productSubscriptionChecked := false
 		subscriptionBalanceFallback := false
 
 		if isSubscriptionType && productSubscriptionService != nil {
-			settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
+			productSubscriptionChecked = true
+			settlement, productErr := productSubscriptionService.GetActiveProductSubscriptionForFamily(
 				c.Request.Context(),
 				apiKey.User.ID,
 				apiKey.Group.ID,
+				apiKey.SubscriptionProductFamily,
 			)
 			if productErr == nil {
 				productSettlement = settlement
@@ -168,10 +171,13 @@ func apiKeyAuthWithSubscription(
 			} else if !errors.Is(productErr, service.ErrSubscriptionNotFound) && !skipBilling {
 				AbortWithError(c, 403, "SUBSCRIPTION_INVALID", productErr.Error())
 				return
+			} else if errors.Is(productErr, service.ErrSubscriptionNotFound) && !skipBilling {
+				AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for this group")
+				return
 			}
 		}
 
-		if isSubscriptionType && productSettlement == nil && subscriptionService != nil {
+		if isSubscriptionType && !productSubscriptionChecked && productSettlement == nil && subscriptionService != nil {
 			sub, subErr := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,
@@ -231,8 +237,19 @@ func apiKeyAuthWithSubscription(
 						code = "USAGE_LIMIT_EXCEEDED"
 						status = 429
 					}
-					AbortWithError(c, status, code, validateErr.Error())
-					return
+					if isSubscriptionLimitError(validateErr) {
+						if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
+							apiKey = fallbackAPIKey
+							productSettlement = nil
+							subscriptionBalanceFallback = true
+						} else {
+							AbortWithError(c, status, code, validateErr.Error())
+							return
+						}
+					} else {
+						AbortWithError(c, status, code, validateErr.Error())
+						return
+					}
 				}
 			} else if subscription != nil {
 				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
@@ -267,7 +284,7 @@ func apiKeyAuthWithSubscription(
 				}
 			} else {
 				// 非订阅模式 或 订阅模式但 subscriptionService 未注入：回退到余额检查
-				if apiKey.User.Balance <= 0 {
+				if apiKey.User.Balance < 0 {
 					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
 					return
 				}
@@ -359,12 +376,12 @@ func resolveSubscriptionBalanceFallbackAPIKey(ctx context.Context, apiKeyService
 		user.SubscriptionBalanceFallbackLimitUSD <= 0 ||
 		user.SubscriptionBalanceFallbackUsedUSD >= user.SubscriptionBalanceFallbackLimitUSD ||
 		user.Balance <= 0 ||
-		apiKey.Group.BalanceFallbackGroupID == nil ||
-		*apiKey.Group.BalanceFallbackGroupID <= 0 {
+		user.SubscriptionBalanceFallbackGroupID == nil ||
+		*user.SubscriptionBalanceFallbackGroupID <= 0 {
 		return nil, service.ErrSubscriptionNotFound
 	}
 
-	fallbackGroup, err := apiKeyService.GetGroupByID(ctx, *apiKey.Group.BalanceFallbackGroupID)
+	fallbackGroup, err := apiKeyService.GetGroupByID(ctx, *user.SubscriptionBalanceFallbackGroupID)
 	if err != nil {
 		return nil, err
 	}
@@ -373,10 +390,14 @@ func resolveSubscriptionBalanceFallbackAPIKey(ctx context.Context, apiKeyService
 		fallbackGroup.SubscriptionType != service.SubscriptionTypeStandard {
 		return nil, service.ErrSubscriptionInvalid
 	}
+	if !user.CanBindGroup(fallbackGroup.ID, fallbackGroup.IsExclusive) {
+		return nil, service.ErrSubscriptionInvalid
+	}
 
 	fallbackAPIKey := *apiKey
 	groupID := fallbackGroup.ID
 	fallbackAPIKey.GroupID = &groupID
 	fallbackAPIKey.Group = fallbackGroup
+	fallbackAPIKey.SubscriptionProductFamily = nil
 	return &fallbackAPIKey, nil
 }

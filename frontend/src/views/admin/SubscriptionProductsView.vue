@@ -170,10 +170,6 @@
     >
       <form id="adjust-form" class="space-y-4" @submit.prevent="submitAdjust">
         <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.dailyLimit', 'Daily Limit USD') }}</label>
-          <input v-model.number="adjustForm.daily_limit_usd" type="number" min="0" step="0.0001" class="input" />
-        </div>
-        <div>
           <label class="input-label">{{ t('admin.subscriptionProducts.columns.expiresAt', 'Expires At') }}</label>
           <input v-model="adjustForm.expires_at" type="date" class="input" />
         </div>
@@ -445,7 +441,6 @@ const selectedSubscription = ref<AdminProductSubscriptionListItem | null>(null)
 
 const showAdjustDialog = ref(false)
 const adjustForm = reactive({
-  daily_limit_usd: 0,
   expires_at: '',
   notes: '',
 })
@@ -461,7 +456,6 @@ const showRevokeConfirm = ref(false)
 
 function openAdjustDialog(row: AdminProductSubscriptionListItem) {
   selectedSubscription.value = row
-  adjustForm.daily_limit_usd = row.daily_limit_usd || 0
   adjustForm.expires_at = row.expires_at ? row.expires_at.slice(0, 10) : ''
   adjustForm.notes = row.notes || ''
   showAdjustDialog.value = true
@@ -477,7 +471,6 @@ async function submitAdjust() {
   actionLoading.value = true
   try {
     await adminAPI.subscriptionProducts.adjustSubscription(selectedSubscription.value.id, {
-      daily_limit_usd: adjustForm.daily_limit_usd,
       expires_at: adjustForm.expires_at || undefined,
       notes: adjustForm.notes || undefined,
     })

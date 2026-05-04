@@ -52,6 +52,7 @@ type UpdateProfileRequest struct {
 	BalanceNotifyThreshold              *float64 `json:"balance_notify_threshold"`
 	SubscriptionBalanceFallbackEnabled  *bool    `json:"subscription_balance_fallback_enabled"`
 	SubscriptionBalanceFallbackLimitUSD *float64 `json:"subscription_balance_fallback_limit_usd"`
+	SubscriptionBalanceFallbackGroupID  *int64   `json:"subscription_balance_fallback_group_id"`
 }
 
 type userProfileResponse struct {
@@ -150,6 +151,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		BalanceNotifyThreshold:              req.BalanceNotifyThreshold,
 		SubscriptionBalanceFallbackEnabled:  req.SubscriptionBalanceFallbackEnabled,
 		SubscriptionBalanceFallbackLimitUSD: req.SubscriptionBalanceFallbackLimitUSD,
+		SubscriptionBalanceFallbackGroupID:  req.SubscriptionBalanceFallbackGroupID,
 	}
 	updatedUser, err := h.userService.UpdateProfile(c.Request.Context(), subject.UserID, svcReq)
 	if err != nil {

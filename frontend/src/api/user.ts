@@ -40,6 +40,7 @@ export async function updateProfile(profile: {
   balance_notify_extra_emails?: NotifyEmailEntry[]
   subscription_balance_fallback_enabled?: boolean
   subscription_balance_fallback_limit_usd?: number
+  subscription_balance_fallback_group_id?: number | null
 }): Promise<User> {
   const { data } = await apiClient.put<User>('/user', profile)
   return data
