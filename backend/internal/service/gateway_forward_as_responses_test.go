@@ -3,6 +3,7 @@
 package service
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -83,7 +84,7 @@ func TestHandleResponsesStreamingResponse_PreservesMessageStartCacheUsage(t *tes
 	}
 
 	svc := &GatewayService{}
-	result, err := svc.handleResponsesStreamingResponse(resp, c, "claude-sonnet-4.5", "claude-sonnet-4.5", nil, time.Now())
+	result, err := svc.handleResponsesStreamingResponse(resp, c, &Account{ID: 43, Platform: PlatformAnthropic}, "claude-sonnet-4.5", "claude-sonnet-4.5", nil, time.Now())
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, 20, result.Usage.InputTokens)
@@ -91,4 +92,27 @@ func TestHandleResponsesStreamingResponse_PreservesMessageStartCacheUsage(t *tes
 	require.Equal(t, 11, result.Usage.CacheReadInputTokens)
 	require.Equal(t, 4, result.Usage.CacheCreationInputTokens)
 	require.Contains(t, rec.Body.String(), `response.completed`)
+}
+
+func TestHandleResponsesStreamingResponse_EmptyUpstreamDoesNotWriteEmpty200(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"x-request-id": []string{"rid_empty_responses_stream"}},
+		Body:       io.NopCloser(strings.NewReader("")),
+	}
+
+	svc := &GatewayService{}
+	_, err := svc.handleResponsesStreamingResponse(resp, c, &Account{ID: 43, Platform: PlatformAnthropic}, "gpt-5.5", "claude-sonnet-4.5", nil, time.Now())
+
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.True(t, errors.As(err, &failoverErr), "expected recoverable failover error, got %T %v", err, err)
+	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.False(t, c.Writer.Written(), "must not commit an empty HTTP 200 before failover")
+	require.Empty(t, rec.Body.String())
 }

@@ -184,7 +184,7 @@ func (s *GatewayService) ForwardAsResponses(
 	var result *ForwardResult
 	var handleErr error
 	if clientStream {
-		result, handleErr = s.handleResponsesStreamingResponse(resp, c, originalModel, mappedModel, reasoningEffort, startTime)
+		result, handleErr = s.handleResponsesStreamingResponse(resp, c, account, originalModel, mappedModel, reasoningEffort, startTime)
 	} else {
 		result, handleErr = s.handleResponsesBufferedStreamingResponse(resp, c, originalModel, mappedModel, reasoningEffort, startTime)
 	}
@@ -364,6 +364,7 @@ func (s *GatewayService) handleResponsesBufferedStreamingResponse(
 func (s *GatewayService) handleResponsesStreamingResponse(
 	resp *http.Response,
 	c *gin.Context,
+	account *Account,
 	originalModel string,
 	mappedModel string,
 	reasoningEffort *string,
@@ -371,20 +372,11 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 ) (*ForwardResult, error) {
 	requestID := resp.Header.Get("x-request-id")
 
-	if s.responseHeaderFilter != nil {
-		responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
-	}
-	c.Writer.Header().Set("Content-Type", "text/event-stream")
-	c.Writer.Header().Set("Cache-Control", "no-cache")
-	c.Writer.Header().Set("Connection", "keep-alive")
-	c.Writer.Header().Set("X-Accel-Buffering", "no")
-	c.Writer.WriteHeader(http.StatusOK)
-
 	state := apicompat.NewAnthropicEventToResponsesState()
 	state.Model = originalModel
 	var usage ClaudeUsage
 	var firstTokenMs *int
-	firstChunk := true
+	streamStarted := false
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -405,15 +397,23 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 			FirstTokenMs:    firstTokenMs,
 		}
 	}
+	ensureStreamStarted := func() {
+		if streamStarted {
+			return
+		}
+		if s.responseHeaderFilter != nil {
+			responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
+		}
+		c.Writer.Header().Set("Content-Type", "text/event-stream")
+		c.Writer.Header().Set("Cache-Control", "no-cache")
+		c.Writer.Header().Set("Connection", "keep-alive")
+		c.Writer.Header().Set("X-Accel-Buffering", "no")
+		c.Writer.WriteHeader(http.StatusOK)
+		streamStarted = true
+	}
 
 	// processEvent handles a single parsed Anthropic SSE event.
 	processEvent := func(event *apicompat.AnthropicStreamEvent) bool {
-		if firstChunk {
-			firstChunk = false
-			ms := int(time.Since(startTime).Milliseconds())
-			firstTokenMs = &ms
-		}
-
 		// Extract usage from message_delta
 		if event.Type == "message_delta" && event.Usage != nil {
 			mergeAnthropicUsage(&usage, *event.Usage)
@@ -425,6 +425,14 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 
 		// Convert to Responses events
 		events := apicompat.AnthropicEventToResponsesEvents(event, state)
+		if len(events) == 0 || !state.CreatedSent {
+			return false
+		}
+		if firstTokenMs == nil {
+			ms := int(time.Since(startTime).Milliseconds())
+			firstTokenMs = &ms
+		}
+		ensureStreamStarted()
 		for _, evt := range events {
 			sse, err := apicompat.ResponsesEventToSSE(evt)
 			if err != nil {
@@ -449,7 +457,12 @@ func (s *GatewayService) handleResponsesStreamingResponse(
 	}
 
 	finalizeStream := func() (*ForwardResult, error) {
-		if finalEvents := apicompat.FinalizeAnthropicResponsesStream(state); len(finalEvents) > 0 {
+		finalEvents := apicompat.FinalizeAnthropicResponsesStream(state)
+		if !streamStarted && len(finalEvents) == 0 {
+			return nil, newEmptySuccessStreamFailoverError(c, account, resp, false, "Upstream returned empty response")
+		}
+		if len(finalEvents) > 0 {
+			ensureStreamStarted()
 			for _, evt := range finalEvents {
 				sse, err := apicompat.ResponsesEventToSSE(evt)
 				if err != nil {

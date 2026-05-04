@@ -3342,6 +3342,48 @@ func (s *OpenAIGatewayService) newOpenAIStreamFailoverError(
 	}
 }
 
+func newEmptySuccessStreamFailoverError(c *gin.Context, account *Account, resp *http.Response, passthrough bool, message string) *UpstreamFailoverError {
+	message = sanitizeUpstreamErrorMessage(strings.TrimSpace(message))
+	if message == "" {
+		message = "Upstream returned empty response"
+	}
+	upstreamRequestID := ""
+	responseHeaders := http.Header(nil)
+	if resp != nil {
+		upstreamRequestID = strings.TrimSpace(resp.Header.Get("x-request-id"))
+		responseHeaders = resp.Header.Clone()
+	}
+	if c != nil {
+		setOpsUpstreamError(c, http.StatusBadGateway, message, "")
+		event := OpsUpstreamErrorEvent{
+			Platform:           PlatformOpenAI,
+			UpstreamStatusCode: http.StatusBadGateway,
+			UpstreamRequestID:  upstreamRequestID,
+			Passthrough:        passthrough,
+			Kind:               "failover",
+			Message:            message,
+		}
+		if account != nil {
+			event.Platform = account.Platform
+			event.AccountID = account.ID
+			event.AccountName = account.Name
+		}
+		appendOpsUpstreamError(c, event)
+	}
+	body, _ := json.Marshal(gin.H{
+		"error": gin.H{
+			"type":    "upstream_error",
+			"message": message,
+		},
+	})
+	return &UpstreamFailoverError{
+		StatusCode:             http.StatusBadGateway,
+		ResponseBody:           body,
+		ResponseHeaders:        responseHeaders,
+		RetryableOnSameAccount: true,
+	}
+}
+
 func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	ctx context.Context,
 	resp *http.Response,
