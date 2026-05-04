@@ -42,34 +42,54 @@
 
           <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
-              <div class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                {{ t('modelHub.groupsLabel') }}
+              <div class="flex items-center gap-2">
+                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400">
+                  <Icon name="grid" size="sm" />
+                </span>
+                <span class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  {{ t('modelHub.groupsLabel') }}
+                </span>
               </div>
-              <div class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
+              <div class="mt-3 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
                 {{ catalogs.length }}
               </div>
             </div>
             <div class="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
-              <div class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                {{ t('modelHub.uniqueModelsLabel') }}
+              <div class="flex items-center gap-2">
+                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
+                  <Icon name="sparkles" size="sm" />
+                </span>
+                <span class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  {{ t('modelHub.uniqueModelsLabel') }}
+                </span>
               </div>
-              <div class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
+              <div class="mt-3 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
                 {{ allModelIds.length }}
               </div>
             </div>
             <div class="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
-              <div class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                {{ t('modelHub.visibleModelsLabel') }}
+              <div class="flex items-center gap-2">
+                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
+                  <Icon name="eye" size="sm" />
+                </span>
+                <span class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  {{ t('modelHub.visibleModelsLabel') }}
+                </span>
               </div>
-              <div class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
+              <div class="mt-3 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
                 {{ visibleModelIds.length }}
               </div>
             </div>
             <div class="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
-              <div class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                {{ t('modelHub.platformsLabel') }}
+              <div class="flex items-center gap-2">
+                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400">
+                  <Icon name="globe" size="sm" />
+                </span>
+                <span class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  {{ t('modelHub.platformsLabel') }}
+                </span>
               </div>
-              <div class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
+              <div class="mt-3 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
                 {{ platformOptions.length }}
               </div>
             </div>
@@ -227,9 +247,10 @@
             <article
               v-for="catalog in visibleCatalogs"
               :key="catalog.group.id"
-              class="card overflow-hidden"
+              class="card overflow-hidden transition-shadow duration-200 hover:shadow-md"
             >
-              <div class="border-b border-gray-100 p-5 dark:border-dark-700">
+              <div class="relative border-b border-gray-100 p-5 dark:border-dark-700">
+                <div class="absolute inset-x-0 top-0 h-[2px]" :class="platformAccentClass(catalog.group.platform)"></div>
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div class="min-w-0 space-y-3">
                     <div class="flex flex-wrap items-center gap-3">
@@ -288,21 +309,21 @@
                     v-for="model in catalog.models"
                     :key="`${catalog.group.id}-${model.id}`"
                     type="button"
-                    class="group flex items-start justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-sm dark:border-dark-600 dark:bg-dark-800 dark:hover:border-sky-500/60"
+                    class="group relative flex items-start justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-[0_4px_12px_rgba(14,165,233,0.08)] dark:border-dark-600 dark:bg-dark-800 dark:hover:border-sky-500/60 dark:hover:shadow-[0_4px_12px_rgba(56,189,248,0.06)]"
                     @click="copyModel(model.id)"
                   >
                     <div class="flex min-w-0 items-start gap-3">
-                      <div class="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 dark:bg-dark-700 dark:text-slate-200">
+                      <div class="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 text-slate-700 ring-1 ring-slate-200/60 dark:from-dark-700 dark:to-dark-600 dark:text-slate-200 dark:ring-dark-500/40">
                         <ModelIcon :model="model.id" size="20px" />
                       </div>
                       <div class="min-w-0">
                         <div class="truncate text-sm font-semibold text-gray-900 dark:text-white">
                           {{ model.display_name }}
                         </div>
-                        <code class="mt-1 block truncate text-xs text-gray-500 dark:text-gray-400">
+                        <code class="mt-1 block truncate text-xs text-gray-400 dark:text-gray-500">
                           {{ model.id }}
                         </code>
-                        <div class="mt-2 flex flex-wrap gap-1.5">
+                        <div class="mt-2.5 flex flex-wrap gap-1.5">
                           <span
                             v-for="badge in getPricingBadges(model, catalog.effective_rate_multiplier)"
                             :key="badge.key"
@@ -321,7 +342,7 @@
                     </div>
 
                     <div
-                      class="ml-3 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-transparent text-gray-400 transition-colors group-hover:border-sky-200 group-hover:text-sky-600 dark:group-hover:border-sky-500/30 dark:group-hover:text-sky-300"
+                      class="ml-3 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-transparent text-gray-400 transition-all duration-200 group-hover:border-sky-200 group-hover:bg-sky-50 group-hover:text-sky-600 dark:group-hover:border-sky-500/30 dark:group-hover:bg-sky-500/10 dark:group-hover:text-sky-300"
                     >
                       <Icon
                         :name="copiedKey === `model:${model.id}` ? 'check' : 'clipboard'"
@@ -354,6 +375,7 @@ import type { GroupPlatform, SubscriptionType } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
+import Icon from '@/components/icons/Icon.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import { useClipboard } from '@/composables/useClipboard'
@@ -503,6 +525,16 @@ const hasActiveFilters = computed(() => {
 
 function getPlatformLabel(platform: GroupPlatform): string {
   return t(`admin.groups.platforms.${platform}`)
+}
+
+function platformAccentClass(platform: GroupPlatform): string {
+  const map: Record<string, string> = {
+    anthropic: 'bg-gradient-to-r from-amber-400 to-orange-500',
+    openai: 'bg-gradient-to-r from-emerald-400 to-teal-500',
+    gemini: 'bg-gradient-to-r from-sky-400 to-blue-500',
+    antigravity: 'bg-gradient-to-r from-violet-400 to-purple-500',
+  }
+  return map[platform] || 'bg-gradient-to-r from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-500'
 }
 
 function getSourceLabel(source: CatalogSource): string {
