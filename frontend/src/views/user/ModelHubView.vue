@@ -359,6 +359,8 @@ import ModelIcon from '@/components/common/ModelIcon.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { formatCurrency } from '@/utils/format'
 
+const PER_MILLION_TOKENS = 1_000_000
+
 type PlatformFilter = GroupPlatform | 'all'
 type GroupFilter = number | 'all'
 
@@ -520,19 +522,24 @@ function formatRateMultiplier(rate: number): string {
   return rate.toFixed(2).replace(/\.?0+$/, '')
 }
 
-function formatPerMillionPrice(price?: number | null): string {
+function formatEffectiveRateAdjustedPrice(price: number, rate: number, scale: number): string {
+  const effectiveRate = Number.isFinite(rate) && rate >= 0 ? rate : 1
+  return formatCurrency(price * scale * effectiveRate)
+}
+
+function formatPerMillionPrice(price?: number | null, rate = 1): string {
   if (price === null || price === undefined) {
     return t('modelHub.pricingUnavailable')
   }
-  return `${formatCurrency(price)} ${t('modelHub.perMillionTokens')}`
+  return `${formatEffectiveRateAdjustedPrice(price, rate, PER_MILLION_TOKENS)} ${t('modelHub.perMillionTokens')}`
 }
 
-function formatPerRequestPrice(price?: number | null, billingMode?: string | null): string {
+function formatPerRequestPrice(price?: number | null, billingMode?: string | null, rate = 1): string {
   if (price === null || price === undefined) {
     return t('modelHub.pricingUnavailable')
   }
   const unitKey = billingMode === 'image' ? 'modelHub.perImage' : 'modelHub.perRequest'
-  return `${formatCurrency(price)} ${t(unitKey)}`
+  return `${formatEffectiveRateAdjustedPrice(price, rate, 1)} ${t(unitKey)}`
 }
 
 function formatCompactTokenCount(tokens?: number | null): string {
@@ -556,13 +563,13 @@ function formatTokenRange(minTokens?: number, maxTokens?: number | null): string
   return `${lower}-${formatCompactTokenCount(maxTokens)}`
 }
 
-function formatTokenIntervalBadge(interval: UserPricingInterval): string | null {
+function formatTokenIntervalBadge(interval: UserPricingInterval, rate: number): string | null {
   const parts: string[] = []
   if (interval.input_price !== undefined && interval.input_price !== null) {
-    parts.push(`${t('modelHub.inputPriceShort')} ${formatPerMillionPrice(interval.input_price)}`)
+    parts.push(`${t('modelHub.inputPriceShort')} ${formatPerMillionPrice(interval.input_price, rate)}`)
   }
   if (interval.output_price !== undefined && interval.output_price !== null) {
-    parts.push(`${t('modelHub.outputPriceShort')} ${formatPerMillionPrice(interval.output_price)}`)
+    parts.push(`${t('modelHub.outputPriceShort')} ${formatPerMillionPrice(interval.output_price, rate)}`)
   }
   if (parts.length === 0) {
     return null
@@ -594,21 +601,21 @@ function getPricingBadges(model: SupportedModel, rate: number): PricingBadge[] {
   if (pricing.input_price !== undefined && pricing.input_price !== null) {
     badges.push({
       key: `input:${model.id}`,
-      text: `${t('modelHub.inputPriceShort')} ${formatPerMillionPrice(pricing.input_price)}`,
+      text: `${t('modelHub.inputPriceShort')} ${formatPerMillionPrice(pricing.input_price, rate)}`,
       tone: 'input'
     })
   }
   if (pricing.output_price !== undefined && pricing.output_price !== null) {
     badges.push({
       key: `output:${model.id}`,
-      text: `${t('modelHub.outputPriceShort')} ${formatPerMillionPrice(pricing.output_price)}`,
+      text: `${t('modelHub.outputPriceShort')} ${formatPerMillionPrice(pricing.output_price, rate)}`,
       tone: 'output'
     })
   }
   if (pricing.per_request_price !== undefined && pricing.per_request_price !== null) {
     badges.push({
       key: `request-default:${model.id}`,
-      text: `${t('modelHub.defaultPriceShort')} ${formatPerRequestPrice(pricing.per_request_price, pricing.billing_mode)}`,
+      text: `${t('modelHub.defaultPriceShort')} ${formatPerRequestPrice(pricing.per_request_price, pricing.billing_mode, rate)}`,
       tone: 'request'
     })
   }
@@ -618,12 +625,12 @@ function getPricingBadges(model: SupportedModel, rate: number): PricingBadge[] {
     }
     badges.push({
       key: `request-tier:${model.id}:${index}`,
-      text: `${formatRequestTierLabel(tier)} ${formatPerRequestPrice(tier.per_request_price, pricing.billing_mode)}`,
+      text: `${formatRequestTierLabel(tier)} ${formatPerRequestPrice(tier.per_request_price, pricing.billing_mode, rate)}`,
       tone: 'request'
     })
   }
   for (const [index, interval] of (pricing.intervals || []).entries()) {
-    const text = formatTokenIntervalBadge(interval)
+    const text = formatTokenIntervalBadge(interval, rate)
     if (!text) {
       continue
     }
