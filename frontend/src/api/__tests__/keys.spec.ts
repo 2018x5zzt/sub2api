@@ -23,38 +23,33 @@ describe('keys api', () => {
     put.mockResolvedValue({ data: {} })
   })
 
-  it('includes subscription product family when creating a key', async () => {
-    await keysAPI.create('gpt key', 21, undefined, [], [], 0, undefined, undefined, 'gpt_shared')
+  it('does not send subscription product family when creating a user key', async () => {
+    await keysAPI.create('gpt key', 21)
 
     expect(post).toHaveBeenCalledWith('/keys', {
       name: 'gpt key',
       group_id: 21,
-      subscription_product_family: 'gpt_shared',
     })
   })
 
-  it('sends null subscription product family on update when clearing family binding', async () => {
+  it('does not send subscription product family on user key update', async () => {
     await keysAPI.update(42, {
       group_id: 9,
-      subscription_product_family: null,
     })
 
     expect(put).toHaveBeenCalledWith('/keys/42', {
       group_id: 9,
-      subscription_product_family: null,
     })
   })
 
-  it('allows admin group updates to carry subscription product family metadata', async () => {
+  it('allows admin group updates to reset rate limit usage', async () => {
     await apiKeysAPI.updateApiKeyGroup(99, {
       group_id: 7,
-      subscription_product_family: 'gpt_shared',
       reset_rate_limit_usage: true,
     })
 
     expect(put).toHaveBeenCalledWith('/admin/api-keys/99', {
       group_id: 7,
-      subscription_product_family: 'gpt_shared',
       reset_rate_limit_usage: true,
     })
   })

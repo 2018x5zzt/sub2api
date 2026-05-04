@@ -171,3 +171,42 @@ func TestAdminServiceGenerateSubscriptionCardCodesUsesProductDefaultValidityDays
 	require.Len(t, repo.created, 1)
 	require.Equal(t, 7, repo.created[0].ValidityDays)
 }
+
+func TestAdminServiceGenerateRedeemCodesStoresRequestedSourceType(t *testing.T) {
+	t.Parallel()
+
+	repo := &redeemCreateRepoStub{}
+	svc := &adminServiceImpl{redeemCodeRepo: repo}
+
+	codes, err := svc.GenerateRedeemCodes(context.Background(), &GenerateRedeemCodesInput{
+		Count:      1,
+		Type:       RedeemTypeBalance,
+		Value:      20,
+		SourceType: RedeemSourceCommercial,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, codes, 1)
+	require.Len(t, repo.created, 1)
+	require.Equal(t, RedeemSourceCommercial, repo.created[0].SourceType)
+	require.Equal(t, RedeemSourceCommercial, codes[0].SourceType)
+}
+
+func TestAdminServiceGenerateRedeemCodesDefaultsSourceTypeToSystemGrant(t *testing.T) {
+	t.Parallel()
+
+	repo := &redeemCreateRepoStub{}
+	svc := &adminServiceImpl{redeemCodeRepo: repo}
+
+	codes, err := svc.GenerateRedeemCodes(context.Background(), &GenerateRedeemCodesInput{
+		Count: 1,
+		Type:  RedeemTypeBalance,
+		Value: 20,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, codes, 1)
+	require.Len(t, repo.created, 1)
+	require.Equal(t, RedeemSourceSystemGrant, repo.created[0].SourceType)
+	require.Equal(t, RedeemSourceSystemGrant, codes[0].SourceType)
+}

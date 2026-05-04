@@ -531,6 +531,7 @@ func redeemCodeFromServiceBase(rc *service.RedeemCode) RedeemCode {
 		Type:         rc.Type,
 		Value:        rc.Value,
 		Status:       rc.Status,
+		SourceType:   service.NormalizeRedeemSourceType(rc.SourceType, service.RedeemSourceSystemGrant),
 		UsedBy:       rc.UsedBy,
 		UsedAt:       rc.UsedAt,
 		CreatedAt:    rc.CreatedAt,

@@ -3937,6 +3937,11 @@ export default {
       generatedSuccessfully: '生成成功',
       codesCreated: '已创建 {count} 个兑换码',
       codeType: '类型',
+      sourceType: '发放来源',
+      sourceTypes: {
+        systemGrant: '系统发放',
+        commercial: '商业售卖'
+      },
       amount: '金额 ($)',
       value: '面值',
       count: '数量',

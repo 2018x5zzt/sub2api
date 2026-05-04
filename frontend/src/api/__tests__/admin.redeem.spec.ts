@@ -22,14 +22,29 @@ describe('admin redeem api', () => {
     await redeemAPI.generate(20, 'subscription', 1, {
       productId: 88,
       validityDays: 30,
+      sourceType: 'commercial',
     })
 
     expect(post).toHaveBeenCalledWith('/admin/redeem-codes/generate', {
       count: 20,
       type: 'subscription',
       value: 1,
+      source_type: 'commercial',
       product_id: 88,
       validity_days: 30,
+    })
+  })
+
+  it('generates balance codes with source_type', async () => {
+    await redeemAPI.generate(5, 'balance', 20, {
+      sourceType: 'commercial',
+    })
+
+    expect(post).toHaveBeenCalledWith('/admin/redeem-codes/generate', {
+      count: 5,
+      type: 'balance',
+      value: 20,
+      source_type: 'commercial',
     })
   })
 })

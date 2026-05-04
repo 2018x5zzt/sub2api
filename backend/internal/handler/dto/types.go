@@ -330,14 +330,15 @@ type ProxyAccountSummary struct {
 }
 
 type RedeemCode struct {
-	ID        int64      `json:"id"`
-	Code      string     `json:"code"`
-	Type      string     `json:"type"`
-	Value     float64    `json:"value"`
-	Status    string     `json:"status"`
-	UsedBy    *int64     `json:"used_by"`
-	UsedAt    *time.Time `json:"used_at"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID         int64      `json:"id"`
+	Code       string     `json:"code"`
+	Type       string     `json:"type"`
+	Value      float64    `json:"value"`
+	Status     string     `json:"status"`
+	SourceType string     `json:"source_type"`
+	UsedBy     *int64     `json:"used_by"`
+	UsedAt     *time.Time `json:"used_at"`
+	CreatedAt  time.Time  `json:"created_at"`
 
 	GroupID      *int64 `json:"group_id"`
 	ProductID    *int64 `json:"product_id"`

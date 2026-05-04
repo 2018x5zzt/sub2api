@@ -36,6 +36,7 @@ type GenerateRedeemCodesRequest struct {
 	Count        int     `json:"count" binding:"required,min=1,max=100"`
 	Type         string  `json:"type" binding:"required,oneof=balance concurrency subscription invitation"`
 	Value        float64 `json:"value"`
+	SourceType   string  `json:"source_type" binding:"omitempty,oneof=commercial benefit compensation system_grant"`
 	GroupID      *int64  `json:"group_id"`      // 订阅类型必填
 	ProductID    *int64  `json:"product_id"`    // 产品订阅类型使用
 	ValidityDays int     `json:"validity_days"` // 订阅类型使用，正数增加/负数退款扣减
@@ -47,6 +48,7 @@ type CreateAndRedeemCodeRequest struct {
 	Code         string  `json:"code" binding:"required,min=3,max=128"`
 	Type         string  `json:"type" binding:"omitempty,oneof=balance concurrency subscription invitation"` // 不传时默认 balance（向后兼容）
 	Value        float64 `json:"value" binding:"required"`
+	SourceType   string  `json:"source_type" binding:"omitempty,oneof=commercial benefit compensation system_grant"`
 	UserID       int64   `json:"user_id" binding:"required,gt=0"`
 	GroupID      *int64  `json:"group_id"`      // subscription 类型必填
 	ProductID    *int64  `json:"product_id"`    // subscription 产品订阅类型使用
@@ -114,6 +116,7 @@ func (h *RedeemHandler) Generate(c *gin.Context) {
 			Count:        req.Count,
 			Type:         req.Type,
 			Value:        req.Value,
+			SourceType:   req.SourceType,
 			GroupID:      req.GroupID,
 			ProductID:    req.ProductID,
 			ValidityDays: req.ValidityDays,
@@ -180,7 +183,7 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 			Type:         req.Type,
 			Value:        req.Value,
 			Status:       service.StatusUnused,
-			SourceType:   service.RedeemSourceCommercial,
+			SourceType:   service.NormalizeRedeemSourceType(req.SourceType, service.RedeemSourceSystemGrant),
 			Notes:        req.Notes,
 			GroupID:      req.GroupID,
 			ProductID:    req.ProductID,

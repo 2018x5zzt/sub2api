@@ -19,6 +19,8 @@ type productSubscriptionRepoStub struct {
 	resolvedProduct *SubscriptionProduct
 	requestedFamily *string
 	err             error
+	createInputs    []CreateSubscriptionProductInput
+	updateInputs    []UpdateSubscriptionProductInput
 	assigned        *UserProductSubscription
 	assignInputs    []AssignProductSubscriptionInput
 	reused          bool
@@ -58,12 +60,22 @@ func (r *productSubscriptionRepoStub) ResolveActiveProductByGroupID(context.Cont
 	return r.resolvedProduct, nil
 }
 
-func (r *productSubscriptionRepoStub) CreateProduct(context.Context, *CreateSubscriptionProductInput) (*SubscriptionProduct, error) {
-	return nil, nil
+func (r *productSubscriptionRepoStub) CreateProduct(_ context.Context, input *CreateSubscriptionProductInput) (*SubscriptionProduct, error) {
+	if input != nil {
+		r.createInputs = append(r.createInputs, *input)
+		return &SubscriptionProduct{ProductFamily: input.ProductFamily}, nil
+	}
+	return &SubscriptionProduct{}, nil
 }
 
-func (r *productSubscriptionRepoStub) UpdateProduct(context.Context, int64, *UpdateSubscriptionProductInput) (*SubscriptionProduct, error) {
-	return nil, nil
+func (r *productSubscriptionRepoStub) UpdateProduct(_ context.Context, _ int64, input *UpdateSubscriptionProductInput) (*SubscriptionProduct, error) {
+	if input != nil {
+		r.updateInputs = append(r.updateInputs, *input)
+		if input.ProductFamily != nil {
+			return &SubscriptionProduct{ProductFamily: *input.ProductFamily}, nil
+		}
+	}
+	return &SubscriptionProduct{}, nil
 }
 
 func (r *productSubscriptionRepoStub) SyncProductBindings(context.Context, int64, []SubscriptionProductBindingInput) ([]SubscriptionProductBindingDetail, error) {
@@ -184,6 +196,57 @@ func TestSubscriptionProductServicePassesExplicitProductFamilyToRepository(t *te
 	}
 	if repo.requestedFamily == nil || *repo.requestedFamily != family {
 		t.Fatalf("requested family = %v, want %q", repo.requestedFamily, family)
+	}
+}
+
+func TestSubscriptionProductServiceCreateProductForcesGPTFamily(t *testing.T) {
+	t.Parallel()
+
+	repo := &productSubscriptionRepoStub{}
+	svc := NewSubscriptionProductService(repo)
+
+	product, err := svc.CreateProduct(context.Background(), &CreateSubscriptionProductInput{
+		Code:          "team",
+		Name:          "Team",
+		ProductFamily: "image",
+	})
+
+	if err != nil {
+		t.Fatalf("CreateProduct returned error: %v", err)
+	}
+	if product.ProductFamily != "gpt" {
+		t.Fatalf("ProductFamily = %q, want gpt", product.ProductFamily)
+	}
+	if len(repo.createInputs) != 1 {
+		t.Fatalf("create input count = %d, want 1", len(repo.createInputs))
+	}
+	if repo.createInputs[0].ProductFamily != "gpt" {
+		t.Fatalf("repo ProductFamily = %q, want gpt", repo.createInputs[0].ProductFamily)
+	}
+}
+
+func TestSubscriptionProductServiceUpdateProductForcesGPTFamily(t *testing.T) {
+	t.Parallel()
+
+	repo := &productSubscriptionRepoStub{}
+	svc := NewSubscriptionProductService(repo)
+
+	family := "image"
+	product, err := svc.UpdateProduct(context.Background(), 88, &UpdateSubscriptionProductInput{
+		ProductFamily: &family,
+	})
+
+	if err != nil {
+		t.Fatalf("UpdateProduct returned error: %v", err)
+	}
+	if product.ProductFamily != "gpt" {
+		t.Fatalf("ProductFamily = %q, want gpt", product.ProductFamily)
+	}
+	if len(repo.updateInputs) != 1 {
+		t.Fatalf("update input count = %d, want 1", len(repo.updateInputs))
+	}
+	if repo.updateInputs[0].ProductFamily == nil || *repo.updateInputs[0].ProductFamily != "gpt" {
+		t.Fatalf("repo ProductFamily = %v, want gpt", repo.updateInputs[0].ProductFamily)
 	}
 }
 

@@ -3807,6 +3807,11 @@ export default {
       generatedSuccessfully: 'Generated Successfully',
       codesCreated: '{count} redeem code(s) created',
       codeType: 'Code Type',
+      sourceType: 'Grant Source',
+      sourceTypes: {
+        systemGrant: 'System Grant',
+        commercial: 'Commercial Sale'
+      },
       amount: 'Amount ($)',
       value: 'Value',
       count: 'Count',

@@ -139,3 +139,28 @@ func TestCreateAndRedeem_BalanceIgnoresSubscriptionFields(t *testing.T) {
 	assert.NotEqual(t, http.StatusBadRequest, code,
 		"balance type should not require group_id or validity_days")
 }
+
+func TestGenerateRedeemCodesAcceptsCommercialSourceType(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	body := map[string]any{
+		"count":       1,
+		"type":        "balance",
+		"value":       20,
+		"source_type": "commercial",
+	}
+	jsonBytes, err := json.Marshal(body)
+	require.NoError(t, err)
+	c.Request, _ = http.NewRequest(http.MethodPost, "/api/v1/admin/redeem-codes/generate", bytes.NewReader(jsonBytes))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	adminSvc := newStubAdminService()
+	h := &RedeemHandler{adminService: adminSvc}
+	h.Generate(c)
+
+	assert.NotEqual(t, http.StatusBadRequest, w.Code)
+	require.NotNil(t, adminSvc.lastGenerateRedeemCodes)
+	require.Equal(t, "commercial", adminSvc.lastGenerateRedeemCodes.SourceType)
+}

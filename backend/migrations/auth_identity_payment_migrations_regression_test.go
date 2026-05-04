@@ -188,3 +188,16 @@ func TestMigration143DisablesMigratedProductSubscriptionPlans(t *testing.T) {
 	require.Contains(t, sql, "Migrated from xlabapi subscription product")
 	require.Contains(t, sql, "price = 0")
 }
+
+func TestMigration146MarksUnusedBalanceRedeemCodesCommercial(t *testing.T) {
+	content, err := FS.ReadFile("146_mark_unused_balance_redeem_codes_commercial.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "UPDATE redeem_codes")
+	require.Contains(t, sql, "SET source_type = 'commercial'")
+	require.Contains(t, sql, "type = 'balance'")
+	require.Contains(t, sql, "status = 'unused'")
+	require.NotContains(t, sql, "type IN")
+	require.NotContains(t, sql, "status IN")
+}

@@ -56,6 +56,7 @@ func (r *redeemCodeRepository) CreateBatch(ctx context.Context, codes []service.
 			SetType(c.Type).
 			SetValue(c.Value).
 			SetStatus(c.Status).
+			SetSourceType(service.NormalizeRedeemSourceType(c.SourceType, service.RedeemSourceSystemGrant)).
 			SetNotes(c.Notes).
 			SetValidityDays(c.ValidityDays).
 			SetNillableUsedBy(c.UsedBy).

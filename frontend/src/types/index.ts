@@ -573,7 +573,6 @@ export interface ApiKey {
 export interface CreateApiKeyRequest {
   name: string
   group_id?: number | null
-  subscription_product_family?: string | null
   custom_key?: string // Optional custom API Key
   ip_whitelist?: string[]
   ip_blacklist?: string[]
@@ -587,7 +586,6 @@ export interface CreateApiKeyRequest {
 export interface UpdateApiKeyRequest {
   name?: string
   group_id?: number | null
-  subscription_product_family?: string | null
   status?: 'active' | 'inactive'
   ip_whitelist?: string[]
   ip_blacklist?: string[]
@@ -1211,6 +1209,7 @@ export interface RedeemCode {
   type: RedeemCodeType
   value: number
   status: 'active' | 'used' | 'expired' | 'unused'
+  source_type?: 'commercial' | 'benefit' | 'compensation' | 'system_grant' | string
   used_by: number | null
   used_at: string | null
   created_at: string
@@ -1226,6 +1225,7 @@ export interface GenerateRedeemCodesRequest {
   count: number
   type: RedeemCodeType
   value: number
+  source_type?: 'commercial' | 'benefit' | 'compensation' | 'system_grant' | string
   group_id?: number | null // 订阅类型专用
   product_id?: number | null // 产品订阅类型专用
   validity_days?: number // 订阅类型专用

@@ -38,6 +38,15 @@ func TestCountEffectiveInviteesIncludesCommercialAndSubscriptionRedeems(t *testi
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestCountEffectiveInviteesRequiresCommercialRedeems(t *testing.T) {
+	source, err := os.ReadFile("affiliate_repo.go")
+	require.NoError(t, err)
+	content := strings.Join(strings.Fields(string(source)), " ")
+
+	require.Contains(t, content, "rc.source_type = 'commercial' AND rc.type IN ('balance', 'subscription')")
+	require.NotContains(t, content, "(rc.type = 'subscription')")
+}
+
 func TestAffiliateUserOverviewSQLIncludesMaturedFrozenQuota(t *testing.T) {
 	query := strings.Join(strings.Fields(affiliateUserOverviewSQL), " ")
 

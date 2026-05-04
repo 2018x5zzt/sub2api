@@ -77,7 +77,7 @@ func (s *SubscriptionProductService) ListVisibleProductFamilies(ctx context.Cont
 		}
 		family := strings.TrimSpace(item.Product.ProductFamily)
 		if family == "" {
-			family = "default"
+			family = "gpt"
 		}
 		if _, ok := seen[family]; ok {
 			continue
@@ -112,6 +112,7 @@ func (s *SubscriptionProductService) CreateProduct(ctx context.Context, input *C
 	if input == nil {
 		return nil, ErrSubscriptionNilInput
 	}
+	input.ProductFamily = "gpt"
 	return s.repo.CreateProduct(ctx, input)
 }
 
@@ -122,6 +123,8 @@ func (s *SubscriptionProductService) UpdateProduct(ctx context.Context, productI
 	if input == nil {
 		return nil, ErrSubscriptionNilInput
 	}
+	family := "gpt"
+	input.ProductFamily = &family
 	return s.repo.UpdateProduct(ctx, productID, input)
 }
 

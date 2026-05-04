@@ -439,16 +439,6 @@
           </Select>
         </div>
 
-        <div v-if="selectedFormGroup?.subscription_type === 'subscription'">
-          <label class="input-label">{{ t('keys.subscriptionProductFamily', 'Subscription Product Family') }}</label>
-          <input
-            v-model.trim="formData.subscription_product_family"
-            type="text"
-            class="input"
-            :placeholder="t('keys.subscriptionProductFamilyPlaceholder', 'default')"
-          />
-        </div>
-
         <!-- Custom Key Section (only for create) -->
         <div v-if="!showEditModal" class="space-y-3">
           <div class="flex items-center justify-between">
@@ -1177,7 +1167,6 @@ const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance 
 const formData = ref({
   name: '',
   group_id: null as number | null,
-  subscription_product_family: null as string | null,
   status: 'active' as 'active' | 'inactive',
   use_custom_key: false,
   custom_key: '',
@@ -1260,16 +1249,6 @@ const groupOptions = computed(() =>
     platform: group.platform
   }))
 )
-
-const selectedFormGroup = computed(() => {
-  if (!formData.value.group_id) return null
-  return groups.value.find((group) => group.id === formData.value.group_id) || null
-})
-
-const resolveFormSubscriptionProductFamily = (): string | null => {
-  if (selectedFormGroup.value?.subscription_type !== 'subscription') return null
-  return (formData.value.subscription_product_family || '').trim() || null
-}
 
 // Group dropdown search
 const groupSearchQuery = ref('')
@@ -1411,7 +1390,6 @@ const editKey = (key: ApiKey) => {
   formData.value = {
     name: key.name,
     group_id: key.group_id,
-    subscription_product_family: key.subscription_product_family || null,
     status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
     use_custom_key: false,
     custom_key: '',
@@ -1480,12 +1458,9 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
   dropdownPosition.value = null
   if (key.group_id === newGroupId) return
 
-  const selectedGroup = newGroupId ? groups.value.find((group) => group.id === newGroupId) : null
-  const family = selectedGroup?.subscription_type === 'subscription' ? key.subscription_product_family : null
   try {
     await keysAPI.update(key.id, {
-      group_id: newGroupId,
-      subscription_product_family: family
+      group_id: newGroupId
     })
     appStore.showSuccess(t('keys.groupChangedSuccess'))
     loadApiKeys()
@@ -1568,7 +1543,6 @@ const handleSubmit = async () => {
       await keysAPI.update(selectedKey.value.id, {
         name: formData.value.name,
         group_id: formData.value.group_id,
-        subscription_product_family: resolveFormSubscriptionProductFamily(),
         status: formData.value.status,
         ip_whitelist: ipWhitelist,
         ip_blacklist: ipBlacklist,
@@ -1589,8 +1563,7 @@ const handleSubmit = async () => {
         ipBlacklist,
         quota,
         expiresInDays,
-        rateLimitData,
-        resolveFormSubscriptionProductFamily()
+        rateLimitData
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1636,7 +1609,6 @@ const closeModals = () => {
   formData.value = {
     name: '',
     group_id: null,
-    subscription_product_family: null,
     status: 'active',
     use_custom_key: false,
     custom_key: '',

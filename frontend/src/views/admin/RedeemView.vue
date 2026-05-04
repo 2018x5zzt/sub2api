@@ -223,6 +223,10 @@
               <label class="input-label">{{ t('admin.redeem.codeType') }}</label>
               <Select v-model="generateForm.type" :options="typeOptions" />
             </div>
+            <div v-if="supportsRedeemSourceType">
+              <label class="input-label">{{ t('admin.redeem.sourceType') }}</label>
+              <Select v-model="generateForm.source_type" :options="sourceTypeOptions" />
+            </div>
             <!-- 余额/并发类型：显示数值输入 -->
             <div v-if="generateForm.type !== 'subscription' && generateForm.type !== 'invitation'">
               <label class="input-label">
@@ -514,6 +518,11 @@ const typeOptions = computed(() => [
   { value: 'invitation', label: t('admin.redeem.invitation') }
 ])
 
+const sourceTypeOptions = computed(() => [
+  { value: 'system_grant', label: t('admin.redeem.sourceTypes.systemGrant') },
+  { value: 'commercial', label: t('admin.redeem.sourceTypes.commercial') }
+])
+
 const filterTypeOptions = computed(() => [
   { value: '', label: t('admin.redeem.allTypes') },
   { value: 'balance', label: t('admin.redeem.balance') },
@@ -559,9 +568,14 @@ const generateForm = reactive({
   type: 'balance' as RedeemCodeType,
   value: 10,
   count: 1,
+  source_type: 'system_grant' as 'commercial' | 'benefit' | 'compensation' | 'system_grant',
   product_id: null as number | null,
   validity_days: 30
 })
+
+const supportsRedeemSourceType = computed(() =>
+  generateForm.type === 'balance' || generateForm.type === 'subscription'
+)
 
 // 监听类型变化，邀请码类型时自动设置 value 为 0
 watch(
@@ -574,6 +588,9 @@ watch(
     }
     if (newType === 'subscription') {
       applySelectedProductDefaultValidity()
+    }
+    if (newType !== 'balance' && newType !== 'subscription') {
+      generateForm.source_type = 'system_grant'
     }
   }
 )
@@ -683,9 +700,14 @@ const handleGenerateCodes = async () => {
       generateForm.type === 'subscription'
         ? {
             productId: generateForm.product_id,
-            validityDays: generateForm.validity_days
+            validityDays: generateForm.validity_days,
+            sourceType: generateForm.source_type
           }
-        : undefined
+        : generateForm.type === 'balance'
+          ? {
+              sourceType: generateForm.source_type
+            }
+          : undefined
     )
     showGenerateDialog.value = false
     generatedCodes.value = result
@@ -693,6 +715,7 @@ const handleGenerateCodes = async () => {
     // 重置表单
     generateForm.product_id = null
     generateForm.validity_days = 30
+    generateForm.source_type = 'system_grant'
     loadCodes()
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('admin.redeem.failedToGenerate'))

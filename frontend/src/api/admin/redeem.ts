@@ -66,6 +66,7 @@ export interface GenerateRedeemCodesOptions {
   groupId?: number | null
   productId?: number | null
   validityDays?: number
+  sourceType?: 'commercial' | 'benefit' | 'compensation' | 'system_grant' | string
 }
 
 export async function generate(
@@ -75,25 +76,24 @@ export async function generate(
   optionsOrGroupId?: GenerateRedeemCodesOptions | number | null,
   legacyValidityDays?: number
 ): Promise<RedeemCode[]> {
+  const options = typeof optionsOrGroupId === 'object' && optionsOrGroupId !== null ? optionsOrGroupId : undefined
   const payload: GenerateRedeemCodesRequest = {
     count,
     type,
-    value
+    value,
+    source_type: options?.sourceType
   }
 
   // 订阅类型专用字段
   if (type === 'subscription') {
-    const options =
-      typeof optionsOrGroupId === 'object'
-        ? optionsOrGroupId
-        : { groupId: optionsOrGroupId, validityDays: legacyValidityDays }
     if (options?.productId != null) {
       payload.product_id = options.productId
     } else {
-      payload.group_id = options?.groupId
+      payload.group_id = options?.groupId ?? (typeof optionsOrGroupId === 'number' ? optionsOrGroupId : undefined)
     }
-    if (options?.validityDays && options.validityDays > 0) {
-      payload.validity_days = options.validityDays
+    const validityDays = options?.validityDays ?? legacyValidityDays
+    if (validityDays && validityDays > 0) {
+      payload.validity_days = validityDays
     }
   }
 

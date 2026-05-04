@@ -15,14 +15,13 @@ export interface UpdateApiKeyGroupResult {
 
 export interface UpdateAdminApiKeyGroupPayload {
   group_id: number | null
-  subscription_product_family?: string | null
   reset_rate_limit_usage?: boolean
 }
 
 /**
  * Update an API key's group binding
  * @param id - API Key ID
- * @param payload - Group ID (0 to unbind, positive to bind, null/undefined to skip) plus optional family/reset metadata
+ * @param payload - Group ID (0 to unbind, positive to bind, null/undefined to skip) plus optional reset metadata
  * @returns Updated API key with auto-grant info
  */
 export async function updateApiKeyGroup(

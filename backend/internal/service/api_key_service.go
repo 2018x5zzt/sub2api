@@ -151,12 +151,11 @@ type APIKeyAuthCacheInvalidator interface {
 
 // CreateAPIKeyRequest 创建API Key请求
 type CreateAPIKeyRequest struct {
-	Name                      string   `json:"name"`
-	GroupID                   *int64   `json:"group_id"`
-	SubscriptionProductFamily *string  `json:"subscription_product_family"`
-	CustomKey                 *string  `json:"custom_key"`   // 可选的自定义key
-	IPWhitelist               []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist               []string `json:"ip_blacklist"` // IP 黑名单
+	Name        string   `json:"name"`
+	GroupID     *int64   `json:"group_id"`
+	CustomKey   *string  `json:"custom_key"`   // 可选的自定义key
+	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
 
 	// Quota fields
 	Quota         float64 `json:"quota"`           // Quota limit in USD (0 = unlimited)
@@ -170,12 +169,11 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
-	Name                      *string  `json:"name"`
-	GroupID                   *int64   `json:"group_id"`
-	SubscriptionProductFamily *string  `json:"subscription_product_family"`
-	Status                    *string  `json:"status"`
-	IPWhitelist               []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
-	IPBlacklist               []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
+	Name        *string  `json:"name"`
+	GroupID     *int64   `json:"group_id"`
+	Status      *string  `json:"status"`
+	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
+	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
 
 	// Quota fields
 	Quota           *float64   `json:"quota"`       // Quota limit in USD (nil = no change, 0 = unlimited)
@@ -405,7 +403,7 @@ func normalizeProductFamilyList(families []string) []string {
 	for _, family := range families {
 		normalized := normalizeProductFamilyName(family)
 		if normalized == "" {
-			normalized = "default"
+			normalized = "gpt"
 		}
 		if _, ok := seen[normalized]; ok {
 			continue
@@ -443,6 +441,7 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	}
 
 	// 验证分组权限（如果指定了分组）
+	var subscriptionProductFamily *string
 	if req.GroupID != nil {
 		group, err := s.groupRepo.GetByID(ctx, *req.GroupID)
 		if err != nil {
@@ -456,11 +455,11 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		if !canBind {
 			return nil, ErrGroupNotAllowed
 		}
-		family, err := s.resolveAPIKeySubscriptionProductFamily(ctx, user.ID, group, req.SubscriptionProductFamily)
+		family, err := s.resolveAPIKeySubscriptionProductFamily(ctx, user.ID, group, nil)
 		if err != nil {
 			return nil, err
 		}
-		req.SubscriptionProductFamily = family
+		subscriptionProductFamily = family
 	}
 
 	var key string
@@ -504,7 +503,7 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		Key:                       key,
 		Name:                      req.Name,
 		GroupID:                   req.GroupID,
-		SubscriptionProductFamily: req.SubscriptionProductFamily,
+		SubscriptionProductFamily: subscriptionProductFamily,
 		Status:                    StatusActive,
 		IPWhitelist:               req.IPWhitelist,
 		IPBlacklist:               req.IPBlacklist,
@@ -670,7 +669,7 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 		groupChanged = true
 	}
 
-	if groupChanged || req.SubscriptionProductFamily != nil {
+	if groupChanged {
 		groupID := int64(0)
 		if apiKey.GroupID != nil {
 			groupID = *apiKey.GroupID
@@ -684,7 +683,7 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 			if err != nil {
 				return nil, fmt.Errorf("get group: %w", err)
 			}
-			family, err := s.resolveAPIKeySubscriptionProductFamily(ctx, user.ID, group, req.SubscriptionProductFamily)
+			family, err := s.resolveAPIKeySubscriptionProductFamily(ctx, user.ID, group, nil)
 			if err != nil {
 				return nil, err
 			}

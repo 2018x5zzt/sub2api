@@ -144,12 +144,12 @@ ORDER BY sp.product_family ASC, sp.sort_order ASC, ups.starts_at ASC, ups.id ASC
 		if firstFamily == "" {
 			firstFamily = strings.TrimSpace(binding.ProductFamily)
 			if firstFamily == "" {
-				firstFamily = "default"
+				firstFamily = "gpt"
 			}
 		}
 		family := strings.TrimSpace(binding.ProductFamily)
 		if family == "" {
-			family = "default"
+			family = "gpt"
 		}
 		seenFamilies[family] = struct{}{}
 		if normalizedFamily == "" && len(seenFamilies) > 1 {
@@ -1580,7 +1580,7 @@ func validateProductLimits(daily, weekly, monthly float64) error {
 func normalizeProductFamily(input string) string {
 	out := strings.TrimSpace(input)
 	if out == "" {
-		return "default"
+		return "gpt"
 	}
 	return out
 }

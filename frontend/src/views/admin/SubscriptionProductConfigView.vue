@@ -50,7 +50,7 @@
               <div class="font-medium text-gray-900 dark:text-white">{{ row.name }}</div>
               <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ row.code }}</div>
               <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.subscriptionProducts.family', 'Family') }}: {{ row.product_family || 'default' }}
+                {{ t('admin.subscriptionProducts.family', 'Family') }}: {{ row.product_family || 'gpt' }}
               </div>
             </div>
           </template>
@@ -153,10 +153,6 @@
         <div>
           <label class="input-label">{{ t('admin.subscriptionProducts.form.status', 'Status') }}</label>
           <Select v-model="productForm.status" :options="statusEditOptions" />
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.productFamily', 'Product Family') }}</label>
-          <input v-model.trim="productForm.product_family" type="text" maxlength="64" class="input" />
         </div>
         <div>
           <label class="input-label">{{ t('admin.subscriptionProducts.form.validityDays', 'Default Validity Days') }}</label>
@@ -393,7 +389,7 @@ const productForm = reactive<ProductForm>({
   name: '',
   description: '',
   status: 'active',
-  product_family: 'default',
+  product_family: 'gpt',
   default_validity_days: 30,
   daily_limit_usd: 0,
   weekly_limit_usd: 0,
@@ -492,7 +488,7 @@ function openProductDialog(product: AdminSubscriptionProduct | null) {
         name: product.name,
         description: product.description || '',
         status: product.status || 'active',
-        product_family: product.product_family || 'default',
+        product_family: 'gpt',
         default_validity_days: product.default_validity_days || 30,
         daily_limit_usd: product.daily_limit_usd || 0,
         weekly_limit_usd: product.weekly_limit_usd || 0,
@@ -504,7 +500,7 @@ function openProductDialog(product: AdminSubscriptionProduct | null) {
         name: '',
         description: '',
         status: 'active',
-        product_family: 'default',
+        product_family: 'gpt',
         default_validity_days: 30,
         daily_limit_usd: 0,
         weekly_limit_usd: 0,
@@ -521,12 +517,13 @@ function closeProductDialog() {
 
 async function submitProduct() {
   submitting.value = true
+  const payload = { ...productForm, product_family: 'gpt' }
   try {
     if (editingProduct.value) {
-      await adminAPI.subscriptionProducts.update(editingProduct.value.id, { ...productForm })
+      await adminAPI.subscriptionProducts.update(editingProduct.value.id, payload)
       appStore.showSuccess(t('admin.subscriptionProducts.updated', 'Product updated'))
     } else {
-      await adminAPI.subscriptionProducts.create({ ...productForm })
+      await adminAPI.subscriptionProducts.create(payload)
       appStore.showSuccess(t('admin.subscriptionProducts.created', 'Product created'))
     }
     closeProductDialog()

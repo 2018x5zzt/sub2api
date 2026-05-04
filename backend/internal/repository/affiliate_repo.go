@@ -205,10 +205,8 @@ WHERE ua.inviter_id = $1
           WHERE rc.used_by = ua.user_id
             AND rc.status = 'used'
             AND rc.used_at IS NOT NULL
-            AND (
-                (rc.source_type = 'commercial' AND rc.type IN ('balance', 'subscription'))
-                OR rc.type = 'subscription'
-            )
+            AND rc.source_type = 'commercial'
+            AND rc.type IN ('balance', 'subscription')
             AND (rc.value > 0 OR rc.group_id IS NOT NULL OR rc.validity_days > 0)
       )
   )`, inviterID)

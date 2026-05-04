@@ -402,6 +402,7 @@ type GenerateRedeemCodesInput struct {
 	Count        int
 	Type         string
 	Value        float64
+	SourceType   string
 	GroupID      *int64 // 订阅类型专用：关联的分组ID
 	ProductID    *int64 // 产品订阅类型专用：关联的产品ID
 	ValidityDays int    // 订阅类型专用：有效天数
@@ -2987,6 +2988,7 @@ func (s *adminServiceImpl) GetRedeemCode(ctx context.Context, id int64) (*Redeem
 }
 
 func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *GenerateRedeemCodesInput) ([]RedeemCode, error) {
+	sourceType := NormalizeRedeemSourceType(input.SourceType, RedeemSourceSystemGrant)
 	// 订阅卡密必须显式绑定新产品订阅 product_id，避免用 group_id 猜产品。
 	var productDefaultValidityDays int
 	if input.Type == RedeemTypeSubscription {
@@ -3008,17 +3010,17 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			return nil, err
 		}
 		code := RedeemCode{
-			Code:   codeValue,
-			Type:   input.Type,
-			Value:  input.Value,
-			Status: StatusUnused,
+			Code:       codeValue,
+			Type:       input.Type,
+			Value:      input.Value,
+			Status:     StatusUnused,
+			SourceType: sourceType,
 		}
 		// 订阅类型专用字段
 		if input.Type == RedeemTypeSubscription {
 			code.GroupID = input.GroupID
 			code.ProductID = input.ProductID
 			code.ValidityDays = input.ValidityDays
-			code.SourceType = RedeemSourceCommercial
 			if code.ValidityDays <= 0 {
 				code.ValidityDays = productDefaultValidityDays
 			}
