@@ -353,6 +353,8 @@ export default {
     channels: 'Channels',
     availableChannels: 'Available Channels',
     subscriptions: 'Product Subscriptions',
+    subscriptionManagement: 'Subscription Management',
+    subscriptionProductConfig: 'Product Config',
     accounts: 'Accounts',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
@@ -1731,10 +1733,16 @@ export default {
       }
     },
 
-    // Subscription Products
+    // Subscription Product Config
+    subscriptionProductConfig: {
+      title: 'Product Config',
+      description: 'Create and manage subscription products and group bindings',
+    },
+
+    // Subscription Products (User Subscriptions)
     subscriptionProducts: {
-      title: 'Product Subscriptions',
-      description: 'Manage shared subscription products, group bindings, and user product subscriptions',
+      title: 'Subscription Management',
+      description: 'View and manage user product subscriptions',
       searchPlaceholder: 'Search products',
       searchSubscriptionsPlaceholder: 'Search users or products',
       allStatus: 'All Status',
@@ -1756,6 +1764,18 @@ export default {
       carryoverIn: 'In',
       carryoverUsed: 'Used',
       carryoverRemaining: 'Remaining',
+      daysRemaining: '{n} days remaining',
+      expiresToday: 'Expires today',
+      daysExpired: 'Expired {n} days ago',
+      resetQuota: 'Reset Quota',
+      resetQuotaDesc: 'Select which usage windows to reset to zero.',
+      quotaReset: 'Quota reset successfully',
+      resetQuotaError: 'Failed to reset quota',
+      adjusted: 'Subscription adjusted',
+      adjustError: 'Failed to adjust subscription',
+      revoked: 'Subscription revoked',
+      revokeError: 'Failed to revoke subscription',
+      revokeConfirm: 'Are you sure you want to revoke this subscription? This action cannot be undone.',
       bindingsTitle: 'Bind Groups: {name}',
       addBinding: 'Add Binding',
       selectGroup: 'Select group',
@@ -5751,6 +5771,20 @@ export default {
     }
   },
 
+  // Product Subscription Mini (Header component)
+  productSubscription: {
+    title: 'Product Subscriptions',
+    viewDetails: 'View product subscription details',
+    activeCount: '{count} active subscription(s)',
+    daily: 'D',
+    weekly: 'W',
+    monthly: 'M',
+    carryover: 'Carryover',
+    daysRemaining: '{days}d left',
+    expired: 'Expired',
+    expiresToday: 'Expires today',
+  },
+
   // Subscription Progress (Header component)
   subscriptionProgress: {
     title: 'My Subscriptions',
@@ -5873,7 +5907,8 @@ export default {
       description:
         'When enabled, requests switch to balance billing within your cap after product subscription quota is exhausted and the group has a balance fallback mapping.',
       limit: 'Balance fallback cap',
-      usage: 'Used ${used}, remaining ${remaining}'
+      usage: 'Used ${used}, remaining ${remaining}',
+      setLimitHint: 'Set a cap greater than 0 to enable balance fallback'
     },
     keyReminder: {
       title: 'Create a dedicated API key after activation',

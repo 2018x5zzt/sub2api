@@ -33,6 +33,7 @@ type ActiveSubscriptionProduct struct {
 type SubscriptionProductGroup struct {
 	GroupID         int64   `json:"group_id"`
 	GroupName       string  `json:"group_name"`
+	GroupPlatform   string  `json:"group_platform"`
 	DebitMultiplier float64 `json:"debit_multiplier"`
 	Status          string  `json:"status"`
 	SortOrder       int     `json:"sort_order"`
@@ -142,6 +143,7 @@ func ActiveSubscriptionProductFromService(item *service.ActiveSubscriptionProduc
 		out.Groups = append(out.Groups, SubscriptionProductGroup{
 			GroupID:         group.GroupID,
 			GroupName:       group.GroupName,
+			GroupPlatform:   group.GroupPlatform,
 			DebitMultiplier: group.DebitMultiplier,
 			Status:          group.Status,
 			SortOrder:       group.SortOrder,

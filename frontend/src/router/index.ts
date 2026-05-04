@@ -448,9 +448,21 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Product Subscriptions',
+      title: 'User Subscriptions',
       titleKey: 'admin.subscriptionProducts.title',
       descriptionKey: 'admin.subscriptionProducts.description'
+    }
+  },
+  {
+    path: '/admin/subscription-product-config',
+    name: 'AdminSubscriptionProductConfig',
+    component: () => import('@/views/admin/SubscriptionProductConfigView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Subscription Product Config',
+      titleKey: 'admin.subscriptionProductConfig.title',
+      descriptionKey: 'admin.subscriptionProductConfig.description'
     }
   },
   {
@@ -737,6 +749,7 @@ router.beforeEach((to, _from, next) => {
       '/admin/groups',
       '/admin/subscriptions',
       '/admin/subscription-products',
+      '/admin/subscription-product-config',
       '/admin/redeem',
       '/subscriptions',
       '/redeem'

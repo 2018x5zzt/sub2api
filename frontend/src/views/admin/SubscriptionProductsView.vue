@@ -4,25 +4,6 @@
       <template #filters>
         <div class="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
           <div class="flex flex-1 flex-wrap items-center gap-3">
-            <div class="flex rounded-md border border-gray-200 bg-gray-50 p-1 dark:border-dark-700 dark:bg-dark-800">
-              <button
-                type="button"
-                class="tab-button"
-                :class="activeTab === 'subscriptions' ? 'tab-button-active' : 'tab-button-inactive'"
-                @click="activeTab = 'subscriptions'"
-              >
-                {{ t('admin.subscriptionProducts.userSubscriptionsTab', 'User Subscriptions') }}
-              </button>
-              <button
-                type="button"
-                class="tab-button"
-                :class="activeTab === 'products' ? 'tab-button-active' : 'tab-button-inactive'"
-                @click="activeTab = 'products'"
-              >
-                {{ t('admin.subscriptionProducts.productConfigTab', 'Product Config') }}
-              </button>
-            </div>
-
             <div class="relative w-full sm:w-72">
               <Icon
                 name="search"
@@ -30,38 +11,21 @@
                 class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500"
               />
               <input
-                v-if="activeTab === 'subscriptions'"
                 v-model="subscriptionSearchQuery"
                 type="text"
                 :placeholder="t('admin.subscriptionProducts.searchSubscriptionsPlaceholder', 'Search users or products')"
                 class="input pl-10"
                 @input="debounceSubscriptionSearch"
               />
-              <input
-                v-else
-                v-model="productSearchQuery"
-                type="text"
-                :placeholder="t('admin.subscriptionProducts.searchPlaceholder', 'Search products')"
-                class="input pl-10"
-              />
             </div>
 
             <Select
-              v-if="activeTab === 'subscriptions'"
               v-model="subscriptionStatusFilter"
               :options="statusFilterOptions"
               :placeholder="t('admin.subscriptionProducts.allStatus', 'All Status')"
               class="w-40"
             />
             <Select
-              v-else
-              v-model="productStatusFilter"
-              :options="productStatusFilterOptions"
-              :placeholder="t('admin.subscriptionProducts.allStatus', 'All Status')"
-              class="w-40"
-            />
-            <Select
-              v-if="activeTab === 'subscriptions'"
               v-model="subscriptionProductFilter"
               :options="productFilterOptions"
               :placeholder="t('admin.subscriptionProducts.allProducts', 'All Products')"
@@ -71,16 +35,12 @@
 
           <div class="flex w-full flex-shrink-0 flex-wrap items-center justify-end gap-3 lg:w-auto">
             <button
-              @click="refreshActiveTab"
-              :disabled="activeLoading"
+              @click="loadUserSubscriptions"
+              :disabled="userSubscriptionsLoading"
               class="btn btn-secondary"
               :title="t('common.refresh', 'Refresh')"
             >
-              <Icon name="refresh" size="md" :class="activeLoading ? 'animate-spin' : ''" />
-            </button>
-            <button v-if="activeTab === 'products'" @click="openProductDialog(null)" class="btn btn-primary">
-              <Icon name="plus" size="md" class="mr-2" />
-              {{ t('admin.subscriptionProducts.createProduct', 'Create Product') }}
+              <Icon name="refresh" size="md" :class="userSubscriptionsLoading ? 'animate-spin' : ''" />
             </button>
           </div>
         </div>
@@ -88,354 +48,206 @@
 
       <template #table>
         <DataTable
-          v-if="activeTab === 'subscriptions'"
           :columns="userSubscriptionColumns"
           :data="userSubscriptions"
           :loading="userSubscriptionsLoading"
         >
           <template #cell-user="{ row }">
-            <div class="min-w-[220px]">
-              <div class="font-medium text-gray-900 dark:text-white">{{ row.user_email }}</div>
-              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {{ row.user_username || '-' }} #{{ row.user_id }}
+            <div class="flex min-w-[200px] items-center gap-3">
+              <span
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                :class="avatarColor(row.user_email)"
+              >
+                {{ avatarInitial(row.user_email) }}
+              </span>
+              <div class="min-w-0">
+                <div class="truncate text-sm font-medium text-gray-900 dark:text-white">{{ row.user_email }}</div>
+                <div class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                  {{ row.user_username || '-' }} #{{ row.user_id }}
+                </div>
               </div>
             </div>
           </template>
 
           <template #cell-product="{ row }">
-            <div class="min-w-[220px]">
-              <div class="font-medium text-gray-900 dark:text-white">{{ row.product_name }}</div>
-              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ row.product_code }}</div>
-            </div>
-          </template>
-
-          <template #cell-status="{ value }">
-            <span class="status-badge" :class="statusBadgeClass(value)">
-              {{ statusLabel(value) }}
+            <span class="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">
+              {{ row.product_name }}
             </span>
           </template>
 
-          <template #cell-daily_usage="{ row }">
-            <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
-              <div>{{ formatUsageUSD(row.daily_usage_usd) }} / {{ formatLimitUSD(row.daily_limit_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.weekly', 'Weekly') }}: {{ formatUsageUSD(row.weekly_usage_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}: {{ formatUsageUSD(row.monthly_usage_usd) }}</div>
-            </div>
-          </template>
-
-          <template #cell-carryover="{ row }">
-            <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
-              <div>{{ t('admin.subscriptionProducts.carryoverIn', 'In') }}: {{ formatUsageUSD(row.daily_carryover_in_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.carryoverUsed', 'Used') }}: {{ formatUsageUSD(row.carryover_used_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.carryoverRemaining', 'Remaining') }}: {{ formatUsageUSD(row.daily_carryover_remaining_usd) }}</div>
-            </div>
-          </template>
-
-          <template #cell-fresh_daily_usage="{ value }">
-            {{ formatUsageUSD(value) }}
-          </template>
-
-          <template #cell-period="{ row }">
-            <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
-              <div>{{ formatDateOnly(row.starts_at) }}</div>
-              <div>{{ formatDateOnly(row.expires_at) }}</div>
-            </div>
-          </template>
-
-          <template #cell-notes="{ value }">
-            <span class="block max-w-[220px] truncate text-gray-600 dark:text-gray-400">
-              {{ value || '-' }}
-            </span>
-          </template>
-        </DataTable>
-
-        <DataTable v-else :columns="productColumns" :data="pagedProducts" :loading="loading">
-          <template #cell-name="{ row }">
-            <div class="min-w-[220px]">
-              <div class="font-medium text-gray-900 dark:text-white">{{ row.name }}</div>
-              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ row.code }}</div>
-              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.subscriptionProducts.family', 'Family') }}: {{ row.product_family || 'default' }}
+          <template #cell-usage="{ row }">
+            <div class="min-w-[260px] space-y-2">
+              <div class="usage-row">
+                <span class="usage-label">{{ t('admin.subscriptionProducts.daily', 'Daily') }}</span>
+                <div class="usage-bar-track">
+                  <div class="usage-bar-fill bg-emerald-500" :style="{ width: usagePercent(row.daily_usage_usd, row.daily_limit_usd) + '%' }" />
+                </div>
+                <span class="usage-text">{{ formatUsageUSD(row.daily_usage_usd) }} / {{ formatLimitUSD(row.daily_limit_usd) }}</span>
+                <span v-if="Number(row.daily_carryover_in_usd || 0) > 0" class="usage-tag-inline">{{ t('admin.subscriptionProducts.carryoverIn', 'Carry') }} {{ formatUsageUSD(row.daily_carryover_in_usd) }}</span>
+              </div>
+              <div class="usage-row">
+                <span class="usage-label">{{ t('admin.subscriptionProducts.weekly', 'Weekly') }}</span>
+                <div class="usage-bar-track">
+                  <div class="usage-bar-fill bg-sky-500" :style="{ width: usagePercent(row.weekly_usage_usd, inferLimit(row.weekly_limit_usd, row.daily_limit_usd, 7)) + '%' }" />
+                </div>
+                <span class="usage-text">{{ formatUsageUSD(row.weekly_usage_usd) }} / {{ formatLimitUSD(inferLimit(row.weekly_limit_usd, row.daily_limit_usd, 7)) }}</span>
+              </div>
+              <div class="usage-row">
+                <span class="usage-label">{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}</span>
+                <div class="usage-bar-track">
+                  <div class="usage-bar-fill bg-violet-500" :style="{ width: usagePercent(row.monthly_usage_usd, inferLimit(row.monthly_limit_usd, row.daily_limit_usd, 30)) + '%' }" />
+                </div>
+                <span class="usage-text">{{ formatUsageUSD(row.monthly_usage_usd) }} / {{ formatLimitUSD(inferLimit(row.monthly_limit_usd, row.daily_limit_usd, 30)) }}</span>
               </div>
             </div>
           </template>
 
+          <template #cell-period="{ row }">
+            <div class="min-w-[100px] text-xs">
+              <div class="font-medium text-gray-700 dark:text-gray-300">{{ formatDateOnly(row.expires_at) }}</div>
+              <div class="mt-0.5 text-gray-400 dark:text-gray-500">{{ remainingDays(row.expires_at) }}</div>
+            </div>
+          </template>
+
           <template #cell-status="{ value }">
             <span class="status-badge" :class="statusBadgeClass(value)">
+              <span class="status-dot" :class="statusDotClass(value)" />
               {{ statusLabel(value) }}
             </span>
           </template>
 
-          <template #cell-limits="{ row }">
-            <div class="min-w-[210px] space-y-1 text-xs text-gray-600 dark:text-gray-300">
-              <div>{{ t('admin.subscriptionProducts.daily', 'Daily') }}: {{ formatLimitUSD(row.daily_limit_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.weekly', 'Weekly') }}: {{ formatLimitUSD(row.weekly_limit_usd) }}</div>
-              <div>{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}: {{ formatLimitUSD(row.monthly_limit_usd) }}</div>
-            </div>
-          </template>
-
-          <template #cell-description="{ value }">
-            <span class="block max-w-[280px] truncate text-gray-600 dark:text-gray-400">
-              {{ value || '-' }}
-            </span>
-          </template>
-
           <template #cell-actions="{ row }">
-            <div class="flex items-center justify-end gap-2">
+            <div class="flex items-center gap-4">
               <button
                 type="button"
-                class="btn btn-secondary btn-sm"
-                :title="t('admin.subscriptionProducts.editProduct', 'Edit Product')"
-                @click="openProductDialog(row)"
+                class="action-btn"
+                :title="t('admin.subscriptions.adjustSubscription', 'Adjust')"
+                @click="openAdjustDialog(row)"
               >
-                <Icon name="edit" size="sm" />
+                <Icon name="calendar" size="md" />
+                <span>{{ t('admin.subscriptions.adjustSubscription', 'Adjust') }}</span>
               </button>
               <button
                 type="button"
-                class="btn btn-secondary btn-sm"
-                :title="t('admin.subscriptionProducts.bindGroups', 'Bind Groups')"
-                @click="openBindingsDialog(row)"
+                class="action-btn"
+                :title="t('admin.subscriptionProducts.resetQuota', 'Reset Quota')"
+                @click="openResetQuotaDialog(row)"
               >
-                <Icon name="link" size="sm" />
+                <Icon name="refresh" size="md" />
+                <span>{{ t('admin.subscriptionProducts.resetQuota', 'Reset Quota') }}</span>
               </button>
               <button
                 type="button"
-                class="btn btn-secondary btn-sm"
-                :title="t('admin.subscriptionProducts.assignUser', 'Assign User')"
-                @click="openAssignDialog(row)"
+                class="action-btn text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300"
+                :title="t('admin.subscriptions.revokeSubscription', 'Revoke')"
+                @click="openRevokeConfirm(row)"
               >
-                <Icon name="userPlus" size="sm" />
-              </button>
-              <button
-                type="button"
-                class="btn btn-secondary btn-sm"
-                :title="t('admin.subscriptionProducts.viewSubscriptions', 'View Subscriptions')"
-                @click="openSubscriptionsDialog(row)"
-              >
-                <Icon name="users" size="sm" />
+                <Icon name="ban" size="md" />
+                <span>{{ t('admin.subscriptions.revokeSubscription', 'Revoke') }}</span>
               </button>
             </div>
-          </template>
-
-          <template #empty>
-            <EmptyState
-              :title="t('admin.subscriptionProducts.emptyTitle', 'No Product Subscriptions')"
-              :description="t('admin.subscriptionProducts.emptyDescription', 'Create a product to share quota across multiple groups.')"
-              :action-text="t('admin.subscriptionProducts.createProduct', 'Create Product')"
-              @action="openProductDialog(null)"
-            />
           </template>
         </DataTable>
       </template>
 
       <template #pagination>
         <Pagination
-          v-if="activeTab === 'subscriptions' && subscriptionPagination.total > 0"
+          v-if="subscriptionPagination.total > 0"
           :page="subscriptionPagination.page"
           :total="subscriptionPagination.total"
           :page-size="subscriptionPagination.page_size"
           @update:page="handleSubscriptionPageChange"
           @update:pageSize="handleSubscriptionPageSizeChange"
         />
-        <Pagination
-          v-else-if="activeTab === 'products' && filteredProducts.length > 0"
-          :page="pagination.page"
-          :total="filteredProducts.length"
-          :page-size="pagination.page_size"
-          @update:page="handlePageChange"
-          @update:pageSize="handlePageSizeChange"
-        />
       </template>
     </TablePageLayout>
 
     <BaseDialog
-      :show="showProductDialog"
-      :title="editingProduct ? t('admin.subscriptionProducts.editProduct', 'Edit Product') : t('admin.subscriptionProducts.createProduct', 'Create Product')"
-      width="wide"
-      @close="closeProductDialog"
+      :show="showAdjustDialog"
+      :title="t('admin.subscriptions.adjustSubscription', 'Adjust Subscription')"
+      width="normal"
+      @close="closeAdjustDialog"
     >
-      <form id="product-form" class="grid gap-4 md:grid-cols-2" @submit.prevent="submitProduct">
-        <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.code', 'Code') }}</label>
-          <input v-model.trim="productForm.code" type="text" required maxlength="64" class="input" />
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.name', 'Name') }}</label>
-          <input v-model.trim="productForm.name" type="text" required maxlength="255" class="input" />
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.status', 'Status') }}</label>
-          <Select v-model="productForm.status" :options="statusEditOptions" />
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.productFamily', 'Product Family') }}</label>
-          <input v-model.trim="productForm.product_family" type="text" maxlength="64" class="input" />
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.validityDays', 'Default Validity Days') }}</label>
-          <input v-model.number="productForm.default_validity_days" type="number" min="1" max="36500" class="input" />
-        </div>
+      <form id="adjust-form" class="space-y-4" @submit.prevent="submitAdjust">
         <div>
           <label class="input-label">{{ t('admin.subscriptionProducts.form.dailyLimit', 'Daily Limit USD') }}</label>
-          <input v-model.number="productForm.daily_limit_usd" type="number" min="0" step="0.0001" class="input" />
+          <input v-model.number="adjustForm.daily_limit_usd" type="number" min="0" step="0.0001" class="input" />
         </div>
         <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.weeklyLimit', 'Weekly Limit USD') }}</label>
-          <input v-model.number="productForm.weekly_limit_usd" type="number" min="0" step="0.0001" class="input" />
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.monthlyLimit', 'Monthly Limit USD') }}</label>
-          <input v-model.number="productForm.monthly_limit_usd" type="number" min="0" step="0.0001" class="input" />
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.sortOrder', 'Sort Order') }}</label>
-          <input v-model.number="productForm.sort_order" type="number" class="input" />
-        </div>
-        <div class="md:col-span-2">
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.description', 'Description') }}</label>
-          <textarea v-model.trim="productForm.description" rows="3" class="input" />
-        </div>
-      </form>
-      <template #footer>
-        <button type="button" class="btn btn-secondary" @click="closeProductDialog">{{ t('common.cancel', 'Cancel') }}</button>
-        <button type="submit" form="product-form" class="btn btn-primary" :disabled="submitting">
-          {{ submitting ? t('common.saving', 'Saving...') : t('common.save', 'Save') }}
-        </button>
-      </template>
-    </BaseDialog>
-
-    <BaseDialog
-      :show="showBindingsDialog"
-      :title="formatProductDialogTitle(t('admin.subscriptionProducts.bindGroups', 'Bind Groups'))"
-      width="extra-wide"
-      @close="closeBindingsDialog"
-    >
-      <div class="space-y-4">
-        <div class="flex justify-end">
-          <button type="button" class="btn btn-secondary btn-sm" @click="addBindingRow">
-            <Icon name="plus" size="sm" class="mr-1.5" />
-            {{ t('admin.subscriptionProducts.addBinding', 'Add Binding') }}
-          </button>
-        </div>
-        <div class="space-y-3">
-          <div
-            v-for="(binding, index) in bindingForm"
-            :key="binding.local_id"
-            class="grid gap-3 rounded-lg border border-gray-200 p-3 dark:border-dark-700 md:grid-cols-[1fr_140px_140px_120px_auto]"
-          >
-            <Select
-              v-model="binding.group_id"
-              :options="groupOptions"
-              searchable
-              :placeholder="t('admin.subscriptionProducts.selectGroup', 'Select group')"
-            />
-            <input v-model.number="binding.debit_multiplier" type="number" min="0.0001" step="0.0001" class="input" />
-            <Select v-model="binding.status" :options="bindingStatusOptions" />
-            <input v-model.number="binding.sort_order" type="number" class="input" />
-            <button type="button" class="btn btn-secondary btn-sm" @click="removeBindingRow(index)">
-              <Icon name="trash" size="sm" />
-            </button>
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <button type="button" class="btn btn-secondary" @click="closeBindingsDialog">{{ t('common.cancel', 'Cancel') }}</button>
-        <button type="button" class="btn btn-primary" :disabled="submitting" @click="submitBindings">
-          {{ submitting ? t('common.saving', 'Saving...') : t('common.save', 'Save') }}
-        </button>
-      </template>
-    </BaseDialog>
-
-    <BaseDialog
-      :show="showAssignDialog"
-      :title="t('admin.subscriptionProducts.assignUser', 'Assign User')"
-      width="normal"
-      @close="closeAssignDialog"
-    >
-      <form id="assign-product-form" class="space-y-4" @submit.prevent="submitAssign">
-        <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.user', 'User') }}</label>
-          <div class="relative">
-            <input
-              v-model="userKeyword"
-              type="text"
-              class="input"
-              :placeholder="t('admin.users.searchUsers', 'Search users')"
-              @input="debounceSearchUsers"
-              @focus="showUserDropdown = true"
-            />
-            <div
-              v-if="showUserDropdown && (userResults.length > 0 || userKeyword)"
-              class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
-            >
-              <div v-if="userSearchLoading" class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                {{ t('common.loading', 'Loading...') }}
-              </div>
-              <button
-                v-for="user in userResults"
-                :key="user.id"
-                type="button"
-                class="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
-                @click="selectUser(user)"
-              >
-                <span class="font-medium text-gray-900 dark:text-white">{{ user.email }}</span>
-                <span class="ml-2 text-gray-500 dark:text-gray-400">#{{ user.id }}</span>
-              </button>
-              <div v-if="!userSearchLoading && userResults.length === 0 && userKeyword" class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                {{ t('common.noOptionsFound', 'No options found') }}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.subscriptionProducts.form.validityDays', 'Validity Days') }}</label>
-          <input v-model.number="assignForm.validity_days" type="number" min="1" max="36500" class="input" />
+          <label class="input-label">{{ t('admin.subscriptionProducts.columns.expiresAt', 'Expires At') }}</label>
+          <input v-model="adjustForm.expires_at" type="date" class="input" />
         </div>
         <div>
           <label class="input-label">{{ t('admin.subscriptionProducts.form.notes', 'Notes') }}</label>
-          <textarea v-model.trim="assignForm.notes" rows="3" class="input" />
+          <textarea v-model.trim="adjustForm.notes" rows="2" class="input" />
         </div>
       </form>
       <template #footer>
-        <button type="button" class="btn btn-secondary" @click="closeAssignDialog">{{ t('common.cancel', 'Cancel') }}</button>
-        <button type="submit" form="assign-product-form" class="btn btn-primary" :disabled="submitting">
-          {{ submitting ? t('common.processing', 'Processing...') : t('admin.subscriptionProducts.assignUser', 'Assign User') }}
+        <button type="button" class="btn btn-secondary" @click="closeAdjustDialog">{{ t('common.cancel', 'Cancel') }}</button>
+        <button type="submit" form="adjust-form" class="btn btn-primary" :disabled="actionLoading">
+          {{ actionLoading ? t('common.saving', 'Saving...') : t('common.save', 'Save') }}
         </button>
       </template>
     </BaseDialog>
 
     <BaseDialog
-      :show="showSubscriptionsDialog"
-      :title="formatProductDialogTitle(t('admin.subscriptionProducts.viewSubscriptions', 'View Subscriptions'))"
-      width="extra-wide"
-      @close="closeSubscriptionsDialog"
+      :show="showResetQuotaDialog"
+      :title="t('admin.subscriptionProducts.resetQuota', 'Reset Quota')"
+      width="normal"
+      @close="closeResetQuotaDialog"
     >
-      <DataTable :columns="productSubscriptionColumns" :data="productSubscriptions" :loading="subscriptionsLoading">
-        <template #cell-user_id="{ value }">#{{ value }}</template>
-        <template #cell-expires_at="{ value }">{{ formatDateOnly(value) }}</template>
-        <template #cell-usage="{ row }">
-          <div class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
-            <div>{{ t('admin.subscriptionProducts.daily', 'Daily') }}: {{ formatUsageUSD(row.daily_usage_usd) }}</div>
-            <div>{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}: {{ formatUsageUSD(row.monthly_usage_usd) }}</div>
-          </div>
-        </template>
-      </DataTable>
+      <div class="space-y-3">
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          {{ t('admin.subscriptionProducts.resetQuotaDesc', 'Select which usage windows to reset to zero.') }}
+        </p>
+        <label class="flex items-center gap-2">
+          <input v-model="resetQuotaForm.daily" type="checkbox" class="checkbox" />
+          <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.subscriptionProducts.daily', 'Daily') }}</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input v-model="resetQuotaForm.weekly" type="checkbox" class="checkbox" />
+          <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.subscriptionProducts.weekly', 'Weekly') }}</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input v-model="resetQuotaForm.monthly" type="checkbox" class="checkbox" />
+          <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.subscriptionProducts.monthly', 'Monthly') }}</span>
+        </label>
+      </div>
+      <template #footer>
+        <button type="button" class="btn btn-secondary" @click="closeResetQuotaDialog">{{ t('common.cancel', 'Cancel') }}</button>
+        <button type="button" class="btn btn-primary" :disabled="actionLoading" @click="submitResetQuota">
+          {{ actionLoading ? t('common.processing', 'Processing...') : t('admin.subscriptionProducts.resetQuota', 'Reset Quota') }}
+        </button>
+      </template>
+    </BaseDialog>
+
+    <BaseDialog
+      :show="showRevokeConfirm"
+      :title="t('admin.subscriptions.revokeSubscription', 'Revoke Subscription')"
+      width="normal"
+      @close="closeRevokeConfirm"
+    >
+      <p class="text-sm text-gray-600 dark:text-gray-400">
+        {{ t('admin.subscriptionProducts.revokeConfirm', 'Are you sure you want to revoke this subscription? This action cannot be undone.') }}
+      </p>
+      <template #footer>
+        <button type="button" class="btn btn-secondary" @click="closeRevokeConfirm">{{ t('common.cancel', 'Cancel') }}</button>
+        <button type="button" class="btn bg-red-600 text-white hover:bg-red-700" :disabled="actionLoading" @click="submitRevoke">
+          {{ actionLoading ? t('common.processing', 'Processing...') : t('admin.subscriptions.revokeSubscription', 'Revoke') }}
+        </button>
+      </template>
     </BaseDialog>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { onMounted, reactive, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import type {
   AdminProductSubscriptionListItem,
-  AdminGroup,
   AdminSubscriptionProduct,
-  AdminSubscriptionProductBinding,
-  AdminUserProductSubscription
 } from '@/types'
-import type { SimpleUser } from '@/api/admin/usage'
 import type { Column } from '@/components/common/types'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorMessage } from '@/utils/apiError'
@@ -446,67 +258,18 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import EmptyState from '@/components/common/EmptyState.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 
-type ProductForm = {
-  code: string
-  name: string
-  description: string
-  status: string
-  product_family: string
-  default_validity_days: number
-  daily_limit_usd: number
-  weekly_limit_usd: number
-  monthly_limit_usd: number
-  sort_order: number
-}
-
-type BindingFormRow = {
-  local_id: string
-  group_id: number | null
-  debit_multiplier: number
-  status: string
-  sort_order: number
-}
-
 const products = ref<AdminSubscriptionProduct[]>([])
-const groups = ref<AdminGroup[]>([])
-const loading = ref(false)
 const userSubscriptionsLoading = ref(false)
-const submitting = ref(false)
-const activeTab = ref<'subscriptions' | 'products'>('subscriptions')
-const productSearchQuery = ref('')
-const productStatusFilter = ref<string | null>(null)
 const subscriptionSearchQuery = ref('')
 const subscriptionStatusFilter = ref<string | null>(null)
 const subscriptionProductFilter = ref<number | null>(null)
-const editingProduct = ref<AdminSubscriptionProduct | null>(null)
-const selectedProduct = ref<AdminSubscriptionProduct | null>(null)
-const showProductDialog = ref(false)
-const showBindingsDialog = ref(false)
-const showAssignDialog = ref(false)
-const showSubscriptionsDialog = ref(false)
-const bindingForm = ref<BindingFormRow[]>([])
-const currentBindings = ref<AdminSubscriptionProductBinding[]>([])
-const productSubscriptions = ref<AdminUserProductSubscription[]>([])
-const subscriptionsLoading = ref(false)
-const userKeyword = ref('')
-const selectedUser = ref<SimpleUser | null>(null)
-const userResults = ref<SimpleUser[]>([])
-const showUserDropdown = ref(false)
-const userSearchLoading = ref(false)
-let userSearchTimeout: ReturnType<typeof setTimeout> | null = null
 let subscriptionSearchTimeout: ReturnType<typeof setTimeout> | null = null
-
-const pagination = reactive({
-  page: 1,
-  page_size: getPersistedPageSize(),
-})
 
 const subscriptionPagination = reactive({
   page: 1,
@@ -516,55 +279,13 @@ const subscriptionPagination = reactive({
 
 const userSubscriptions = ref<AdminProductSubscriptionListItem[]>([])
 
-const activeLoading = computed(() =>
-  activeTab.value === 'subscriptions' ? userSubscriptionsLoading.value : loading.value
-)
-
-const productForm = reactive<ProductForm>({
-  code: '',
-  name: '',
-  description: '',
-  status: 'active',
-  product_family: 'default',
-  default_validity_days: 30,
-  daily_limit_usd: 0,
-  weekly_limit_usd: 0,
-  monthly_limit_usd: 0,
-  sort_order: 0,
-})
-
-const assignForm = reactive({
-  validity_days: 30,
-  notes: '',
-})
-
 const userSubscriptionColumns: Column[] = [
   { key: 'user', label: t('admin.subscriptionProducts.columns.user', 'User') },
   { key: 'product', label: t('admin.subscriptionProducts.columns.product', 'Product') },
+  { key: 'usage', label: t('admin.subscriptionProducts.columns.dailyUsage', 'Usage') },
+  { key: 'period', label: t('admin.subscriptionProducts.columns.expiresAt', 'Expires') },
   { key: 'status', label: t('admin.subscriptionProducts.columns.status', 'Status') },
-  { key: 'daily_usage', label: t('admin.subscriptionProducts.columns.dailyUsage', 'Daily Usage') },
-  { key: 'carryover', label: t('admin.subscriptionProducts.columns.carryover', 'Carryover') },
-  { key: 'fresh_daily_usage', label: t('admin.subscriptionProducts.columns.freshDailyUsage', 'Fresh Today') },
-  { key: 'period', label: t('admin.subscriptionProducts.columns.period', 'Period') },
-  { key: 'notes', label: t('admin.subscriptionProducts.columns.notes', 'Notes') },
-]
-
-const productColumns: Column[] = [
-  { key: 'name', label: t('admin.subscriptionProducts.columns.product', 'Product') },
-  { key: 'status', label: t('admin.subscriptionProducts.columns.status', 'Status') },
-  { key: 'limits', label: t('admin.subscriptionProducts.columns.limits', 'Limits') },
-  { key: 'default_validity_days', label: t('admin.subscriptionProducts.columns.defaultValidity', 'Default Validity Days') },
-  { key: 'description', label: t('admin.subscriptionProducts.columns.description', 'Description') },
-  { key: 'actions', label: t('common.actions', 'Actions'), class: 'text-right' },
-]
-
-const productSubscriptionColumns: Column[] = [
-  { key: 'id', label: 'ID' },
-  { key: 'user_id', label: t('admin.subscriptionProducts.columns.user', 'User') },
-  { key: 'status', label: t('admin.subscriptionProducts.columns.status', 'Status') },
-  { key: 'expires_at', label: t('admin.subscriptionProducts.columns.expiresAt', 'Expires At') },
-  { key: 'usage', label: t('admin.subscriptionProducts.columns.usage', 'Usage') },
-  { key: 'notes', label: t('admin.subscriptionProducts.columns.notes', 'Notes') },
+  { key: 'actions', label: t('common.actions', 'Actions') },
 ]
 
 const statusFilterOptions = [
@@ -574,27 +295,6 @@ const statusFilterOptions = [
   { value: 'revoked', label: t('admin.subscriptionProducts.status.revoked', 'Revoked') },
 ]
 
-const productStatusFilterOptions = [
-  { value: null, label: t('admin.subscriptionProducts.allStatus', 'All Status') },
-  { value: 'active', label: t('admin.subscriptionProducts.status.active', 'Active') },
-  { value: 'draft', label: t('admin.subscriptionProducts.status.draft', 'Draft') },
-  { value: 'disabled', label: t('admin.subscriptionProducts.status.disabled', 'Disabled') },
-]
-
-const statusEditOptions = productStatusFilterOptions.filter((item) => item.value !== null)
-
-const bindingStatusOptions = [
-  { value: 'active', label: t('admin.subscriptionProducts.status.active', 'Active') },
-  { value: 'inactive', label: t('admin.subscriptionProducts.status.inactive', 'Inactive') },
-]
-
-const groupOptions = computed(() =>
-  groups.value.map((group) => ({
-    value: group.id,
-    label: `${group.name} #${group.id}`,
-  }))
-)
-
 const productFilterOptions = computed(() => [
   { value: null, label: t('admin.subscriptionProducts.allProducts', 'All Products') },
   ...products.value.map((product) => ({
@@ -603,25 +303,42 @@ const productFilterOptions = computed(() => [
   })),
 ])
 
-const filteredProducts = computed(() => {
-  const keyword = productSearchQuery.value.trim().toLowerCase()
-  return products.value.filter((product) => {
-    if (productStatusFilter.value && product.status !== productStatusFilter.value) return false
-    if (!keyword) return true
-    return [product.name, product.code, product.description, product.product_family].some((value) =>
-      String(value || '').toLowerCase().includes(keyword)
-    )
-  })
-})
+const AVATAR_COLORS = [
+  'bg-emerald-500',
+  'bg-sky-500',
+  'bg-violet-500',
+  'bg-amber-500',
+  'bg-rose-500',
+  'bg-teal-500',
+  'bg-indigo-500',
+  'bg-pink-500',
+]
 
-const pagedProducts = computed(() => {
-  const start = (pagination.page - 1) * pagination.page_size
-  return filteredProducts.value.slice(start, start + pagination.page_size)
-})
+function avatarInitial(email: string): string {
+  return (email?.[0] ?? '?').toUpperCase()
+}
 
-watch([productSearchQuery, productStatusFilter], () => {
-  pagination.page = 1
-})
+function avatarColor(email: string): string {
+  let hash = 0
+  for (let i = 0; i < (email?.length ?? 0); i++) {
+    hash = email.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
+}
+
+function inferLimit(limit: number | null | undefined, dailyLimit: number | null | undefined, multiplier: number): number {
+  const l = Number(limit || 0)
+  if (l > 0) return l
+  const d = Number(dailyLimit || 0)
+  return d > 0 ? d * multiplier : 0
+}
+
+function usagePercent(usage: number | null | undefined, limit: number | null | undefined): number {
+  const u = Number(usage || 0)
+  const l = Number(limit || 0)
+  if (l <= 0) return u > 0 ? 100 : 0
+  return Math.min(100, (u / l) * 100)
+}
 
 watch([subscriptionStatusFilter, subscriptionProductFilter], () => {
   subscriptionPagination.page = 1
@@ -658,166 +375,11 @@ async function loadUserSubscriptions() {
 }
 
 async function loadProducts() {
-  loading.value = true
   try {
     products.value = await adminAPI.subscriptionProducts.list()
-  } catch (error) {
-    appStore.showError(extractApiErrorMessage(error, t('admin.subscriptionProducts.loadError', 'Failed to load products')))
-  } finally {
-    loading.value = false
+  } catch {
+    // product list is only used for the filter dropdown; swallow errors
   }
-}
-
-async function loadGroups() {
-  try {
-    groups.value = await adminAPI.groups.getAll()
-  } catch (error) {
-    appStore.showError(extractApiErrorMessage(error, t('admin.groups.loadError', 'Failed to load groups')))
-  }
-}
-
-function openProductDialog(product: AdminSubscriptionProduct | null) {
-  editingProduct.value = product
-  Object.assign(productForm, product
-    ? {
-        code: product.code,
-        name: product.name,
-        description: product.description || '',
-        status: product.status || 'active',
-        product_family: product.product_family || 'default',
-        default_validity_days: product.default_validity_days || 30,
-        daily_limit_usd: product.daily_limit_usd || 0,
-        weekly_limit_usd: product.weekly_limit_usd || 0,
-        monthly_limit_usd: product.monthly_limit_usd || 0,
-        sort_order: product.sort_order || 0,
-      }
-    : {
-        code: '',
-        name: '',
-        description: '',
-        status: 'active',
-        product_family: 'default',
-        default_validity_days: 30,
-        daily_limit_usd: 0,
-        weekly_limit_usd: 0,
-        monthly_limit_usd: 0,
-        sort_order: 0,
-      })
-  showProductDialog.value = true
-}
-
-function closeProductDialog() {
-  showProductDialog.value = false
-  editingProduct.value = null
-}
-
-async function submitProduct() {
-  submitting.value = true
-  try {
-    if (editingProduct.value) {
-      await adminAPI.subscriptionProducts.update(editingProduct.value.id, { ...productForm })
-      appStore.showSuccess(t('admin.subscriptionProducts.updated', 'Product updated'))
-    } else {
-      await adminAPI.subscriptionProducts.create({ ...productForm })
-      appStore.showSuccess(t('admin.subscriptionProducts.created', 'Product created'))
-    }
-    closeProductDialog()
-    await loadProducts()
-  } catch (error) {
-    appStore.showError(extractApiErrorMessage(error, t('admin.subscriptionProducts.saveError', 'Failed to save product')))
-  } finally {
-    submitting.value = false
-  }
-}
-
-async function openBindingsDialog(product: AdminSubscriptionProduct) {
-  selectedProduct.value = product
-  currentBindings.value = []
-  bindingForm.value = []
-  showBindingsDialog.value = true
-  try {
-    currentBindings.value = await adminAPI.subscriptionProducts.listBindings(product.id)
-    bindingForm.value = currentBindings.value.map((binding) => ({
-      local_id: `${binding.group_id}-${binding.sort_order}`,
-      group_id: binding.group_id,
-      debit_multiplier: binding.debit_multiplier || 1,
-      status: binding.status || 'active',
-      sort_order: binding.sort_order || 0,
-    }))
-  } catch (error) {
-    appStore.showError(extractApiErrorMessage(error, t('admin.subscriptionProducts.bindingsLoadError', 'Failed to load bindings')))
-  }
-}
-
-function closeBindingsDialog() {
-  showBindingsDialog.value = false
-  selectedProduct.value = null
-  bindingForm.value = []
-}
-
-function addBindingRow() {
-  bindingForm.value.push({
-    local_id: `${Date.now()}-${Math.random()}`,
-    group_id: null,
-    debit_multiplier: 1,
-    status: 'active',
-    sort_order: bindingForm.value.length + 1,
-  })
-}
-
-function removeBindingRow(index: number) {
-  bindingForm.value.splice(index, 1)
-}
-
-async function submitBindings() {
-  if (!selectedProduct.value) return
-  const seen = new Set<number>()
-  const bindings = bindingForm.value
-    .filter((binding) => binding.group_id)
-    .map((binding) => {
-      const groupID = Number(binding.group_id)
-      if (seen.has(groupID)) {
-        throw new Error(t('admin.subscriptionProducts.duplicateGroup', 'Duplicate group binding'))
-      }
-      seen.add(groupID)
-      return {
-        group_id: groupID,
-        debit_multiplier: Number(binding.debit_multiplier) || 1,
-        status: binding.status || 'active',
-        sort_order: Number(binding.sort_order) || 0,
-      }
-    })
-  submitting.value = true
-  try {
-    await adminAPI.subscriptionProducts.syncBindings(selectedProduct.value.id, bindings)
-    appStore.showSuccess(t('admin.subscriptionProducts.bindingsSaved', 'Bindings saved'))
-    closeBindingsDialog()
-  } catch (error) {
-    appStore.showError(error instanceof Error ? error.message : extractApiErrorMessage(error, t('admin.subscriptionProducts.bindingsSaveError', 'Failed to save bindings')))
-  } finally {
-    submitting.value = false
-  }
-}
-
-function openAssignDialog(product: AdminSubscriptionProduct) {
-  selectedProduct.value = product
-  selectedUser.value = null
-  userKeyword.value = ''
-  userResults.value = []
-  assignForm.validity_days = product.default_validity_days || 30
-  assignForm.notes = ''
-  showAssignDialog.value = true
-}
-
-function closeAssignDialog() {
-  showAssignDialog.value = false
-  selectedProduct.value = null
-  showUserDropdown.value = false
-}
-
-function debounceSearchUsers() {
-  if (userSearchTimeout) clearTimeout(userSearchTimeout)
-  userSearchTimeout = setTimeout(searchUsers, 300)
 }
 
 function debounceSubscriptionSearch() {
@@ -826,79 +388,6 @@ function debounceSubscriptionSearch() {
     subscriptionPagination.page = 1
     void loadUserSubscriptions()
   }, 300)
-}
-
-async function searchUsers() {
-  const keyword = userKeyword.value.trim()
-  if (!keyword) {
-    userResults.value = []
-    return
-  }
-  userSearchLoading.value = true
-  try {
-    userResults.value = await adminAPI.usage.searchUsers(keyword)
-  } catch {
-    userResults.value = []
-  } finally {
-    userSearchLoading.value = false
-  }
-}
-
-function selectUser(user: SimpleUser) {
-  selectedUser.value = user
-  userKeyword.value = `${user.email} (#${user.id})`
-  showUserDropdown.value = false
-}
-
-async function submitAssign() {
-  if (!selectedProduct.value || !selectedUser.value) {
-    appStore.showError(t('admin.subscriptionProducts.selectUserRequired', 'Please select a user'))
-    return
-  }
-  submitting.value = true
-  try {
-    await adminAPI.subscriptionProducts.assign(selectedProduct.value.id, {
-      user_id: selectedUser.value.id,
-      validity_days: assignForm.validity_days || selectedProduct.value.default_validity_days || 30,
-      notes: assignForm.notes,
-    })
-    appStore.showSuccess(t('admin.subscriptionProducts.assigned', 'Product subscription assigned'))
-    closeAssignDialog()
-  } catch (error) {
-    appStore.showError(extractApiErrorMessage(error, t('admin.subscriptionProducts.assignError', 'Failed to assign product subscription')))
-  } finally {
-    submitting.value = false
-  }
-}
-
-async function openSubscriptionsDialog(product: AdminSubscriptionProduct) {
-  selectedProduct.value = product
-  productSubscriptions.value = []
-  showSubscriptionsDialog.value = true
-  subscriptionsLoading.value = true
-  try {
-    productSubscriptions.value = await adminAPI.subscriptionProducts.listSubscriptions(product.id)
-  } catch (error) {
-    appStore.showError(extractApiErrorMessage(error, t('admin.subscriptionProducts.subscriptionsLoadError', 'Failed to load subscriptions')))
-  } finally {
-    subscriptionsLoading.value = false
-  }
-}
-
-function closeSubscriptionsDialog() {
-  showSubscriptionsDialog.value = false
-  selectedProduct.value = null
-  productSubscriptions.value = []
-}
-
-function handlePageChange(page: number) {
-  pagination.page = page
-}
-
-function handlePageSizeChange(pageSize: number) {
-  pagination.page_size = pageSize
-  pagination.page = 1
-  setPersistedPageSize(pageSize)
 }
 
 function handleSubscriptionPageChange(page: number) {
@@ -913,14 +402,6 @@ function handleSubscriptionPageSizeChange(pageSize: number) {
   void loadUserSubscriptions()
 }
 
-function refreshActiveTab() {
-  if (activeTab.value === 'subscriptions') {
-    void loadUserSubscriptions()
-    return
-  }
-  void loadProducts()
-}
-
 function formatUsageUSD(value: number | null | undefined): string {
   return `$${Number(value || 0).toFixed(2)}`
 }
@@ -930,39 +411,202 @@ function formatLimitUSD(value: number | null | undefined): string {
   return amount > 0 ? `$${amount.toFixed(2)}` : t('admin.subscriptionProducts.unlimited', 'Unlimited')
 }
 
+function remainingDays(expiresAt: string): string {
+  if (!expiresAt) return '-'
+  const now = new Date()
+  const expires = new Date(expiresAt)
+  const diffMs = expires.getTime() - now.getTime()
+  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+  if (days > 0) return t('admin.subscriptionProducts.daysRemaining', { n: days })
+  if (days === 0) return t('admin.subscriptionProducts.expiresToday', 'Expires today')
+  return t('admin.subscriptionProducts.daysExpired', { n: Math.abs(days) })
+}
+
 function statusLabel(status: string): string {
   return t(`admin.subscriptionProducts.status.${status}`, status)
 }
 
 function statusBadgeClass(status: string): string {
   if (status === 'active') return 'status-active'
+  if (status === 'expired') return 'status-expired'
   if (status === 'disabled' || status === 'inactive') return 'status-disabled'
-  return 'status-draft'
+  return 'status-revoked'
 }
 
-function formatProductDialogTitle(prefix: string): string {
-  return selectedProduct.value?.name ? `${prefix}: ${selectedProduct.value.name}` : prefix
+function statusDotClass(status: string): string {
+  if (status === 'active') return 'bg-emerald-500'
+  if (status === 'expired') return 'bg-amber-500'
+  if (status === 'disabled' || status === 'inactive') return 'bg-gray-400'
+  return 'bg-red-500'
+}
+
+const actionLoading = ref(false)
+const selectedSubscription = ref<AdminProductSubscriptionListItem | null>(null)
+
+const showAdjustDialog = ref(false)
+const adjustForm = reactive({
+  daily_limit_usd: 0,
+  expires_at: '',
+  notes: '',
+})
+
+const showResetQuotaDialog = ref(false)
+const resetQuotaForm = reactive({
+  daily: true,
+  weekly: true,
+  monthly: true,
+})
+
+const showRevokeConfirm = ref(false)
+
+function openAdjustDialog(row: AdminProductSubscriptionListItem) {
+  selectedSubscription.value = row
+  adjustForm.daily_limit_usd = row.daily_limit_usd || 0
+  adjustForm.expires_at = row.expires_at ? row.expires_at.slice(0, 10) : ''
+  adjustForm.notes = row.notes || ''
+  showAdjustDialog.value = true
+}
+
+function closeAdjustDialog() {
+  showAdjustDialog.value = false
+  selectedSubscription.value = null
+}
+
+async function submitAdjust() {
+  if (!selectedSubscription.value) return
+  actionLoading.value = true
+  try {
+    await adminAPI.subscriptionProducts.adjustSubscription(selectedSubscription.value.id, {
+      daily_limit_usd: adjustForm.daily_limit_usd,
+      expires_at: adjustForm.expires_at || undefined,
+      notes: adjustForm.notes || undefined,
+    })
+    appStore.showSuccess(t('admin.subscriptionProducts.adjusted', 'Subscription adjusted'))
+    closeAdjustDialog()
+    void loadUserSubscriptions()
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.subscriptionProducts.adjustError', 'Failed to adjust subscription')))
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+function openResetQuotaDialog(row: AdminProductSubscriptionListItem) {
+  selectedSubscription.value = row
+  resetQuotaForm.daily = true
+  resetQuotaForm.weekly = true
+  resetQuotaForm.monthly = true
+  showResetQuotaDialog.value = true
+}
+
+function closeResetQuotaDialog() {
+  showResetQuotaDialog.value = false
+  selectedSubscription.value = null
+}
+
+async function submitResetQuota() {
+  if (!selectedSubscription.value) return
+  actionLoading.value = true
+  try {
+    await adminAPI.subscriptionProducts.resetSubscriptionQuota(selectedSubscription.value.id, {
+      daily: resetQuotaForm.daily,
+      weekly: resetQuotaForm.weekly,
+      monthly: resetQuotaForm.monthly,
+    })
+    appStore.showSuccess(t('admin.subscriptionProducts.quotaReset', 'Quota reset successfully'))
+    closeResetQuotaDialog()
+    void loadUserSubscriptions()
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.subscriptionProducts.resetQuotaError', 'Failed to reset quota')))
+  } finally {
+    actionLoading.value = false
+  }
+}
+
+function openRevokeConfirm(row: AdminProductSubscriptionListItem) {
+  selectedSubscription.value = row
+  showRevokeConfirm.value = true
+}
+
+function closeRevokeConfirm() {
+  showRevokeConfirm.value = false
+  selectedSubscription.value = null
+}
+
+async function submitRevoke() {
+  if (!selectedSubscription.value) return
+  actionLoading.value = true
+  try {
+    await adminAPI.subscriptionProducts.revokeSubscription(selectedSubscription.value.id)
+    appStore.showSuccess(t('admin.subscriptionProducts.revoked', 'Subscription revoked'))
+    closeRevokeConfirm()
+    void loadUserSubscriptions()
+  } catch (error) {
+    appStore.showError(extractApiErrorMessage(error, t('admin.subscriptionProducts.revokeError', 'Failed to revoke subscription')))
+  } finally {
+    actionLoading.value = false
+  }
 }
 
 onMounted(async () => {
-  await Promise.all([loadUserSubscriptions(), loadProducts(), loadGroups()])
+  await Promise.all([loadUserSubscriptions(), loadProducts()])
 })
 </script>
 
 <style scoped>
 .status-badge {
-  @apply inline-flex rounded-full px-2 py-0.5 text-xs font-medium;
+  @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium;
+}
+
+.status-dot {
+  @apply h-1.5 w-1.5 rounded-full;
 }
 
 .status-active {
-  @apply bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300;
+  @apply bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-600/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20;
+}
+
+.status-expired {
+  @apply bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20;
 }
 
 .status-disabled {
-  @apply bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-gray-300;
+  @apply bg-gray-50 text-gray-600 ring-1 ring-inset ring-gray-500/10 dark:bg-gray-500/10 dark:text-gray-400 dark:ring-gray-500/20;
 }
 
-.status-draft {
-  @apply bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300;
+.status-revoked {
+  @apply bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/10 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20;
+}
+
+.usage-row {
+  @apply flex items-center gap-2;
+}
+
+.usage-label {
+  @apply w-10 shrink-0 text-[11px] text-gray-400 dark:text-gray-500;
+}
+
+.usage-bar-track {
+  @apply h-1.5 w-20 shrink-0 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-600;
+}
+
+.usage-bar-fill {
+  @apply h-full rounded-full transition-all duration-300;
+}
+
+.usage-text {
+  @apply shrink-0 text-[11px] tabular-nums text-gray-600 dark:text-gray-300;
+}
+
+.usage-tag-inline {
+  @apply ml-1 shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] tabular-nums text-amber-600 dark:bg-amber-500/10 dark:text-amber-400;
+}
+
+.action-btn {
+  @apply flex flex-col items-center gap-1 text-gray-400 transition-colors hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300;
+}
+
+.action-btn span {
+  @apply text-[11px] leading-none;
 }
 </style>

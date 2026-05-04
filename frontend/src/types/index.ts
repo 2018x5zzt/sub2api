@@ -1433,6 +1433,7 @@ export interface UserSubscription {
 export interface SubscriptionProductGroup {
   group_id: number
   group_name: string
+  group_platform: string
   debit_multiplier: number
   status: string
   sort_order: number
@@ -1519,6 +1520,8 @@ export interface AdminProductSubscriptionListItem extends AdminUserProductSubscr
   product_code: string
   product_name: string
   daily_limit_usd: number
+  weekly_limit_usd: number
+  monthly_limit_usd: number
   carryover_used_usd: number
   fresh_daily_usage_usd: number
 }

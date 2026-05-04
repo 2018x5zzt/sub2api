@@ -260,6 +260,7 @@ type ProductSettlementContext struct {
 type SubscriptionProductGroupSummary struct {
 	GroupID         int64
 	GroupName       string
+	GroupPlatform   string
 	DebitMultiplier float64
 	Status          string
 	SortOrder       int

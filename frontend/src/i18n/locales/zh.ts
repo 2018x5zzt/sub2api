@@ -353,6 +353,8 @@ export default {
     channels: '渠道管理',
     availableChannels: '可用渠道',
     subscriptions: '产品订阅',
+    subscriptionManagement: '订阅管理',
+    subscriptionProductConfig: '产品配置',
     accounts: '账号管理',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
@@ -1784,10 +1786,16 @@ export default {
       }
     },
 
-    // Subscription Products
+    // Subscription Product Config
+    subscriptionProductConfig: {
+      title: '产品配置',
+      description: '创建和管理订阅产品、分组绑定',
+    },
+
+    // Subscription Products (User Subscriptions)
     subscriptionProducts: {
-      title: '产品订阅',
-      description: '管理共享订阅产品、分组绑定和用户产品订阅',
+      title: '订阅管理',
+      description: '查看和管理用户的产品订阅',
       searchPlaceholder: '搜索产品',
       searchSubscriptionsPlaceholder: '搜索用户或产品',
       allStatus: '全部状态',
@@ -1809,6 +1817,18 @@ export default {
       carryoverIn: '结转',
       carryoverUsed: '已用',
       carryoverRemaining: '剩余',
+      daysRemaining: '剩余 {n} 天',
+      expiresToday: '今日到期',
+      daysExpired: '已过期 {n} 天',
+      resetQuota: '重置配额',
+      resetQuotaDesc: '选择要重置为零的用量窗口。',
+      quotaReset: '配额已重置',
+      resetQuotaError: '重置配额失败',
+      adjusted: '订阅已调整',
+      adjustError: '调整订阅失败',
+      revoked: '订阅已撤销',
+      revokeError: '撤销订阅失败',
+      revokeConfirm: '确定要撤销该订阅吗？此操作不可撤回。',
       bindingsTitle: '绑定分组：{name}',
       addBinding: '添加绑定',
       selectGroup: '选择分组',
@@ -5911,6 +5931,20 @@ export default {
     }
   },
 
+  // Product Subscription Mini (Header component)
+  productSubscription: {
+    title: '产品订阅',
+    viewDetails: '查看产品订阅详情',
+    activeCount: '{count} 个有效订阅',
+    daily: '日',
+    weekly: '周',
+    monthly: '月',
+    carryover: '结转',
+    daysRemaining: '剩余 {days} 天',
+    expired: '已过期',
+    expiresToday: '今天到期',
+  },
+
   // Subscription Progress (Header component)
   subscriptionProgress: {
     title: '我的订阅',
@@ -6029,13 +6063,17 @@ export default {
       title: '订阅消耗完时，自动消耗余额',
       description: '开启后，产品订阅额度耗尽且分组存在余额兜底映射时，会在你设置的上限内自动改用余额。',
       limit: '余额兜底上限',
-      usage: '已用 ${used}，剩余 ${remaining}'
+      usage: '已用 ${used}，剩余 ${remaining}',
+      setLimitHint: '请设置一个大于 0 的上限以启用余额兜底'
     },
     keyReminder: {
       title: '激活后建议新建分组专用 API Key',
       description: '这样可以避免继续误用旧 key 的余额或限额，并按分组隔离你的订阅用量。',
       action: '去生成 API Key'
-    }
+    },
+    visibleGroups: '包含分组',
+    groupMultiplier: '{multiplier}x',
+    dailyQuotaBreakdown: '昨日结转 ${carryover} + 今日 ${today} = 今日可用 ${total}'
   },
 
   // Onboarding Tour

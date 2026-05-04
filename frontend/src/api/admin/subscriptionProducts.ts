@@ -78,6 +78,35 @@ export async function assign(
   return data
 }
 
+export async function adjustSubscription(
+  subscriptionId: number,
+  payload: { daily_limit_usd?: number; expires_at?: string; notes?: string }
+): Promise<AdminUserProductSubscription> {
+  const { data } = await apiClient.put<AdminUserProductSubscription>(
+    `/admin/product-subscriptions/${subscriptionId}/adjust`,
+    payload
+  )
+  return data
+}
+
+export async function revokeSubscription(subscriptionId: number): Promise<{ message: string }> {
+  const { data } = await apiClient.delete<{ message: string }>(
+    `/admin/product-subscriptions/${subscriptionId}`
+  )
+  return data
+}
+
+export async function resetSubscriptionQuota(
+  subscriptionId: number,
+  options: { daily: boolean; weekly: boolean; monthly: boolean }
+): Promise<AdminUserProductSubscription> {
+  const { data } = await apiClient.post<AdminUserProductSubscription>(
+    `/admin/product-subscriptions/${subscriptionId}/reset-quota`,
+    options
+  )
+  return data
+}
+
 export const subscriptionProductsAPI = {
   list,
   listUserSubscriptions,
@@ -86,7 +115,10 @@ export const subscriptionProductsAPI = {
   listBindings,
   syncBindings,
   listSubscriptions,
-  assign
+  assign,
+  adjustSubscription,
+  revokeSubscription,
+  resetSubscriptionQuota
 }
 
 export default subscriptionProductsAPI

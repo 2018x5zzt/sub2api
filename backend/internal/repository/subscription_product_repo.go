@@ -382,6 +382,7 @@ SELECT
 	spg.product_id,
 	spg.group_id,
 	g.name,
+	COALESCE(g.platform, ''),
 	spg.debit_multiplier,
 	spg.status,
 	spg.sort_order
@@ -404,6 +405,7 @@ ORDER BY spg.product_id ASC, spg.sort_order ASC, spg.group_id ASC`, pqInt64Array
 			&productID,
 			&group.GroupID,
 			&group.GroupName,
+			&group.GroupPlatform,
 			&group.DebitMultiplier,
 			&group.Status,
 			&group.SortOrder,
