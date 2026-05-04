@@ -17,6 +17,11 @@ func resolveOpenAIForwardModel(account *Account, requestedModel, defaultMappedMo
 	if !matched && defaultMappedModel != "" && !isExplicitCodexModel(requestedModel) {
 		return defaultMappedModel
 	}
+	if !matched {
+		if normalized := normalizeKnownOpenAICompatAlias(mappedModel); normalized != "" {
+			return normalized
+		}
+	}
 	return mappedModel
 }
 
@@ -35,9 +40,9 @@ func isExplicitCodexModel(model string) bool {
 	}
 	if strings.HasSuffix(model, "-openai-compact") {
 		base := strings.TrimSuffix(model, "-openai-compact")
-		return getNormalizedCodexModel(base) != ""
+		return normalizeKnownOpenAICompatModel(base) != ""
 	}
-	return false
+	return normalizeKnownOpenAICompatModel(model) != ""
 }
 
 // resolveOpenAICompactForwardModel determines the compact-only upstream model

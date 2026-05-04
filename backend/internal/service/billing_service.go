@@ -288,8 +288,8 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	}
 
 	// OpenAI 仅匹配已知 GPT-5/Codex 族，避免未知 OpenAI 型号误计价。
-	if strings.Contains(modelLower, "gpt-5") || strings.Contains(modelLower, "codex") {
-		normalized := normalizeCodexModel(modelLower)
+	if strings.Contains(modelLower, "gpt-5") || strings.Contains(modelLower, "gpt5") || strings.Contains(modelLower, "codex") {
+		normalized := normalizeKnownOpenAICompatModel(modelLower)
 		switch normalized {
 		case "gpt-5.5":
 			return s.fallbackPrices["gpt-5.5"]

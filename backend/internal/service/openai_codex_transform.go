@@ -7,6 +7,7 @@ import (
 )
 
 var codexModelMap = map[string]string{
+	"gpt5.5":                     "gpt-5.5",
 	"gpt-5.5":                    "gpt-5.5",
 	"gpt-5.4":                    "gpt-5.4",
 	"gpt-5.4-mini":               "gpt-5.4-mini",
@@ -762,6 +763,9 @@ func normalizeOpenAIModelForUpstream(account *Account, model string) string {
 	if account == nil || account.Type == AccountTypeOAuth {
 		return normalizeCodexModel(model)
 	}
+	if normalized := normalizeKnownOpenAICompatAlias(model); normalized != "" {
+		return normalized
+	}
 	return strings.TrimSpace(model)
 }
 
@@ -802,6 +806,34 @@ func getNormalizedCodexModel(modelID string) string {
 		}
 	}
 	return ""
+}
+
+func normalizeKnownOpenAICompatModel(model string) string {
+	modelID := strings.TrimSpace(model)
+	if modelID == "" {
+		return ""
+	}
+	if strings.Contains(modelID, "/") {
+		parts := strings.Split(modelID, "/")
+		modelID = parts[len(parts)-1]
+	}
+	return getNormalizedCodexModel(modelID)
+}
+
+func normalizeKnownOpenAICompatAlias(model string) string {
+	modelID := strings.TrimSpace(model)
+	if modelID == "" {
+		return ""
+	}
+	if strings.Contains(modelID, "/") {
+		parts := strings.Split(modelID, "/")
+		modelID = parts[len(parts)-1]
+	}
+	normalized := getNormalizedCodexModel(modelID)
+	if normalized == "" || strings.EqualFold(modelID, normalized) {
+		return ""
+	}
+	return normalized
 }
 
 // extractTextFromContent extracts plain text from a content value that is either

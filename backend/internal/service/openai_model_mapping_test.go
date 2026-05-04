@@ -103,6 +103,15 @@ func TestResolveOpenAIForwardModel(t *testing.T) {
 			defaultMappedModel: "gpt-5.4",
 			expectedModel:      "gpt-5.5-openai-compact",
 		},
+		{
+			name: "canonicalizes gpt5.5 alias instead of group default",
+			account: &Account{
+				Credentials: map[string]any{},
+			},
+			requestedModel:     "gpt5.5",
+			defaultMappedModel: "gpt-5.4",
+			expectedModel:      "gpt-5.5",
+		},
 	}
 
 	for _, tt := range tests {
@@ -204,6 +213,8 @@ func TestNormalizeCodexModel(t *testing.T) {
 		"gpt-5.3-codex-spark-high":  "gpt-5.3-codex-spark",
 		"gpt-5.3-codex-spark-xhigh": "gpt-5.3-codex-spark",
 		"gpt-5.3":                   "gpt-5.3-codex",
+		"gpt5.5":                    "gpt-5.5",
+		"openai/gpt5.5":             "gpt-5.5",
 		"gpt-image-2":               "gpt-image-2",
 	}
 
@@ -238,6 +249,12 @@ func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 			account: &Account{Type: AccountTypeAPIKey},
 			model:   "gpt-4.1",
 			want:    "gpt-4.1",
+		},
+		{
+			name:    "apikey canonicalizes known gpt55 alias",
+			account: &Account{Type: AccountTypeAPIKey},
+			model:   "gpt5.5",
+			want:    "gpt-5.5",
 		},
 	}
 
