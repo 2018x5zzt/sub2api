@@ -5,11 +5,12 @@
       @click="togglePopover"
       @mouseenter="handleMouseEnter"
       @mouseleave="handleMouseLeave"
-      class="flex cursor-pointer items-center gap-2 rounded-xl bg-emerald-50 px-3 py-1.5 transition-colors hover:bg-emerald-100 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30"
+      class="flex cursor-pointer items-center gap-2 rounded-xl bg-purple-50 px-3 py-1.5 transition-colors hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/30"
       :title="t('productSubscription.viewDetails')"
     >
-      <Icon name="creditCard" size="sm" class="text-emerald-600 dark:text-emerald-400" />
-      <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+      <Icon name="creditCard" size="sm" class="text-purple-600 dark:text-purple-400" />
+      <span v-if="summary.active_count > 0" class="h-2 w-2 rounded-full bg-emerald-500"></span>
+      <span class="text-xs font-semibold text-purple-700 dark:text-purple-300">
         {{ summary.active_count }}
       </span>
     </button>
@@ -18,89 +19,100 @@
     <transition name="dropdown">
       <div
         v-if="popoverOpen"
-        class="absolute right-0 z-50 mt-2 w-[360px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-dark-700 dark:bg-dark-800"
+        class="absolute right-0 z-50 mt-2 w-[380px] overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-2xl dark:border-dark-700 dark:bg-dark-800"
         @mouseenter="handleMouseEnter"
         @mouseleave="handleMouseLeave"
       >
-        <div class="border-b border-gray-100 p-3 dark:border-dark-700">
-          <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
-            {{ t('productSubscription.title') }}
+        <!-- Header -->
+        <div class="px-5 pt-5 pb-3">
+          <h3 class="text-base font-bold text-gray-900 dark:text-white">
+            {{ t('productSubscription.mySubscriptions') }}
           </h3>
-          <p class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">
+          <p class="mt-0.5 text-xs text-gray-400 dark:text-dark-400">
             {{ t('productSubscription.activeCount', { count: summary.active_count }) }}
           </p>
         </div>
 
-        <div class="max-h-80 overflow-y-auto">
+        <!-- Products -->
+        <div class="max-h-[360px] overflow-y-auto px-5">
           <div
-            v-for="product in summary.products"
+            v-for="(product, idx) in summary.products"
             :key="product.subscription_id"
-            class="border-b border-gray-50 p-3 last:border-b-0 dark:border-dark-700/50"
+            class="py-4"
+            :class="{ 'border-t border-gray-100 dark:border-dark-700/50': idx > 0 }"
           >
-            <!-- Product header -->
-            <div class="mb-2 flex items-center justify-between">
+            <!-- Product name + days -->
+            <div class="mb-3 flex items-center justify-between">
               <span class="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/10 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-500/20">
                 <PlatformIcon :platform="getProductPlatform(product) as any" size="xs" />
                 {{ product.name }}
               </span>
               <span
                 v-if="product.expires_at"
-                class="text-[11px]"
+                class="text-xs font-medium"
                 :class="getDaysClass(product.expires_at)"
               >
                 {{ formatDaysRemaining(product.expires_at) }}
               </span>
             </div>
 
-            <!-- Usage bars -->
-            <div class="space-y-1.5">
+            <!-- Usage rows -->
+            <div class="space-y-2.5">
               <!-- Daily -->
-              <div class="flex items-center gap-2">
-                <span class="w-7 shrink-0 text-[10px] text-gray-400">{{ t('productSubscription.daily') }}</span>
-                <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-100 dark:bg-dark-600">
+              <div class="flex items-center gap-3">
+                <span class="w-8 shrink-0 text-xs text-gray-400 dark:text-gray-500">{{ t('productSubscription.daily') }}</span>
+                <div class="h-2 min-w-0 flex-1 rounded-full bg-gray-100 dark:bg-dark-600">
                   <div
-                    class="h-1.5 rounded-full transition-all"
-                    :class="barClass(product.daily_usage_usd, product.daily_limit_usd)"
-                    :style="{ width: barWidth(product.daily_usage_usd, product.daily_limit_usd) }"
+                    class="h-2 rounded-full transition-all duration-300"
+                    :class="barClass(product.daily_usage_usd, dailyEffectiveLimit(product))"
+                    :style="{ width: barWidth(product.daily_usage_usd, dailyEffectiveLimit(product)) }"
                   />
                 </div>
-                <span class="w-24 shrink-0 text-right text-[10px] tabular-nums text-gray-500">
-                  {{ fmtUsage(product.daily_usage_usd, product.daily_limit_usd) }}
-                </span>
-                <span v-if="Number(product.daily_carryover_in_usd || 0) > 0" class="shrink-0 rounded bg-amber-50 px-1 py-0.5 text-[9px] tabular-nums text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
-                  {{ t('productSubscription.carryover') }} ${{ (product.daily_carryover_in_usd || 0).toFixed(2) }}
+                <span class="w-[90px] shrink-0 text-right text-xs tabular-nums text-gray-500 dark:text-gray-400">
+                  {{ fmtUsage(product.daily_usage_usd, dailyEffectiveLimit(product)) }}
                 </span>
               </div>
               <!-- Weekly -->
-              <div class="flex items-center gap-2">
-                <span class="w-7 shrink-0 text-[10px] text-gray-400">{{ t('productSubscription.weekly') }}</span>
-                <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-100 dark:bg-dark-600">
+              <div class="flex items-center gap-3">
+                <span class="w-8 shrink-0 text-xs text-gray-400 dark:text-gray-500">{{ t('productSubscription.weekly') }}</span>
+                <div class="h-2 min-w-0 flex-1 rounded-full bg-gray-100 dark:bg-dark-600">
                   <div
-                    class="h-1.5 rounded-full transition-all"
+                    class="h-2 rounded-full transition-all duration-300"
                     :class="barClass(product.weekly_usage_usd, effectiveLimit(product.weekly_limit_usd, product.daily_limit_usd, 7))"
                     :style="{ width: barWidth(product.weekly_usage_usd, effectiveLimit(product.weekly_limit_usd, product.daily_limit_usd, 7)) }"
                   />
                 </div>
-                <span class="w-24 shrink-0 text-right text-[10px] tabular-nums text-gray-500">
+                <span class="w-[90px] shrink-0 text-right text-xs tabular-nums text-gray-500 dark:text-gray-400">
                   {{ fmtUsage(product.weekly_usage_usd, effectiveLimit(product.weekly_limit_usd, product.daily_limit_usd, 7)) }}
                 </span>
               </div>
               <!-- Monthly -->
-              <div class="flex items-center gap-2">
-                <span class="w-7 shrink-0 text-[10px] text-gray-400">{{ t('productSubscription.monthly') }}</span>
-                <div class="h-1.5 min-w-0 flex-1 rounded-full bg-gray-100 dark:bg-dark-600">
+              <div class="flex items-center gap-3">
+                <span class="w-8 shrink-0 text-xs text-gray-400 dark:text-gray-500">{{ t('productSubscription.monthly') }}</span>
+                <div class="h-2 min-w-0 flex-1 rounded-full bg-gray-100 dark:bg-dark-600">
                   <div
-                    class="h-1.5 rounded-full transition-all"
+                    class="h-2 rounded-full transition-all duration-300"
                     :class="barClass(product.monthly_usage_usd, effectiveLimit(product.monthly_limit_usd, product.daily_limit_usd, 30))"
                     :style="{ width: barWidth(product.monthly_usage_usd, effectiveLimit(product.monthly_limit_usd, product.daily_limit_usd, 30)) }"
                   />
                 </div>
-                <span class="w-24 shrink-0 text-right text-[10px] tabular-nums text-gray-500">
+                <span class="w-[90px] shrink-0 text-right text-xs tabular-nums text-gray-500 dark:text-gray-400">
                   {{ fmtUsage(product.monthly_usage_usd, effectiveLimit(product.monthly_limit_usd, product.daily_limit_usd, 30)) }}
                 </span>
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Footer link -->
+        <div class="border-t border-gray-100 px-5 py-3 text-center dark:border-dark-700">
+          <router-link
+            to="/subscriptions"
+            class="text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+            @click="popoverOpen = false"
+          >
+            {{ t('productSubscription.viewAll') }}
+          </router-link>
         </div>
       </div>
     </transition>
@@ -136,6 +148,10 @@ async function loadSummary() {
   } catch (e) {
     console.error('[ProductSubscriptionMini] Failed to load:', e)
   }
+}
+
+function dailyEffectiveLimit(product: ActiveSubscriptionProduct): number {
+  return (product.daily_limit_usd || 0) + (product.daily_carryover_in_usd || 0)
 }
 
 function effectiveLimit(limit: number, dailyLimit: number, multiplier: number): number {

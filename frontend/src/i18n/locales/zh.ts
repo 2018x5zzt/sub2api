@@ -6009,6 +6009,22 @@ export default {
     }
   },
 
+  // Product Subscription Mini (Header component)
+  productSubscription: {
+    title: '产品订阅',
+    mySubscriptions: '我的订阅',
+    viewDetails: '查看产品订阅详情',
+    viewAll: '查看全部订阅',
+    activeCount: '{count} 个有效订阅',
+    daily: '每日',
+    weekly: '每周',
+    monthly: '每月',
+    carryover: '结转',
+    daysRemaining: '剩余 {days} 天',
+    expired: '已过期',
+    expiresToday: '今天到期',
+  },
+
   // Subscription Progress (Header component)
   subscriptionProgress: {
     title: '我的订阅',

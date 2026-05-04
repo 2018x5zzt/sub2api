@@ -5849,6 +5849,22 @@ export default {
     }
   },
 
+  // Product Subscription Mini (Header component)
+  productSubscription: {
+    title: 'Product Subscriptions',
+    mySubscriptions: 'My Subscriptions',
+    viewDetails: 'View product subscription details',
+    viewAll: 'View All Subscriptions',
+    activeCount: '{count} active subscription(s)',
+    daily: 'Daily',
+    weekly: 'Weekly',
+    monthly: 'Monthly',
+    carryover: 'Carryover',
+    daysRemaining: '{days}d left',
+    expired: 'Expired',
+    expiresToday: 'Expires today',
+  },
+
   // Subscription Progress (Header component)
   subscriptionProgress: {
     title: 'My Subscriptions',
