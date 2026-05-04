@@ -2944,6 +2944,7 @@ func (s *adminServiceImpl) GetRedeemCode(ctx context.Context, id int64) (*Redeem
 
 func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *GenerateRedeemCodesInput) ([]RedeemCode, error) {
 	// 订阅卡密支持新产品订阅 product_id，并保留旧 group_id 兼容入口。
+	var productDefaultValidityDays int
 	if input.Type == RedeemTypeSubscription {
 		if (input.GroupID == nil) == (input.ProductID == nil) {
 			return nil, errors.New("exactly one of group_id or product_id is required for subscription type")
@@ -2963,8 +2964,13 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 				input.ProductID = &productID
 				input.GroupID = nil
 			}
-		} else if err := s.validateRedeemProductID(ctx, *input.ProductID); err != nil {
-			return nil, err
+		}
+		if input.ProductID != nil {
+			product, err := s.getRedeemProduct(ctx, *input.ProductID)
+			if err != nil {
+				return nil, err
+			}
+			productDefaultValidityDays = product.DefaultValidityDays
 		}
 	}
 
@@ -2987,7 +2993,10 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			code.ValidityDays = input.ValidityDays
 			code.SourceType = RedeemSourceCommercial
 			if code.ValidityDays <= 0 {
-				code.ValidityDays = 30 // 默认30天
+				code.ValidityDays = productDefaultValidityDays
+			}
+			if code.ValidityDays <= 0 {
+				code.ValidityDays = 30 // 兼容旧分组订阅码的默认值
 			}
 		}
 		if err := s.redeemCodeRepo.Create(ctx, &code); err != nil {
@@ -2998,29 +3007,35 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 	return codes, nil
 }
 
-func (s *adminServiceImpl) validateRedeemProductID(ctx context.Context, productID int64) error {
+func (s *adminServiceImpl) getRedeemProduct(ctx context.Context, productID int64) (*SubscriptionProduct, error) {
 	if productID <= 0 {
-		return errors.New("product_id is required for subscription type")
+		return nil, errors.New("product_id is required for subscription type")
 	}
 	resolver, ok := s.defaultSubAssigner.(interface {
 		ListProducts(ctx context.Context) ([]SubscriptionProduct, error)
 	})
 	if !ok {
-		return errors.New("subscription product service is not configured")
+		return nil, errors.New("subscription product service is not configured")
 	}
 	products, err := resolver.ListProducts(ctx)
 	if err != nil {
-		return fmt.Errorf("validate subscription product: %w", err)
+		return nil, fmt.Errorf("validate subscription product: %w", err)
 	}
-	for _, product := range products {
+	for i := range products {
+		product := products[i]
 		if product.ID == productID {
 			if product.Status != SubscriptionProductStatusActive {
-				return errors.New("subscription product must be active")
+				return nil, errors.New("subscription product must be active")
 			}
-			return nil
+			return &product, nil
 		}
 	}
-	return ErrSubscriptionNotFound
+	return nil, ErrSubscriptionNotFound
+}
+
+func (s *adminServiceImpl) validateRedeemProductID(ctx context.Context, productID int64) error {
+	_, err := s.getRedeemProduct(ctx, productID)
+	return err
 }
 
 func (s *adminServiceImpl) resolveProductIDForLegacyGroup(ctx context.Context, groupID int64) (int64, bool, error) {

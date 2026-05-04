@@ -8025,6 +8025,7 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 			cmd.SubscriptionID = nil
 			cmd.SubscriptionCost = 0
 			cmd.ProductSubscriptionID = &fields.productSubscriptionID
+			cmd.ProductGroupID = fields.groupID
 			cmd.ProductDebitCost = fields.productDebitCost
 		} else if p.Subscription != nil && p.Cost.TotalCost > 0 {
 			cmd.SubscriptionID = &p.Subscription.ID

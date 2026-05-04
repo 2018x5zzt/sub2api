@@ -73,9 +73,15 @@ func TestAdminServiceGenerateSubscriptionCardCodesConvertsMappedLegacyGroupToPro
 	groupID := int64(21)
 	repo := &redeemCreateRepoStub{}
 	svc := &adminServiceImpl{
-		redeemCodeRepo:     repo,
-		groupRepo:          &subscriptionGroupRepoStub{group: &Group{ID: groupID, Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
-		defaultSubAssigner: redeemProductAwareAssignerStub{groupID: groupID, productID: 88},
+		redeemCodeRepo: repo,
+		groupRepo:      &subscriptionGroupRepoStub{group: &Group{ID: groupID, Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		defaultSubAssigner: redeemProductAwareAssignerStub{
+			groupID:   groupID,
+			productID: 88,
+			products: []SubscriptionProduct{
+				{ID: 88, Status: SubscriptionProductStatusActive, DefaultValidityDays: 30},
+			},
+		},
 	}
 
 	codes, err := svc.GenerateRedeemCodes(context.Background(), &GenerateRedeemCodesInput{
@@ -100,9 +106,15 @@ func TestAdminServiceGenerateSubscriptionCardCodesKeepsValidityDaysOnSameProduct
 	groupID := int64(21)
 	repo := &redeemCreateRepoStub{}
 	svc := &adminServiceImpl{
-		redeemCodeRepo:     repo,
-		groupRepo:          &subscriptionGroupRepoStub{group: &Group{ID: groupID, Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
-		defaultSubAssigner: redeemProductAwareAssignerStub{groupID: groupID, productID: 88},
+		redeemCodeRepo: repo,
+		groupRepo:      &subscriptionGroupRepoStub{group: &Group{ID: groupID, Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		defaultSubAssigner: redeemProductAwareAssignerStub{
+			groupID:   groupID,
+			productID: 88,
+			products: []SubscriptionProduct{
+				{ID: 88, Status: SubscriptionProductStatusActive, DefaultValidityDays: 7},
+			},
+		},
 	}
 
 	for _, days := range []int{1, 7, 30} {
@@ -182,4 +194,30 @@ func TestAdminServiceGenerateSubscriptionCardCodesStoresActiveProductID(t *testi
 	require.Nil(t, repo.created[0].GroupID)
 	require.NotNil(t, repo.created[0].ProductID)
 	require.Equal(t, productID, *repo.created[0].ProductID)
+}
+
+func TestAdminServiceGenerateSubscriptionCardCodesUsesProductDefaultValidityDays(t *testing.T) {
+	t.Parallel()
+
+	productID := int64(88)
+	repo := &redeemCreateRepoStub{}
+	svc := &adminServiceImpl{
+		redeemCodeRepo: repo,
+		defaultSubAssigner: redeemProductAwareAssignerStub{
+			products: []SubscriptionProduct{
+				{ID: productID, Status: SubscriptionProductStatusActive, DefaultValidityDays: 7},
+			},
+		},
+	}
+
+	codes, err := svc.GenerateRedeemCodes(context.Background(), &GenerateRedeemCodesInput{
+		Count:     1,
+		Type:      RedeemTypeSubscription,
+		ProductID: &productID,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, codes, 1)
+	require.Len(t, repo.created, 1)
+	require.Equal(t, 7, repo.created[0].ValidityDays)
 }

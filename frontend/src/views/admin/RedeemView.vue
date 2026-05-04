@@ -425,6 +425,7 @@ interface ProductOption {
   value: number
   label: string
   description: string | null
+  defaultValidityDays: number
 }
 
 const showGenerateDialog = ref(false)
@@ -439,7 +440,8 @@ const subscriptionProductOptions = computed(() => {
     .map((product) => ({
       value: product.id,
       label: `${product.name} #${product.id}`,
-      description: product.description || product.code
+      description: product.description || product.code,
+      defaultValidityDays: product.default_validity_days || 30
     }))
 })
 
@@ -567,8 +569,25 @@ watch(
     } else if (generateForm.value === 0) {
       generateForm.value = 10
     }
+    if (newType === 'subscription') {
+      applySelectedProductDefaultValidity()
+    }
   }
 )
+
+watch(
+  () => generateForm.product_id,
+  () => {
+    if (generateForm.type === 'subscription') {
+      applySelectedProductDefaultValidity()
+    }
+  }
+)
+
+const applySelectedProductDefaultValidity = () => {
+  const selected = subscriptionProducts.value.find((product) => product.id === generateForm.product_id)
+  generateForm.validity_days = selected?.default_validity_days || 30
+}
 
 const buildRedeemQueryFilters = () => ({
   type: (filters.type || undefined) as RedeemCodeType | undefined,

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"math"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -135,4 +136,152 @@ func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subsc
 		return nil
 	}
 	return service.ErrSubscriptionNotFound
+}
+
+func splitAndIncrementProductSubscriptionUsage(ctx context.Context, tx *sql.Tx, userID, productSubscriptionID, groupID int64, costUSD float64) error {
+	if costUSD <= 0 {
+		return nil
+	}
+
+	candidates, err := listProductDebitCandidates(ctx, tx, userID, productSubscriptionID, groupID)
+	if err != nil {
+		return err
+	}
+	if len(candidates) == 0 {
+		return service.ErrSubscriptionNotFound
+	}
+
+	remaining := costUSD
+	for _, candidate := range candidates {
+		debit := math.Min(remaining, candidate.remaining)
+		if debit <= 0 {
+			continue
+		}
+		if err := advanceAndIncrementProductSubscriptionUsage(ctx, tx, candidate.subscriptionID, debit); err != nil {
+			return err
+		}
+		remaining -= debit
+		if remaining <= 0.0000001 {
+			return nil
+		}
+	}
+
+	return service.ErrDailyLimitExceeded
+}
+
+type productDebitCandidate struct {
+	subscriptionID int64
+	remaining      float64
+}
+
+func listProductDebitCandidates(ctx context.Context, tx *sql.Tx, userID, productSubscriptionID, groupID int64) ([]productDebitCandidate, error) {
+	rows, err := tx.QueryContext(ctx, `
+		WITH anchor AS (
+			SELECT
+				ups.user_id,
+				sp.product_family
+			FROM user_product_subscriptions ups
+			JOIN subscription_products sp
+				ON sp.id = ups.product_id
+				AND sp.deleted_at IS NULL
+			WHERE ups.id = $2
+				AND ups.user_id = $1
+				AND ups.deleted_at IS NULL
+		),
+		prepared AS (
+			SELECT
+				ups.id,
+				COALESCE(sp.daily_limit_usd, 0) AS daily_limit_usd,
+				COALESCE(sp.weekly_limit_usd, 0) AS weekly_limit_usd,
+				COALESCE(sp.monthly_limit_usd, 0) AS monthly_limit_usd,
+				CASE
+					WHEN ups.daily_window_start IS NULL THEN 0
+					WHEN ups.daily_window_start + INTERVAL '24 hours' <= NOW()
+						THEN GREATEST(CAST(EXTRACT(EPOCH FROM (date_trunc('day', NOW()) - ups.daily_window_start)) / 86400 AS bigint), 0)
+					ELSE 0
+				END AS elapsed_days,
+				CASE
+					WHEN ups.daily_window_start IS NULL OR ups.daily_window_start + INTERVAL '24 hours' <= NOW()
+						THEN 0
+					ELSE ups.daily_usage_usd
+				END AS base_daily_usage,
+				CASE
+					WHEN ups.weekly_window_start IS NULL OR ups.weekly_window_start + INTERVAL '7 days' <= NOW()
+						THEN 0
+					ELSE ups.weekly_usage_usd
+				END AS base_weekly_usage,
+				CASE
+					WHEN ups.monthly_window_start IS NULL OR ups.monthly_window_start + INTERVAL '30 days' <= NOW()
+						THEN 0
+					ELSE ups.monthly_usage_usd
+				END AS base_monthly_usage,
+				CASE
+					WHEN ups.daily_window_start IS NULL OR ups.daily_window_start + INTERVAL '24 hours' > NOW()
+						THEN ups.daily_carryover_in_usd
+					WHEN ups.status = $4
+						AND ups.expires_at > date_trunc('day', NOW())
+						AND GREATEST(CAST(EXTRACT(EPOCH FROM (date_trunc('day', NOW()) - ups.daily_window_start)) / 86400 AS bigint), 0) = 1
+						THEN GREATEST(COALESCE(sp.daily_limit_usd, 0) - GREATEST(ups.daily_usage_usd - GREATEST(ups.daily_carryover_in_usd - ups.daily_carryover_remaining_usd, 0), 0), 0)
+					ELSE 0
+				END AS effective_carryover
+			FROM user_product_subscriptions ups
+			JOIN subscription_products sp
+				ON sp.id = ups.product_id
+				AND sp.deleted_at IS NULL
+				AND sp.status = 'active'
+			JOIN subscription_product_groups spg
+				ON spg.product_id = sp.id
+				AND spg.group_id = $3
+				AND spg.deleted_at IS NULL
+				AND spg.status = 'active'
+			JOIN anchor
+				ON anchor.user_id = ups.user_id
+				AND anchor.product_family = sp.product_family
+			WHERE ups.user_id = $1
+				AND ups.status = $4
+				AND ups.expires_at > NOW()
+				AND ups.deleted_at IS NULL
+			ORDER BY sp.sort_order ASC, ups.starts_at ASC, ups.id ASC
+			FOR UPDATE OF ups
+		)
+		SELECT
+			id,
+			LEAST(
+				CASE
+					WHEN daily_limit_usd > 0 THEN GREATEST(daily_limit_usd + GREATEST(effective_carryover, 0) - base_daily_usage, 0)
+					ELSE 1.0e100
+				END,
+				CASE
+					WHEN weekly_limit_usd > 0 THEN GREATEST(weekly_limit_usd - base_weekly_usage, 0)
+					ELSE 1.0e100
+				END,
+				CASE
+					WHEN monthly_limit_usd > 0 THEN GREATEST(monthly_limit_usd - base_monthly_usage, 0)
+					ELSE 1.0e100
+				END
+			) AS remaining
+		FROM prepared
+	`, userID, productSubscriptionID, groupID, service.SubscriptionStatusActive)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	candidates := make([]productDebitCandidate, 0)
+	for rows.Next() {
+		var candidate productDebitCandidate
+		if err := rows.Scan(&candidate.subscriptionID, &candidate.remaining); err != nil {
+			return nil, err
+		}
+		if candidate.remaining > 0 {
+			candidates = append(candidates, candidate)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(candidates) == 0 {
+		return nil, service.ErrDailyLimitExceeded
+	}
+	return candidates, nil
 }

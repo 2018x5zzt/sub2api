@@ -198,6 +198,90 @@ func TestUsageBillingRepositoryApply_ProductSubscriptionAdvancesCarryover(t *tes
 	require.InDelta(t, 32, carryoverRemaining, 0.000001)
 }
 
+func TestUsageBillingRepositoryApply_ProductSubscriptionSplitsDebitAcrossSameFamily(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-product-split-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+	})
+	group := mustCreateGroup(t, client, &service.Group{
+		Name:             "usage-billing-product-split-group-" + uuid.NewString(),
+		Platform:         service.PlatformAnthropic,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID:  user.ID,
+		GroupID: &group.ID,
+		Key:     "sk-usage-billing-product-split-" + uuid.NewString(),
+		Name:    "billing-product-split",
+	})
+
+	var firstProductID, secondProductID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, product_family, default_validity_days, daily_limit_usd, weekly_limit_usd, monthly_limit_usd, sort_order)
+		VALUES ($1, 'split first', 'active', 'gpt_shared', 7, 45, 315, 1350, 10)
+		RETURNING id
+	`, "split-first-"+uuid.NewString()).Scan(&firstProductID))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, product_family, default_validity_days, daily_limit_usd, weekly_limit_usd, monthly_limit_usd, sort_order)
+		VALUES ($1, 'split second', 'active', 'gpt_shared', 30, 225, 1575, 6750, 20)
+		RETURNING id
+	`, "split-second-"+uuid.NewString()).Scan(&secondProductID))
+	_, err := integrationDB.ExecContext(ctx, `
+		INSERT INTO subscription_product_groups (product_id, group_id, debit_multiplier, status, sort_order)
+		VALUES ($1, $3, 1, 'active', 1), ($2, $3, 1, 'active', 1)
+	`, firstProductID, secondProductID, group.ID)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	var firstSubID, secondSubID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id, product_id, starts_at, expires_at, status,
+			daily_window_start, weekly_window_start, monthly_window_start,
+			daily_usage_usd, weekly_usage_usd, monthly_usage_usd
+		)
+		VALUES ($1, $2, $3::timestamptz - INTERVAL '2 days', $3::timestamptz + INTERVAL '7 days', 'active',
+			date_trunc('day', $3::timestamptz), date_trunc('day', $3::timestamptz), date_trunc('day', $3::timestamptz),
+			40, 40, 40)
+		RETURNING id
+	`, user.ID, firstProductID, now).Scan(&firstSubID))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id, product_id, starts_at, expires_at, status,
+			daily_window_start, weekly_window_start, monthly_window_start,
+			daily_usage_usd, weekly_usage_usd, monthly_usage_usd
+		)
+		VALUES ($1, $2, $3::timestamptz - INTERVAL '1 day', $3::timestamptz + INTERVAL '30 days', 'active',
+			date_trunc('day', $3::timestamptz), date_trunc('day', $3::timestamptz), date_trunc('day', $3::timestamptz),
+			10, 10, 10)
+		RETURNING id
+	`, user.ID, secondProductID, now).Scan(&secondSubID))
+
+	_, err = repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:             uuid.NewString(),
+		APIKeyID:              apiKey.ID,
+		UserID:                user.ID,
+		ProductSubscriptionID: &firstSubID,
+		ProductGroupID:        group.ID,
+		ProductDebitCost:      12,
+	})
+	require.NoError(t, err)
+
+	var firstDaily, secondDaily float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT daily_usage_usd FROM user_product_subscriptions WHERE id = $1
+	`, firstSubID).Scan(&firstDaily))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT daily_usage_usd FROM user_product_subscriptions WHERE id = $1
+	`, secondSubID).Scan(&secondDaily))
+	require.InDelta(t, 45, firstDaily, 0.000001)
+	require.InDelta(t, 17, secondDaily, 0.000001)
+}
+
 func TestUsageBillingRepositoryApply_ProductSubscriptionResetsMonthlyAfter30Days(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)

@@ -179,7 +179,7 @@ func (s *affiliateTierRepoStub) BindInviter(context.Context, int64, int64) (bool
 	return false, nil
 }
 
-func (s *affiliateTierRepoStub) AccrueQuota(context.Context, int64, int64, float64, int) (bool, error) {
+func (s *affiliateTierRepoStub) AccrueQuota(context.Context, int64, int64, float64, int, *int64) (bool, error) {
 	return false, nil
 }
 
@@ -203,6 +203,10 @@ func (s *affiliateTierRepoStub) ListInvitees(context.Context, int64, int) ([]Aff
 	return nil, nil
 }
 
+func (s *affiliateTierRepoStub) GetAffiliateUserOverview(context.Context, int64) (*AffiliateUserOverview, error) {
+	return nil, ErrAffiliateProfileNotFound
+}
+
 func (s *affiliateTierRepoStub) UpdateUserAffCode(context.Context, int64, string) error {
 	return nil
 }
@@ -220,5 +224,17 @@ func (s *affiliateTierRepoStub) BatchSetUserRebateRate(context.Context, []int64,
 }
 
 func (s *affiliateTierRepoStub) ListUsersWithCustomSettings(context.Context, AffiliateAdminFilter) ([]AffiliateAdminEntry, int64, error) {
+	return nil, 0, nil
+}
+
+func (s *affiliateTierRepoStub) ListAffiliateInviteRecords(context.Context, AffiliateRecordFilter) ([]AffiliateInviteRecord, int64, error) {
+	return nil, 0, nil
+}
+
+func (s *affiliateTierRepoStub) ListAffiliateRebateRecords(context.Context, AffiliateRecordFilter) ([]AffiliateRebateRecord, int64, error) {
+	return nil, 0, nil
+}
+
+func (s *affiliateTierRepoStub) ListAffiliateTransferRecords(context.Context, AffiliateRecordFilter) ([]AffiliateTransferRecord, int64, error) {
 	return nil, 0, nil
 }

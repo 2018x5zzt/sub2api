@@ -358,11 +358,3 @@ func TestForwardAsChatCompletions_UpstreamRequestIgnoresClientCancel(t *testing.
 	require.NotNil(t, upstream.lastReq)
 	require.NoError(t, upstream.lastReq.Context().Err())
 }
-=======
-	var failoverErr *UpstreamFailoverError
-	require.True(t, errors.As(err, &failoverErr), "expected recoverable failover error, got %T %v", err, err)
-	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
-	require.False(t, c.Writer.Written(), "must not commit an empty HTTP 200 before failover")
-	require.Empty(t, rec.Body.String())
-}
->>>>>>> theirs

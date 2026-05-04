@@ -112,7 +112,13 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		}
 	}
 	if cmd.ProductDebitCost > 0 && cmd.ProductSubscriptionID != nil {
-		if err := advanceAndIncrementProductSubscriptionUsage(ctx, tx, *cmd.ProductSubscriptionID, cmd.ProductDebitCost); err != nil {
+		var err error
+		if cmd.ProductGroupID > 0 {
+			err = splitAndIncrementProductSubscriptionUsage(ctx, tx, cmd.UserID, *cmd.ProductSubscriptionID, cmd.ProductGroupID, cmd.ProductDebitCost)
+		} else {
+			err = advanceAndIncrementProductSubscriptionUsage(ctx, tx, *cmd.ProductSubscriptionID, cmd.ProductDebitCost)
+		}
+		if err != nil {
 			return err
 		}
 	}

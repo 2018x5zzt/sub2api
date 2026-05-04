@@ -50,6 +50,28 @@ func TestRedeemServiceAssignProductSubscriptionFromRedeem(t *testing.T) {
 	}
 }
 
+func TestRedeemServiceAssignProductSubscriptionFromRedeemUsesRedeemCodeValidityDays(t *testing.T) {
+	productID := int64(150)
+	assigner := &redeemProductAssignerStub{}
+	svc := &RedeemService{productSubAssigner: assigner}
+
+	err := svc.assignProductSubscriptionFromRedeem(context.Background(), 42, &RedeemCode{
+		Code:         "PRODUCT-WEEKLY-150",
+		ProductID:    &productID,
+		ValidityDays: 7,
+	})
+	if err != nil {
+		t.Fatalf("assignProductSubscriptionFromRedeem returned error: %v", err)
+	}
+	if len(assigner.inputs) != 1 {
+		t.Fatalf("assign calls = %d, want 1", len(assigner.inputs))
+	}
+	got := assigner.inputs[0]
+	if got.ValidityDays != 7 {
+		t.Fatalf("ValidityDays = %d, want 7 from redeem code", got.ValidityDays)
+	}
+}
+
 func TestValidateSubscriptionRedeemCodeAllowsHistoricalProductCodeWithLegacyGroupID(t *testing.T) {
 	productID := int64(88)
 	groupID := int64(21)
