@@ -29,7 +29,7 @@ func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subsc
 				COALESCE(sp.daily_limit_usd, 0) AS daily_limit_usd,
 				date_trunc('day', NOW()) AS today_start,
 				date_trunc('week', NOW()) AS week_start,
-				date_trunc('month', NOW()) AS month_start,
+				date_trunc('day', NOW()) AS month_start,
 				CASE
 					WHEN ups.daily_window_start IS NULL THEN true
 					WHEN ups.daily_window_start + INTERVAL '24 hours' <= NOW() THEN true
@@ -42,7 +42,7 @@ func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subsc
 				END AS should_advance_weekly,
 				CASE
 					WHEN ups.monthly_window_start IS NULL THEN true
-					WHEN date_trunc('month', ups.monthly_window_start) < date_trunc('month', NOW()) THEN true
+					WHEN ups.monthly_window_start + INTERVAL '30 days' <= NOW() THEN true
 					ELSE false
 				END AS should_advance_monthly,
 				CASE

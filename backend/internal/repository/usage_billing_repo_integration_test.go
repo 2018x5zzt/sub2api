@@ -198,7 +198,7 @@ func TestUsageBillingRepositoryApply_ProductSubscriptionAdvancesCarryover(t *tes
 	require.InDelta(t, 32, carryoverRemaining, 0.000001)
 }
 
-func TestUsageBillingRepositoryApply_ProductSubscriptionResetsMonthlyOnCalendarMonthBoundary(t *testing.T) {
+func TestUsageBillingRepositoryApply_ProductSubscriptionResetsMonthlyAfter30Days(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
 	repo := NewUsageBillingRepository(client, integrationDB)
@@ -235,8 +235,8 @@ func TestUsageBillingRepositoryApply_ProductSubscriptionResetsMonthlyOnCalendarM
 			weekly_usage_usd,
 			monthly_usage_usd
 		)
-		VALUES ($1, $2, NOW() - INTERVAL '10 days', NOW() + INTERVAL '20 days', 'active',
-			date_trunc('day', NOW()), date_trunc('week', NOW()), date_trunc('month', NOW()) - INTERVAL '1 day',
+		VALUES ($1, $2, NOW() - INTERVAL '40 days', NOW() + INTERVAL '20 days', 'active',
+			date_trunc('day', NOW()), date_trunc('week', NOW()), NOW() - INTERVAL '31 days',
 			0, 0, 149)
 		RETURNING id
 	`, user.ID, productID).Scan(&productSubscriptionID))
@@ -261,7 +261,7 @@ func TestUsageBillingRepositoryApply_ProductSubscriptionResetsMonthlyOnCalendarM
 	require.InDelta(t, 2, monthlyUsage, 0.000001)
 	var wantMonthlyWindowStart time.Time
 	require.NoError(t, integrationDB.QueryRowContext(ctx, `
-		SELECT date_trunc('month', NOW())
+		SELECT date_trunc('day', NOW())
 	`).Scan(&wantMonthlyWindowStart))
 	require.True(t, monthlyWindowStart.Equal(wantMonthlyWindowStart), "monthly_window_start = %s, want %s", monthlyWindowStart, wantMonthlyWindowStart)
 }

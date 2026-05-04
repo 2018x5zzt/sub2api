@@ -126,7 +126,7 @@ func TestSubscriptionProductRepositoryAdminProductManagement(t *testing.T) {
 	require.Equal(t, user.ID, subs[0].UserID)
 }
 
-func TestSubscriptionProductRepositoryListActiveProductsNormalizesCalendarMonthUsage(t *testing.T) {
+func TestSubscriptionProductRepositoryListActiveProductsNormalizesRolling30DayUsage(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
 	repo := NewSubscriptionProductRepository(client, integrationDB)
@@ -159,8 +159,8 @@ func TestSubscriptionProductRepositoryListActiveProductsNormalizesCalendarMonthU
 			weekly_usage_usd,
 			monthly_usage_usd
 		)
-		VALUES ($1, $2, NOW() - INTERVAL '10 days', NOW() + INTERVAL '20 days', 'active',
-			date_trunc('day', NOW()), date_trunc('week', NOW()), date_trunc('month', NOW()) - INTERVAL '1 day',
+		VALUES ($1, $2, NOW() - INTERVAL '40 days', NOW() + INTERVAL '20 days', 'active',
+			date_trunc('day', NOW()), date_trunc('week', NOW()), NOW() - INTERVAL '31 days',
 			0, 0, 149)
 	`, userID, productID)
 	require.NoError(t, err)
@@ -171,7 +171,7 @@ func TestSubscriptionProductRepositoryListActiveProductsNormalizesCalendarMonthU
 	require.InDelta(t, 0, items[0].Subscription.MonthlyUsageUSD, 0.000001)
 
 	var wantMonthlyWindowStart time.Time
-	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('month', NOW())`).Scan(&wantMonthlyWindowStart))
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('day', NOW())`).Scan(&wantMonthlyWindowStart))
 	require.NotNil(t, items[0].Subscription.MonthlyWindowStart)
 	require.True(t, items[0].Subscription.MonthlyWindowStart.Equal(wantMonthlyWindowStart), "monthly window = %s, want %s", items[0].Subscription.MonthlyWindowStart, wantMonthlyWindowStart)
 }
@@ -211,10 +211,10 @@ func TestSubscriptionProductRepositoryListProductSubscriptionsNormalizesExpiredW
 			daily_carryover_in_usd,
 			daily_carryover_remaining_usd
 		)
-		VALUES ($1, $2, NOW() - INTERVAL '10 days', NOW() + INTERVAL '20 days', 'active',
+		VALUES ($1, $2, NOW() - INTERVAL '40 days', NOW() + INTERVAL '20 days', 'active',
 			date_trunc('day', NOW()) - INTERVAL '1 day',
 			date_trunc('week', NOW()),
-			date_trunc('month', NOW()) - INTERVAL '1 day',
+			NOW() - INTERVAL '31 days',
 			10, 20, 149, 5, 2)
 	`, userID, productID)
 	require.NoError(t, err)
@@ -223,9 +223,8 @@ func TestSubscriptionProductRepositoryListProductSubscriptionsNormalizesExpiredW
 	require.NoError(t, err)
 	require.Len(t, subs, 1)
 
-	var todayStart, monthStart time.Time
+	var todayStart time.Time
 	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('day', NOW())`).Scan(&todayStart))
-	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('month', NOW())`).Scan(&monthStart))
 
 	got := subs[0]
 	require.NotNil(t, got.DailyWindowStart)
@@ -234,7 +233,7 @@ func TestSubscriptionProductRepositoryListProductSubscriptionsNormalizesExpiredW
 	require.InDelta(t, 38, got.DailyCarryoverInUSD, 0.000001)
 	require.InDelta(t, 38, got.DailyCarryoverRemainingUSD, 0.000001)
 	require.NotNil(t, got.MonthlyWindowStart)
-	require.True(t, got.MonthlyWindowStart.Equal(monthStart), "monthly_window_start = %s, want %s", got.MonthlyWindowStart, monthStart)
+	require.True(t, got.MonthlyWindowStart.Equal(todayStart), "monthly_window_start = %s, want %s", got.MonthlyWindowStart, todayStart)
 	require.InDelta(t, 0, got.MonthlyUsageUSD, 0.000001)
 }
 
@@ -336,10 +335,10 @@ func TestSubscriptionProductRepositoryListUserProductSubscriptionsForAdminNormal
 			daily_carryover_in_usd,
 			daily_carryover_remaining_usd
 		)
-		VALUES ($1, $2, NOW() - INTERVAL '10 days', NOW() + INTERVAL '20 days', 'active',
+		VALUES ($1, $2, NOW() - INTERVAL '40 days', NOW() + INTERVAL '20 days', 'active',
 			date_trunc('day', NOW()) - INTERVAL '1 day',
 			date_trunc('week', NOW()),
-			date_trunc('month', NOW()) - INTERVAL '1 day',
+			NOW() - INTERVAL '31 days',
 			10, 20, 149, 5, 2)
 	`, user.ID, productID)
 	require.NoError(t, err)
@@ -354,9 +353,8 @@ func TestSubscriptionProductRepositoryListUserProductSubscriptionsForAdminNormal
 	require.Equal(t, int64(1), page.Total)
 	require.Len(t, items, 1)
 
-	var todayStart, monthStart time.Time
+	var todayStart time.Time
 	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('day', NOW())`).Scan(&todayStart))
-	require.NoError(t, integrationDB.QueryRowContext(ctx, `SELECT date_trunc('month', NOW())`).Scan(&monthStart))
 
 	got := items[0]
 	require.NotNil(t, got.DailyWindowStart)
@@ -367,7 +365,7 @@ func TestSubscriptionProductRepositoryListUserProductSubscriptionsForAdminNormal
 	require.InDelta(t, 0, got.CarryoverUsedUSD, 0.000001)
 	require.InDelta(t, 0, got.FreshDailyUsageUSD, 0.000001)
 	require.NotNil(t, got.MonthlyWindowStart)
-	require.True(t, got.MonthlyWindowStart.Equal(monthStart), "monthly_window_start = %s, want %s", got.MonthlyWindowStart, monthStart)
+	require.True(t, got.MonthlyWindowStart.Equal(todayStart), "monthly_window_start = %s, want %s", got.MonthlyWindowStart, todayStart)
 	require.InDelta(t, 0, got.MonthlyUsageUSD, 0.000001)
 }
 

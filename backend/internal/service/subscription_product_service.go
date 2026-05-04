@@ -199,7 +199,7 @@ func normalizeExpiredProductSubscriptionWindow(sub *UserProductSubscription, pro
 		sub.WeeklyUsageUSD = 0
 	}
 	if productSubscriptionMonthlyWindowExpired(sub.MonthlyWindowStart, now) {
-		windowStart := startOfMonth(now)
+		windowStart := startOfDay(now)
 		sub.MonthlyWindowStart = &windowStart
 		sub.MonthlyUsageUSD = 0
 	}
@@ -209,7 +209,7 @@ func productSubscriptionMonthlyWindowExpired(windowStart *time.Time, now time.Ti
 	if windowStart == nil {
 		return false
 	}
-	return startOfMonth(now).After(startOfMonth(*windowStart))
+	return now.Sub(*windowStart) >= 30*24*time.Hour
 }
 
 func NormalizeExpiredProductSubscriptionWindowForRepository(sub *UserProductSubscription, product *SubscriptionProduct, now time.Time) {
