@@ -30,3 +30,9 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
   })
 })
+
+describe('AppSidebar subscription management navigation', () => {
+  it('points the main subscription management entry at the canonical admin subscriptions URL', () => {
+    expect(componentSource).toContain("{ path: '/admin/subscriptions', label: t('nav.subscriptionManagement')")
+  })
+})

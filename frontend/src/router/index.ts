@@ -439,11 +439,7 @@ export const routes: RouteRecordRaw[] = [
   },
   {
     path: '/admin/subscriptions',
-    redirect: '/admin/subscription-products'
-  },
-  {
-    path: '/admin/subscription-products',
-    name: 'AdminSubscriptionProducts',
+    name: 'AdminSubscriptions',
     component: () => import('@/views/admin/SubscriptionProductsView.vue'),
     meta: {
       requiresAuth: true,
@@ -452,6 +448,10 @@ export const routes: RouteRecordRaw[] = [
       titleKey: 'admin.subscriptionProducts.title',
       descriptionKey: 'admin.subscriptionProducts.description'
     }
+  },
+  {
+    path: '/admin/subscription-products',
+    redirect: '/admin/subscriptions'
   },
   {
     path: '/admin/subscription-product-config',
