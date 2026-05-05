@@ -120,11 +120,12 @@ func splitOpenAICompatReasoningModel(model string) (normalizedModel string, reas
 		modelID = parts[len(parts)-1]
 	}
 	modelID = strings.TrimSpace(modelID)
-	if !strings.HasPrefix(strings.ToLower(modelID), "gpt-") {
+	lowerModelID := strings.ToLower(modelID)
+	if !strings.HasPrefix(lowerModelID, "gpt-") && !strings.HasPrefix(lowerModelID, "gpt5.") {
 		return trimmed, "", false
 	}
 
-	parts := strings.FieldsFunc(strings.ToLower(modelID), func(r rune) bool {
+	parts := strings.FieldsFunc(lowerModelID, func(r rune) bool {
 		switch r {
 		case '-', '_', ' ':
 			return true
