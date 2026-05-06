@@ -415,8 +415,48 @@ func (r *groupRepository) ListActive(ctx context.Context) ([]service.Group, erro
 			outGroups[i].RateLimitedAccountCount = c.RateLimited
 		}
 	}
+	accountGroups, err := r.loadActiveAccountGroupBindings(ctx, groupIDs)
+	if err != nil {
+		return nil, err
+	}
+	for i := range outGroups {
+		outGroups[i].AccountGroups = accountGroups[outGroups[i].ID]
+	}
 
 	return outGroups, nil
+}
+
+func (r *groupRepository) loadActiveAccountGroupBindings(ctx context.Context, groupIDs []int64) (map[int64][]service.AccountGroup, error) {
+	result := make(map[int64][]service.AccountGroup, len(groupIDs))
+	if len(groupIDs) == 0 {
+		return result, nil
+	}
+	rows, err := r.sql.QueryContext(ctx, `
+		SELECT ag.account_id, ag.group_id, ag.priority, ag.billing_multiplier
+		FROM account_groups ag
+		JOIN accounts a ON a.id = ag.account_id
+		WHERE ag.group_id = ANY($1)
+		  AND a.status = 'active'
+		  AND a.schedulable = true
+		  AND (a.deleted_at IS NULL)
+		ORDER BY ag.group_id, ag.billing_multiplier, ag.account_id
+	`, pq.Array(groupIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var entry service.AccountGroup
+		if err := rows.Scan(&entry.AccountID, &entry.GroupID, &entry.Priority, &entry.BillingMultiplier); err != nil {
+			return nil, err
+		}
+		result[entry.GroupID] = append(result[entry.GroupID], entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (r *groupRepository) ListActiveByPlatform(ctx context.Context, platform string) ([]service.Group, error) {

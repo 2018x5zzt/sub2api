@@ -53,12 +53,18 @@ func (h *AvailableChannelHandler) featureEnabled(c *gin.Context) bool {
 // 订阅视觉加深），并用 RateMultiplier 作为默认倍率；用户专属倍率前端走
 // /groups/rates，和 API 密钥页面保持一致。
 type userAvailableGroup struct {
-	ID               int64   `json:"id"`
-	Name             string  `json:"name"`
-	Platform         string  `json:"platform"`
-	SubscriptionType string  `json:"subscription_type"`
-	RateMultiplier   float64 `json:"rate_multiplier"`
-	IsExclusive      bool    `json:"is_exclusive"`
+	ID                             int64    `json:"id"`
+	Name                           string   `json:"name"`
+	Platform                       string   `json:"platform"`
+	SubscriptionType               string   `json:"subscription_type"`
+	RateMultiplier                 float64  `json:"rate_multiplier"`
+	IsExclusive                    bool     `json:"is_exclusive"`
+	PricingMode                    string   `json:"pricing_mode"`
+	DefaultBudgetMultiplier        *float64 `json:"default_budget_multiplier,omitempty"`
+	DynamicMultiplierMin           *float64 `json:"dynamic_multiplier_min,omitempty"`
+	DynamicMultiplierMax           *float64 `json:"dynamic_multiplier_max,omitempty"`
+	DynamicBudgetMultiplier        *float64 `json:"dynamic_budget_multiplier,omitempty"`
+	DynamicBudgetMatchedMultiplier *float64 `json:"dynamic_budget_matched_multiplier,omitempty"`
 }
 
 // userSupportedModelPricing 用户可见的定价字段白名单。
@@ -213,15 +219,28 @@ func filterUserVisibleGroups(
 			continue
 		}
 		visible = append(visible, userAvailableGroup{
-			ID:               g.ID,
-			Name:             g.Name,
-			Platform:         g.Platform,
-			SubscriptionType: g.SubscriptionType,
-			RateMultiplier:   g.RateMultiplier,
-			IsExclusive:      g.IsExclusive,
+			ID:                             g.ID,
+			Name:                           g.Name,
+			Platform:                       g.Platform,
+			SubscriptionType:               g.SubscriptionType,
+			RateMultiplier:                 g.RateMultiplier,
+			IsExclusive:                    g.IsExclusive,
+			PricingMode:                    g.PricingMode,
+			DefaultBudgetMultiplier:        g.DefaultBudgetMultiplier,
+			DynamicMultiplierMin:           g.DynamicMultiplierMin,
+			DynamicMultiplierMax:           g.DynamicMultiplierMax,
+			DynamicBudgetMultiplier:        userDynamicBudgetMultiplier(g),
+			DynamicBudgetMatchedMultiplier: g.DynamicBudgetMatchedMultiplier,
 		})
 	}
 	return visible
+}
+
+func userDynamicBudgetMultiplier(g service.AvailableGroupRef) *float64 {
+	if g.PricingMode != service.GroupPricingModeDynamic {
+		return nil
+	}
+	return &g.DynamicBudgetMultiplier
 }
 
 // toUserSupportedModels 将 service 层支持模型转换为用户 DTO（字段白名单）。

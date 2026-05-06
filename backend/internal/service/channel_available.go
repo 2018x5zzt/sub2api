@@ -17,12 +17,18 @@ import (
 // 订阅 vs 标准（SubscriptionType）、默认倍率（RateMultiplier）。用户专属倍率
 // 不在这里暴露，前端自己通过 /groups/rates 拉取，和 API 密钥页面保持一致。
 type AvailableGroupRef struct {
-	ID               int64
-	Name             string
-	Platform         string
-	SubscriptionType string
-	RateMultiplier   float64
-	IsExclusive      bool
+	ID                             int64
+	Name                           string
+	Platform                       string
+	SubscriptionType               string
+	RateMultiplier                 float64
+	IsExclusive                    bool
+	PricingMode                    string
+	DefaultBudgetMultiplier        *float64
+	DynamicMultiplierMin           *float64
+	DynamicMultiplierMax           *float64
+	DynamicBudgetMultiplier        float64
+	DynamicBudgetMatchedMultiplier *float64
 }
 
 // AvailableChannel 可用渠道视图：用于「可用渠道」页面展示渠道基础信息 +
@@ -63,12 +69,19 @@ func (s *ChannelService) ListAvailable(ctx context.Context) ([]AvailableChannel,
 	for i := range groups {
 		g := groups[i]
 		groupByID[g.ID] = AvailableGroupRef{
-			ID:               g.ID,
-			Name:             g.Name,
-			Platform:         g.Platform,
-			SubscriptionType: g.SubscriptionType,
-			RateMultiplier:   g.RateMultiplier,
-			IsExclusive:      g.IsExclusive,
+			ID:                      g.ID,
+			Name:                    g.Name,
+			Platform:                g.Platform,
+			SubscriptionType:        g.SubscriptionType,
+			RateMultiplier:          g.RateMultiplier,
+			IsExclusive:             g.IsExclusive,
+			PricingMode:             normalizeGroupPricingMode(g.PricingMode),
+			DefaultBudgetMultiplier: g.DefaultBudgetMultiplier,
+		}
+		if groupByID[g.ID].PricingMode == GroupPricingModeDynamic {
+			ref := groupByID[g.ID]
+			applyDynamicGroupSummary(&ref, &g)
+			groupByID[g.ID] = ref
 		}
 	}
 
@@ -107,6 +120,43 @@ func (s *ChannelService) ListAvailable(ctx context.Context) ([]AvailableChannel,
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	})
 	return out, nil
+}
+
+func applyDynamicGroupSummary(ref *AvailableGroupRef, group *Group) {
+	if ref == nil || group == nil {
+		return
+	}
+	budget := DefaultBudgetMultiplier
+	if group.DefaultBudgetMultiplier != nil {
+		budget = *group.DefaultBudgetMultiplier
+	}
+	ref.DynamicBudgetMultiplier = budget
+
+	var minMultiplier *float64
+	var maxMultiplier *float64
+	var matchedMultiplier *float64
+	for i := range group.AccountGroups {
+		accountGroup := &group.AccountGroups[i]
+		if accountGroup.GroupID != 0 && accountGroup.GroupID != group.ID {
+			continue
+		}
+		if accountGroup.Account != nil && !accountGroup.Account.IsSchedulable() {
+			continue
+		}
+		multiplier := accountGroup.EffectiveBillingMultiplier()
+		if minMultiplier == nil || multiplier < *minMultiplier {
+			minMultiplier = float64Ptr(multiplier)
+		}
+		if maxMultiplier == nil || multiplier > *maxMultiplier {
+			maxMultiplier = float64Ptr(multiplier)
+		}
+		if multiplier <= budget && (matchedMultiplier == nil || multiplier > *matchedMultiplier) {
+			matchedMultiplier = float64Ptr(multiplier)
+		}
+	}
+	ref.DynamicMultiplierMin = minMultiplier
+	ref.DynamicMultiplierMax = maxMultiplier
+	ref.DynamicBudgetMatchedMultiplier = matchedMultiplier
 }
 
 // fillGlobalPricingFallback 对未命中渠道定价的支持模型，从全局 LiteLLM 数据合成一份

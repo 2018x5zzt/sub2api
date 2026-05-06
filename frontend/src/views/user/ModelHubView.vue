@@ -275,7 +275,7 @@
                       {{ catalog.group.description }}
                     </p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">
-                      {{ t('modelHub.pricingComputedWithRate', { rate: formatRateMultiplier(catalog.effective_rate_multiplier) }) }}
+                      {{ getCatalogPricingSummary(catalog) }}
                     </p>
                   </div>
 
@@ -325,7 +325,7 @@
                         </code>
                         <div class="mt-2.5 flex flex-wrap gap-1.5">
                           <span
-                            v-for="badge in getPricingBadges(model, catalog.effective_rate_multiplier)"
+                            v-for="badge in getPricingBadges(model, catalog)"
                             :key="badge.key"
                             :class="pricingBadgeClass(badge.tone)"
                           >
@@ -402,6 +402,12 @@ interface GroupModelCatalog {
     platform: GroupPlatform
     subscription_type: SubscriptionType
     rate_multiplier: number
+    pricing_mode: 'fixed' | 'dynamic'
+    default_budget_multiplier: number | null
+    dynamic_multiplier_min: number | null
+    dynamic_multiplier_max: number | null
+    dynamic_budget_multiplier: number | null
+    dynamic_budget_matched_multiplier: number | null
   }
   source: CatalogSource
   user_rate_multiplier: number | null
@@ -566,6 +572,15 @@ function formatPerMillionPrice(price?: number | null, rate = 1): string {
   return `${formatEffectiveRateAdjustedPrice(price, rate, PER_MILLION_TOKENS)} ${t('modelHub.perMillionTokens')}`
 }
 
+function formatPerMillionPriceRange(price: number, minRate: number, maxRate: number): string {
+  const min = formatEffectiveRateAdjustedPrice(price, minRate, PER_MILLION_TOKENS)
+  const max = formatEffectiveRateAdjustedPrice(price, maxRate, PER_MILLION_TOKENS)
+  if (min === max) {
+    return `${min} ${t('modelHub.perMillionTokens')}`
+  }
+  return `${min}-${max} ${t('modelHub.perMillionTokens')}`
+}
+
 function formatPerRequestPrice(price?: number | null, billingMode?: string | null, rate = 1): string {
   if (price === null || price === undefined) {
     return t('modelHub.pricingUnavailable')
@@ -616,7 +631,11 @@ function formatRequestTierLabel(tier: UserPricingInterval): string {
   return formatTokenRange(tier.min_tokens ?? 0, tier.max_tokens ?? null)
 }
 
-function getPricingBadges(model: SupportedModel, rate: number): PricingBadge[] {
+function getPricingBadges(model: SupportedModel, catalog: GroupModelCatalog): PricingBadge[] {
+  if (isDynamicCatalog(catalog)) {
+    return getDynamicPricingBadges(model, catalog)
+  }
+  const rate = catalog.effective_rate_multiplier
   const badges: PricingBadge[] = [
     {
       key: `rate:${model.id}`,
@@ -681,6 +700,119 @@ function getPricingBadges(model: SupportedModel, rate: number): PricingBadge[] {
   }
 
   return badges
+}
+
+function getDynamicPricingBadges(model: SupportedModel, catalog: GroupModelCatalog): PricingBadge[] {
+  const budget = catalog.group.dynamic_budget_multiplier ?? catalog.group.default_budget_multiplier
+  const minRate = catalog.group.dynamic_multiplier_min
+  const maxRate = catalog.group.dynamic_multiplier_max
+  const matchedRate = catalog.group.dynamic_budget_matched_multiplier
+  const badges: PricingBadge[] = [
+    {
+      key: `dynamic:${model.id}`,
+      text: t('modelHub.dynamicShort'),
+      tone: 'rate'
+    },
+  ]
+  if (budget !== null && budget !== undefined) {
+    badges.push({
+      key: `dynamic-budget:${model.id}`,
+      text: `${t('modelHub.budgetShort')} ${formatRateMultiplier(budget)}x`,
+      tone: 'rate'
+    })
+  }
+  if (minRate !== null && minRate !== undefined && maxRate !== null && maxRate !== undefined) {
+    badges.push({
+      key: `dynamic-range:${model.id}`,
+      text: `${t('modelHub.accountRateRangeShort')} ${formatRateRange(minRate, maxRate)}`,
+      tone: 'rate'
+    })
+  }
+  badges.push({
+    key: `dynamic-budget-match:${model.id}`,
+    text: `${t('modelHub.budgetMatchedRateShort')} ${matchedRate === null || matchedRate === undefined ? t('modelHub.noBudgetMatchedRate') : `${formatRateMultiplier(matchedRate)}x`}`,
+    tone: 'rate'
+  })
+
+  const pricing = model.pricing
+  if (!pricing || minRate === null || minRate === undefined || maxRate === null || maxRate === undefined) {
+    return badges
+  }
+  if (pricing.input_price !== undefined && pricing.input_price !== null) {
+    badges.push({
+      key: `dynamic-input:${model.id}`,
+      text: `${t('modelHub.inputPriceShort')} ${formatPerMillionPriceRange(pricing.input_price, minRate, maxRate)}`,
+      tone: 'input'
+    })
+  }
+  if (pricing.output_price !== undefined && pricing.output_price !== null) {
+    badges.push({
+      key: `dynamic-output:${model.id}`,
+      text: `${t('modelHub.outputPriceShort')} ${formatPerMillionPriceRange(pricing.output_price, minRate, maxRate)}`,
+      tone: 'output'
+    })
+  }
+  if (pricing.image_output_price !== undefined && pricing.image_output_price !== null) {
+    badges.push({
+      key: `dynamic-image-output:${model.id}`,
+      text: `${t('modelHub.imageOutputPriceShort')} ${formatPerMillionPriceRange(pricing.image_output_price, minRate, maxRate)}`,
+      tone: 'image'
+    })
+  }
+  if (matchedRate !== null && matchedRate !== undefined) {
+    if (pricing.input_price !== undefined && pricing.input_price !== null) {
+      badges.push({
+        key: `dynamic-input-reference:${model.id}`,
+        text: `${t('modelHub.budgetReferenceShort')} ${t('modelHub.inputPriceShort')} ${formatPerMillionPrice(pricing.input_price, matchedRate)}`,
+        tone: 'interval'
+      })
+    }
+    if (pricing.output_price !== undefined && pricing.output_price !== null) {
+      badges.push({
+        key: `dynamic-output-reference:${model.id}`,
+        text: `${t('modelHub.budgetReferenceShort')} ${t('modelHub.outputPriceShort')} ${formatPerMillionPrice(pricing.output_price, matchedRate)}`,
+        tone: 'interval'
+      })
+    }
+    if (pricing.image_output_price !== undefined && pricing.image_output_price !== null) {
+      badges.push({
+        key: `dynamic-image-reference:${model.id}`,
+        text: `${t('modelHub.budgetReferenceShort')} ${t('modelHub.imageOutputPriceShort')} ${formatPerMillionPrice(pricing.image_output_price, matchedRate)}`,
+        tone: 'interval'
+      })
+    }
+  }
+  return badges
+}
+
+function isDynamicCatalog(catalog: GroupModelCatalog): boolean {
+  return catalog.group.pricing_mode === 'dynamic'
+}
+
+function formatRateRange(minRate: number, maxRate: number): string {
+  const min = formatRateMultiplier(minRate)
+  const max = formatRateMultiplier(maxRate)
+  if (min === max) {
+    return `${min}x`
+  }
+  return `${min}x-${max}x`
+}
+
+function getCatalogPricingSummary(catalog: GroupModelCatalog): string {
+  if (!isDynamicCatalog(catalog)) {
+    return t('modelHub.pricingComputedWithRate', { rate: formatRateMultiplier(catalog.effective_rate_multiplier) })
+  }
+  const budget = catalog.group.dynamic_budget_multiplier ?? catalog.group.default_budget_multiplier
+  const budgetText = budget === null || budget === undefined ? '-' : formatRateMultiplier(budget)
+  const minRate = catalog.group.dynamic_multiplier_min
+  const maxRate = catalog.group.dynamic_multiplier_max
+  if (minRate === null || minRate === undefined || maxRate === null || maxRate === undefined) {
+    return t('modelHub.dynamicPricingSummaryNoRange', { budget: budgetText })
+  }
+  return t('modelHub.dynamicPricingSummary', {
+    budget: budgetText,
+    range: formatRateRange(minRate, maxRate)
+  })
 }
 
 function pricingBadgeClass(tone: PricingBadge['tone']): string {
@@ -837,6 +969,12 @@ function ensureCatalog(
       platform: group.platform as GroupPlatform,
       subscription_type: (group.subscription_type || 'standard') as SubscriptionType,
       rate_multiplier: group.rate_multiplier,
+      pricing_mode: group.pricing_mode === 'dynamic' ? 'dynamic' : 'fixed',
+      default_budget_multiplier: group.default_budget_multiplier ?? null,
+      dynamic_multiplier_min: group.dynamic_multiplier_min ?? null,
+      dynamic_multiplier_max: group.dynamic_multiplier_max ?? null,
+      dynamic_budget_multiplier: group.dynamic_budget_multiplier ?? group.default_budget_multiplier ?? null,
+      dynamic_budget_matched_multiplier: group.dynamic_budget_matched_multiplier ?? null,
     },
     source: 'default',
     user_rate_multiplier: userRate,

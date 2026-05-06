@@ -203,3 +203,84 @@ func TestListAvailable_OpenAIUnrestrictedChannelUsesDefaultModelCatalog(t *testi
 	require.Contains(t, names, "gpt-5.4")
 	require.Contains(t, names, "gpt-5.3-codex")
 }
+
+func TestListAvailable_DynamicGroupExposesBudgetAndMultiplierSummary(t *testing.T) {
+	budget := 8.0
+	channels := []Channel{{
+		ID:       1,
+		Name:     "dynamic",
+		Status:   StatusActive,
+		GroupIDs: []int64{10},
+	}}
+	groupRepo := &stubGroupRepoForAvailable{
+		activeGroups: []Group{{
+			ID:                      10,
+			Name:                    "OpenAI Dynamic",
+			Platform:                PlatformOpenAI,
+			Status:                  StatusActive,
+			RateMultiplier:          1,
+			PricingMode:             GroupPricingModeDynamic,
+			DefaultBudgetMultiplier: &budget,
+			AccountGroups: []AccountGroup{
+				{AccountID: 1, GroupID: 10, BillingMultiplier: 3, Account: &Account{Status: StatusActive, Schedulable: true}},
+				{AccountID: 2, GroupID: 10, BillingMultiplier: 12, Account: &Account{Status: StatusActive, Schedulable: true}},
+				{AccountID: 3, GroupID: 10, BillingMultiplier: 5, Account: &Account{Status: StatusDisabled, Schedulable: true}},
+				{AccountID: 4, GroupID: 10, BillingMultiplier: 8, Account: &Account{Status: StatusActive, Schedulable: true}},
+			},
+		}},
+	}
+	svc := newAvailableChannelService(channels, groupRepo)
+
+	out, err := svc.ListAvailable(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Len(t, out[0].Groups, 1)
+	group := out[0].Groups[0]
+	require.Equal(t, GroupPricingModeDynamic, group.PricingMode)
+	require.NotNil(t, group.DefaultBudgetMultiplier)
+	require.Equal(t, 8.0, *group.DefaultBudgetMultiplier)
+	require.NotNil(t, group.DynamicMultiplierMin)
+	require.NotNil(t, group.DynamicMultiplierMax)
+	require.Equal(t, 3.0, *group.DynamicMultiplierMin)
+	require.Equal(t, 12.0, *group.DynamicMultiplierMax)
+	require.Equal(t, 8.0, group.DynamicBudgetMultiplier)
+	require.NotNil(t, group.DynamicBudgetMatchedMultiplier)
+	require.Equal(t, 8.0, *group.DynamicBudgetMatchedMultiplier)
+}
+
+func TestListAvailable_DynamicGroupUsesSystemDefaultBudgetWhenGroupDefaultMissing(t *testing.T) {
+	channels := []Channel{{
+		ID:       1,
+		Name:     "dynamic",
+		Status:   StatusActive,
+		GroupIDs: []int64{10},
+	}}
+	groupRepo := &stubGroupRepoForAvailable{
+		activeGroups: []Group{{
+			ID:             10,
+			Name:           "OpenAI Dynamic",
+			Platform:       PlatformOpenAI,
+			Status:         StatusActive,
+			RateMultiplier: 1,
+			PricingMode:    GroupPricingModeDynamic,
+			AccountGroups: []AccountGroup{
+				{AccountID: 1, GroupID: 10, BillingMultiplier: 10, Account: &Account{Status: StatusActive, Schedulable: true}},
+				{AccountID: 2, GroupID: 10, BillingMultiplier: 12, Account: &Account{Status: StatusActive, Schedulable: true}},
+			},
+		}},
+	}
+	svc := newAvailableChannelService(channels, groupRepo)
+
+	out, err := svc.ListAvailable(context.Background())
+
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	group := out[0].Groups[0]
+	require.Equal(t, DefaultBudgetMultiplier, group.DynamicBudgetMultiplier)
+	require.Nil(t, group.DynamicBudgetMatchedMultiplier)
+	require.NotNil(t, group.DynamicMultiplierMin)
+	require.NotNil(t, group.DynamicMultiplierMax)
+	require.Equal(t, 10.0, *group.DynamicMultiplierMin)
+	require.Equal(t, 12.0, *group.DynamicMultiplierMax)
+}

@@ -46,6 +46,34 @@ func TestGroupRepoSuite(t *testing.T) {
 	suite.Run(t, new(GroupRepoSuite))
 }
 
+func (s *GroupRepoSuite) insertAccount(name, platform, status string, schedulable bool) int64 {
+	var id int64
+	s.Require().NoError(scanSingleRow(
+		s.ctx,
+		s.tx,
+		"INSERT INTO accounts (name, platform, type, status, schedulable) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+		[]any{name, platform, service.AccountTypeOAuth, status, schedulable},
+		&id,
+	))
+	return id
+}
+
+func (s *GroupRepoSuite) insertAccountGroup(accountID, groupID int64, priority int, billingMultiplier float64) {
+	_, err := s.tx.ExecContext(
+		s.ctx,
+		"INSERT INTO account_groups (account_id, group_id, priority, billing_multiplier, created_at) VALUES ($1, $2, $3, $4, NOW())",
+		accountID,
+		groupID,
+		priority,
+		billingMultiplier,
+	)
+	s.Require().NoError(err)
+}
+
+func float64Pointer(v float64) *float64 {
+	return &v
+}
+
 // --- Create / GetByID / Update / Delete ---
 
 func (s *GroupRepoSuite) TestCreate() {
@@ -531,6 +559,43 @@ func (s *GroupRepoSuite) TestListActive() {
 		}
 	}
 	s.Require().True(found, "active1 group should be in results")
+}
+
+func (s *GroupRepoSuite) TestListActiveLoadsOnlyActiveSchedulableAccountGroupBillingMultipliers() {
+	group := &service.Group{
+		Name:                    "dynamic-list-active",
+		Platform:                service.PlatformOpenAI,
+		RateMultiplier:          1.0,
+		IsExclusive:             false,
+		Status:                  service.StatusActive,
+		SubscriptionType:        service.SubscriptionTypeStandard,
+		PricingMode:             service.GroupPricingModeDynamic,
+		DefaultBudgetMultiplier: float64Pointer(8),
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, group))
+
+	activeSchedulableID := s.insertAccount("active-schedulable", service.PlatformOpenAI, service.StatusActive, true)
+	disabledID := s.insertAccount("disabled", service.PlatformOpenAI, service.StatusDisabled, true)
+	unschedulableID := s.insertAccount("unschedulable", service.PlatformOpenAI, service.StatusActive, false)
+	s.insertAccountGroup(activeSchedulableID, group.ID, 1, 3)
+	s.insertAccountGroup(disabledID, group.ID, 2, 12)
+	s.insertAccountGroup(unschedulableID, group.ID, 3, 8)
+
+	groups, err := s.repo.ListActive(s.ctx)
+
+	s.Require().NoError(err)
+	var got *service.Group
+	for i := range groups {
+		if groups[i].ID == group.ID {
+			got = &groups[i]
+			break
+		}
+	}
+	s.Require().NotNil(got)
+	s.Require().Len(got.AccountGroups, 1)
+	s.Require().Equal(activeSchedulableID, got.AccountGroups[0].AccountID)
+	s.Require().Equal(group.ID, got.AccountGroups[0].GroupID)
+	s.Require().Equal(3.0, got.AccountGroups[0].BillingMultiplier)
 }
 
 func (s *GroupRepoSuite) TestListActiveByPlatform() {

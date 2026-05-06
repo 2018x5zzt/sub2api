@@ -16,6 +16,13 @@ export interface UserAvailableGroup {
   rate_multiplier: number
   /** true = 专属分组（小范围授权）；false = 公开分组。 */
   is_exclusive: boolean
+  /** fixed | dynamic. Dynamic groups use account binding multipliers for billing. */
+  pricing_mode?: 'fixed' | 'dynamic'
+  default_budget_multiplier?: number | null
+  dynamic_multiplier_min?: number | null
+  dynamic_multiplier_max?: number | null
+  dynamic_budget_multiplier?: number | null
+  dynamic_budget_matched_multiplier?: number | null
 }
 
 export interface UserPricingInterval {

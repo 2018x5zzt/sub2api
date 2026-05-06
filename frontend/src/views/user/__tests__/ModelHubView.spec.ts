@@ -27,6 +27,14 @@ const messages: Record<string, string> = {
   'modelHub.sourceMapping': 'Account mapping aggregate',
   'modelHub.sourceMixed': 'Defaults + account mappings',
   'modelHub.pricingComputedWithRate': 'Prices include {rate}x',
+  'modelHub.dynamicPricingSummary': 'Dynamic billing · Budget {budget}x · Account rates {range} · Actual billing uses the dispatched account rate',
+  'modelHub.dynamicPricingSummaryNoRange': 'Dynamic billing · Budget {budget}x · Account rates unavailable · Actual billing uses the dispatched account rate',
+  'modelHub.dynamicShort': 'Dynamic',
+  'modelHub.budgetShort': 'Budget',
+  'modelHub.accountRateRangeShort': 'Account rates',
+  'modelHub.budgetReferenceShort': 'Budget reference',
+  'modelHub.budgetMatchedRateShort': 'Budget priority',
+  'modelHub.noBudgetMatchedRate': 'None',
   'modelHub.rateShort': 'Rate',
   'modelHub.inputPriceShort': 'Input',
   'modelHub.outputPriceShort': 'Output',
@@ -247,5 +255,79 @@ describe('ModelHubView pricing display', () => {
     const text = wrapper.text()
     expect(text).toContain('Image output $20.00 / 1M tokens')
     expect(text).not.toContain('Pricing unavailable')
+  })
+
+  it('shows dynamic groups as a multiplier range with default budget reference', async () => {
+    getAvailable.mockResolvedValue([
+      {
+        name: 'Dynamic',
+        description: '',
+        platforms: [
+          {
+            platform: 'openai',
+            groups: [
+              {
+                id: 10,
+                name: 'Dynamic',
+                platform: 'openai',
+                subscription_type: 'standard',
+                rate_multiplier: 1,
+                is_exclusive: false,
+                pricing_mode: 'dynamic',
+                default_budget_multiplier: 8,
+                dynamic_multiplier_min: 3,
+                dynamic_multiplier_max: 12,
+                dynamic_budget_multiplier: 8,
+                dynamic_budget_matched_multiplier: 8,
+              },
+            ],
+            supported_models: [
+              {
+                name: 'gpt-image-demo',
+                platform: 'openai',
+                pricing: {
+                  billing_mode: 'token',
+                  input_price: 0.000003,
+                  output_price: 0.000015,
+                  cache_write_price: null,
+                  cache_read_price: null,
+                  image_output_price: null,
+                  per_request_price: null,
+                  intervals: [],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ])
+    getUserGroupRates.mockResolvedValue({})
+
+    const wrapper = mount(ModelHubView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          EmptyState: true,
+          GroupBadge: GroupBadgeStub,
+          Icon: true,
+          LoadingSpinner: true,
+          ModelIcon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('Dynamic billing · Budget 8x · Account rates 3x-12x')
+    expect(text).toContain('Dynamic')
+    expect(text).toContain('Budget 8x')
+    expect(text).toContain('Account rates 3x-12x')
+    expect(text).toContain('Budget priority 8x')
+    expect(text).toContain('Input $9.00-$36.00 / 1M tokens')
+    expect(text).toContain('Output $45.00-$180.00 / 1M tokens')
+    expect(text).toContain('Budget reference Input $24.00 / 1M tokens')
+    expect(text).not.toContain('Rate 1x')
+    expect(text).not.toContain('Input $3.00 / 1M tokens')
   })
 })
