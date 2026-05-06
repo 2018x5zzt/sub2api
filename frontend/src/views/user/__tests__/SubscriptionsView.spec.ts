@@ -192,7 +192,9 @@ describe('SubscriptionsView product subscriptions', () => {
     expect(text).toContain('pro pool')
     expect(text).toContain('1.5x')
     expect(text).toContain('激活后建议新建分组专用 API Key')
-    await wrapper.get('button').trigger('click')
+    const keyButton = wrapper.findAll('button').find((button) => button.text().includes('去生成 API Key'))
+    expect(keyButton).toBeTruthy()
+    await keyButton!.trigger('click')
     expect(routerPush).toHaveBeenCalledWith('/keys')
   })
 
@@ -265,7 +267,7 @@ describe('SubscriptionsView product subscriptions', () => {
     await vm.saveBalanceFallbackSettings()
     expect(updateProfileMock).not.toHaveBeenCalled()
     expect(showError).toHaveBeenCalled()
-    expect(vm.fallbackEnabled).toBe(false)
+    expect(vm.fallbackEnabled).toBe(true)
 
     showError.mockClear()
     vm.fallbackEnabled = true
@@ -277,6 +279,131 @@ describe('SubscriptionsView product subscriptions', () => {
       subscription_balance_fallback_enabled: true,
       subscription_balance_fallback_limit_usd: 12,
       subscription_balance_fallback_group_id: 11
+    })
+  })
+
+  it('lets a first-time user enable fallback locally before choosing group and limit', async () => {
+    authStore.user = {
+      subscription_balance_fallback_enabled: false,
+      subscription_balance_fallback_limit_usd: 0,
+      subscription_balance_fallback_used_usd: 0,
+      subscription_balance_fallback_group_id: null
+    }
+    authStore.refreshUser.mockResolvedValue(authStore.user)
+    getAvailableGroups.mockResolvedValue([
+      { id: 11, name: 'Balance Pool', status: 'active', subscription_type: 'standard' }
+    ])
+
+    const wrapper = mount(SubscriptionsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const toggle = wrapper.get('input[type="checkbox"]')
+    await toggle.setValue(true)
+    await flushPromises()
+
+    expect(updateProfileMock).not.toHaveBeenCalled()
+    expect(showError).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('Balance Pool')
+    expect((wrapper.vm as any).fallbackEnabled).toBe(true)
+  })
+
+  it('validates enabled fallback only when the user saves', async () => {
+    authStore.user = {
+      subscription_balance_fallback_enabled: false,
+      subscription_balance_fallback_limit_usd: 0,
+      subscription_balance_fallback_used_usd: 0,
+      subscription_balance_fallback_group_id: null
+    }
+    authStore.refreshUser.mockResolvedValue(authStore.user)
+    getAvailableGroups.mockResolvedValue([
+      { id: 11, name: 'Balance Pool', status: 'active', subscription_type: 'standard' }
+    ])
+
+    const wrapper = mount(SubscriptionsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as {
+      fallbackEnabled: boolean
+      fallbackLimit: number
+      fallbackGroupId: number | null
+      saveBalanceFallbackSettings: () => Promise<void>
+    }
+
+    vm.fallbackEnabled = true
+    vm.fallbackLimit = 12
+    vm.fallbackGroupId = null
+    await vm.saveBalanceFallbackSettings()
+
+    expect(updateProfileMock).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalled()
+    expect(vm.fallbackEnabled).toBe(true)
+
+    showError.mockClear()
+    vm.fallbackGroupId = 11
+    vm.fallbackLimit = 0
+    await vm.saveBalanceFallbackSettings()
+
+    expect(updateProfileMock).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalled()
+    expect(vm.fallbackEnabled).toBe(true)
+  })
+
+  it('saves disabled fallback explicitly and clears the fallback group', async () => {
+    authStore.user = {
+      subscription_balance_fallback_enabled: true,
+      subscription_balance_fallback_limit_usd: 12,
+      subscription_balance_fallback_used_usd: 3.5,
+      subscription_balance_fallback_group_id: 11
+    }
+    authStore.refreshUser.mockResolvedValue(authStore.user)
+    getAvailableGroups.mockResolvedValue([
+      { id: 11, name: 'Balance Pool', status: 'active', subscription_type: 'standard' }
+    ])
+    updateProfileMock.mockResolvedValue({
+      subscription_balance_fallback_enabled: false,
+      subscription_balance_fallback_limit_usd: 12,
+      subscription_balance_fallback_used_usd: 3.5,
+      subscription_balance_fallback_group_id: null
+    })
+
+    const wrapper = mount(SubscriptionsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const vm = wrapper.vm as unknown as {
+      fallbackEnabled: boolean
+      saveBalanceFallbackSettings: () => Promise<void>
+    }
+    vm.fallbackEnabled = false
+    await vm.saveBalanceFallbackSettings()
+
+    expect(updateProfileMock).toHaveBeenCalledWith({
+      subscription_balance_fallback_enabled: false,
+      subscription_balance_fallback_limit_usd: 12,
+      subscription_balance_fallback_group_id: null
     })
   })
 

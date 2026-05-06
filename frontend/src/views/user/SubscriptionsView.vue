@@ -33,7 +33,6 @@
                   type="checkbox"
                   class="peer sr-only"
                   :disabled="savingFallback"
-                  @change="saveBalanceFallbackSettings"
                 />
                 <div class="h-6 w-11 rounded-full bg-gray-200 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-all peer-checked:bg-emerald-500 peer-checked:after:translate-x-full peer-disabled:opacity-50 dark:bg-dark-600 dark:after:bg-dark-300 dark:peer-checked:bg-emerald-600" />
               </div>
@@ -52,7 +51,6 @@
                   v-model.number="fallbackGroupId"
                   class="input"
                   :disabled="savingFallback"
-                  @change="saveBalanceFallbackSettings"
                 >
                   <option :value="null">{{ t('userSubscriptions.balanceFallback.selectGroup', 'Select balance group') }}</option>
                   <option
@@ -77,7 +75,6 @@
                     step="0.01"
                     class="input pl-7"
                     :disabled="savingFallback"
-                    @blur="saveBalanceFallbackSettings"
                   />
                 </div>
               </label>
@@ -91,6 +88,44 @@
             <p class="mt-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
               {{ t('userSubscriptions.balanceFallback.negativeBalanceHint', 'If your balance becomes negative, future requests will be blocked until you recharge.') }}
             </p>
+            <div class="mt-4 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                :disabled="savingFallback"
+                @click="saveBalanceFallbackSettings"
+              >
+                {{ savingFallback ? t('common.saving', 'Saving...') : t('common.save', 'Save') }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm"
+                :disabled="savingFallback"
+                @click="resetBalanceFallbackForm"
+              >
+                {{ t('common.cancel', 'Cancel') }}
+              </button>
+            </div>
+          </div>
+          <div v-else class="border-t border-gray-100 bg-gray-50/50 px-5 py-4 dark:border-dark-700 dark:bg-dark-800/50">
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                :disabled="savingFallback"
+                @click="saveBalanceFallbackSettings"
+              >
+                {{ savingFallback ? t('common.saving', 'Saving...') : t('common.save', 'Save') }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm"
+                :disabled="savingFallback"
+                @click="resetBalanceFallbackForm"
+              >
+                {{ t('common.cancel', 'Cancel') }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -477,18 +512,22 @@ async function loadSubscriptions() {
   }
 }
 
+function resetBalanceFallbackForm() {
+  fallbackEnabled.value = Boolean(authStore.user?.subscription_balance_fallback_enabled)
+  fallbackLimit.value = authStore.user?.subscription_balance_fallback_limit_usd || 0
+  fallbackGroupId.value = authStore.user?.subscription_balance_fallback_group_id || null
+}
+
 async function saveBalanceFallbackSettings() {
   const hasPositiveLimit = (fallbackLimit.value || 0) > 0
   const hasFallbackGroup = !!fallbackGroupId.value
 
   if (fallbackEnabled.value && !hasFallbackGroup) {
     appStore.showError(t('userSubscriptions.balanceFallback.groupRequired', 'Please select a balance group'))
-    fallbackEnabled.value = false
     return
   }
   if (fallbackEnabled.value && !hasPositiveLimit) {
     appStore.showError(t('userSubscriptions.balanceFallback.limitRequired', 'Please set a positive fallback limit'))
-    fallbackEnabled.value = false
     return
   }
   savingFallback.value = true
@@ -509,9 +548,7 @@ async function saveBalanceFallbackSettings() {
   } catch (error) {
     console.error('Failed to save subscription balance fallback:', error)
     appStore.showError(t('common.error'))
-    fallbackEnabled.value = Boolean(authStore.user?.subscription_balance_fallback_enabled)
-    fallbackLimit.value = authStore.user?.subscription_balance_fallback_limit_usd || 0
-    fallbackGroupId.value = authStore.user?.subscription_balance_fallback_group_id || null
+    resetBalanceFallbackForm()
   } finally {
     savingFallback.value = false
   }
