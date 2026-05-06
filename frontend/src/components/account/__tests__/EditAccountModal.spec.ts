@@ -17,7 +17,7 @@ vi.mock('@/stores/app', () => ({
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({
-    isSimpleMode: true
+    isSimpleMode: false
   })
 }))
 
@@ -136,18 +136,19 @@ function buildAccount() {
     rate_multiplier: 1,
     status: 'active',
     group_ids: [],
+    account_groups: [],
     expires_at: null,
     auto_pause_on_expired: false
   } as any
 }
 
-function mountModal(account = buildAccount()) {
+function mountModal(account = buildAccount(), groups: any[] = []) {
   return mount(EditAccountModal, {
     props: {
       show: true,
       account,
       proxies: [],
-      groups: []
+      groups
     },
     global: {
       stubs: {
@@ -215,5 +216,38 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.compact_model_mapping).toEqual({
       'gpt-5.4': 'gpt-5.4-openai-compact'
     })
+  })
+
+  it('submits billing multipliers for dynamic group bindings', async () => {
+    const account = buildAccount()
+    account.group_ids = [101, 202]
+    account.account_groups = [
+      { account_id: 1, group_id: 101, priority: 1, billing_multiplier: 7.5 },
+      { account_id: 1, group_id: 202, priority: 2, billing_multiplier: 1 }
+    ]
+    const groups = [
+      { id: 101, name: 'Dynamic Pool', platform: 'openai', pricing_mode: 'dynamic', rate_multiplier: 1 },
+      { id: 202, name: 'Fixed Pool', platform: 'openai', pricing_mode: 'fixed', rate_multiplier: 2 }
+    ]
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account, groups)
+
+    const dynamicInput = wrapper.get('[data-testid="group-billing-multiplier-101"]')
+    expect((dynamicInput.element as HTMLInputElement).value).toBe('7.5')
+    expect(wrapper.find('[data-testid="group-billing-multiplier-202"]').exists()).toBe(false)
+
+    await dynamicInput.setValue('9.25')
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.group_ids).toEqual([101, 202])
+    expect(updateAccountMock.mock.calls[0]?.[1]?.group_bindings).toEqual([
+      { group_id: 101, billing_multiplier: 9.25 },
+      { group_id: 202 }
+    ])
   })
 })

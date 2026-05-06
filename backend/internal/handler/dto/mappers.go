@@ -177,6 +177,8 @@ func groupFromServiceBase(g *service.Group) Group {
 		RateMultiplier:                  g.RateMultiplier,
 		IsExclusive:                     g.IsExclusive,
 		Status:                          g.Status,
+		PricingMode:                     g.PricingMode,
+		DefaultBudgetMultiplier:         g.DefaultBudgetMultiplier,
 		SubscriptionType:                g.SubscriptionType,
 		DailyLimitUSD:                   g.DailyLimitUSD,
 		WeeklyLimitUSD:                  g.WeeklyLimitUSD,
@@ -397,12 +399,13 @@ func AccountGroupFromService(ag *service.AccountGroup) *AccountGroup {
 		return nil
 	}
 	return &AccountGroup{
-		AccountID: ag.AccountID,
-		GroupID:   ag.GroupID,
-		Priority:  ag.Priority,
-		CreatedAt: ag.CreatedAt,
-		Account:   AccountFromServiceShallow(ag.Account),
-		Group:     GroupFromServiceShallow(ag.Group),
+		AccountID:         ag.AccountID,
+		GroupID:           ag.GroupID,
+		Priority:          ag.Priority,
+		BillingMultiplier: ag.EffectiveBillingMultiplier(),
+		CreatedAt:         ag.CreatedAt,
+		Account:           AccountFromServiceShallow(ag.Account),
+		Group:             GroupFromServiceShallow(ag.Group),
 	}
 }
 

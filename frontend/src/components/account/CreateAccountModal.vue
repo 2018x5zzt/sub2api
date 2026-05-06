@@ -2744,6 +2744,43 @@
           :mixed-scheduling="mixedScheduling"
           data-tour="account-form-groups"
         />
+
+        <div
+          v-if="!authStore.isSimpleMode && selectedGroupBillingConfigs.length > 0"
+          class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+        >
+          <div class="mb-3">
+            <h4 class="text-sm font-semibold text-gray-900 dark:text-white">分组扣费乘数</h4>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              仅动态倍率分组会影响该账号在该分组下的扣费倍数。
+            </p>
+          </div>
+          <div class="space-y-3">
+            <div
+              v-for="config in selectedGroupBillingConfigs"
+              :key="config.groupId"
+              class="flex items-center justify-between gap-3 rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-700/50"
+            >
+              <div class="min-w-0">
+                <div class="truncate text-sm font-medium text-gray-900 dark:text-white">
+                  {{ config.groupName }}
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                  Group ID: {{ config.groupId }}
+                </div>
+              </div>
+              <input
+                :data-testid="`group-billing-multiplier-${config.groupId}`"
+                type="number"
+                step="0.001"
+                min="0.001"
+                :value="config.billingMultiplier"
+                @input="setGroupBillingMultiplier(config.groupId, ($event.target as HTMLInputElement).value)"
+                class="w-28 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-800"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
     </form>
@@ -3496,6 +3533,69 @@ const form = reactive({
   expires_at: null as number | null
 })
 
+const DEFAULT_GROUP_BILLING_MULTIPLIER = '1'
+const groupBillingMultipliers = reactive<Record<number, string>>({})
+
+const selectedGroupBillingConfigs = computed(() =>
+  form.group_ids
+    .map((groupId) => {
+      const group = props.groups.find((item) => item.id === groupId)
+      if (group?.pricing_mode !== 'dynamic') {
+        return null
+      }
+      return {
+        groupId,
+        groupName: group.name || `#${groupId}`,
+        billingMultiplier: groupBillingMultipliers[groupId] ?? DEFAULT_GROUP_BILLING_MULTIPLIER
+      }
+    })
+    .filter((item): item is { groupId: number; groupName: string; billingMultiplier: string } => item !== null)
+)
+
+const syncSelectedGroupBillingMultipliers = (groupIDs: number[]) => {
+  for (const groupID of groupIDs) {
+    if (!groupBillingMultipliers[groupID]) {
+      groupBillingMultipliers[groupID] = DEFAULT_GROUP_BILLING_MULTIPLIER
+    }
+  }
+}
+
+const setGroupBillingMultiplier = (groupID: number, value: string) => {
+  groupBillingMultipliers[groupID] = value
+}
+
+const buildGroupBindingsPayload = () =>
+  form.group_ids.map((groupId) => {
+    const group = props.groups.find((item) => item.id === groupId)
+    const rawValue = (groupBillingMultipliers[groupId] ?? DEFAULT_GROUP_BILLING_MULTIPLIER).trim()
+    const parsed = Number.parseFloat(rawValue)
+    return {
+      group_id: groupId,
+      ...(group?.pricing_mode === 'dynamic' && Number.isFinite(parsed) && parsed > 0 && Math.abs(parsed - 1) > 1e-9
+        ? { billing_multiplier: parsed }
+        : {})
+    }
+  })
+
+const validateGroupBillingMultipliers = () => {
+  for (const config of selectedGroupBillingConfigs.value) {
+    const rawValue = (groupBillingMultipliers[config.groupId] ?? DEFAULT_GROUP_BILLING_MULTIPLIER).trim()
+    const parsed = Number.parseFloat(rawValue)
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      appStore.showError(`分组 ${config.groupId} 的扣费乘数必须大于 0`)
+      return false
+    }
+  }
+  return true
+}
+
+watch(
+  () => form.group_ids.slice(),
+  (groupIDs) => {
+    syncSelectedGroupBillingMultipliers(groupIDs)
+  }
+)
+
 // Helper to check if current type needs OAuth flow
 const isOAuthFlow = computed(() => {
   // Antigravity upstream 类型不需要 OAuth 流程
@@ -4005,6 +4105,9 @@ const resetForm = () => {
   form.priority = 1
   form.rate_multiplier = 1
   form.group_ids = []
+  for (const key of Object.keys(groupBillingMultipliers)) {
+    delete groupBillingMultipliers[Number(key)]
+  }
   form.expires_at = null
   accountCategory.value = 'oauth-based'
   addMethod.value = 'oauth'
@@ -4240,6 +4343,10 @@ const handleVertexServiceAccountDrop = async (event: DragEvent) => {
 }
 
 const handleSubmit = async () => {
+  if (!validateGroupBillingMultipliers()) {
+    return
+  }
+
   // For OAuth-based type, handle OAuth flow (goes to step 2)
   if (isOAuthFlow.value) {
     if (!form.name.trim()) {
@@ -4434,7 +4541,7 @@ const handleSubmit = async () => {
 
   await doCreateAccount({
     ...form,
-    group_ids: form.group_ids,
+    group_bindings: buildGroupBindingsPayload(),
     extra,
     auto_pause_on_expired: autoPauseOnExpired.value
   })
@@ -4543,7 +4650,7 @@ const createAccountAndFinish = async (
     load_factor: form.load_factor ?? undefined,
     priority: form.priority,
     rate_multiplier: form.rate_multiplier,
-    group_ids: form.group_ids,
+    group_bindings: buildGroupBindingsPayload(),
     expires_at: form.expires_at,
     auto_pause_on_expired: autoPauseOnExpired.value
   })
@@ -4610,7 +4717,7 @@ const handleOpenAIExchange = async (authCode: string) => {
         load_factor: form.load_factor ?? undefined,
         priority: form.priority,
         rate_multiplier: form.rate_multiplier,
-        group_ids: form.group_ids,
+        group_bindings: buildGroupBindingsPayload(),
         expires_at: form.expires_at,
         auto_pause_on_expired: autoPauseOnExpired.value
       })
@@ -4707,7 +4814,7 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
             load_factor: form.load_factor ?? undefined,
             priority: form.priority,
             rate_multiplier: form.rate_multiplier,
-            group_ids: form.group_ids,
+            group_bindings: buildGroupBindingsPayload(),
             expires_at: form.expires_at,
             auto_pause_on_expired: autoPauseOnExpired.value
           })
@@ -4805,7 +4912,7 @@ const handleAntigravityValidateRT = async (refreshTokenInput: string) => {
           load_factor: form.load_factor ?? undefined,
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,
-          group_ids: form.group_ids,
+          group_bindings: buildGroupBindingsPayload(),
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })
@@ -5146,7 +5253,7 @@ const handleCookieAuth = async (sessionKey: string) => {
           load_factor: form.load_factor ?? undefined,
           priority: form.priority,
           rate_multiplier: form.rate_multiplier,
-          group_ids: form.group_ids,
+          group_bindings: buildGroupBindingsPayload(),
           expires_at: form.expires_at,
           auto_pause_on_expired: autoPauseOnExpired.value
         })

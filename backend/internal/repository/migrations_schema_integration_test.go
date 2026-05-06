@@ -84,6 +84,12 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 
 	// account_groups: created_at should be timestamptz
 	requireColumn(t, tx, "account_groups", "created_at", "timestamp with time zone", 0, false)
+	requireColumn(t, tx, "account_groups", "billing_multiplier", "numeric", 0, false)
+
+	// groups: dynamic pricing fields
+	requireColumn(t, tx, "groups", "pricing_mode", "character varying", 20, false)
+	requireColumn(t, tx, "groups", "default_budget_multiplier", "numeric", 0, true)
+	requireIndex(t, tx, "groups", "idx_groups_pricing_mode")
 
 	// user_allowed_groups: created_at should be timestamptz
 	requireColumn(t, tx, "user_allowed_groups", "created_at", "timestamp with time zone", 0, false)

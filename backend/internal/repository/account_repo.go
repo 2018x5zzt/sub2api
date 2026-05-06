@@ -853,10 +853,19 @@ func (r *accountRepository) GetGroups(ctx context.Context, accountID int64) ([]s
 }
 
 func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
+	bindings := make([]service.AccountGroupBindingInput, 0, len(groupIDs))
+	for _, groupID := range groupIDs {
+		bindings = append(bindings, service.AccountGroupBindingInput{GroupID: groupID})
+	}
+	return r.BindGroupBindings(ctx, accountID, bindings)
+}
+
+func (r *accountRepository) BindGroupBindings(ctx context.Context, accountID int64, bindings []service.AccountGroupBindingInput) error {
 	existingGroupIDs, err := r.loadAccountGroupIDs(ctx, accountID)
 	if err != nil {
 		return err
 	}
+	normalizedBindings := normalizeAccountGroupBindings(bindings)
 	// 使用事务保证删除旧绑定与创建新绑定的原子性
 	tx, err := r.client.Tx(ctx)
 	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
@@ -876,20 +885,23 @@ func (r *accountRepository) BindGroups(ctx context.Context, accountID int64, gro
 		return err
 	}
 
-	if len(groupIDs) == 0 {
+	if len(normalizedBindings) == 0 {
 		if tx != nil {
 			return tx.Commit()
 		}
 		return nil
 	}
 
-	builders := make([]*dbent.AccountGroupCreate, 0, len(groupIDs))
-	for i, groupID := range groupIDs {
-		builders = append(builders, txClient.AccountGroup.Create().
+	groupIDs := make([]int64, 0, len(normalizedBindings))
+	builders := make([]*dbent.AccountGroupCreate, 0, len(normalizedBindings))
+	for i, binding := range normalizedBindings {
+		groupIDs = append(groupIDs, binding.GroupID)
+		builder := txClient.AccountGroup.Create().
 			SetAccountID(accountID).
-			SetGroupID(groupID).
-			SetPriority(i+1),
-		)
+			SetGroupID(binding.GroupID).
+			SetPriority(i + 1).
+			SetBillingMultiplier(binding.EffectiveBillingMultiplier())
+		builders = append(builders, builder)
 	}
 
 	if _, err := txClient.AccountGroup.CreateBulk(builders...).Save(ctx); err != nil {
@@ -1680,6 +1692,26 @@ func (r *accountRepository) loadAccountGroupIDs(ctx context.Context, accountID i
 		ids = append(ids, entry.GroupID)
 	}
 	return ids, nil
+}
+
+func normalizeAccountGroupBindings(bindings []service.AccountGroupBindingInput) []service.AccountGroupBindingInput {
+	if len(bindings) == 0 {
+		return nil
+	}
+	seen := make(map[int64]int, len(bindings))
+	normalized := make([]service.AccountGroupBindingInput, 0, len(bindings))
+	for _, binding := range bindings {
+		if binding.GroupID <= 0 {
+			continue
+		}
+		if idx, exists := seen[binding.GroupID]; exists {
+			normalized[idx].BillingMultiplier = binding.BillingMultiplier
+			continue
+		}
+		seen[binding.GroupID] = len(normalized)
+		normalized = append(normalized, binding)
+	}
+	return normalized
 }
 
 func mergeGroupIDs(a []int64, b []int64) []int64 {

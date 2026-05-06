@@ -490,6 +490,8 @@ export interface Group {
   description: string | null
   platform: GroupPlatform
   rate_multiplier: number
+  pricing_mode?: 'fixed' | 'dynamic'
+  default_budget_multiplier?: number | null
   rpm_limit?: number // Group-level RPM cap (0 = unlimited); overrides user-level rpm_limit when set
   is_exclusive: boolean
   status: 'active' | 'inactive'
@@ -798,6 +800,7 @@ export interface Account {
   updated_at: string
   proxy?: Proxy
   group_ids?: number[] // Groups this account belongs to
+  account_groups?: AccountGroup[]
   groups?: Group[] // Preloaded group objects
 
   // Rate limit & scheduling fields
@@ -865,6 +868,19 @@ export interface Account {
   current_window_cost?: number | null // 当前窗口费用
   active_sessions?: number | null // 当前活跃会话数
   current_rpm?: number | null // 当前分钟 RPM 计数
+}
+
+export interface AccountGroup {
+  account_id: number
+  group_id: number
+  priority: number
+  billing_multiplier: number
+  created_at?: string
+}
+
+export interface AccountGroupBindingRequest {
+  group_id: number
+  billing_multiplier?: number
 }
 
 // Account Usage types
@@ -974,6 +990,7 @@ export interface CreateAccountRequest {
   priority?: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
   group_ids?: number[]
+  group_bindings?: AccountGroupBindingRequest[]
   expires_at?: number | null
   auto_pause_on_expired?: boolean
   confirm_mixed_channel_risk?: boolean
@@ -993,6 +1010,7 @@ export interface UpdateAccountRequest {
   schedulable?: boolean
   status?: 'active' | 'inactive' | 'error'
   group_ids?: number[]
+  group_bindings?: AccountGroupBindingRequest[]
   expires_at?: number | null
   auto_pause_on_expired?: boolean
   confirm_mixed_channel_risk?: boolean

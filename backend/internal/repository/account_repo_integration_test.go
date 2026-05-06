@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -89,6 +90,34 @@ func (s *AccountRepoSuite) SetupTest() {
 
 func TestAccountRepoSuite(t *testing.T) {
 	suite.Run(t, new(AccountRepoSuite))
+}
+
+func mustInsertMinimalGroup(t *testing.T, exec interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, name string) int64 {
+	t.Helper()
+
+	rows, err := exec.QueryContext(context.Background(), `
+		INSERT INTO groups (name, rate_multiplier, is_exclusive, status, created_at, updated_at)
+		VALUES ($1, 1, false, 'active', NOW(), NOW())
+		RETURNING id
+	`, name)
+	if err != nil {
+		t.Fatalf("insert minimal group: %v", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		t.Fatalf("insert minimal group: no id returned")
+	}
+	var id int64
+	if err := rows.Scan(&id); err != nil {
+		t.Fatalf("scan minimal group id: %v", err)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("insert minimal group rows: %v", err)
+	}
+	return id
 }
 
 // --- Create / GetByID / Update / Delete ---
@@ -196,6 +225,28 @@ func (s *AccountRepoSuite) TestDelete_WithGroupBindings() {
 	count, err := s.client.AccountGroup.Query().Where(accountgroup.AccountIDEQ(account.ID)).Count(s.ctx)
 	s.Require().NoError(err)
 	s.Require().Zero(count, "expected bindings to be removed")
+}
+
+func (s *AccountRepoSuite) TestBindGroupBindings_PersistsBillingMultiplier() {
+	groupAID := mustInsertMinimalGroup(s.T(), s.repo.sql, "binding-a")
+	groupBID := mustInsertMinimalGroup(s.T(), s.repo.sql, "binding-b")
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-billing-bindings"})
+
+	multiplierA := 8.5
+	err := s.repo.BindGroupBindings(s.ctx, account.ID, []service.AccountGroupBindingInput{
+		{GroupID: groupAID, BillingMultiplier: &multiplierA},
+		{GroupID: groupBID},
+	})
+	s.Require().NoError(err)
+
+	got, err := s.repo.GetByID(s.ctx, account.ID)
+	s.Require().NoError(err)
+	s.Require().Equal([]int64{groupAID, groupBID}, got.GroupIDs)
+	s.Require().Len(got.AccountGroups, 2)
+	s.Require().Equal(groupAID, got.AccountGroups[0].GroupID)
+	s.Require().InDelta(8.5, got.AccountGroups[0].BillingMultiplier, 0.0001)
+	s.Require().Equal(groupBID, got.AccountGroups[1].GroupID)
+	s.Require().InDelta(1.0, got.AccountGroups[1].BillingMultiplier, 0.0001)
 }
 
 // --- List / ListWithFilters ---
