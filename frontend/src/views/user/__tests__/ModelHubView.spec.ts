@@ -30,6 +30,7 @@ const messages: Record<string, string> = {
   'modelHub.rateShort': 'Rate',
   'modelHub.inputPriceShort': 'Input',
   'modelHub.outputPriceShort': 'Output',
+  'modelHub.imageOutputPriceShort': 'Image output',
   'modelHub.defaultPriceShort': 'Default',
   'modelHub.perMillionTokens': '/ 1M tokens',
   'modelHub.perRequest': '/ request',
@@ -186,5 +187,65 @@ describe('ModelHubView pricing display', () => {
     expect(text).toContain('0-128K Input $8.00 / 1M tokens · Output $40.00 / 1M tokens')
     expect(text).toContain('Default $0.04 / request')
     expect(text).not.toContain('$0.000003 / 1M tokens')
+  })
+
+  it('shows image output token prices instead of pricing unavailable', async () => {
+    getAvailable.mockResolvedValue([
+      {
+        name: 'Images',
+        description: '',
+        platforms: [
+          {
+            platform: 'openai',
+            groups: [
+              {
+                id: 10,
+                name: 'Images',
+                platform: 'openai',
+                subscription_type: 'standard',
+                rate_multiplier: 2,
+                is_exclusive: false,
+              },
+            ],
+            supported_models: [
+              {
+                name: 'gpt-image-demo',
+                platform: 'openai',
+                pricing: {
+                  billing_mode: 'token',
+                  input_price: null,
+                  output_price: null,
+                  cache_write_price: null,
+                  cache_read_price: null,
+                  image_output_price: 0.00001,
+                  per_request_price: null,
+                  intervals: [],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ])
+    getUserGroupRates.mockResolvedValue({})
+
+    const wrapper = mount(ModelHubView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          EmptyState: true,
+          GroupBadge: GroupBadgeStub,
+          Icon: true,
+          LoadingSpinner: true,
+          ModelIcon: true,
+        },
+      },
+    })
+
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('Image output $20.00 / 1M tokens')
+    expect(text).not.toContain('Pricing unavailable')
   })
 })

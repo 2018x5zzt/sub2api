@@ -417,7 +417,7 @@ interface PlatformOption {
 interface PricingBadge {
   key: string
   text: string
-  tone: 'rate' | 'input' | 'output' | 'request' | 'interval'
+  tone: 'rate' | 'input' | 'output' | 'request' | 'image' | 'interval'
 }
 
 const { t } = useI18n()
@@ -644,6 +644,13 @@ function getPricingBadges(model: SupportedModel, rate: number): PricingBadge[] {
       tone: 'output'
     })
   }
+  if (pricing.image_output_price !== undefined && pricing.image_output_price !== null) {
+    badges.push({
+      key: `image-output:${model.id}`,
+      text: `${t('modelHub.imageOutputPriceShort')} ${formatPerMillionPrice(pricing.image_output_price, rate)}`,
+      tone: 'image'
+    })
+  }
   if (pricing.per_request_price !== undefined && pricing.per_request_price !== null) {
     badges.push({
       key: `request-default:${model.id}`,
@@ -690,6 +697,9 @@ function pricingBadgeClass(tone: PricingBadge['tone']): string {
   if (tone === 'request') {
     return `${base} bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300`
   }
+  if (tone === 'image') {
+    return `${base} bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-300`
+  }
   return `${base} bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300`
 }
 
@@ -699,6 +709,7 @@ function hasDisplayedPricing(model: SupportedModel): boolean {
     (
       model.pricing.input_price !== undefined ||
       model.pricing.output_price !== undefined ||
+      model.pricing.image_output_price !== undefined ||
       model.pricing.per_request_price !== undefined ||
       (model.pricing.intervals || []).some((interval) =>
         interval.input_price !== undefined ||
