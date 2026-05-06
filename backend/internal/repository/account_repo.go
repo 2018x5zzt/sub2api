@@ -1650,11 +1650,12 @@ func (r *accountRepository) loadAccountGroups(ctx context.Context, accountIDs []
 	for _, ag := range entries {
 		groupSvc := groupEntityToService(ag.Edges.Group)
 		agSvc := service.AccountGroup{
-			AccountID: ag.AccountID,
-			GroupID:   ag.GroupID,
-			Priority:  ag.Priority,
-			CreatedAt: ag.CreatedAt,
-			Group:     groupSvc,
+			AccountID:         ag.AccountID,
+			GroupID:           ag.GroupID,
+			Priority:          ag.Priority,
+			BillingMultiplier: ag.BillingMultiplier,
+			CreatedAt:         ag.CreatedAt,
+			Group:             groupSvc,
 		}
 		accountGroupsByAccount[ag.AccountID] = append(accountGroupsByAccount[ag.AccountID], agSvc)
 		groupIDsByAccount[ag.AccountID] = append(groupIDsByAccount[ag.AccountID], ag.GroupID)

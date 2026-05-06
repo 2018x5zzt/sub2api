@@ -45,6 +45,7 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 		SetStatus(key.Status).
 		SetNillableGroupID(key.GroupID).
 		SetNillableSubscriptionProductFamily(key.SubscriptionProductFamily).
+		SetNillableBudgetMultiplier(key.BudgetMultiplier).
 		SetNillableLastUsedAt(key.LastUsedAt).
 		SetQuota(key.Quota).
 		SetQuotaUsed(key.QuotaUsed).
@@ -127,6 +128,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldUserID,
 			apikey.FieldGroupID,
 			apikey.FieldSubscriptionProductFamily,
+			apikey.FieldBudgetMultiplier,
 			apikey.FieldStatus,
 			apikey.FieldIPWhitelist,
 			apikey.FieldIPBlacklist,
@@ -172,6 +174,8 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldStatus,
 				group.FieldSubscriptionType,
 				group.FieldRateMultiplier,
+				group.FieldPricingMode,
+				group.FieldDefaultBudgetMultiplier,
 				group.FieldDailyLimitUsd,
 				group.FieldWeeklyLimitUsd,
 				group.FieldMonthlyLimitUsd,
@@ -232,6 +236,11 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 		builder.SetSubscriptionProductFamily(strings.TrimSpace(*key.SubscriptionProductFamily))
 	} else {
 		builder.ClearSubscriptionProductFamily()
+	}
+	if key.BudgetMultiplier != nil {
+		builder.SetBudgetMultiplier(*key.BudgetMultiplier)
+	} else {
+		builder.ClearBudgetMultiplier()
 	}
 
 	// Expiration time
@@ -641,6 +650,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		UpdatedAt:                 m.UpdatedAt,
 		GroupID:                   m.GroupID,
 		SubscriptionProductFamily: m.SubscriptionProductFamily,
+		BudgetMultiplier:          m.BudgetMultiplier,
 		Quota:                     m.Quota,
 		QuotaUsed:                 m.QuotaUsed,
 		ExpiresAt:                 m.ExpiresAt,
@@ -721,6 +731,8 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		Description:                     derefString(g.Description),
 		Platform:                        g.Platform,
 		RateMultiplier:                  g.RateMultiplier,
+		PricingMode:                     g.PricingMode,
+		DefaultBudgetMultiplier:         g.DefaultBudgetMultiplier,
 		IsExclusive:                     g.IsExclusive,
 		Status:                          g.Status,
 		Hydrated:                        true,

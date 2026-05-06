@@ -48,6 +48,11 @@ func (APIKey) Fields() []ent.Field {
 			MaxLen(64).
 			Optional().
 			Nillable(),
+		field.Float("budget_multiplier").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Comment("Budget multiplier used by dynamic pricing groups"),
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),

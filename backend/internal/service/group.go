@@ -19,6 +19,9 @@ type Group struct {
 	Status         string
 	Hydrated       bool // indicates the group was loaded from a trusted repository source
 
+	PricingMode             string
+	DefaultBudgetMultiplier *float64
+
 	SubscriptionType    string
 	DailyLimitUSD       *float64
 	WeeklyLimitUSD      *float64
@@ -80,6 +83,10 @@ func (g *Group) IsActive() bool {
 
 func (g *Group) IsSubscriptionType() bool {
 	return g.SubscriptionType == SubscriptionTypeSubscription
+}
+
+func (g *Group) IsDynamicPricing() bool {
+	return normalizeGroupPricingMode(g.PricingMode) == GroupPricingModeDynamic
 }
 
 func (g *Group) HasDailyLimit() bool {

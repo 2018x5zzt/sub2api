@@ -145,6 +145,47 @@ func (_u *GroupUpdate) SetNillableStatus(v *string) *GroupUpdate {
 	return _u
 }
 
+// SetPricingMode sets the "pricing_mode" field.
+func (_u *GroupUpdate) SetPricingMode(v string) *GroupUpdate {
+	_u.mutation.SetPricingMode(v)
+	return _u
+}
+
+// SetNillablePricingMode sets the "pricing_mode" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillablePricingMode(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetPricingMode(*v)
+	}
+	return _u
+}
+
+// SetDefaultBudgetMultiplier sets the "default_budget_multiplier" field.
+func (_u *GroupUpdate) SetDefaultBudgetMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetDefaultBudgetMultiplier()
+	_u.mutation.SetDefaultBudgetMultiplier(v)
+	return _u
+}
+
+// SetNillableDefaultBudgetMultiplier sets the "default_budget_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableDefaultBudgetMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetDefaultBudgetMultiplier(*v)
+	}
+	return _u
+}
+
+// AddDefaultBudgetMultiplier adds value to the "default_budget_multiplier" field.
+func (_u *GroupUpdate) AddDefaultBudgetMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddDefaultBudgetMultiplier(v)
+	return _u
+}
+
+// ClearDefaultBudgetMultiplier clears the value of the "default_budget_multiplier" field.
+func (_u *GroupUpdate) ClearDefaultBudgetMultiplier() *GroupUpdate {
+	_u.mutation.ClearDefaultBudgetMultiplier()
+	return _u
+}
+
 // SetPlatform sets the "platform" field.
 func (_u *GroupUpdate) SetPlatform(v string) *GroupUpdate {
 	_u.mutation.SetPlatform(v)
@@ -890,6 +931,11 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PricingMode(); ok {
+		if err := group.PricingModeValidator(v); err != nil {
+			return &ValidationError{Name: "pricing_mode", err: fmt.Errorf(`ent: validator failed for field "Group.pricing_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Platform(); ok {
 		if err := group.PlatformValidator(v); err != nil {
 			return &ValidationError{Name: "platform", err: fmt.Errorf(`ent: validator failed for field "Group.platform": %w`, err)}
@@ -949,6 +995,18 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PricingMode(); ok {
+		_spec.SetField(group.FieldPricingMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DefaultBudgetMultiplier(); ok {
+		_spec.SetField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDefaultBudgetMultiplier(); ok {
+		_spec.AddField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64, value)
+	}
+	if _u.mutation.DefaultBudgetMultiplierCleared() {
+		_spec.ClearField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.Platform(); ok {
 		_spec.SetField(group.FieldPlatform, field.TypeString, value)
@@ -1513,6 +1571,47 @@ func (_u *GroupUpdateOne) SetNillableStatus(v *string) *GroupUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetPricingMode sets the "pricing_mode" field.
+func (_u *GroupUpdateOne) SetPricingMode(v string) *GroupUpdateOne {
+	_u.mutation.SetPricingMode(v)
+	return _u
+}
+
+// SetNillablePricingMode sets the "pricing_mode" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillablePricingMode(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetPricingMode(*v)
+	}
+	return _u
+}
+
+// SetDefaultBudgetMultiplier sets the "default_budget_multiplier" field.
+func (_u *GroupUpdateOne) SetDefaultBudgetMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetDefaultBudgetMultiplier()
+	_u.mutation.SetDefaultBudgetMultiplier(v)
+	return _u
+}
+
+// SetNillableDefaultBudgetMultiplier sets the "default_budget_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableDefaultBudgetMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetDefaultBudgetMultiplier(*v)
+	}
+	return _u
+}
+
+// AddDefaultBudgetMultiplier adds value to the "default_budget_multiplier" field.
+func (_u *GroupUpdateOne) AddDefaultBudgetMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddDefaultBudgetMultiplier(v)
+	return _u
+}
+
+// ClearDefaultBudgetMultiplier clears the value of the "default_budget_multiplier" field.
+func (_u *GroupUpdateOne) ClearDefaultBudgetMultiplier() *GroupUpdateOne {
+	_u.mutation.ClearDefaultBudgetMultiplier()
 	return _u
 }
 
@@ -2274,6 +2373,11 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PricingMode(); ok {
+		if err := group.PricingModeValidator(v); err != nil {
+			return &ValidationError{Name: "pricing_mode", err: fmt.Errorf(`ent: validator failed for field "Group.pricing_mode": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Platform(); ok {
 		if err := group.PlatformValidator(v); err != nil {
 			return &ValidationError{Name: "platform", err: fmt.Errorf(`ent: validator failed for field "Group.platform": %w`, err)}
@@ -2350,6 +2454,18 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PricingMode(); ok {
+		_spec.SetField(group.FieldPricingMode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DefaultBudgetMultiplier(); ok {
+		_spec.SetField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDefaultBudgetMultiplier(); ok {
+		_spec.AddField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64, value)
+	}
+	if _u.mutation.DefaultBudgetMultiplierCleared() {
+		_spec.ClearField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.Platform(); ok {
 		_spec.SetField(group.FieldPlatform, field.TypeString, value)

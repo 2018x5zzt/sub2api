@@ -140,6 +140,33 @@ func (_u *APIKeyUpdate) ClearSubscriptionProductFamily() *APIKeyUpdate {
 	return _u
 }
 
+// SetBudgetMultiplier sets the "budget_multiplier" field.
+func (_u *APIKeyUpdate) SetBudgetMultiplier(v float64) *APIKeyUpdate {
+	_u.mutation.ResetBudgetMultiplier()
+	_u.mutation.SetBudgetMultiplier(v)
+	return _u
+}
+
+// SetNillableBudgetMultiplier sets the "budget_multiplier" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableBudgetMultiplier(v *float64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetBudgetMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBudgetMultiplier adds value to the "budget_multiplier" field.
+func (_u *APIKeyUpdate) AddBudgetMultiplier(v float64) *APIKeyUpdate {
+	_u.mutation.AddBudgetMultiplier(v)
+	return _u
+}
+
+// ClearBudgetMultiplier clears the value of the "budget_multiplier" field.
+func (_u *APIKeyUpdate) ClearBudgetMultiplier() *APIKeyUpdate {
+	_u.mutation.ClearBudgetMultiplier()
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *APIKeyUpdate) SetStatus(v string) *APIKeyUpdate {
 	_u.mutation.SetStatus(v)
@@ -624,6 +651,15 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.SubscriptionProductFamilyCleared() {
 		_spec.ClearField(apikey.FieldSubscriptionProductFamily, field.TypeString)
 	}
+	if value, ok := _u.mutation.BudgetMultiplier(); ok {
+		_spec.SetField(apikey.FieldBudgetMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBudgetMultiplier(); ok {
+		_spec.AddField(apikey.FieldBudgetMultiplier, field.TypeFloat64, value)
+	}
+	if _u.mutation.BudgetMultiplierCleared() {
+		_spec.ClearField(apikey.FieldBudgetMultiplier, field.TypeFloat64)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
 	}
@@ -955,6 +991,33 @@ func (_u *APIKeyUpdateOne) SetNillableSubscriptionProductFamily(v *string) *APIK
 // ClearSubscriptionProductFamily clears the value of the "subscription_product_family" field.
 func (_u *APIKeyUpdateOne) ClearSubscriptionProductFamily() *APIKeyUpdateOne {
 	_u.mutation.ClearSubscriptionProductFamily()
+	return _u
+}
+
+// SetBudgetMultiplier sets the "budget_multiplier" field.
+func (_u *APIKeyUpdateOne) SetBudgetMultiplier(v float64) *APIKeyUpdateOne {
+	_u.mutation.ResetBudgetMultiplier()
+	_u.mutation.SetBudgetMultiplier(v)
+	return _u
+}
+
+// SetNillableBudgetMultiplier sets the "budget_multiplier" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableBudgetMultiplier(v *float64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetBudgetMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBudgetMultiplier adds value to the "budget_multiplier" field.
+func (_u *APIKeyUpdateOne) AddBudgetMultiplier(v float64) *APIKeyUpdateOne {
+	_u.mutation.AddBudgetMultiplier(v)
+	return _u
+}
+
+// ClearBudgetMultiplier clears the value of the "budget_multiplier" field.
+func (_u *APIKeyUpdateOne) ClearBudgetMultiplier() *APIKeyUpdateOne {
+	_u.mutation.ClearBudgetMultiplier()
 	return _u
 }
 
@@ -1471,6 +1534,15 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if _u.mutation.SubscriptionProductFamilyCleared() {
 		_spec.ClearField(apikey.FieldSubscriptionProductFamily, field.TypeString)
+	}
+	if value, ok := _u.mutation.BudgetMultiplier(); ok {
+		_spec.SetField(apikey.FieldBudgetMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBudgetMultiplier(); ok {
+		_spec.AddField(apikey.FieldBudgetMultiplier, field.TypeFloat64, value)
+	}
+	if _u.mutation.BudgetMultiplierCleared() {
+		_spec.ClearField(apikey.FieldBudgetMultiplier, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)

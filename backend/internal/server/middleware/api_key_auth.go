@@ -304,6 +304,7 @@ func apiKeyAuthWithSubscription(
 		if subscriptionBalanceFallback {
 			c.Request = c.Request.WithContext(service.ContextWithSubscriptionBalanceFallback(c.Request.Context()))
 		}
+		c.Request = c.Request.WithContext(context.WithValue(c.Request.Context(), ctxkey.APIKey, apiKey))
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{
 			UserID:      apiKey.User.ID,

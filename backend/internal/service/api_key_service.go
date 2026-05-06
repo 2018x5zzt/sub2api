@@ -153,6 +153,7 @@ type APIKeyAuthCacheInvalidator interface {
 type CreateAPIKeyRequest struct {
 	Name        string   `json:"name"`
 	GroupID     *int64   `json:"group_id"`
+	BudgetMultiplier *float64 `json:"budget_multiplier"`
 	CustomKey   *string  `json:"custom_key"`   // 可选的自定义key
 	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
 	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
@@ -171,6 +172,7 @@ type CreateAPIKeyRequest struct {
 type UpdateAPIKeyRequest struct {
 	Name        *string  `json:"name"`
 	GroupID     *int64   `json:"group_id"`
+	BudgetMultiplier *float64 `json:"budget_multiplier"`
 	Status      *string  `json:"status"`
 	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
 	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
@@ -442,6 +444,7 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 
 	// 验证分组权限（如果指定了分组）
 	var subscriptionProductFamily *string
+	var budgetMultiplier *float64
 	if req.GroupID != nil {
 		group, err := s.groupRepo.GetByID(ctx, *req.GroupID)
 		if err != nil {
@@ -460,6 +463,26 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 			return nil, err
 		}
 		subscriptionProductFamily = family
+		if group.IsDynamicPricing() {
+			validated, err := validateBudgetMultiplier(req.BudgetMultiplier, nil)
+			if err != nil {
+				return nil, err
+			}
+			if validated != nil {
+				budgetMultiplier = validated
+			} else if group.DefaultBudgetMultiplier != nil {
+				budgetMultiplier = group.DefaultBudgetMultiplier
+			} else {
+				v := DefaultBudgetMultiplier
+				budgetMultiplier = &v
+			}
+		} else if req.BudgetMultiplier != nil {
+			validated, err := validateBudgetMultiplier(req.BudgetMultiplier, nil)
+			if err != nil {
+				return nil, err
+			}
+			budgetMultiplier = validated
+		}
 	}
 
 	var key string
@@ -504,6 +527,7 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		Name:                      req.Name,
 		GroupID:                   req.GroupID,
 		SubscriptionProductFamily: subscriptionProductFamily,
+		BudgetMultiplier:          budgetMultiplier,
 		Status:                    StatusActive,
 		IPWhitelist:               req.IPWhitelist,
 		IPBlacklist:               req.IPBlacklist,
@@ -646,6 +670,9 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 
 	groupChanged := false
 	if req.GroupID != nil {
+		if apiKey.GroupID != nil && *apiKey.GroupID != *req.GroupID {
+			return nil, ErrAPIKeyGroupImmutable
+		}
 		// 验证分组权限
 		user, err := s.userRepo.GetByID(ctx, userID)
 		if err != nil {
@@ -667,6 +694,14 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 
 		apiKey.GroupID = req.GroupID
 		groupChanged = true
+	}
+
+	if req.BudgetMultiplier != nil {
+		validated, err := validateBudgetMultiplier(req.BudgetMultiplier, nil)
+		if err != nil {
+			return nil, err
+		}
+		apiKey.BudgetMultiplier = validated
 	}
 
 	if groupChanged {

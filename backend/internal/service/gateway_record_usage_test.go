@@ -192,6 +192,58 @@ func TestGatewayServiceRecordUsage_PreservesRequestedAndUpstreamModels(t *testin
 	require.Equal(t, mappedModel, *usageRepo.lastLog.UpstreamModel)
 }
 
+func TestGatewayServiceRecordUsage_DynamicPricingUsesAccountGroupBillingMultiplier(t *testing.T) {
+	groupID := int64(21)
+	accountBillingMultiplier := 3.0
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, subRepo)
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_dynamic_account_group_multiplier",
+			Usage: ClaudeUsage{
+				InputTokens:  10,
+				OutputTokens: 6,
+			},
+			Model:    "claude-sonnet-4",
+			Duration: time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      502,
+			GroupID: i64p(groupID),
+			Group: &Group{
+				ID:             groupID,
+				RateMultiplier: 1,
+				PricingMode:    GroupPricingModeDynamic,
+			},
+		},
+		User: &User{ID: 602},
+		Account: &Account{
+			ID: 702,
+			AccountGroups: []AccountGroup{{
+				AccountID:         702,
+				GroupID:           groupID,
+				BillingMultiplier: accountBillingMultiplier,
+			}},
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, accountBillingMultiplier, usageRepo.lastLog.RateMultiplier)
+
+	expected, err := svc.billingService.CalculateCost("claude-sonnet-4", UsageTokens{
+		InputTokens:  10,
+		OutputTokens: 6,
+	}, accountBillingMultiplier)
+	require.NoError(t, err)
+	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
+	require.Equal(t, 1, userRepo.deductCalls)
+}
+
 func TestGatewayServiceRecordUsage_UsageLogWriteErrorDoesNotSkipBilling(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: MarkUsageLogCreateNotPersisted(context.Canceled)}
 	userRepo := &openAIRecordUsageUserRepoStub{}

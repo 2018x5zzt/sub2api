@@ -31,6 +31,8 @@ const (
 	FieldGroupID = "group_id"
 	// FieldSubscriptionProductFamily holds the string denoting the subscription_product_family field in the database.
 	FieldSubscriptionProductFamily = "subscription_product_family"
+	// FieldBudgetMultiplier holds the string denoting the budget_multiplier field in the database.
+	FieldBudgetMultiplier = "budget_multiplier"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
@@ -105,6 +107,7 @@ var Columns = []string{
 	FieldName,
 	FieldGroupID,
 	FieldSubscriptionProductFamily,
+	FieldBudgetMultiplier,
 	FieldStatus,
 	FieldLastUsedAt,
 	FieldIPWhitelist,
@@ -221,6 +224,11 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 // BySubscriptionProductFamily orders the results by the subscription_product_family field.
 func BySubscriptionProductFamily(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionProductFamily, opts...).ToFunc()
+}
+
+// ByBudgetMultiplier orders the results by the budget_multiplier field.
+func ByBudgetMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBudgetMultiplier, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

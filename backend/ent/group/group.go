@@ -32,6 +32,10 @@ const (
 	FieldIsExclusive = "is_exclusive"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldPricingMode holds the string denoting the pricing_mode field in the database.
+	FieldPricingMode = "pricing_mode"
+	// FieldDefaultBudgetMultiplier holds the string denoting the default_budget_multiplier field in the database.
+	FieldDefaultBudgetMultiplier = "default_budget_multiplier"
 	// FieldPlatform holds the string denoting the platform field in the database.
 	FieldPlatform = "platform"
 	// FieldSubscriptionType holds the string denoting the subscription_type field in the database.
@@ -163,6 +167,8 @@ var Columns = []string{
 	FieldRateMultiplier,
 	FieldIsExclusive,
 	FieldStatus,
+	FieldPricingMode,
+	FieldDefaultBudgetMultiplier,
 	FieldPlatform,
 	FieldSubscriptionType,
 	FieldDailyLimitUsd,
@@ -232,6 +238,10 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
+	// DefaultPricingMode holds the default value on creation for the "pricing_mode" field.
+	DefaultPricingMode string
+	// PricingModeValidator is a validator for the "pricing_mode" field. It is called by the builders before save.
+	PricingModeValidator func(string) error
 	// DefaultPlatform holds the default value on creation for the "platform" field.
 	DefaultPlatform string
 	// PlatformValidator is a validator for the "platform" field. It is called by the builders before save.
@@ -314,6 +324,16 @@ func ByIsExclusive(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByPricingMode orders the results by the pricing_mode field.
+func ByPricingMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPricingMode, opts...).ToFunc()
+}
+
+// ByDefaultBudgetMultiplier orders the results by the default_budget_multiplier field.
+func ByDefaultBudgetMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDefaultBudgetMultiplier, opts...).ToFunc()
 }
 
 // ByPlatform orders the results by the platform field.

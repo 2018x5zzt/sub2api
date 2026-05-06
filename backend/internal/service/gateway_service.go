@@ -8400,15 +8400,13 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
 	}
 
-	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
-	multiplier := 1.0
+	// 获取用户侧最终计费倍率。动态分组下分组倍率固定为 1，再乘账号分组结算倍率。
+	defaultRateMultiplier := 1.0
 	if s.cfg != nil {
-		multiplier = s.cfg.Default.RateMultiplier
+		defaultRateMultiplier = s.cfg.Default.RateMultiplier
 	}
-	if apiKey.GroupID != nil && apiKey.Group != nil {
-		groupDefault := apiKey.Group.RateMultiplier
-		multiplier = s.getUserGroupRateMultiplier(ctx, user.ID, *apiKey.GroupID, groupDefault)
-	}
+	multiplierResolution := resolveBillingMultiplierForUsage(ctx, apiKey, user, account, defaultRateMultiplier, s.getUserGroupRateMultiplier)
+	multiplier := multiplierResolution.EffectiveBillingMultiplier
 
 	// 确定计费模型
 	billingModel := forwardResultBillingModel(result.Model, result.UpstreamModel)

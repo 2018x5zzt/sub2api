@@ -91,6 +91,21 @@ func (a *Account) BillingRateMultiplier() float64 {
 	return *a.RateMultiplier
 }
 
+// GroupBillingMultiplier 返回账号在指定分组绑定下的用户侧扣费乘数。
+// 未配置、未绑定或非法值时按 1.0 处理。
+func (a *Account) GroupBillingMultiplier(groupID *int64) float64 {
+	if a == nil || groupID == nil || *groupID <= 0 {
+		return 1.0
+	}
+	for i := range a.AccountGroups {
+		ag := &a.AccountGroups[i]
+		if ag.GroupID == *groupID {
+			return ag.EffectiveBillingMultiplier()
+		}
+	}
+	return 1.0
+}
+
 func (a *Account) EffectiveLoadFactor() int {
 	if a == nil {
 		return 1

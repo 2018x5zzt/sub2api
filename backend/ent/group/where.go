@@ -95,6 +95,16 @@ func Status(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldStatus, v))
 }
 
+// PricingMode applies equality check predicate on the "pricing_mode" field. It's identical to PricingModeEQ.
+func PricingMode(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldPricingMode, v))
+}
+
+// DefaultBudgetMultiplier applies equality check predicate on the "default_budget_multiplier" field. It's identical to DefaultBudgetMultiplierEQ.
+func DefaultBudgetMultiplier(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldDefaultBudgetMultiplier, v))
+}
+
 // Platform applies equality check predicate on the "platform" field. It's identical to PlatformEQ.
 func Platform(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPlatform, v))
@@ -583,6 +593,121 @@ func StatusEqualFold(v string) predicate.Group {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// PricingModeEQ applies the EQ predicate on the "pricing_mode" field.
+func PricingModeEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldPricingMode, v))
+}
+
+// PricingModeNEQ applies the NEQ predicate on the "pricing_mode" field.
+func PricingModeNEQ(v string) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldPricingMode, v))
+}
+
+// PricingModeIn applies the In predicate on the "pricing_mode" field.
+func PricingModeIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldPricingMode, vs...))
+}
+
+// PricingModeNotIn applies the NotIn predicate on the "pricing_mode" field.
+func PricingModeNotIn(vs ...string) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldPricingMode, vs...))
+}
+
+// PricingModeGT applies the GT predicate on the "pricing_mode" field.
+func PricingModeGT(v string) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldPricingMode, v))
+}
+
+// PricingModeGTE applies the GTE predicate on the "pricing_mode" field.
+func PricingModeGTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldPricingMode, v))
+}
+
+// PricingModeLT applies the LT predicate on the "pricing_mode" field.
+func PricingModeLT(v string) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldPricingMode, v))
+}
+
+// PricingModeLTE applies the LTE predicate on the "pricing_mode" field.
+func PricingModeLTE(v string) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldPricingMode, v))
+}
+
+// PricingModeContains applies the Contains predicate on the "pricing_mode" field.
+func PricingModeContains(v string) predicate.Group {
+	return predicate.Group(sql.FieldContains(FieldPricingMode, v))
+}
+
+// PricingModeHasPrefix applies the HasPrefix predicate on the "pricing_mode" field.
+func PricingModeHasPrefix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasPrefix(FieldPricingMode, v))
+}
+
+// PricingModeHasSuffix applies the HasSuffix predicate on the "pricing_mode" field.
+func PricingModeHasSuffix(v string) predicate.Group {
+	return predicate.Group(sql.FieldHasSuffix(FieldPricingMode, v))
+}
+
+// PricingModeEqualFold applies the EqualFold predicate on the "pricing_mode" field.
+func PricingModeEqualFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldEqualFold(FieldPricingMode, v))
+}
+
+// PricingModeContainsFold applies the ContainsFold predicate on the "pricing_mode" field.
+func PricingModeContainsFold(v string) predicate.Group {
+	return predicate.Group(sql.FieldContainsFold(FieldPricingMode, v))
+}
+
+// DefaultBudgetMultiplierEQ applies the EQ predicate on the "default_budget_multiplier" field.
+func DefaultBudgetMultiplierEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldEQ(FieldDefaultBudgetMultiplier, v))
+}
+
+// DefaultBudgetMultiplierNEQ applies the NEQ predicate on the "default_budget_multiplier" field.
+func DefaultBudgetMultiplierNEQ(v float64) predicate.Group {
+	return predicate.Group(sql.FieldNEQ(FieldDefaultBudgetMultiplier, v))
+}
+
+// DefaultBudgetMultiplierIn applies the In predicate on the "default_budget_multiplier" field.
+func DefaultBudgetMultiplierIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldIn(FieldDefaultBudgetMultiplier, vs...))
+}
+
+// DefaultBudgetMultiplierNotIn applies the NotIn predicate on the "default_budget_multiplier" field.
+func DefaultBudgetMultiplierNotIn(vs ...float64) predicate.Group {
+	return predicate.Group(sql.FieldNotIn(FieldDefaultBudgetMultiplier, vs...))
+}
+
+// DefaultBudgetMultiplierGT applies the GT predicate on the "default_budget_multiplier" field.
+func DefaultBudgetMultiplierGT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGT(FieldDefaultBudgetMultiplier, v))
+}
+
+// DefaultBudgetMultiplierGTE applies the GTE predicate on the "default_budget_multiplier" field.
+func DefaultBudgetMultiplierGTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldGTE(FieldDefaultBudgetMultiplier, v))
+}
+
+// DefaultBudgetMultiplierLT applies the LT predicate on the "default_budget_multiplier" field.
+func DefaultBudgetMultiplierLT(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLT(FieldDefaultBudgetMultiplier, v))
+}
+
+// DefaultBudgetMultiplierLTE applies the LTE predicate on the "default_budget_multiplier" field.
+func DefaultBudgetMultiplierLTE(v float64) predicate.Group {
+	return predicate.Group(sql.FieldLTE(FieldDefaultBudgetMultiplier, v))
+}
+
+// DefaultBudgetMultiplierIsNil applies the IsNil predicate on the "default_budget_multiplier" field.
+func DefaultBudgetMultiplierIsNil() predicate.Group {
+	return predicate.Group(sql.FieldIsNull(FieldDefaultBudgetMultiplier))
+}
+
+// DefaultBudgetMultiplierNotNil applies the NotNil predicate on the "default_budget_multiplier" field.
+func DefaultBudgetMultiplierNotNil() predicate.Group {
+	return predicate.Group(sql.FieldNotNull(FieldDefaultBudgetMultiplier))
 }
 
 // PlatformEQ applies the EQ predicate on the "platform" field.

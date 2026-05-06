@@ -34,6 +34,7 @@ type APIKey struct {
 	Name                      string
 	GroupID                   *int64
 	SubscriptionProductFamily *string
+	BudgetMultiplier          *float64
 	Status                    string
 	IPWhitelist               []string
 	IPBlacklist               []string

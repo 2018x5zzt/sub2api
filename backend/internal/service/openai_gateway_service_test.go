@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -28,6 +30,18 @@ var _ GatewayCache = (*stubGatewayCache)(nil)
 type stubOpenAIAccountRepo struct {
 	AccountRepository
 	accounts []Account
+}
+
+type stubOpenAIUsageLogRepo struct {
+	UsageLogRepository
+	stats *usagestats.UsageStats
+}
+
+func (r stubOpenAIUsageLogRepo) GetStatsWithFilters(ctx context.Context, filters usagestats.UsageLogFilters) (*usagestats.UsageStats, error) {
+	if r.stats == nil {
+		return &usagestats.UsageStats{}, nil
+	}
+	return r.stats, nil
 }
 
 type snapshotUpdateAccountRepo struct {
@@ -733,6 +747,198 @@ func TestOpenAISelectAccountWithLoadAwareness_PrefersLowerLoad(t *testing.T) {
 	}
 }
 
+func TestOpenAISelectAccountWithLoadAwareness_DynamicPricingPrefersHighestAccountAtOrBelowBudget(t *testing.T) {
+	groupID := int64(10)
+	budget := 8.0
+	ctx := context.WithValue(context.Background(), ctxkey.APIKey, &APIKey{
+		ID:               100,
+		UserID:           200,
+		GroupID:          &groupID,
+		BudgetMultiplier: &budget,
+		Group: &Group{
+			ID:                      groupID,
+			Platform:                PlatformOpenAI,
+			Status:                  StatusActive,
+			Hydrated:                true,
+			RateMultiplier:          1,
+			PricingMode:             GroupPricingModeDynamic,
+			DefaultBudgetMultiplier: &budget,
+		},
+	})
+	ctx = context.WithValue(ctx, ctxkey.Group, apiKeyFromContext(ctx).Group)
+
+	repo := stubOpenAIAccountRepo{
+		accounts: []Account{
+			dynamicOpenAIAccount(1, groupID, 3),
+			dynamicOpenAIAccount(2, groupID, 6),
+			dynamicOpenAIAccount(3, groupID, 10),
+		},
+	}
+	concurrencyCache := stubConcurrencyCache{
+		loadMap: map[int64]*AccountLoadInfo{
+			1: {AccountID: 1, LoadRate: 0},
+			2: {AccountID: 2, LoadRate: 0},
+			3: {AccountID: 3, LoadRate: 0},
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:        repo,
+		usageLogRepo:       stubOpenAIUsageLogRepo{},
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "gpt-4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(2), selection.Account.ID)
+}
+
+func TestOpenAISelectAccountWithLoadAwareness_DynamicPricingAllowsHighMultiplierOnlyWhenSevenDayAverageAllows(t *testing.T) {
+	groupID := int64(10)
+	budget := 8.0
+	ctx := context.WithValue(context.Background(), ctxkey.APIKey, &APIKey{
+		ID:               100,
+		UserID:           200,
+		GroupID:          &groupID,
+		BudgetMultiplier: &budget,
+		Group: &Group{
+			ID:                      groupID,
+			Platform:                PlatformOpenAI,
+			Status:                  StatusActive,
+			Hydrated:                true,
+			RateMultiplier:          1,
+			PricingMode:             GroupPricingModeDynamic,
+			DefaultBudgetMultiplier: &budget,
+		},
+	})
+	ctx = context.WithValue(ctx, ctxkey.Group, apiKeyFromContext(ctx).Group)
+
+	repo := stubOpenAIAccountRepo{
+		accounts: []Account{
+			dynamicOpenAIAccount(1, groupID, 6),
+			dynamicOpenAIAccount(2, groupID, 10),
+		},
+	}
+	concurrencyCache := stubConcurrencyCache{
+		loadMap: map[int64]*AccountLoadInfo{
+			1: {AccountID: 1, LoadRate: 100},
+			2: {AccountID: 2, LoadRate: 0},
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: repo,
+		usageLogRepo: stubOpenAIUsageLogRepo{stats: &usagestats.UsageStats{
+			TotalRequests:   10,
+			TotalCost:       100,
+			TotalActualCost: 700,
+		}},
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "gpt-4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(2), selection.Account.ID)
+}
+
+func TestOpenAISelectAccountWithLoadAwareness_DynamicPricingAllowsHighMultiplierWhenCurrentSevenDayAverageBelowBudget(t *testing.T) {
+	groupID := int64(10)
+	budget := 8.0
+	ctx := context.WithValue(context.Background(), ctxkey.APIKey, &APIKey{
+		ID:               100,
+		UserID:           200,
+		GroupID:          &groupID,
+		BudgetMultiplier: &budget,
+		Group: &Group{
+			ID:                      groupID,
+			Platform:                PlatformOpenAI,
+			Status:                  StatusActive,
+			Hydrated:                true,
+			RateMultiplier:          1,
+			PricingMode:             GroupPricingModeDynamic,
+			DefaultBudgetMultiplier: &budget,
+		},
+	})
+	ctx = context.WithValue(ctx, ctxkey.Group, apiKeyFromContext(ctx).Group)
+
+	repo := stubOpenAIAccountRepo{
+		accounts: []Account{
+			dynamicOpenAIAccount(1, groupID, 6),
+			dynamicOpenAIAccount(2, groupID, 10),
+		},
+	}
+	concurrencyCache := stubConcurrencyCache{
+		loadMap: map[int64]*AccountLoadInfo{
+			1: {AccountID: 1, LoadRate: 100},
+			2: {AccountID: 2, LoadRate: 0},
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: repo,
+		usageLogRepo: stubOpenAIUsageLogRepo{stats: &usagestats.UsageStats{
+			TotalRequests:   10,
+			TotalCost:       100,
+			TotalActualCost: 790,
+		}},
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "gpt-4", nil)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(2), selection.Account.ID)
+}
+
+func TestOpenAISelectAccountWithLoadAwareness_DynamicPricingBlocksHighMultiplierWhenCurrentSevenDayAverageAtBudget(t *testing.T) {
+	groupID := int64(10)
+	budget := 8.0
+	ctx := context.WithValue(context.Background(), ctxkey.APIKey, &APIKey{
+		ID:               100,
+		UserID:           200,
+		GroupID:          &groupID,
+		BudgetMultiplier: &budget,
+		Group: &Group{
+			ID:                      groupID,
+			Platform:                PlatformOpenAI,
+			Status:                  StatusActive,
+			Hydrated:                true,
+			RateMultiplier:          1,
+			PricingMode:             GroupPricingModeDynamic,
+			DefaultBudgetMultiplier: &budget,
+		},
+	})
+	ctx = context.WithValue(ctx, ctxkey.Group, apiKeyFromContext(ctx).Group)
+
+	repo := stubOpenAIAccountRepo{
+		accounts: []Account{
+			dynamicOpenAIAccount(1, groupID, 6),
+			dynamicOpenAIAccount(2, groupID, 10),
+		},
+	}
+	concurrencyCache := stubConcurrencyCache{
+		loadMap: map[int64]*AccountLoadInfo{
+			1: {AccountID: 1, LoadRate: 100},
+			2: {AccountID: 2, LoadRate: 0},
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo: repo,
+		usageLogRepo: stubOpenAIUsageLogRepo{stats: &usagestats.UsageStats{
+			TotalRequests:   10,
+			TotalCost:       100,
+			TotalActualCost: 800,
+		}},
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, err := svc.SelectAccountWithLoadAwareness(ctx, &groupID, "", "gpt-4", nil)
+	require.ErrorIs(t, err, ErrDynamicPricingBudgetExceeded)
+	require.Nil(t, selection)
+}
+
 func TestOpenAISelectAccountForModelWithExclusions_StickyExcludedFallback(t *testing.T) {
 	sessionHash := "excluded"
 	repo := stubOpenAIAccountRepo{
@@ -757,6 +963,22 @@ func TestOpenAISelectAccountForModelWithExclusions_StickyExcludedFallback(t *tes
 	}
 	if acc == nil || acc.ID != 2 {
 		t.Fatalf("expected account 2")
+	}
+}
+
+func dynamicOpenAIAccount(id, groupID int64, billingMultiplier float64) Account {
+	return Account{
+		ID:          id,
+		Platform:    PlatformOpenAI,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    1,
+		AccountGroups: []AccountGroup{{
+			AccountID:         id,
+			GroupID:           groupID,
+			BillingMultiplier: billingMultiplier,
+		}},
 	}
 }
 

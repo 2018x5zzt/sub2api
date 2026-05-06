@@ -36,6 +36,8 @@ type APIKey struct {
 	GroupID *int64 `json:"group_id,omitempty"`
 	// SubscriptionProductFamily holds the value of the "subscription_product_family" field.
 	SubscriptionProductFamily *string `json:"subscription_product_family,omitempty"`
+	// Budget multiplier used by dynamic pricing groups
+	BudgetMultiplier *float64 `json:"budget_multiplier,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// Last usage time of this API key
@@ -125,7 +127,7 @@ func (*APIKey) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case apikey.FieldIPWhitelist, apikey.FieldIPBlacklist:
 			values[i] = new([]byte)
-		case apikey.FieldQuota, apikey.FieldQuotaUsed, apikey.FieldRateLimit5h, apikey.FieldRateLimit1d, apikey.FieldRateLimit7d, apikey.FieldUsage5h, apikey.FieldUsage1d, apikey.FieldUsage7d:
+		case apikey.FieldBudgetMultiplier, apikey.FieldQuota, apikey.FieldQuotaUsed, apikey.FieldRateLimit5h, apikey.FieldRateLimit1d, apikey.FieldRateLimit7d, apikey.FieldUsage5h, apikey.FieldUsage1d, apikey.FieldUsage7d:
 			values[i] = new(sql.NullFloat64)
 		case apikey.FieldID, apikey.FieldUserID, apikey.FieldGroupID:
 			values[i] = new(sql.NullInt64)
@@ -204,6 +206,13 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.SubscriptionProductFamily = new(string)
 				*_m.SubscriptionProductFamily = value.String
+			}
+		case apikey.FieldBudgetMultiplier:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field budget_multiplier", values[i])
+			} else if value.Valid {
+				_m.BudgetMultiplier = new(float64)
+				*_m.BudgetMultiplier = value.Float64
 			}
 		case apikey.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -389,6 +398,11 @@ func (_m *APIKey) String() string {
 	if v := _m.SubscriptionProductFamily; v != nil {
 		builder.WriteString("subscription_product_family=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.BudgetMultiplier; v != nil {
+		builder.WriteString("budget_multiplier=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("status=")

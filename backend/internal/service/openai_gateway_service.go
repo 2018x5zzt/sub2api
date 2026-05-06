@@ -1408,6 +1408,10 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 		return nil
 	}
+	if !s.isAccountSchedulableForDynamicPricing(ctx, account, groupID) {
+		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+		return nil
+	}
 	if groupID != nil && s.needsUpstreamChannelRestrictionCheck(ctx, groupID) &&
 		s.isUpstreamModelRestrictedByChannel(ctx, *groupID, account, requestedModel, requireCompact) {
 		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
@@ -1453,6 +1457,9 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
 			continue
 		}
+		if !s.isAccountSchedulableForDynamicPricing(ctx, fresh, groupID) {
+			continue
+		}
 		compactTier := 0
 		if requireCompact {
 			compactTier = openAICompactSupportTier(fresh)
@@ -1479,7 +1486,7 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 			continue
 		}
 
-		if s.isBetterAccount(fresh, selected) {
+		if s.isBetterAccountForSelection(ctx, groupID, fresh, selected) {
 			selected = fresh
 			selectedCompactTier = compactTier
 		}
@@ -1521,6 +1528,77 @@ func (s *OpenAIGatewayService) isBetterAccount(candidate, current *Account) bool
 	}
 }
 
+func (s *OpenAIGatewayService) isBetterAccountForSelection(ctx context.Context, groupID *int64, candidate, current *Account) bool {
+	if cmp := compareDynamicPricingAccountPreference(ctx, groupID, candidate, current, s.getUserGroupRateMultiplier); cmp != 0 {
+		return cmp < 0
+	}
+	return s.isBetterAccount(candidate, current)
+}
+
+func (s *OpenAIGatewayService) compareAccountLoadsForSelection(ctx context.Context, groupID *int64, a, b accountWithLoad) int {
+	if cmp := compareDynamicPricingAccountPreference(ctx, groupID, a.account, b.account, s.getUserGroupRateMultiplier); cmp != 0 {
+		return cmp
+	}
+	if a.account.Priority != b.account.Priority {
+		if a.account.Priority < b.account.Priority {
+			return -1
+		}
+		return 1
+	}
+	if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
+		if a.loadInfo.LoadRate < b.loadInfo.LoadRate {
+			return -1
+		}
+		return 1
+	}
+	switch {
+	case a.account.LastUsedAt == nil && b.account.LastUsedAt != nil:
+		return -1
+	case a.account.LastUsedAt != nil && b.account.LastUsedAt == nil:
+		return 1
+	case a.account.LastUsedAt == nil && b.account.LastUsedAt == nil:
+		return 0
+	default:
+		if a.account.LastUsedAt.Before(*b.account.LastUsedAt) {
+			return -1
+		}
+		if b.account.LastUsedAt.Before(*a.account.LastUsedAt) {
+			return 1
+		}
+		return 0
+	}
+}
+
+func (s *OpenAIGatewayService) sortAccountsForSelection(ctx context.Context, groupID *int64, accounts []*Account) {
+	sort.SliceStable(accounts, func(i, j int) bool {
+		if cmp := compareDynamicPricingAccountPreference(ctx, groupID, accounts[i], accounts[j], s.getUserGroupRateMultiplier); cmp != 0 {
+			return cmp < 0
+		}
+		return s.isBetterAccount(accounts[i], accounts[j])
+	})
+}
+
+func (s *OpenAIGatewayService) isAccountSchedulableForDynamicPricing(ctx context.Context, account *Account, groupID *int64) bool {
+	return isAccountWithinDynamicBudget(ctx, groupID, account, s.getUserGroupRateMultiplier)
+}
+
+func (s *OpenAIGatewayService) getUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
+	if s == nil {
+		return groupDefaultMultiplier
+	}
+	resolver := s.userGroupRateResolver
+	if resolver == nil {
+		resolver = newUserGroupRateResolver(
+			nil,
+			nil,
+			resolveUserGroupRateCacheTTL(s.cfg),
+			nil,
+			"service.openai_gateway",
+		)
+	}
+	return resolver.Resolve(ctx, userID, groupID, groupDefaultMultiplier)
+}
+
 // SelectAccountWithLoadAwareness selects an account with load-awareness and wait plan.
 func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
 	return s.selectAccountWithLoadAwareness(ctx, groupID, sessionHash, requestedModel, excludedIDs, false)
@@ -1533,6 +1611,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 			"model", requestedModel)
 		return nil, fmt.Errorf("%w supporting model: %s (channel pricing restriction)", ErrNoAvailableAccounts, requestedModel)
 	}
+	ctx = withDynamicPricingBudgetState(ctx, groupID, s.usageLogRepo)
 
 	cfg := s.schedulingConfig()
 	needsUpstreamCheck := s.needsUpstreamChannelRestrictionCheck(ctx, groupID)
@@ -1600,6 +1679,8 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 					account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel, requireCompact)
 					if account == nil {
 						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+					} else if !s.isAccountSchedulableForDynamicPricing(ctx, account, groupID) {
+						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 					} else if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, account, requestedModel, requireCompact) {
 						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
 					} else {
@@ -1626,6 +1707,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 
 	// ============ Layer 2: Load-aware selection ============
 	baseCandidateCount := 0
+	dynamicBudgetBlocked := false
 	candidates := make([]*Account, 0, len(accounts))
 	for i := range accounts {
 		acc := &accounts[i]
@@ -1645,10 +1727,17 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 			continue
 		}
 		baseCandidateCount++
+		if !s.isAccountSchedulableForDynamicPricing(ctx, acc, groupID) {
+			dynamicBudgetBlocked = true
+			continue
+		}
 		candidates = append(candidates, acc)
 	}
 
 	if len(candidates) == 0 {
+		if dynamicBudgetBlocked {
+			return nil, ErrDynamicPricingBudgetExceeded
+		}
 		return nil, ErrNoAvailableAccounts
 	}
 
@@ -1663,7 +1752,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 	loadMap, err := s.concurrencyService.GetAccountsLoadBatch(ctx, accountLoads)
 	if err != nil {
 		ordered := append([]*Account(nil), candidates...)
-		sortAccountsByPriorityAndLastUsed(ordered, false)
+		s.sortAccountsForSelection(ctx, groupID, ordered)
 		if requireCompact {
 			ordered = prioritizeOpenAICompactAccounts(ordered)
 		}
@@ -1674,6 +1763,10 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 			}
 			fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel, requireCompact)
 			if fresh == nil {
+				continue
+			}
+			if !s.isAccountSchedulableForDynamicPricing(ctx, fresh, groupID) {
+				dynamicBudgetBlocked = true
 				continue
 			}
 			if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
@@ -1704,25 +1797,11 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 
 		if len(available) > 0 {
 			sort.SliceStable(available, func(i, j int) bool {
-				a, b := available[i], available[j]
-				if a.account.Priority != b.account.Priority {
-					return a.account.Priority < b.account.Priority
-				}
-				if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
-					return a.loadInfo.LoadRate < b.loadInfo.LoadRate
-				}
-				switch {
-				case a.account.LastUsedAt == nil && b.account.LastUsedAt != nil:
-					return true
-				case a.account.LastUsedAt != nil && b.account.LastUsedAt == nil:
-					return false
-				case a.account.LastUsedAt == nil && b.account.LastUsedAt == nil:
-					return false
-				default:
-					return a.account.LastUsedAt.Before(*b.account.LastUsedAt)
-				}
+				return s.compareAccountLoadsForSelection(ctx, groupID, available[i], available[j]) < 0
 			})
-			shuffleWithinSortGroups(available)
+			if dynamicPricingGroupFromContext(ctx, groupID) == nil {
+				shuffleWithinSortGroups(available)
+			}
 
 			selectionOrder := make([]accountWithLoad, 0, len(available))
 			if requireCompact {
@@ -1752,6 +1831,10 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 				if fresh == nil {
 					continue
 				}
+				if !s.isAccountSchedulableForDynamicPricing(ctx, fresh, groupID) {
+					dynamicBudgetBlocked = true
+					continue
+				}
 				if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
 					continue
 				}
@@ -1767,7 +1850,10 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 	}
 
 	// ============ Layer 3: Fallback wait ============
-	sortAccountsByPriorityAndLastUsed(candidates, false)
+	if dynamicBudgetBlocked && dynamicPricingGroupFromContext(ctx, groupID) != nil {
+		return nil, ErrDynamicPricingBudgetExceeded
+	}
+	s.sortAccountsForSelection(ctx, groupID, candidates)
 	if requireCompact {
 		candidates = prioritizeOpenAICompactAccounts(candidates)
 	}
@@ -1778,6 +1864,10 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		}
 		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel, requireCompact)
 		if fresh == nil {
+			continue
+		}
+		if !s.isAccountSchedulableForDynamicPricing(ctx, fresh, groupID) {
+			dynamicBudgetBlocked = true
 			continue
 		}
 		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel, requireCompact) {
@@ -1793,6 +1883,9 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 
 	if requireCompact && baseCandidateCount > 0 {
 		return nil, ErrNoAvailableCompactAccounts
+	}
+	if dynamicBudgetBlocked {
+		return nil, ErrDynamicPricingBudgetExceeded
 	}
 	return nil, ErrNoAvailableAccounts
 }
@@ -5118,18 +5211,14 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		ImageOutputTokens:   result.Usage.ImageOutputTokens,
 	}
 
-	// Get rate multiplier
-	multiplier := 1.0
+	// Resolve the user-facing billing multiplier. Dynamic groups keep the
+	// group/user-group rate at 1 and apply the account-group adjustment.
+	defaultRateMultiplier := 1.0
 	if s.cfg != nil {
-		multiplier = s.cfg.Default.RateMultiplier
+		defaultRateMultiplier = s.cfg.Default.RateMultiplier
 	}
-	if apiKey.GroupID != nil && apiKey.Group != nil {
-		resolver := s.userGroupRateResolver
-		if resolver == nil {
-			resolver = newUserGroupRateResolver(nil, nil, resolveUserGroupRateCacheTTL(s.cfg), nil, "service.openai_gateway")
-		}
-		multiplier = resolver.Resolve(ctx, user.ID, *apiKey.GroupID, apiKey.Group.RateMultiplier)
-	}
+	multiplierResolution := resolveBillingMultiplierForUsage(ctx, apiKey, user, account, defaultRateMultiplier, s.getUserGroupRateMultiplier)
+	multiplier := multiplierResolution.EffectiveBillingMultiplier
 
 	var cost *CostBreakdown
 	var err error

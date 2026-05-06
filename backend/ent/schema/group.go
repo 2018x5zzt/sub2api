@@ -50,6 +50,15 @@ func (Group) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
+		field.String("pricing_mode").
+			MaxLen(20).
+			Default("fixed").
+			Comment("Pricing mode: fixed or dynamic"),
+		field.Float("default_budget_multiplier").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Comment("Default API key budget multiplier for dynamic pricing groups"),
 
 		// Subscription-related fields (added by migration 003)
 		field.String("platform").
@@ -180,6 +189,7 @@ func (Group) Indexes() []ent.Index {
 		index.Fields("status"),
 		index.Fields("platform"),
 		index.Fields("subscription_type"),
+		index.Fields("pricing_mode"),
 		index.Fields("is_exclusive"),
 		index.Fields("deleted_at"),
 		index.Fields("sort_order"),

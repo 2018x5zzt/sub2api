@@ -32,6 +32,10 @@ func (AccountGroup) Fields() []ent.Field {
 		field.Int64("group_id"),
 		field.Int("priority").
 			Default(50),
+		field.Float("billing_multiplier").
+			Default(1.0).
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
+			Comment("User-facing billing multiplier for this account inside this group"),
 		field.Time("created_at").
 			Immutable().
 			Default(time.Now).
