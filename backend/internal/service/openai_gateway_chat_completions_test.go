@@ -115,7 +115,7 @@ func TestHandleChatStreamingResponse_EmptyUpstreamDoesNotWriteEmpty200(t *testin
 	require.Error(t, err)
 	var failoverErr *UpstreamFailoverError
 	require.True(t, errors.As(err, &failoverErr), "expected recoverable failover error, got %T %v", err, err)
-	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
 	require.False(t, c.Writer.Written(), "must not commit an empty HTTP 200 before failover")
 	require.Empty(t, rec.Body.String())
 }

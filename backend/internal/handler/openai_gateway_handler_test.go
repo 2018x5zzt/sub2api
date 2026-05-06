@@ -170,6 +170,16 @@ func TestOpenAIEnsureForwardErrorResponse_DoesNotOverrideWrittenResponse(t *test
 	assert.Equal(t, "already written", w.Body.String())
 }
 
+func TestOpenAIMapUpstreamErrorKeeps503ForAgentRetry(t *testing.T) {
+	h := &OpenAIGatewayHandler{}
+
+	status, errType, message := h.mapUpstreamError(http.StatusServiceUnavailable)
+
+	require.Equal(t, http.StatusServiceUnavailable, status)
+	require.Equal(t, "upstream_error", errType)
+	require.Equal(t, "Upstream service temporarily unavailable", message)
+}
+
 func TestShouldLogOpenAIForwardFailureAsWarn(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

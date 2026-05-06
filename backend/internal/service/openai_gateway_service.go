@@ -3349,40 +3349,19 @@ func openAIStreamDataStartsClientOutput(data, eventType string) bool {
 	if trimmed == "" {
 		return false
 	}
-	if strings.TrimSpace(eventType) == "response.failed" {
+	eventType = strings.TrimSpace(eventType)
+	if eventType == "response.failed" {
+		return false
+	}
+	switch eventType {
+	case "response.output_text.delta", "response.refusal.delta", "response.function_call_arguments.delta":
+		return gjson.Get(trimmed, "delta").String() != ""
+	case "response.content_part.added":
+		return gjson.Get(trimmed, "part.text").String() != ""
+	case "response.output_item.added", "response.output_item.done", "response.content_part.done":
 		return false
 	}
 	return !openAIStreamEventIsPreamble(eventType)
-}
-
-func openAIStreamFailedEventShouldFailover(payload []byte, message string) bool {
-	code := strings.ToLower(strings.TrimSpace(gjson.GetBytes(payload, "response.error.code").String()))
-	if code == "" {
-		code = strings.ToLower(strings.TrimSpace(gjson.GetBytes(payload, "error.code").String()))
-	}
-	errType := strings.ToLower(strings.TrimSpace(gjson.GetBytes(payload, "response.error.type").String()))
-	if errType == "" {
-		errType = strings.ToLower(strings.TrimSpace(gjson.GetBytes(payload, "error.type").String()))
-	}
-	combined := strings.ToLower(strings.TrimSpace(message + " " + code + " " + errType))
-	if combined == "" {
-		return true
-	}
-	nonRetryableMarkers := []string{
-		"invalid_request",
-		"content_policy",
-		"policy",
-		"safety",
-		"high-risk cyber",
-		"not allowed",
-		"violat",
-	}
-	for _, marker := range nonRetryableMarkers {
-		if strings.Contains(combined, marker) {
-			return false
-		}
-	}
-	return true
 }
 
 func writeOpenAIStreamFailureEvent(w io.Writer, code, message string, done bool) bool {
@@ -3444,10 +3423,10 @@ func (s *OpenAIGatewayService) newOpenAIStreamFailoverError(
 		detail = truncateString(string(payload), maxBytes)
 	}
 	if c != nil {
-		setOpsUpstreamError(c, http.StatusBadGateway, message, detail)
+		setOpsUpstreamError(c, http.StatusServiceUnavailable, message, detail)
 		event := OpsUpstreamErrorEvent{
 			Platform:           PlatformOpenAI,
-			UpstreamStatusCode: http.StatusBadGateway,
+			UpstreamStatusCode: http.StatusServiceUnavailable,
 			UpstreamRequestID:  strings.TrimSpace(upstreamRequestID),
 			Passthrough:        passthrough,
 			Kind:               "failover",
@@ -3468,7 +3447,7 @@ func (s *OpenAIGatewayService) newOpenAIStreamFailoverError(
 		},
 	})
 	return &UpstreamFailoverError{
-		StatusCode:   http.StatusBadGateway,
+		StatusCode:   http.StatusServiceUnavailable,
 		ResponseBody: body,
 	}
 }
@@ -3485,10 +3464,10 @@ func newEmptySuccessStreamFailoverError(c *gin.Context, account *Account, resp *
 		responseHeaders = resp.Header.Clone()
 	}
 	if c != nil {
-		setOpsUpstreamError(c, http.StatusBadGateway, message, "")
+		setOpsUpstreamError(c, http.StatusServiceUnavailable, message, "")
 		event := OpsUpstreamErrorEvent{
 			Platform:           PlatformOpenAI,
-			UpstreamStatusCode: http.StatusBadGateway,
+			UpstreamStatusCode: http.StatusServiceUnavailable,
 			UpstreamRequestID:  upstreamRequestID,
 			Passthrough:        passthrough,
 			Kind:               "failover",
@@ -3508,7 +3487,7 @@ func newEmptySuccessStreamFailoverError(c *gin.Context, account *Account, resp *
 		},
 	})
 	return &UpstreamFailoverError{
-		StatusCode:             http.StatusBadGateway,
+		StatusCode:             http.StatusServiceUnavailable,
 		ResponseBody:           body,
 		ResponseHeaders:        responseHeaders,
 		RetryableOnSameAccount: true,
@@ -3591,7 +3570,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			eventType := strings.TrimSpace(gjson.Get(trimmedData, "type").String())
 			if eventType == "response.failed" {
 				failedMessage = extractOpenAISSEErrorMessage(dataBytes)
-				if !openAIStreamClientOutputStarted(c, clientOutputStarted) && openAIStreamFailedEventShouldFailover(dataBytes, failedMessage) {
+				if !openAIStreamClientOutputStarted(c, clientOutputStarted) {
 					return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs},
 						s.newOpenAIStreamFailoverError(c, account, true, upstreamRequestID, dataBytes, failedMessage)
 				}
@@ -4404,7 +4383,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			forceFlushFailedEvent := false
 			if eventType == "response.failed" {
 				failedMessage = extractOpenAISSEErrorMessage(dataBytes)
-				if !openAIStreamClientOutputStarted(c, clientOutputStarted) && openAIStreamFailedEventShouldFailover(dataBytes, failedMessage) {
+				if !openAIStreamClientOutputStarted(c, clientOutputStarted) {
 					sawFailedEvent = true
 					streamFailoverErr = s.newOpenAIStreamFailoverError(c, account, false, upstreamRequestID, dataBytes, failedMessage)
 					return
