@@ -4208,12 +4208,23 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	if !ok {
 		return nil, errors.New("streaming not supported")
 	}
-	bufferedWriter := bufio.NewWriterSize(w, 4*1024)
+	var streamBuffer bytes.Buffer
+	bufferedWriter := bufio.NewWriterSize(&streamBuffer, 4*1024)
 	flushBuffered := func() error {
-		if err := bufferedWriter.Flush(); err != nil {
+		return bufferedWriter.Flush()
+	}
+	flushBufferedToClient := func() error {
+		if err := flushBuffered(); err != nil {
+			return err
+		}
+		if streamBuffer.Len() == 0 {
+			return nil
+		}
+		if _, err := w.Write(streamBuffer.Bytes()); err != nil {
 			return err
 		}
 		flusher.Flush()
+		streamBuffer.Reset()
 		return nil
 	}
 
@@ -4290,7 +4301,6 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			clientDisconnected = true
 			return
 		}
-		clientOutputStarted = true
 		lastDownstreamWriteAt = time.Now()
 	}
 
@@ -4316,8 +4326,8 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			return resultWithUsage(), fmt.Errorf("upstream response failed: %s", failedMessage)
 		}
 		if !clientDisconnected {
-			hadBufferedData := bufferedWriter.Buffered() > 0
-			if err := flushBuffered(); err != nil {
+			hadBufferedData := bufferedWriter.Buffered() > 0 || streamBuffer.Len() > 0
+			if err := flushBufferedToClient(); err != nil {
 				clientDisconnected = true
 				logger.LegacyPrintf("service.openai_gateway", "Client disconnected during final flush, returning collected usage")
 			} else if hadBufferedData {
@@ -4418,9 +4428,6 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 					if err := flushBuffered(); err != nil {
 						clientDisconnected = true
 						logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming flush, continuing to drain upstream for billing")
-					} else {
-						clientOutputStarted = true
-						lastDownstreamWriteAt = time.Now()
 					}
 				}
 			}
@@ -4446,9 +4453,6 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 				if err := flushBuffered(); err != nil {
 					clientDisconnected = true
 					logger.LegacyPrintf("service.openai_gateway", "Client disconnected during streaming flush, continuing to drain upstream for billing")
-				} else {
-					clientOutputStarted = true
-					lastDownstreamWriteAt = time.Now()
 				}
 			}
 		}
