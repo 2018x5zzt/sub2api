@@ -61,6 +61,7 @@ func GetForcePlatformFromContext(c *gin.Context) (string, bool) {
 type ErrorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	URL     string `json:"url,omitempty"`
 }
 
 // NewErrorResponse 创建错误响应
@@ -73,7 +74,11 @@ func NewErrorResponse(code, message string) ErrorResponse {
 
 // AbortWithError 中断请求并返回JSON错误
 func AbortWithError(c *gin.Context, statusCode int, code, message string) {
-	c.JSON(statusCode, NewErrorResponse(code, message))
+	resp := NewErrorResponse(code, message)
+	if statusCode == http.StatusUnauthorized {
+		resp.URL = "https://xlabapi.com"
+	}
+	c.JSON(statusCode, resp)
 	c.Abort()
 }
 
