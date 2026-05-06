@@ -364,6 +364,71 @@ describe('SubscriptionsView product subscriptions', () => {
     expect(vm.fallbackEnabled).toBe(true)
   })
 
+  it('keeps historical enabled fallback editable when no fallback group is bound', async () => {
+    authStore.user = {
+      subscription_balance_fallback_enabled: true,
+      subscription_balance_fallback_limit_usd: 12,
+      subscription_balance_fallback_used_usd: 3.5,
+      subscription_balance_fallback_group_id: null
+    }
+    authStore.refreshUser.mockResolvedValue(authStore.user)
+    getAvailableGroups.mockResolvedValue([
+      { id: 11, name: 'Balance Pool', status: 'active', subscription_type: 'standard' }
+    ])
+
+    const wrapper = mount(SubscriptionsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Balance Pool')
+    expect((wrapper.vm as any).fallbackEnabled).toBe(true)
+    expect((wrapper.vm as any).fallbackGroupId).toBe(null)
+
+    await (wrapper.vm as any).saveBalanceFallbackSettings()
+
+    expect(updateProfileMock).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalled()
+    expect((wrapper.vm as any).fallbackEnabled).toBe(true)
+  })
+
+  it('rejects a stale fallback group that is no longer selectable', async () => {
+    authStore.user = {
+      subscription_balance_fallback_enabled: true,
+      subscription_balance_fallback_limit_usd: 12,
+      subscription_balance_fallback_used_usd: 3.5,
+      subscription_balance_fallback_group_id: 99
+    }
+    authStore.refreshUser.mockResolvedValue(authStore.user)
+    getAvailableGroups.mockResolvedValue([
+      { id: 11, name: 'Balance Pool', status: 'active', subscription_type: 'standard' }
+    ])
+
+    const wrapper = mount(SubscriptionsView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          Icon: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    await (wrapper.vm as any).saveBalanceFallbackSettings()
+
+    expect(updateProfileMock).not.toHaveBeenCalled()
+    expect(showError).toHaveBeenCalled()
+    expect((wrapper.vm as any).fallbackEnabled).toBe(true)
+    expect((wrapper.vm as any).fallbackGroupId).toBe(99)
+  })
+
   it('saves disabled fallback explicitly and clears the fallback group', async () => {
     authStore.user = {
       subscription_balance_fallback_enabled: true,

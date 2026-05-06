@@ -521,8 +521,13 @@ function resetBalanceFallbackForm() {
 async function saveBalanceFallbackSettings() {
   const hasPositiveLimit = (fallbackLimit.value || 0) > 0
   const hasFallbackGroup = !!fallbackGroupId.value
+  const hasSelectableFallbackGroup = fallbackGroupOptions.value.some((option) => option.value === fallbackGroupId.value)
 
   if (fallbackEnabled.value && !hasFallbackGroup) {
+    appStore.showError(t('userSubscriptions.balanceFallback.groupRequired', 'Please select a balance group'))
+    return
+  }
+  if (fallbackEnabled.value && !hasSelectableFallbackGroup) {
     appStore.showError(t('userSubscriptions.balanceFallback.groupRequired', 'Please select a balance group'))
     return
   }
