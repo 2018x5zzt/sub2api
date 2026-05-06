@@ -114,6 +114,25 @@ type errReadCloser struct {
 func (r errReadCloser) Read([]byte) (int, error) { return 0, r.err }
 func (r errReadCloser) Close() error             { return nil }
 
+type chunkedErrReadCloser struct {
+	chunks []string
+	err    error
+}
+
+func (r *chunkedErrReadCloser) Read(p []byte) (int, error) {
+	if len(r.chunks) == 0 {
+		if r.err != nil {
+			return 0, r.err
+		}
+		return 0, io.EOF
+	}
+	chunk := r.chunks[0]
+	r.chunks = r.chunks[1:]
+	return copy(p, chunk), nil
+}
+
+func (r *chunkedErrReadCloser) Close() error { return nil }
+
 type failingGinWriter struct {
 	gin.ResponseWriter
 	failAfter int
@@ -1560,6 +1579,71 @@ func TestOpenAIStreamingPassthroughMissingTerminalEventReturnsIncompleteError(t 
 	if err == nil || !strings.Contains(err.Error(), "missing terminal event") {
 		t.Fatalf("expected missing terminal event error, got %v", err)
 	}
+}
+
+func TestOpenAIStreamingPassthroughStartedStreamReadErrorWritesFailureEvent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			MaxLineSize: defaultMaxLineSize,
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: &chunkedErrReadCloser{
+			chunks: []string{
+				"data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\"},\"output_index\":0}\n\n",
+			},
+			err: io.ErrUnexpectedEOF,
+		},
+		Header: http.Header{"X-Request-Id": []string{"rid-stream-read-error"}},
+	}
+
+	_, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "", "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "stream read error")
+
+	body := rec.Body.String()
+	require.Contains(t, body, "response.output_item.added")
+	require.Contains(t, body, "event: response.failed")
+	require.Contains(t, body, "upstream_stream_error")
+	require.Contains(t, body, "data: [DONE]")
+}
+
+func TestOpenAIStreamingPassthroughStartedMissingTerminalWritesFailureEvent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			MaxLineSize: defaultMaxLineSize,
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\"},\"output_index\":0}\n\n")),
+		Header:     http.Header{"X-Request-Id": []string{"rid-missing-terminal"}},
+	}
+
+	_, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "", "")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "missing terminal event")
+
+	body := rec.Body.String()
+	require.Contains(t, body, "response.output_item.added")
+	require.Contains(t, body, "event: response.failed")
+	require.Contains(t, body, "upstream_stream_incomplete")
+	require.Contains(t, body, "data: [DONE]")
 }
 
 func TestOpenAIStreamingPassthroughResponseFailedBeforeOutputReturnsFailover(t *testing.T) {

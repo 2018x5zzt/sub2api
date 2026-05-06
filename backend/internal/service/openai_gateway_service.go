@@ -3385,6 +3385,44 @@ func openAIStreamFailedEventShouldFailover(payload []byte, message string) bool 
 	return true
 }
 
+func writeOpenAIStreamFailureEvent(w io.Writer, code, message string, done bool) bool {
+	if w == nil {
+		return false
+	}
+	code = strings.TrimSpace(code)
+	if code == "" {
+		code = "upstream_stream_error"
+	}
+	message = sanitizeUpstreamErrorMessage(strings.TrimSpace(message))
+	if message == "" {
+		message = "Upstream stream ended before completion"
+	}
+	evt := apicompat.ResponsesStreamEvent{
+		Type: "response.failed",
+		Response: &apicompat.ResponsesResponse{
+			Object: "response",
+			Status: "failed",
+			Error: &apicompat.ResponsesError{
+				Code:    code,
+				Message: message,
+			},
+		},
+	}
+	sse, err := apicompat.ResponsesEventToSSE(evt)
+	if err != nil {
+		return false
+	}
+	if _, err := io.WriteString(w, sse); err != nil {
+		return false
+	}
+	if done {
+		if _, err := io.WriteString(w, "data: [DONE]\n\n"); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *OpenAIGatewayService) newOpenAIStreamFailoverError(
 	c *gin.Context,
 	account *Account,
@@ -3624,6 +3662,9 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 			upstreamRequestID,
 			err,
 		)
+		if writeOpenAIStreamFailureEvent(w, "upstream_stream_error", "Upstream stream disconnected before completion: "+sanitizeStreamError(err), true) {
+			flusher.Flush()
+		}
 		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, fmt.Errorf("stream read error: %w", err)
 	}
 	if sawFailedEvent {
@@ -3638,6 +3679,11 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		if !openAIStreamClientOutputStarted(c, clientOutputStarted) {
 			return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs},
 				s.newOpenAIStreamFailoverError(c, account, true, upstreamRequestID, nil, "OpenAI stream ended before a terminal event")
+		}
+		if !clientDisconnected {
+			if writeOpenAIStreamFailureEvent(w, "upstream_stream_incomplete", "Upstream stream ended before a terminal event", true) {
+				flusher.Flush()
+			}
 		}
 		return &openaiStreamingResultPassthrough{usage: usage, firstTokenMs: firstTokenMs}, errors.New("stream usage incomplete: missing terminal event")
 	}
