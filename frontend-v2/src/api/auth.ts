@@ -106,6 +106,27 @@ export async function resetPassword(req: ResetPasswordRequest): Promise<{ messag
   return data
 }
 
+export interface OAuthTokenPayload {
+  access_token: string
+  refresh_token: string
+  expires_in: number
+  token_type: string
+}
+
+export async function completeLinuxDoOAuthRegistration(
+  pendingOAuthToken: string,
+  invitationCode: string
+): Promise<OAuthTokenPayload> {
+  const { data } = await apiClient.post<OAuthTokenPayload>(
+    '/auth/oauth/linuxdo/complete-registration',
+    {
+      pending_oauth_token: pendingOAuthToken,
+      invitation_code: invitationCode
+    }
+  )
+  return data
+}
+
 export const authAPI = {
   login,
   login2FA,
@@ -122,7 +143,8 @@ export const authAPI = {
   getPublicSettings,
   sendVerifyCode,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  completeLinuxDoOAuthRegistration
 }
 
 export default authAPI

@@ -21,6 +21,8 @@ interface AuthState {
   logout: () => Promise<void>
   refreshUser: () => Promise<User | null>
   setAuthFromResponse: (resp: AuthResponse) => void
+  /** Set auth state from an externally-issued token (e.g. OAuth callback). */
+  setToken: (accessToken: string) => Promise<User | null>
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -104,5 +106,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
       return null
     }
+  },
+
+  setToken: async (accessToken) => {
+    localStorage.setItem(AUTH_TOKEN_KEY, accessToken)
+    set({ token: accessToken })
+    return get().refreshUser()
   }
 }))

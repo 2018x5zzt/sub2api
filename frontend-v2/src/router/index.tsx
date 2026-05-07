@@ -4,6 +4,10 @@ import Console from '@/pages/Console'
 import LoginPage from '@/pages/auth/Login'
 import RegisterPage from '@/pages/auth/Register'
 import ForgotPasswordPage from '@/pages/auth/ForgotPassword'
+import ResetPasswordPage from '@/pages/auth/ResetPassword'
+import EmailVerifyPage from '@/pages/auth/EmailVerify'
+import OAuthCallbackPage from '@/pages/auth/OAuthCallback'
+import LinuxDoCallbackPage from '@/pages/auth/LinuxDoCallback'
 import KeysPage from '@/pages/user/Keys'
 import UsagePage from '@/pages/user/Usage'
 import ProfilePage from '@/pages/user/Profile'
@@ -23,7 +27,11 @@ const router = createBrowserRouter([
   // Auth
   { path: '/login', element: <RedirectIfAuthed><LoginPage /></RedirectIfAuthed> },
   { path: '/register', element: <RedirectIfAuthed><RegisterPage /></RedirectIfAuthed> },
+  { path: '/email-verify', element: <EmailVerifyPage /> },
   { path: '/forgot-password', element: <ForgotPasswordPage /> },
+  { path: '/reset-password', element: <ResetPasswordPage /> },
+  { path: '/auth/callback', element: <OAuthCallbackPage /> },
+  { path: '/auth/linuxdo/callback', element: <LinuxDoCallbackPage /> },
 
   // Console v4 - Plato (verbatim port of console-v4.jsx). Self-contained: brings
   // its own NavBar, so it does not nest inside ConsoleLayout.
