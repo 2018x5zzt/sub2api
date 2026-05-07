@@ -1,10 +1,26 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" class="dark">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sub2API - AI API Gateway</title>
+    <meta name="color-scheme" content="dark light" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <title>Sub2API · AI API Gateway</title>
+    <style>
+      /* 防止刷新时白屏闪烁：HTML 已是 dark 类，但样式表加载前给一个底色 */
+      html {
+        background-color: #07080a;
+      }
+      html:not(.dark) {
+        background-color: #ffffff;
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>

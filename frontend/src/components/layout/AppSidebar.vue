@@ -9,12 +9,32 @@
     <!-- Logo/Brand -->
     <div class="sidebar-header">
       <!-- Custom Logo or Default Logo -->
-      <div class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow">
-        <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+      <div
+        class="flex h-9 w-9 items-center justify-center overflow-hidden"
+        style="
+          border-radius: 8px;
+          background: var(--bg-2);
+          border: 1px solid var(--line-2);
+        "
+      >
+        <img
+          v-if="settingsLoaded"
+          :src="siteLogo || '/logo.png'"
+          alt="Logo"
+          class="h-full w-full object-contain"
+        />
       </div>
       <transition name="fade">
         <div v-if="!sidebarCollapsed" class="flex flex-col">
-          <span class="text-lg font-bold text-gray-900 dark:text-white">
+          <span
+            style="
+              font-family: 'Inter', system-ui, sans-serif;
+              font-size: 15px;
+              font-weight: 500;
+              letter-spacing: -0.015em;
+              color: var(--text-1);
+            "
+          >
             {{ siteName }}
           </span>
           <!-- Version Badge -->
@@ -60,7 +80,11 @@
           <div v-if="!sidebarCollapsed" class="sidebar-section-title">
             {{ t('nav.myAccount') }}
           </div>
-          <div v-else class="mx-3 my-3 h-px bg-gray-200 dark:bg-dark-700"></div>
+          <div
+            v-else
+            class="mx-3 my-3 h-px"
+            style="background: var(--line-1)"
+          ></div>
 
           <router-link
             v-for="item in personalNavItems"
@@ -105,14 +129,23 @@
     </nav>
 
     <!-- Bottom Section -->
-    <div class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
+    <div
+      class="mt-auto"
+      style="border-top: 1px solid var(--line-1); padding: 10px"
+    >
       <!-- Theme Toggle -->
       <button
         @click="toggleTheme"
-        class="sidebar-link mb-2 w-full"
-        :title="sidebarCollapsed ? (isDark ? t('nav.lightMode') : t('nav.darkMode')) : undefined"
+        class="sidebar-link mb-1 w-full"
+        :title="
+          sidebarCollapsed ? (isDark ? t('nav.lightMode') : t('nav.darkMode')) : undefined
+        "
       >
-        <SunIcon v-if="isDark" class="h-5 w-5 flex-shrink-0 text-amber-500" />
+        <SunIcon
+          v-if="isDark"
+          class="h-5 w-5 flex-shrink-0"
+          style="color: var(--accent-4)"
+        />
         <MoonIcon v-else class="h-5 w-5 flex-shrink-0" />
         <transition name="fade">
           <span v-if="!sidebarCollapsed">{{
@@ -127,7 +160,10 @@
         class="sidebar-link w-full"
         :title="sidebarCollapsed ? t('nav.expand') : t('nav.collapse')"
       >
-        <ChevronDoubleLeftIcon v-if="!sidebarCollapsed" class="h-5 w-5 flex-shrink-0" />
+        <ChevronDoubleLeftIcon
+          v-if="!sidebarCollapsed"
+          class="h-5 w-5 flex-shrink-0"
+        />
         <ChevronDoubleRightIcon v-else class="h-5 w-5 flex-shrink-0" />
         <transition name="fade">
           <span v-if="!sidebarCollapsed">{{ t('nav.collapse') }}</span>

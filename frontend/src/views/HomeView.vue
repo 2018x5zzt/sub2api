@@ -15,24 +15,32 @@
   <!-- Default Home Page -->
   <div
     v-else
-    class="relative flex min-h-screen flex-col overflow-hidden bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"
+    class="relative flex min-h-screen flex-col overflow-hidden"
+    style="background: var(--bg-0)"
   >
     <!-- Background Decorations -->
     <div class="pointer-events-none absolute inset-0 overflow-hidden">
+      <!-- mesh gradient（cyan / violet glow） -->
       <div
-        class="absolute -right-40 -top-40 h-96 w-96 rounded-full bg-primary-400/20 blur-3xl"
+        class="absolute inset-0 bg-mesh-gradient"
+        style="opacity: 0.7"
       ></div>
+      <!-- 网格 -->
       <div
-        class="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-primary-500/15 blur-3xl"
-      ></div>
-      <div
-        class="absolute left-1/3 top-1/4 h-72 w-72 rounded-full bg-primary-300/10 blur-3xl"
-      ></div>
-      <div
-        class="absolute bottom-1/4 right-1/4 h-64 w-64 rounded-full bg-primary-400/10 blur-3xl"
-      ></div>
-      <div
-        class="absolute inset-0 bg-[linear-gradient(rgba(20,184,166,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(20,184,166,0.03)_1px,transparent_1px)] bg-[size:64px_64px]"
+        class="absolute inset-0 grid-bg"
+        style="
+          opacity: 0.4;
+          mask-image: radial-gradient(
+            ellipse 80% 60% at 50% 25%,
+            #000 30%,
+            transparent 80%
+          );
+          -webkit-mask-image: radial-gradient(
+            ellipse 80% 60% at 50% 25%,
+            #000 30%,
+            transparent 80%
+          );
+        "
       ></div>
     </div>
 
@@ -40,14 +48,35 @@
     <header class="relative z-20 px-6 py-4">
       <nav class="mx-auto flex max-w-6xl items-center justify-between">
         <!-- Logo -->
-        <div class="flex items-center">
-          <div class="h-10 w-10 overflow-hidden rounded-xl shadow-md">
-            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+        <div class="flex items-center gap-3">
+          <div
+            class="h-9 w-9 overflow-hidden flex items-center justify-center"
+            style="
+              border-radius: 8px;
+              background: var(--bg-2);
+              border: 1px solid var(--line-2);
+            "
+          >
+            <img
+              :src="siteLogo || '/logo.png'"
+              alt="Logo"
+              class="h-full w-full object-contain"
+            />
           </div>
+          <span
+            style="
+              font-family: 'Inter', system-ui, sans-serif;
+              font-size: 15px;
+              font-weight: 500;
+              letter-spacing: -0.01em;
+              color: var(--text-1);
+            "
+            >{{ siteName }}</span
+          >
         </div>
 
         <!-- Nav Actions -->
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
           <!-- Language Switcher -->
           <LocaleSwitcher />
 
@@ -57,7 +86,7 @@
             :href="docUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="btn btn-ghost btn-icon"
             :title="t('home.viewDocs')"
           >
             <Icon name="book" size="md" />
@@ -66,7 +95,7 @@
           <!-- Theme Toggle -->
           <button
             @click="toggleTheme"
-            class="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+            class="btn btn-ghost btn-icon"
             :title="isDark ? t('home.switchToLight') : t('home.switchToDark')"
           >
             <Icon v-if="isDark" name="sun" size="md" />
@@ -77,20 +106,33 @@
           <router-link
             v-if="isAuthenticated"
             :to="dashboardPath"
-            class="inline-flex items-center gap-1.5 rounded-full bg-gray-900 py-1 pl-1 pr-2.5 transition-colors hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700"
+            class="btn btn-secondary btn-sm"
+            style="padding-left: 4px; padding-right: 12px"
           >
             <span
-              class="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600 text-[10px] font-semibold text-white"
+              class="flex h-6 w-6 items-center justify-center"
+              style="
+                border-radius: 5px;
+                background: linear-gradient(
+                  135deg,
+                  var(--accent),
+                  var(--accent-2)
+                );
+                color: #052330;
+                font-size: 10.5px;
+                font-weight: 600;
+              "
             >
               {{ userInitial }}
             </span>
-            <span class="text-xs font-medium text-white">{{ t('home.dashboard') }}</span>
+            <span style="margin-left: 6px">{{ t('home.dashboard') }}</span>
             <svg
-              class="h-3 w-3 text-gray-400"
+              class="h-3 w-3"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
               stroke-width="2"
+              style="color: var(--text-3); margin-left: 6px"
             >
               <path
                 stroke-linecap="round"
@@ -99,43 +141,85 @@
               />
             </svg>
           </router-link>
-          <router-link
-            v-else
-            to="/login"
-            class="inline-flex items-center rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-gray-800 dark:bg-gray-800 dark:hover:bg-gray-700"
-          >
-            {{ t('home.login') }}
+          <router-link v-else to="/login" class="btn btn-primary btn-sm">
+            {{ t('home.login') }} →
           </router-link>
         </div>
       </nav>
     </header>
 
     <!-- Main Content -->
-    <main class="relative z-10 flex-1 px-6 py-16">
+    <main class="relative z-10 flex-1 px-6 py-12 md:py-16">
       <div class="mx-auto max-w-6xl">
-        <!-- Hero Section - Left/Right Layout -->
-        <div class="mb-12 flex flex-col items-center justify-between gap-12 lg:flex-row lg:gap-16">
+        <!-- Hero Section -->
+        <div
+          class="mb-16 flex flex-col items-center justify-between gap-12 lg:flex-row lg:gap-16"
+        >
           <!-- Left: Text Content -->
           <div class="flex-1 text-center lg:text-left">
-            <h1
-              class="mb-4 text-4xl font-bold text-gray-900 dark:text-white md:text-5xl lg:text-6xl"
+            <div
+              class="badge mb-6"
+              style="
+                background: color-mix(
+                  in srgb,
+                  var(--accent-3) 12%,
+                  transparent
+                );
+                border-color: color-mix(
+                  in srgb,
+                  var(--accent-3) 32%,
+                  transparent
+                );
+                color: var(--accent-3);
+              "
             >
+              <span
+                style="
+                  width: 6px;
+                  height: 6px;
+                  border-radius: 999px;
+                  background: var(--accent-3);
+                  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-3) 24%, transparent);
+                "
+              ></span>
+              <span class="mono" style="letter-spacing: 0.02em">{{
+                t('home.tags.realtimeBilling')
+              }}</span>
+            </div>
+
+            <h1 class="h-display mb-5">
               {{ siteName }}
             </h1>
-            <p class="mb-8 text-lg text-gray-600 dark:text-dark-300 md:text-xl">
+            <p class="lead mb-8" style="max-width: 540px">
               {{ siteSubtitle }}
             </p>
 
-            <!-- CTA Button -->
-            <div>
+            <!-- CTA -->
+            <div class="flex items-center gap-3 justify-center lg:justify-start">
               <router-link
                 :to="isAuthenticated ? dashboardPath : '/login'"
-                class="btn btn-primary px-8 py-3 text-base shadow-lg shadow-primary-500/30"
+                class="btn btn-primary btn-lg"
               >
                 {{ isAuthenticated ? t('home.goToDashboard') : t('home.getStarted') }}
-                <Icon name="arrowRight" size="md" class="ml-2" :stroke-width="2" />
+                <Icon name="arrowRight" size="md" :stroke-width="2" />
               </router-link>
+              <a
+                v-if="docUrl"
+                :href="docUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="btn btn-secondary btn-lg"
+              >
+                {{ t('home.docs') }}
+              </a>
             </div>
+
+            <p
+              class="mono mt-6"
+              style="font-size: 12px; color: var(--text-4)"
+            >
+              # 兼容 OpenAI / Anthropic / Gemini SDK
+            </p>
           </div>
 
           <!-- Right: Terminal Animation -->
@@ -176,62 +260,74 @@
           </div>
         </div>
 
-        <!-- Feature Tags - Centered -->
-        <div class="mb-12 flex flex-wrap items-center justify-center gap-4 md:gap-6">
-          <div
-            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200/50 bg-white/80 px-5 py-2.5 shadow-sm backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/80"
-          >
-            <Icon name="swap" size="sm" class="text-primary-500" />
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{
+        <!-- Feature Tags -->
+        <div class="mb-16 flex flex-wrap items-center justify-center gap-3">
+          <div class="badge" style="height: 30px; padding: 0 14px">
+            <Icon
+              name="swap"
+              size="sm"
+              style="color: var(--accent)"
+            />
+            <span style="color: var(--text-2)">{{
               t('home.tags.subscriptionToApi')
             }}</span>
           </div>
-          <div
-            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200/50 bg-white/80 px-5 py-2.5 shadow-sm backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/80"
-          >
-            <Icon name="shield" size="sm" class="text-primary-500" />
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{
+          <div class="badge" style="height: 30px; padding: 0 14px">
+            <Icon
+              name="shield"
+              size="sm"
+              style="color: var(--accent)"
+            />
+            <span style="color: var(--text-2)">{{
               t('home.tags.stickySession')
             }}</span>
           </div>
-          <div
-            class="inline-flex items-center gap-2.5 rounded-full border border-gray-200/50 bg-white/80 px-5 py-2.5 shadow-sm backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/80"
-          >
-            <Icon name="chart" size="sm" class="text-primary-500" />
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{
+          <div class="badge" style="height: 30px; padding: 0 14px">
+            <Icon
+              name="chart"
+              size="sm"
+              style="color: var(--accent)"
+            />
+            <span style="color: var(--text-2)">{{
               t('home.tags.realtimeBilling')
             }}</span>
           </div>
         </div>
 
         <!-- Features Grid -->
-        <div class="mb-12 grid gap-6 md:grid-cols-3">
+        <div class="mb-16 grid gap-4 md:grid-cols-3">
           <!-- Feature 1: Unified Gateway -->
-          <div
-            class="group rounded-2xl border border-gray-200/50 bg-white/60 p-6 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:shadow-primary-500/10 dark:border-dark-700/50 dark:bg-dark-800/60"
-          >
+          <div class="card card-hover" style="padding: 22px">
             <div
-              class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30 transition-transform group-hover:scale-110"
+              class="mb-4 flex h-11 w-11 items-center justify-center"
+              style="
+                border-radius: 10px;
+                background: color-mix(in srgb, var(--accent) 14%, transparent);
+                color: var(--accent);
+              "
             >
-              <Icon name="server" size="lg" class="text-white" />
+              <Icon name="server" size="lg" />
             </div>
-            <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+            <h3 class="h-3 mb-2">
               {{ t('home.features.unifiedGateway') }}
             </h3>
-            <p class="text-sm leading-relaxed text-gray-600 dark:text-dark-400">
+            <p style="font-size: 13.5px; line-height: 1.6; color: var(--text-3)">
               {{ t('home.features.unifiedGatewayDesc') }}
             </p>
           </div>
 
           <!-- Feature 2: Account Pool -->
-          <div
-            class="group rounded-2xl border border-gray-200/50 bg-white/60 p-6 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:shadow-primary-500/10 dark:border-dark-700/50 dark:bg-dark-800/60"
-          >
+          <div class="card card-hover" style="padding: 22px">
             <div
-              class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-lg shadow-primary-500/30 transition-transform group-hover:scale-110"
+              class="mb-4 flex h-11 w-11 items-center justify-center"
+              style="
+                border-radius: 10px;
+                background: color-mix(in srgb, var(--accent-2) 14%, transparent);
+                color: var(--accent-2);
+              "
             >
               <svg
-                class="h-6 w-6 text-white"
+                class="h-6 w-6"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -244,23 +340,26 @@
                 />
               </svg>
             </div>
-            <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+            <h3 class="h-3 mb-2">
               {{ t('home.features.multiAccount') }}
             </h3>
-            <p class="text-sm leading-relaxed text-gray-600 dark:text-dark-400">
+            <p style="font-size: 13.5px; line-height: 1.6; color: var(--text-3)">
               {{ t('home.features.multiAccountDesc') }}
             </p>
           </div>
 
           <!-- Feature 3: Billing & Quota -->
-          <div
-            class="group rounded-2xl border border-gray-200/50 bg-white/60 p-6 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:shadow-primary-500/10 dark:border-dark-700/50 dark:bg-dark-800/60"
-          >
+          <div class="card card-hover" style="padding: 22px">
             <div
-              class="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg shadow-purple-500/30 transition-transform group-hover:scale-110"
+              class="mb-4 flex h-11 w-11 items-center justify-center"
+              style="
+                border-radius: 10px;
+                background: color-mix(in srgb, var(--accent-3) 14%, transparent);
+                color: var(--accent-3);
+              "
             >
               <svg
-                class="h-6 w-6 text-white"
+                class="h-6 w-6"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -273,10 +372,10 @@
                 />
               </svg>
             </div>
-            <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+            <h3 class="h-3 mb-2">
               {{ t('home.features.balanceQuota') }}
             </h3>
-            <p class="text-sm leading-relaxed text-gray-600 dark:text-dark-400">
+            <p style="font-size: 13.5px; line-height: 1.6; color: var(--text-3)">
               {{ t('home.features.balanceQuotaDesc') }}
             </p>
           </div>
@@ -284,87 +383,81 @@
 
         <!-- Supported Providers -->
         <div class="mb-8 text-center">
-          <h2 class="mb-3 text-2xl font-bold text-gray-900 dark:text-white">
-            {{ t('home.providers.title') }}
-          </h2>
-          <p class="text-sm text-gray-600 dark:text-dark-400">
+          <div class="eyebrow mb-3">{{ t('home.providers.title') }}</div>
+          <p style="font-size: 13.5px; color: var(--text-3)">
             {{ t('home.providers.description') }}
           </p>
         </div>
 
-        <div class="mb-16 flex flex-wrap items-center justify-center gap-4">
-          <!-- Claude - Supported -->
-          <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
-          >
+        <div class="mb-12 flex flex-wrap items-center justify-center gap-3">
+          <!-- Claude -->
+          <div class="provider-tag">
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-orange-400 to-orange-500"
+              class="provider-icon"
+              style="
+                background: linear-gradient(135deg, #d97757, #c4602e);
+              "
             >
-              <span class="text-xs font-bold text-white">C</span>
+              <span>C</span>
             </div>
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ t('home.providers.claude') }}</span>
-            <span
-              class="rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
-              >{{ t('home.providers.supported') }}</span
-            >
+            <span class="provider-name">{{ t('home.providers.claude') }}</span>
+            <span class="provider-status">{{
+              t('home.providers.supported')
+            }}</span>
           </div>
-          <!-- GPT - Supported -->
-          <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
-          >
+          <!-- GPT -->
+          <div class="provider-tag">
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-green-500 to-green-600"
+              class="provider-icon"
+              style="background: linear-gradient(135deg, #10a37f, #0d8f6f)"
             >
-              <span class="text-xs font-bold text-white">G</span>
+              <span>G</span>
             </div>
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">GPT</span>
-            <span
-              class="rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
-              >{{ t('home.providers.supported') }}</span
-            >
+            <span class="provider-name">GPT</span>
+            <span class="provider-status">{{
+              t('home.providers.supported')
+            }}</span>
           </div>
-          <!-- Gemini - Supported -->
-          <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
-          >
+          <!-- Gemini -->
+          <div class="provider-tag">
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600"
+              class="provider-icon"
+              style="background: linear-gradient(135deg, #4285f4, #1a73e8)"
             >
-              <span class="text-xs font-bold text-white">G</span>
+              <span>G</span>
             </div>
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ t('home.providers.gemini') }}</span>
-            <span
-              class="rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
-              >{{ t('home.providers.supported') }}</span
-            >
+            <span class="provider-name">{{ t('home.providers.gemini') }}</span>
+            <span class="provider-status">{{
+              t('home.providers.supported')
+            }}</span>
           </div>
-          <!-- Antigravity - Supported -->
-          <div
-            class="flex items-center gap-2 rounded-xl border border-primary-200 bg-white/60 px-5 py-3 ring-1 ring-primary-500/20 backdrop-blur-sm dark:border-primary-800 dark:bg-dark-800/60"
-          >
+          <!-- Antigravity -->
+          <div class="provider-tag">
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-rose-500 to-pink-600"
+              class="provider-icon"
+              style="background: linear-gradient(135deg, #f43f5e, #db2777)"
             >
-              <span class="text-xs font-bold text-white">A</span>
+              <span>A</span>
             </div>
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ t('home.providers.antigravity') }}</span>
-            <span
-              class="rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
-              >{{ t('home.providers.supported') }}</span
-            >
+            <span class="provider-name">{{
+              t('home.providers.antigravity')
+            }}</span>
+            <span class="provider-status">{{
+              t('home.providers.supported')
+            }}</span>
           </div>
-          <!-- More - Coming Soon -->
-          <div
-            class="flex items-center gap-2 rounded-xl border border-gray-200/50 bg-white/40 px-5 py-3 opacity-60 backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/40"
-          >
+          <!-- More -->
+          <div class="provider-tag" style="opacity: 0.5">
             <div
-              class="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-gray-500 to-gray-600"
+              class="provider-icon"
+              style="background: var(--bg-3); color: var(--text-3)"
             >
-              <span class="text-xs font-bold text-white">+</span>
+              <span>+</span>
             </div>
-            <span class="text-sm font-medium text-gray-700 dark:text-dark-200">{{ t('home.providers.more') }}</span>
+            <span class="provider-name">{{ t('home.providers.more') }}</span>
             <span
-              class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-dark-700 dark:text-dark-400"
+              class="provider-status"
+              style="background: var(--bg-3); color: var(--text-3)"
               >{{ t('home.providers.soon') }}</span
             >
           </div>
@@ -373,12 +466,19 @@
     </main>
 
     <!-- Footer -->
-    <footer class="relative z-10 border-t border-gray-200/50 px-6 py-8 dark:border-dark-800/50">
+    <footer
+      class="relative z-10 px-6 py-8"
+      style="border-top: 1px solid var(--line-1)"
+    >
       <div
         class="mx-auto flex max-w-6xl flex-col items-center justify-center gap-4 text-center sm:flex-row sm:text-left"
       >
-        <p class="text-sm text-gray-500 dark:text-dark-400">
-          &copy; {{ currentYear }} {{ siteName }}. {{ t('home.footer.allRightsReserved') }}
+        <p
+          class="mono"
+          style="font-size: 12px; color: var(--text-4)"
+        >
+          &copy; {{ currentYear }} {{ siteName }}.
+          {{ t('home.footer.allRightsReserved') }}
         </p>
         <div class="flex items-center gap-4">
           <a
@@ -386,7 +486,7 @@
             :href="docUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
+            class="footer-link"
           >
             {{ t('home.docs') }}
           </a>
@@ -394,7 +494,7 @@
             :href="githubUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
+            class="footer-link"
           >
             GitHub
           </a>
@@ -416,26 +516,22 @@ const { t } = useI18n()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 
-// Site settings - directly from appStore (already initialized from injected config)
+// Site settings
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
 const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
 const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'AI API Gateway Platform')
 const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 
-// Check if homeContent is a URL (for iframe display)
 const isHomeContentUrl = computed(() => {
   const content = homeContent.value.trim()
   return content.startsWith('http://') || content.startsWith('https://')
 })
 
-// Theme
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
-// GitHub URL
 const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
 
-// Auth state
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const isAdmin = computed(() => authStore.isAdmin)
 const dashboardPath = computed(() => isAdmin.value ? '/admin/dashboard' : '/dashboard')
@@ -445,17 +541,14 @@ const userInitial = computed(() => {
   return user.email.charAt(0).toUpperCase()
 })
 
-// Current year for footer
 const currentYear = computed(() => new Date().getFullYear())
 
-// Toggle theme
 function toggleTheme() {
   isDark.value = !isDark.value
   document.documentElement.classList.toggle('dark', isDark.value)
   localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
 }
 
-// Initialize theme
 function initTheme() {
   const savedTheme = localStorage.getItem('theme')
   if (
@@ -469,11 +562,7 @@ function initTheme() {
 
 onMounted(() => {
   initTheme()
-
-  // Check auth state
   authStore.checkAuth()
-
-  // Ensure public settings are loaded (will use cache if already loaded from injected config)
   if (!appStore.publicSettingsLoaded) {
     appStore.fetchPublicSettings()
   }
@@ -481,6 +570,60 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Provider tag */
+.provider-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-1);
+  border: 1px solid var(--line-1);
+  border-radius: 10px;
+  transition: all 150ms ease;
+}
+.provider-tag:hover {
+  border-color: var(--line-2);
+  background: var(--bg-2);
+}
+.provider-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+}
+.provider-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  letter-spacing: -0.005em;
+}
+.provider-status {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+/* Footer link */
+.footer-link {
+  font-size: 13px;
+  color: var(--text-3);
+  transition: color 150ms ease;
+}
+.footer-link:hover {
+  color: var(--text-1);
+}
+
 /* Terminal Container */
 .terminal-container {
   position: relative;
@@ -490,12 +633,12 @@ onMounted(() => {
 /* Terminal Window */
 .terminal-window {
   width: 420px;
-  background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+  background: linear-gradient(180deg, #11141a 0%, #07080a 100%);
   border-radius: 14px;
   box-shadow:
-    0 25px 50px -12px rgba(0, 0, 0, 0.4),
-    0 0 0 1px rgba(255, 255, 255, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    0 25px 50px -12px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   overflow: hidden;
   transform: perspective(1000px) rotateX(2deg) rotateY(-2deg);
   transition: transform 0.3s ease;
@@ -503,6 +646,11 @@ onMounted(() => {
 
 .terminal-window:hover {
   transform: perspective(1000px) rotateX(0deg) rotateY(0deg) translateY(-4px);
+  box-shadow:
+    0 35px 70px -12px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(125, 211, 252, 0.18),
+    0 0 60px rgba(125, 211, 252, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 /* Terminal Header */
@@ -510,8 +658,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  background: rgba(30, 41, 59, 0.8);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(15, 18, 24, 0.6);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .terminal-buttons {
@@ -520,35 +668,35 @@ onMounted(() => {
 }
 
 .terminal-buttons span {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
 }
 
 .btn-close {
-  background: #ef4444;
+  background: #ff5f56;
 }
 .btn-minimize {
-  background: #eab308;
+  background: #ffbd2e;
 }
 .btn-maximize {
-  background: #22c55e;
+  background: #27c93f;
 }
 
 .terminal-title {
   flex: 1;
   text-align: center;
-  font-size: 12px;
-  font-family: ui-monospace, monospace;
-  color: #64748b;
+  font-size: 11.5px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--text-4);
   margin-right: 52px;
 }
 
 /* Terminal Body */
 .terminal-body {
   padding: 20px 24px;
-  font-family: ui-monospace, 'Fira Code', monospace;
-  font-size: 14px;
+  font-family: 'JetBrains Mono', ui-monospace, 'Fira Code', monospace;
+  font-size: 13px;
   line-height: 2;
 }
 
@@ -586,28 +734,29 @@ onMounted(() => {
 }
 
 .code-prompt {
-  color: #22c55e;
-  font-weight: bold;
+  color: #34d399;
+  font-weight: 600;
 }
 .code-cmd {
-  color: #38bdf8;
+  color: #7dd3fc;
 }
 .code-flag {
   color: #a78bfa;
 }
 .code-url {
-  color: #14b8a6;
+  color: #c8cbd2;
 }
 .code-comment {
-  color: #64748b;
+  color: #5b606b;
   font-style: italic;
 }
 .code-success {
-  color: #22c55e;
-  background: rgba(34, 197, 94, 0.15);
-  padding: 2px 8px;
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.12);
+  padding: 1px 7px;
   border-radius: 4px;
   font-weight: 600;
+  font-size: 12px;
 }
 .code-response {
   color: #fbbf24;
@@ -616,9 +765,9 @@ onMounted(() => {
 /* Blinking Cursor */
 .cursor {
   display: inline-block;
-  width: 8px;
-  height: 16px;
-  background: #22c55e;
+  width: 7px;
+  height: 14px;
+  background: #34d399;
   animation: blink 1s step-end infinite;
 }
 
@@ -631,14 +780,5 @@ onMounted(() => {
   100% {
     opacity: 0;
   }
-}
-
-/* Dark mode adjustments */
-:deep(.dark) .terminal-window {
-  box-shadow:
-    0 25px 50px -12px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(20, 184, 166, 0.2),
-    0 0 40px rgba(20, 184, 166, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 </style>

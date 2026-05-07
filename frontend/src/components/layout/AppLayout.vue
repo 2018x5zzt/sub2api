@@ -1,7 +1,25 @@
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-dark-950">
-    <!-- Background Decoration -->
-    <div class="pointer-events-none fixed inset-0 bg-mesh-gradient"></div>
+  <div class="min-h-screen" style="background: var(--bg-0)">
+    <!-- 背景装饰：极淡的网状光晕 + 网格 -->
+    <div
+      class="pointer-events-none fixed inset-0 bg-mesh-gradient opacity-60"
+    ></div>
+    <div
+      class="pointer-events-none fixed inset-0 grid-bg"
+      style="
+        opacity: 0.35;
+        mask-image: radial-gradient(
+          ellipse 80% 60% at 50% 0%,
+          #000 30%,
+          transparent 80%
+        );
+        -webkit-mask-image: radial-gradient(
+          ellipse 80% 60% at 50% 0%,
+          #000 30%,
+          transparent 80%
+        );
+      "
+    ></div>
 
     <!-- Sidebar -->
     <AppSidebar />

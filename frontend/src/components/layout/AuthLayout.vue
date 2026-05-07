@@ -1,26 +1,41 @@
 <template>
-  <div class="relative flex min-h-screen items-center justify-center overflow-hidden p-4">
-    <!-- Background -->
+  <div
+    class="relative flex min-h-screen items-center justify-center overflow-hidden p-4"
+    style="background: var(--bg-0)"
+  >
+    <!-- 背景：网状光晕 -->
     <div
-      class="absolute inset-0 bg-gradient-to-br from-gray-50 via-primary-50/30 to-gray-100 dark:from-dark-950 dark:via-dark-900 dark:to-dark-950"
+      class="pointer-events-none absolute inset-0 bg-mesh-gradient"
+      style="opacity: 0.7"
     ></div>
 
-    <!-- Decorative Elements -->
+    <!-- 装饰光斑（cyan + violet glow） -->
     <div class="pointer-events-none absolute inset-0 overflow-hidden">
-      <!-- Gradient Orbs -->
       <div
-        class="absolute -right-40 -top-40 h-80 w-80 rounded-full bg-primary-400/20 blur-3xl"
+        class="absolute -right-40 -top-40 h-96 w-96 rounded-full blur-3xl"
+        style="background: rgba(125, 211, 252, 0.18)"
       ></div>
       <div
-        class="absolute -bottom-40 -left-40 h-80 w-80 rounded-full bg-primary-500/15 blur-3xl"
-      ></div>
-      <div
-        class="absolute left-1/2 top-1/2 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary-300/10 blur-3xl"
+        class="absolute -bottom-40 -left-40 h-96 w-96 rounded-full blur-3xl"
+        style="background: rgba(167, 139, 250, 0.14)"
       ></div>
 
-      <!-- Grid Pattern -->
+      <!-- 网格背景 -->
       <div
-        class="absolute inset-0 bg-[linear-gradient(rgba(20,184,166,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(20,184,166,0.03)_1px,transparent_1px)] bg-[size:64px_64px]"
+        class="absolute inset-0 grid-bg"
+        style="
+          opacity: 0.5;
+          mask-image: radial-gradient(
+            ellipse 70% 60% at 50% 30%,
+            #000 30%,
+            transparent 80%
+          );
+          -webkit-mask-image: radial-gradient(
+            ellipse 70% 60% at 50% 30%,
+            #000 30%,
+            transparent 80%
+          );
+        "
       ></div>
     </div>
 
@@ -28,34 +43,52 @@
     <div class="relative z-10 w-full max-w-md">
       <!-- Logo/Brand -->
       <div class="mb-8 text-center">
-        <!-- Custom Logo or Default Logo -->
         <template v-if="settingsLoaded">
           <div
-            class="mb-4 inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl shadow-lg shadow-primary-500/30"
+            class="mb-4 inline-flex h-16 w-16 items-center justify-center overflow-hidden rounded-[14px] shadow-glow"
+            style="background: var(--bg-2); border: 1px solid var(--line-2)"
           >
-            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+            <img
+              :src="siteLogo || '/logo.png'"
+              alt="Logo"
+              class="h-full w-full object-contain"
+            />
           </div>
-          <h1 class="text-gradient mb-2 text-3xl font-bold">
+          <h1
+            class="text-gradient mb-2"
+            style="
+              font-family: 'Inter', system-ui, sans-serif;
+              font-size: 32px;
+              font-weight: 500;
+              letter-spacing: -0.02em;
+            "
+          >
             {{ siteName }}
           </h1>
-          <p class="text-sm text-gray-500 dark:text-dark-400">
+          <p style="color: var(--text-3); font-size: 13px">
             {{ siteSubtitle }}
           </p>
         </template>
       </div>
 
       <!-- Card Container -->
-      <div class="card-glass rounded-2xl p-8 shadow-glass">
+      <div class="card-glass" style="padding: 32px; border-radius: 14px">
         <slot />
       </div>
 
       <!-- Footer Links -->
-      <div class="mt-6 text-center text-sm">
+      <div
+        class="mt-6 text-center"
+        style="font-size: 13px; color: var(--text-3)"
+      >
         <slot name="footer" />
       </div>
 
       <!-- Copyright -->
-      <div class="mt-8 text-center text-xs text-gray-400 dark:text-dark-500">
+      <div
+        class="mt-8 text-center mono"
+        style="font-size: 11px; color: var(--text-4)"
+      >
         &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
       </div>
     </div>
@@ -81,8 +114,3 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.text-gradient {
-  @apply bg-gradient-to-r from-primary-600 to-primary-500 bg-clip-text text-transparent;
-}
-</style>
