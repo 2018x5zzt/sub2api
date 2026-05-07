@@ -16,7 +16,9 @@ import {
   Layers,
   BadgeCheck,
   Server,
-  Settings
+  Settings,
+  Ticket,
+  Database
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { LocaleSwitcher } from './LocaleSwitcher'
@@ -44,8 +46,12 @@ const adminNav: NavItem[] = [
   { to: '/admin/users', labelKey: 'nav.users', Icon: UserCircle },
   { to: '/admin/groups', labelKey: 'nav.groups', Icon: Boxes },
   { to: '/admin/accounts', labelKey: 'nav.accounts', Icon: Server },
+  { to: '/admin/subscriptions', labelKey: 'nav.subscriptions', Icon: BadgeCheck },
   { to: '/admin/usage', labelKey: 'nav.usage', Icon: BarChart3 },
+  { to: '/admin/redeem', labelKey: 'nav.redeemCodes', Icon: Gift },
+  { to: '/admin/promo-codes', labelKey: 'nav.promoCodes', Icon: Ticket },
   { to: '/admin/announcements', labelKey: 'nav.announcements', Icon: Megaphone },
+  { to: '/admin/backup', labelKey: 'common.backup', Icon: Database },
   { to: '/admin/settings', labelKey: 'nav.settings', Icon: Settings }
 ]
 

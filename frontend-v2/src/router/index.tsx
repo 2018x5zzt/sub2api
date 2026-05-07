@@ -21,6 +21,10 @@ import AdminAccountsPage from '@/pages/admin/Accounts'
 import AdminUsagePage from '@/pages/admin/Usage'
 import AdminSettingsPage from '@/pages/admin/Settings'
 import AdminAnnouncementsPage from '@/pages/admin/Announcements'
+import AdminRedeemCodesPage from '@/pages/admin/RedeemCodes'
+import AdminPromoCodesPage from '@/pages/admin/PromoCodes'
+import AdminSubscriptionsPage from '@/pages/admin/Subscriptions'
+import AdminBackupPage from '@/pages/admin/Backup'
 import { PlaceholderPage } from '@/pages/admin/Placeholder'
 import NotFoundPage from '@/pages/NotFound'
 import { ConsoleLayout } from '@/components/layout/ConsoleLayout'
@@ -66,8 +70,11 @@ const router = createBrowserRouter([
       { path: '/admin/accounts', element: <AdminAccountsPage /> },
       { path: '/admin/usage', element: <AdminUsagePage /> },
       { path: '/admin/announcements', element: <AdminAnnouncementsPage /> },
-      { path: '/admin/settings', element: <AdminSettingsPage /> },
-      { path: '/admin/redeem', element: <PlaceholderPage title="Redeem Codes" /> }
+      { path: '/admin/redeem', element: <AdminRedeemCodesPage /> },
+      { path: '/admin/promo-codes', element: <AdminPromoCodesPage /> },
+      { path: '/admin/subscriptions', element: <AdminSubscriptionsPage /> },
+      { path: '/admin/backup', element: <AdminBackupPage /> },
+      { path: '/admin/settings', element: <AdminSettingsPage /> }
     ]
   },
 

@@ -1,0 +1,102 @@
+import { apiClient } from '@/api/client'
+
+export interface BackupS3Config {
+  endpoint: string
+  region: string
+  bucket: string
+  prefix: string
+  access_key_id: string
+  secret_access_key_configured?: boolean
+  secret_access_key?: string
+  use_path_style: boolean
+}
+
+export interface BackupScheduleConfig {
+  enabled: boolean
+  cron_expression: string
+  retention_days: number
+}
+
+export interface BackupRecord {
+  id: string
+  size_bytes: number
+  created_at: string
+  status: 'completed' | 'failed' | 'in_progress'
+  storage: 's3' | 'local'
+  s3_key?: string
+  error_message?: string
+  encrypted: boolean
+}
+
+export interface CreateBackupRequest {
+  password?: string
+  description?: string
+}
+
+export interface TestS3Response {
+  success: boolean
+  message: string
+  details?: string
+}
+
+export async function getS3Config() {
+  const { data } = await apiClient.get<BackupS3Config>('/admin/backup/s3-config')
+  return data
+}
+
+export async function updateS3Config(config: BackupS3Config) {
+  const { data } = await apiClient.put<BackupS3Config>('/admin/backup/s3-config', config)
+  return data
+}
+
+export async function testS3Connection(config: BackupS3Config) {
+  const { data } = await apiClient.post<TestS3Response>('/admin/backup/s3-test', config)
+  return data
+}
+
+export async function getSchedule() {
+  const { data } = await apiClient.get<BackupScheduleConfig>('/admin/backup/schedule')
+  return data
+}
+
+export async function updateSchedule(config: BackupScheduleConfig) {
+  const { data } = await apiClient.put<BackupScheduleConfig>('/admin/backup/schedule', config)
+  return data
+}
+
+export async function createBackup(req?: CreateBackupRequest) {
+  const { data } = await apiClient.post<BackupRecord>('/admin/backup', req || {})
+  return data
+}
+
+export async function listBackups() {
+  const { data } = await apiClient.get<{ items: BackupRecord[] }>('/admin/backup')
+  return data
+}
+
+export async function deleteBackup(id: string) {
+  await apiClient.delete(`/admin/backup/${id}`)
+}
+
+export async function getBackupDownloadURL(id: string) {
+  const { data } = await apiClient.get<{ url: string }>(`/admin/backup/${id}/download`)
+  return data
+}
+
+export async function restoreBackup(id: string, password: string) {
+  const { data } = await apiClient.post<BackupRecord>(`/admin/backup/${id}/restore`, { password })
+  return data
+}
+
+export const adminBackupAPI = {
+  getS3Config,
+  updateS3Config,
+  testS3Connection,
+  getSchedule,
+  updateSchedule,
+  createBackup,
+  listBackups,
+  deleteBackup,
+  getBackupDownloadURL,
+  restoreBackup
+}
