@@ -148,8 +148,11 @@ func resolveBillingMultiplierForUsage(ctx context.Context, apiKey *APIKey, user 
 	if user != nil && user.ID > 0 && resolveUserGroupRate != nil {
 		baseMultiplier = resolveUserGroupRate(ctx, user.ID, *apiKey.GroupID, group.RateMultiplier)
 	}
+	if account != nil {
+		resolution.BillingAdjustmentMultiplier = account.GroupBillingMultiplier(apiKey.GroupID)
+	}
 	resolution.BaseRateMultiplier = baseMultiplier
-	resolution.EffectiveBillingMultiplier = baseMultiplier
+	resolution.EffectiveBillingMultiplier = baseMultiplier * resolution.BillingAdjustmentMultiplier
 	return resolution
 }
 

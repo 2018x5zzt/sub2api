@@ -6176,7 +6176,7 @@ export default {
     sourceDefault: '平台默认',
     sourceMapping: '账号映射聚合',
     sourceMixed: '默认值 + 账号映射',
-    pricingComputedWithRate: '价格已包含 {rate}x 分组倍率',
+    pricingComputedWithRate: '价格按 {rate}x 分组基础倍率展示；最终计费可能叠加本次调度账号倍率',
     dynamicPricingSummary: '动态计费 · 预算 {budget}x · 账号倍率 {range} · 实际按本次调度账号倍率结算',
     dynamicPricingSummaryNoRange: '动态计费 · 预算 {budget}x · 账号倍率暂无 · 实际按本次调度账号倍率结算',
     dynamicShort: '动态',

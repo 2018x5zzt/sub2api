@@ -26,7 +26,7 @@ const messages: Record<string, string> = {
   'modelHub.sourceDefault': 'Platform defaults',
   'modelHub.sourceMapping': 'Account mapping aggregate',
   'modelHub.sourceMixed': 'Defaults + account mappings',
-  'modelHub.pricingComputedWithRate': 'Prices include {rate}x',
+  'modelHub.pricingComputedWithRate': 'Prices use {rate}x base group rate; final billing may include the dispatched account multiplier',
   'modelHub.dynamicPricingSummary': 'Dynamic billing · Budget {budget}x · Account rates {range} · Actual billing uses the dispatched account rate',
   'modelHub.dynamicPricingSummaryNoRange': 'Dynamic billing · Budget {budget}x · Account rates unavailable · Actual billing uses the dispatched account rate',
   'modelHub.dynamicShort': 'Dynamic',

@@ -6023,7 +6023,7 @@ export default {
     sourceDefault: 'Platform defaults',
     sourceMapping: 'Account mapping aggregate',
     sourceMixed: 'Defaults + account mappings',
-    pricingComputedWithRate: 'Prices include {rate}x group rate',
+    pricingComputedWithRate: 'Prices use {rate}x base group rate; final billing may include the dispatched account multiplier',
     dynamicPricingSummary: 'Dynamic billing · Budget {budget}x · Account rates {range} · Actual billing uses the dispatched account rate',
     dynamicPricingSummaryNoRange: 'Dynamic billing · Budget {budget}x · Account rates unavailable · Actual billing uses the dispatched account rate',
     dynamicShort: 'Dynamic',

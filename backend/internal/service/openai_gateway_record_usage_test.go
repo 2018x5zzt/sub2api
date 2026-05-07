@@ -327,6 +327,55 @@ func TestOpenAIGatewayServiceRecordUsage_DynamicPricingUsesAccountGroupBillingMu
 	require.Equal(t, 1, userRepo.deductCalls)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_FixedPricingAppliesAccountGroupBillingMultiplier(t *testing.T) {
+	groupID := int64(22)
+	groupRate := 2.0
+	accountBillingMultiplier := 3.0
+	effectiveMultiplier := groupRate * accountBillingMultiplier
+	usage := OpenAIUsage{InputTokens: 15, OutputTokens: 4, CacheReadInputTokens: 3}
+
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_fixed_account_group_multiplier",
+			Usage:     usage,
+			Model:     "gpt-5.4",
+			Duration:  time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      1004,
+			GroupID: i64p(groupID),
+			Group: &Group{
+				ID:             groupID,
+				RateMultiplier: groupRate,
+				PricingMode:    GroupPricingModeFixed,
+			},
+		},
+		User: &User{ID: 2004},
+		Account: &Account{
+			ID: 3004,
+			AccountGroups: []AccountGroup{{
+				AccountID:         3004,
+				GroupID:           groupID,
+				BillingMultiplier: accountBillingMultiplier,
+			}},
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, effectiveMultiplier, usageRepo.lastLog.RateMultiplier)
+
+	expected := expectedOpenAICost(t, svc, "gpt-5.4", usage, effectiveMultiplier)
+	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
+	require.Equal(t, 1, userRepo.deductCalls)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_IncludesEndpointMetadata(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}

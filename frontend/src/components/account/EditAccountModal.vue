@@ -2069,7 +2069,7 @@
         <div class="mb-3">
           <h4 class="text-sm font-semibold text-gray-900 dark:text-white">分组扣费乘数</h4>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            仅动态倍率分组会影响该账号在该分组下的扣费倍数。
+            该乘数会作为账号在对应分组下计费倍率的额外乘积。
           </p>
         </div>
         <div class="space-y-3">
@@ -2450,16 +2450,12 @@ const selectedGroupBillingConfigs = computed(() =>
   form.group_ids
     .map((groupId) => {
       const group = props.groups.find((item) => item.id === groupId)
-      if (group?.pricing_mode !== 'dynamic') {
-        return null
-      }
       return {
         groupId,
-        groupName: group.name || `#${groupId}`,
+        groupName: group?.name || `#${groupId}`,
         billingMultiplier: groupBillingMultipliers[groupId] ?? DEFAULT_GROUP_BILLING_MULTIPLIER
       }
     })
-    .filter((item): item is { groupId: number; groupName: string; billingMultiplier: string } => item !== null)
 )
 
 const statusOptions = computed(() => {
@@ -2494,12 +2490,11 @@ const setGroupBillingMultiplier = (groupID: number, value: string) => {
 
 const buildGroupBindingsPayload = () =>
   form.group_ids.map((groupId) => {
-    const group = props.groups.find((item) => item.id === groupId)
     const rawValue = (groupBillingMultipliers[groupId] ?? DEFAULT_GROUP_BILLING_MULTIPLIER).trim()
     const parsed = Number.parseFloat(rawValue)
     return {
       group_id: groupId,
-      ...(group?.pricing_mode === 'dynamic' && Number.isFinite(parsed) && parsed > 0 && Math.abs(parsed - 1) > 1e-9
+      ...(Number.isFinite(parsed) && parsed > 0 && Math.abs(parsed - 1) > 1e-9
         ? { billing_multiplier: parsed }
         : {})
     }

@@ -244,6 +244,60 @@ func TestGatewayServiceRecordUsage_DynamicPricingUsesAccountGroupBillingMultipli
 	require.Equal(t, 1, userRepo.deductCalls)
 }
 
+func TestGatewayServiceRecordUsage_FixedPricingAppliesAccountGroupBillingMultiplier(t *testing.T) {
+	groupID := int64(22)
+	groupRate := 2.0
+	accountBillingMultiplier := 3.0
+	effectiveMultiplier := groupRate * accountBillingMultiplier
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, subRepo)
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_fixed_account_group_multiplier",
+			Usage: ClaudeUsage{
+				InputTokens:  10,
+				OutputTokens: 6,
+			},
+			Model:    "claude-sonnet-4",
+			Duration: time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      503,
+			GroupID: i64p(groupID),
+			Group: &Group{
+				ID:             groupID,
+				RateMultiplier: groupRate,
+				PricingMode:    GroupPricingModeFixed,
+			},
+		},
+		User: &User{ID: 603},
+		Account: &Account{
+			ID: 703,
+			AccountGroups: []AccountGroup{{
+				AccountID:         703,
+				GroupID:           groupID,
+				BillingMultiplier: accountBillingMultiplier,
+			}},
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, effectiveMultiplier, usageRepo.lastLog.RateMultiplier)
+
+	expected, err := svc.billingService.CalculateCost("claude-sonnet-4", UsageTokens{
+		InputTokens:  10,
+		OutputTokens: 6,
+	}, effectiveMultiplier)
+	require.NoError(t, err)
+	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
+	require.Equal(t, 1, userRepo.deductCalls)
+}
+
 func TestGatewayServiceRecordUsage_UsageLogWriteErrorDoesNotSkipBilling(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: MarkUsageLogCreateNotPersisted(context.Canceled)}
 	userRepo := &openAIRecordUsageUserRepoStub{}
