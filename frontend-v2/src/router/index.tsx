@@ -16,6 +16,9 @@ import SubscriptionsPage from '@/pages/user/Subscriptions'
 import ModelHubPage from '@/pages/user/ModelHub'
 import AdminDashboard from '@/pages/admin/Dashboard'
 import AdminUsersPage from '@/pages/admin/Users'
+import AdminGroupsPage from '@/pages/admin/Groups'
+import AdminAccountsPage from '@/pages/admin/Accounts'
+import AdminUsagePage from '@/pages/admin/Usage'
 import { PlaceholderPage } from '@/pages/admin/Placeholder'
 import NotFoundPage from '@/pages/NotFound'
 import { ConsoleLayout } from '@/components/layout/ConsoleLayout'
@@ -57,10 +60,10 @@ const router = createBrowserRouter([
     children: [
       { path: '/admin', element: <AdminDashboard /> },
       { path: '/admin/users', element: <AdminUsersPage /> },
-      { path: '/admin/groups', element: <PlaceholderPage title="Groups" /> },
-      { path: '/admin/accounts', element: <PlaceholderPage title="Accounts" /> },
+      { path: '/admin/groups', element: <AdminGroupsPage /> },
+      { path: '/admin/accounts', element: <AdminAccountsPage /> },
+      { path: '/admin/usage', element: <AdminUsagePage /> },
       { path: '/admin/announcements', element: <PlaceholderPage title="Announcements" /> },
-      { path: '/admin/usage', element: <PlaceholderPage title="Usage" /> },
       { path: '/admin/redeem', element: <PlaceholderPage title="Redeem Codes" /> },
       { path: '/admin/settings', element: <PlaceholderPage title="Settings" /> }
     ]

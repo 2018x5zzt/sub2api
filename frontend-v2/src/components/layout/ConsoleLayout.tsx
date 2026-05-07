@@ -14,7 +14,8 @@ import {
   Megaphone,
   Boxes,
   Layers,
-  BadgeCheck
+  BadgeCheck,
+  Server
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { LocaleSwitcher } from './LocaleSwitcher'
@@ -40,8 +41,10 @@ const userNav: NavItem[] = [
 const adminNav: NavItem[] = [
   { to: '/admin', labelKey: 'nav.dashboard', Icon: LayoutDashboard },
   { to: '/admin/users', labelKey: 'nav.users', Icon: UserCircle },
-  { to: '/admin/announcements', labelKey: 'nav.announcements', Icon: Megaphone },
-  { to: '/admin/groups', labelKey: 'nav.groups', Icon: Boxes }
+  { to: '/admin/groups', labelKey: 'nav.groups', Icon: Boxes },
+  { to: '/admin/accounts', labelKey: 'nav.accounts', Icon: Server },
+  { to: '/admin/usage', labelKey: 'nav.usage', Icon: BarChart3 },
+  { to: '/admin/announcements', labelKey: 'nav.announcements', Icon: Megaphone }
 ]
 
 export function ConsoleLayout({ admin, children }: { admin?: boolean; children?: ReactNode }) {
