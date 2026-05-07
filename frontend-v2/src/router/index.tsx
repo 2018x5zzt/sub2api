@@ -12,6 +12,8 @@ import KeysPage from '@/pages/user/Keys'
 import UsagePage from '@/pages/user/Usage'
 import ProfilePage from '@/pages/user/Profile'
 import RedeemPage from '@/pages/user/Redeem'
+import SubscriptionsPage from '@/pages/user/Subscriptions'
+import ModelHubPage from '@/pages/user/ModelHub'
 import AdminDashboard from '@/pages/admin/Dashboard'
 import AdminUsersPage from '@/pages/admin/Users'
 import { PlaceholderPage } from '@/pages/admin/Placeholder'
@@ -43,6 +45,8 @@ const router = createBrowserRouter([
     children: [
       { path: '/keys', element: <KeysPage /> },
       { path: '/usage', element: <UsagePage /> },
+      { path: '/models', element: <ModelHubPage /> },
+      { path: '/subscriptions', element: <SubscriptionsPage /> },
       { path: '/redeem', element: <RedeemPage /> },
       { path: '/profile', element: <ProfilePage /> }
     ]

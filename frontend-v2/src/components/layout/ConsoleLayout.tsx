@@ -12,7 +12,9 @@ import {
   LogOut,
   Shield,
   Megaphone,
-  Boxes
+  Boxes,
+  Layers,
+  BadgeCheck
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { LocaleSwitcher } from './LocaleSwitcher'
@@ -28,7 +30,9 @@ interface NavItem {
 const userNav: NavItem[] = [
   { to: '/dashboard', labelKey: 'nav.dashboard', Icon: LayoutDashboard },
   { to: '/keys', labelKey: 'nav.apiKeys', Icon: KeyRound },
+  { to: '/models', labelKey: 'nav.modelHub', Icon: Layers },
   { to: '/usage', labelKey: 'nav.usage', Icon: BarChart3 },
+  { to: '/subscriptions', labelKey: 'nav.mySubscriptions', Icon: BadgeCheck },
   { to: '/redeem', labelKey: 'nav.redeem', Icon: Gift },
   { to: '/profile', labelKey: 'nav.profile', Icon: UserCircle }
 ]
