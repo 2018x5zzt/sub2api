@@ -116,6 +116,15 @@ export const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/oauth/consent',
+    name: 'XlabOAuthConsent',
+    component: () => import('@/views/auth/XlabOAuthConsentView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Xlab OAuth'
+    }
+  },
+  {
     path: '/forgot-password',
     name: 'ForgotPassword',
     component: () => import('@/views/auth/ForgotPasswordView.vue'),
@@ -284,6 +293,16 @@ export const routes: RouteRecordRaw[] = [
       title: 'My Orders',
       titleKey: 'nav.myOrders',
       requiresPayment: true
+    }
+  },
+  {
+    path: '/image-studio',
+    name: 'ImageStudio',
+    component: () => import('@/views/user/ImageStudioView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      title: '创作图片'
     }
   },
   {

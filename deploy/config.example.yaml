@@ -807,6 +807,24 @@ jwt:
   access_token_expire_minutes: 0
 
 # =============================================================================
+# Xlab OAuth Provider (Optional, for trusted first-party SSO clients)
+# Xlab OAuth Provider（可选，用于可信第一方 SSO 客户端）
+# =============================================================================
+xlab_oauth_provider:
+  # Configure client secrets for /oauth/token. Leave empty to disable token exchange.
+  # 配置 /oauth/token 使用的客户端密钥。留空时会拒绝 token 换取。
+  # Generate each secret with / 每个密钥建议生成命令: openssl rand -hex 32
+  clients: []
+  # Example / 示例:
+  # clients:
+  #   - client_id: "miku-client"
+  #     client_secret: "replace-with-random-secret"
+  #   - client_id: "miku-app"
+  #     client_secret: "replace-with-random-secret"
+  #   - client_id: "miku-prod"
+  #     client_secret: "replace-with-random-secret"
+
+# =============================================================================
 # TOTP (2FA) Configuration
 # TOTP 双因素认证配置
 # =============================================================================

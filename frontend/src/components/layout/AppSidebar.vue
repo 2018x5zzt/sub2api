@@ -661,7 +661,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
     { path: '/affiliate', label: t('nav.affiliate'), icon: UsersIcon, hideInSimpleMode: true, featureFlag: flagAffiliate },
     { path: '/profile', label: t('nav.profile'), icon: UserIcon },
     ...customMenuItemsForUser.value.map((item): NavItem => ({
-      path: `/custom/${item.id}`,
+      path: customMenuItemPath(item),
       label: item.label,
       icon: null,
       iconSvg: item.icon_svg,
@@ -761,17 +761,21 @@ const adminNavItems = computed((): NavItem[] => {
     filtered.push({ path: '/models', label: t('nav.modelHub'), icon: ChannelIcon })
     filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
     for (const cm of customMenuItemsForAdmin.value) {
-      filtered.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
+      filtered.push({ path: customMenuItemPath(cm), label: cm.label, icon: null, iconSvg: cm.icon_svg })
     }
     return filtered
   }
 
   visible.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
   for (const cm of customMenuItemsForAdmin.value) {
-    visible.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
+    visible.push({ path: customMenuItemPath(cm), label: cm.label, icon: null, iconSvg: cm.icon_svg })
   }
   return visible
 })
+
+function customMenuItemPath(item: { id: string; url: string }): string {
+  return item.url.startsWith('/') ? item.url : `/custom/${item.id}`
+}
 
 function toggleSidebar() {
   appStore.toggleSidebar()

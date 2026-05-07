@@ -108,6 +108,11 @@ func registerRoutes(
 	// API v1
 	v1 := r.Group("/api/v1")
 
+	// OAuth provider endpoints consumed by Miku. These intentionally return
+	// plain OAuth JSON, not the xlabapi API envelope.
+	r.POST("/oauth/token", h.Auth.XlabOAuthToken)
+	r.GET("/oauth/userinfo", h.Auth.XlabOAuthUserInfo)
+
 	// 注册各模块路由
 	routes.RegisterAuthRoutes(v1, h, jwtAuth, redisClient, settingService)
 	routes.RegisterUserRoutes(v1, h, jwtAuth, settingService)

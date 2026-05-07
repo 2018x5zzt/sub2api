@@ -89,6 +89,7 @@ type Config struct {
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
+	XlabOAuthProvider       XlabOAuthProviderConfig       `mapstructure:"xlab_oauth_provider"`
 }
 
 type LogConfig struct {
@@ -169,6 +170,15 @@ type IdempotencyConfig struct {
 	CleanupIntervalSeconds int `mapstructure:"cleanup_interval_seconds"`
 	// CleanupBatchSize 每次清理的最大记录数。
 	CleanupBatchSize int `mapstructure:"cleanup_batch_size"`
+}
+
+type XlabOAuthProviderConfig struct {
+	Clients []XlabOAuthProviderClientConfig `mapstructure:"clients"`
+}
+
+type XlabOAuthProviderClientConfig struct {
+	ClientID     string `mapstructure:"client_id"`
+	ClientSecret string `mapstructure:"client_secret"`
 }
 
 type LinuxDoConnectConfig struct {
@@ -1274,6 +1284,10 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.OIDC.UserInfoUsernamePath = strings.TrimSpace(cfg.OIDC.UserInfoUsernamePath)
 	cfg.OIDC.UsePKCEExplicit = hasExplicitConfigOrEnv("oidc_connect.use_pkce", "OIDC_CONNECT_USE_PKCE")
 	cfg.OIDC.ValidateIDTokenExplicit = hasExplicitConfigOrEnv("oidc_connect.validate_id_token", "OIDC_CONNECT_VALIDATE_ID_TOKEN")
+	for i := range cfg.XlabOAuthProvider.Clients {
+		cfg.XlabOAuthProvider.Clients[i].ClientID = strings.TrimSpace(cfg.XlabOAuthProvider.Clients[i].ClientID)
+		cfg.XlabOAuthProvider.Clients[i].ClientSecret = strings.TrimSpace(cfg.XlabOAuthProvider.Clients[i].ClientSecret)
+	}
 	cfg.Dashboard.KeyPrefix = strings.TrimSpace(cfg.Dashboard.KeyPrefix)
 	cfg.CORS.AllowedOrigins = normalizeStringSlice(cfg.CORS.AllowedOrigins)
 	cfg.Security.ResponseHeaders.AdditionalAllowed = normalizeStringSlice(cfg.Security.ResponseHeaders.AdditionalAllowed)
@@ -1615,6 +1629,8 @@ func setDefaults() {
 	viper.SetDefault("idempotency.max_stored_response_len", 64*1024)
 	viper.SetDefault("idempotency.cleanup_interval_seconds", 60)
 	viper.SetDefault("idempotency.cleanup_batch_size", 500)
+
+	viper.SetDefault("xlab_oauth_provider.clients", []map[string]string{})
 
 	// Gateway
 	viper.SetDefault("gateway.response_header_timeout", 600) // 600秒(10分钟)等待上游响应头，LLM高负载时可能排队较久

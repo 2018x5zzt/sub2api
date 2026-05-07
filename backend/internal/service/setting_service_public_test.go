@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -89,6 +90,19 @@ func TestSettingService_GetPublicSettings_ExposesForceEmailOnThirdPartySignup(t 
 	settings, err := svc.GetPublicSettings(context.Background())
 	require.NoError(t, err)
 	require.True(t, settings.ForceEmailOnThirdPartySignup)
+}
+
+func TestSettingService_GetFrameSrcOrigins_IncludesImageStudioOrigins(t *testing.T) {
+	svc := NewSettingService(&settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyCustomMenuItems: `[{"id":"image-studio","label":"创作图片","url":"/image-studio","visibility":"user","sort_order":0}]`,
+		},
+	}, &config.Config{})
+
+	origins, err := svc.GetFrameSrcOrigins(context.Background())
+	require.NoError(t, err)
+	require.True(t, slices.Contains(origins, "https://ai.mikuapi.org"))
+	require.True(t, slices.Contains(origins, "https://iframe.mikuapi.org"))
 }
 
 func TestSettingService_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *testing.T) {

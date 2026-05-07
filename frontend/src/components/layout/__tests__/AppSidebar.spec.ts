@@ -36,3 +36,12 @@ describe('AppSidebar subscription management navigation', () => {
     expect(componentSource).toContain("{ path: '/admin/subscriptions', label: t('nav.subscriptionManagement')")
   })
 })
+
+describe('AppSidebar custom menu navigation', () => {
+  it('uses internal custom menu URLs directly instead of routing them through iframe custom pages', () => {
+    expect(componentSource).toContain("function customMenuItemPath(item: { id: string; url: string }): string")
+    expect(componentSource).toContain("return item.url.startsWith('/') ? item.url : `/custom/${item.id}`")
+    expect(componentSource).toContain('path: customMenuItemPath(item)')
+    expect(componentSource).toContain('path: customMenuItemPath(cm)')
+  })
+})
