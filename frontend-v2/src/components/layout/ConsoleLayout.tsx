@@ -15,7 +15,8 @@ import {
   Boxes,
   Layers,
   BadgeCheck,
-  Server
+  Server,
+  Settings
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { LocaleSwitcher } from './LocaleSwitcher'
@@ -44,7 +45,8 @@ const adminNav: NavItem[] = [
   { to: '/admin/groups', labelKey: 'nav.groups', Icon: Boxes },
   { to: '/admin/accounts', labelKey: 'nav.accounts', Icon: Server },
   { to: '/admin/usage', labelKey: 'nav.usage', Icon: BarChart3 },
-  { to: '/admin/announcements', labelKey: 'nav.announcements', Icon: Megaphone }
+  { to: '/admin/announcements', labelKey: 'nav.announcements', Icon: Megaphone },
+  { to: '/admin/settings', labelKey: 'nav.settings', Icon: Settings }
 ]
 
 export function ConsoleLayout({ admin, children }: { admin?: boolean; children?: ReactNode }) {
