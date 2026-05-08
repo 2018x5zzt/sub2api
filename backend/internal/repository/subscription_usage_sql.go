@@ -98,6 +98,11 @@ func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subsc
 						AND status = $3
 						AND expires_at > today_start
 						THEN GREATEST(daily_limit_usd - fresh_used, 0)
+					WHEN should_advance_daily
+						AND elapsed_days > 1
+						AND status = $3
+						AND expires_at > today_start
+						THEN daily_limit_usd
 					WHEN should_advance_daily THEN 0
 					ELSE daily_carryover_in_usd
 				END AS next_carryover_in,
@@ -107,6 +112,11 @@ func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subsc
 						AND status = $3
 						AND expires_at > today_start
 						THEN GREATEST(daily_limit_usd - fresh_used, 0)
+					WHEN should_advance_daily
+						AND elapsed_days > 1
+						AND status = $3
+						AND expires_at > today_start
+						THEN daily_limit_usd
 					WHEN should_advance_daily THEN 0
 					ELSE daily_carryover_remaining_usd
 				END AS next_carryover_remaining

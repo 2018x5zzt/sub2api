@@ -198,6 +198,74 @@ func TestUsageBillingRepositoryApply_ProductSubscriptionAdvancesCarryover(t *tes
 	require.InDelta(t, 32, carryoverRemaining, 0.000001)
 }
 
+func TestUsageBillingRepositoryApply_ProductSubscriptionCarriesYesterdayQuotaAfterIdleDays(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-product-idle-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-billing-product-idle-" + uuid.NewString(),
+		Name:   "billing-product-idle",
+	})
+
+	var productID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, daily_limit_usd)
+		VALUES ($1, $2, 'active', 45)
+		RETURNING id
+	`, "idle-"+uuid.NewString(), "idle product").Scan(&productID))
+
+	var productSubscriptionID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id,
+			product_id,
+			starts_at,
+			expires_at,
+			status,
+			daily_window_start,
+			weekly_window_start,
+			monthly_window_start,
+			daily_usage_usd,
+			weekly_usage_usd,
+			monthly_usage_usd,
+			daily_carryover_in_usd,
+			daily_carryover_remaining_usd
+		)
+		VALUES ($1, $2, NOW() - INTERVAL '5 days', NOW() + INTERVAL '7 days', 'active',
+			(date_trunc('day', NOW() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai') - INTERVAL '4 days',
+			NOW() - INTERVAL '5 days',
+			NOW() - INTERVAL '5 days',
+			0, 0, 0, 0, 0)
+		RETURNING id
+	`, user.ID, productID).Scan(&productSubscriptionID))
+
+	_, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:             uuid.NewString(),
+		APIKeyID:              apiKey.ID,
+		UserID:                user.ID,
+		ProductSubscriptionID: &productSubscriptionID,
+		ProductDebitCost:      6,
+	})
+	require.NoError(t, err)
+
+	var dailyUsage, carryoverIn, carryoverRemaining float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT daily_usage_usd, daily_carryover_in_usd, daily_carryover_remaining_usd
+		FROM user_product_subscriptions
+		WHERE id = $1
+	`, productSubscriptionID).Scan(&dailyUsage, &carryoverIn, &carryoverRemaining))
+
+	require.InDelta(t, 6, dailyUsage, 0.000001)
+	require.InDelta(t, 45, carryoverIn, 0.000001)
+	require.InDelta(t, 39, carryoverRemaining, 0.000001)
+}
+
 func TestUsageBillingRepositoryApply_ProductSubscriptionSplitsDebitAcrossSameFamily(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)

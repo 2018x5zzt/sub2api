@@ -253,11 +253,19 @@ func normalizeExpiredProductSubscriptionWindow(sub *UserProductSubscription, pro
 			freshUsed := maxFloat64(sub.DailyUsageUSD-carryoverConsumed, 0)
 			freshRemaining := maxFloat64(product.DailyLimitUSD-freshUsed, 0)
 			if sub.DailyWindowStart != nil &&
-				elapsedDailyWindows(*sub.DailyWindowStart, windowStart) == 1 &&
 				sub.Status == SubscriptionStatusActive &&
 				sub.ExpiresAt.After(windowStart) {
-				sub.DailyCarryoverInUSD = freshRemaining
-				sub.DailyCarryoverRemainingUSD = freshRemaining
+				elapsedWindows := elapsedDailyWindows(*sub.DailyWindowStart, windowStart)
+				if elapsedWindows == 1 {
+					sub.DailyCarryoverInUSD = freshRemaining
+					sub.DailyCarryoverRemainingUSD = freshRemaining
+				} else if elapsedWindows > 1 {
+					sub.DailyCarryoverInUSD = product.DailyLimitUSD
+					sub.DailyCarryoverRemainingUSD = product.DailyLimitUSD
+				} else {
+					sub.DailyCarryoverInUSD = 0
+					sub.DailyCarryoverRemainingUSD = 0
+				}
 			} else {
 				sub.DailyCarryoverInUSD = 0
 				sub.DailyCarryoverRemainingUSD = 0

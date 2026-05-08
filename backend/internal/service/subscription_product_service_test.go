@@ -348,6 +348,41 @@ func TestNormalizeExpiredProductSubscriptionWindowResetsDailyAtBeijingMidnight(t
 	}
 }
 
+func TestNormalizeExpiredProductSubscriptionWindowCarriesYesterdayQuotaAfterIdleDays(t *testing.T) {
+	t.Parallel()
+
+	windowStart := time.Date(2026, 5, 3, 16, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 5, 8, 8, 30, 0, 0, time.UTC)
+	sub := &UserProductSubscription{
+		Status:                     SubscriptionStatusActive,
+		ExpiresAt:                  now.Add(24 * time.Hour),
+		DailyWindowStart:           &windowStart,
+		DailyUsageUSD:              0,
+		DailyCarryoverInUSD:        0,
+		DailyCarryoverRemainingUSD: 0,
+	}
+	product := &SubscriptionProduct{DailyLimitUSD: 45}
+
+	NormalizeExpiredProductSubscriptionWindowForRepository(sub, product, now)
+
+	wantDaily := time.Date(2026, 5, 7, 16, 0, 0, 0, time.UTC)
+	if sub.DailyWindowStart == nil {
+		t.Fatal("DailyWindowStart is nil, want Beijing midnight in UTC")
+	}
+	if !sub.DailyWindowStart.Equal(wantDaily) {
+		t.Fatalf("DailyWindowStart = %s, want %s", sub.DailyWindowStart.Format(time.RFC3339), wantDaily.Format(time.RFC3339))
+	}
+	if sub.DailyUsageUSD != 0 {
+		t.Fatalf("DailyUsageUSD = %v, want 0", sub.DailyUsageUSD)
+	}
+	if sub.DailyCarryoverInUSD != 45 {
+		t.Fatalf("DailyCarryoverInUSD = %v, want 45", sub.DailyCarryoverInUSD)
+	}
+	if sub.DailyCarryoverRemainingUSD != 45 {
+		t.Fatalf("DailyCarryoverRemainingUSD = %v, want 45", sub.DailyCarryoverRemainingUSD)
+	}
+}
+
 func TestNormalizeExpiredProductSubscriptionWindowRollsWeeklyFromCurrentStart(t *testing.T) {
 	t.Parallel()
 
