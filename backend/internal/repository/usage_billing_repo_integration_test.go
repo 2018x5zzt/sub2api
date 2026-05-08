@@ -350,6 +350,173 @@ func TestUsageBillingRepositoryApply_ProductSubscriptionSplitsDebitAcrossSameFam
 	require.InDelta(t, 17, secondDaily, 0.000001)
 }
 
+func TestUsageBillingRepositoryApply_ProductSubscriptionOverageUsesBalanceFallback(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-product-overage-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      20,
+	})
+	_, err := integrationDB.ExecContext(ctx, `
+		UPDATE users
+		SET subscription_balance_fallback_enabled = TRUE,
+			subscription_balance_fallback_limit_usd = 5,
+			subscription_balance_fallback_used_usd = 0
+		WHERE id = $1
+	`, user.ID)
+	require.NoError(t, err)
+
+	group := mustCreateGroup(t, client, &service.Group{
+		Name:             "usage-billing-product-overage-group-" + uuid.NewString(),
+		Platform:         service.PlatformOpenAI,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID:  user.ID,
+		GroupID: &group.ID,
+		Key:     "sk-usage-billing-product-overage-" + uuid.NewString(),
+		Name:    "billing-product-overage",
+	})
+
+	var productID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, product_family, default_validity_days, daily_limit_usd)
+		VALUES ($1, 'overage product', 'active', 'gpt_overage', 7, 1)
+		RETURNING id
+	`, "overage-"+uuid.NewString()).Scan(&productID))
+	_, err = integrationDB.ExecContext(ctx, `
+		INSERT INTO subscription_product_groups (product_id, group_id, debit_multiplier, status, sort_order)
+		VALUES ($1, $2, 1, 'active', 1)
+	`, productID, group.ID)
+	require.NoError(t, err)
+
+	var productSubscriptionID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id, product_id, starts_at, expires_at, status,
+			daily_window_start, weekly_window_start, monthly_window_start,
+			daily_usage_usd, weekly_usage_usd, monthly_usage_usd
+		)
+		VALUES ($1, $2, NOW() - INTERVAL '1 day', NOW() + INTERVAL '7 days', 'active',
+			date_trunc('day', NOW() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai',
+			date_trunc('day', NOW()), date_trunc('day', NOW()),
+			0, 0, 0)
+		RETURNING id
+	`, user.ID, productID).Scan(&productSubscriptionID))
+
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:                  uuid.NewString(),
+		APIKeyID:                   apiKey.ID,
+		UserID:                     user.ID,
+		ProductSubscriptionID:      &productSubscriptionID,
+		ProductGroupID:             group.ID,
+		ProductDebitCost:           2,
+		ProductBalanceFallbackCost: 2,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+
+	var dailyUsage, balance, fallbackUsed float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT ups.daily_usage_usd, u.balance, u.subscription_balance_fallback_used_usd
+		FROM user_product_subscriptions ups
+		JOIN users u ON u.id = ups.user_id
+		WHERE ups.id = $1
+	`, productSubscriptionID).Scan(&dailyUsage, &balance, &fallbackUsed))
+	require.InDelta(t, 1, dailyUsage, 0.000001)
+	require.InDelta(t, 19, balance, 0.000001)
+	require.InDelta(t, 1, fallbackUsed, 0.000001)
+	require.NotNil(t, result.NewBalance)
+	require.InDelta(t, 19, *result.NewBalance, 0.000001)
+}
+
+func TestUsageBillingRepositoryApply_ProductSubscriptionFullyOverageUsesBalanceFallback(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(client, integrationDB)
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-billing-product-full-overage-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      20,
+	})
+	_, err := integrationDB.ExecContext(ctx, `
+		UPDATE users
+		SET subscription_balance_fallback_enabled = TRUE,
+			subscription_balance_fallback_limit_usd = 5,
+			subscription_balance_fallback_used_usd = 0
+		WHERE id = $1
+	`, user.ID)
+	require.NoError(t, err)
+
+	group := mustCreateGroup(t, client, &service.Group{
+		Name:             "usage-billing-product-full-overage-group-" + uuid.NewString(),
+		Platform:         service.PlatformOpenAI,
+		SubscriptionType: service.SubscriptionTypeSubscription,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID:  user.ID,
+		GroupID: &group.ID,
+		Key:     "sk-usage-billing-product-full-overage-" + uuid.NewString(),
+		Name:    "billing-product-full-overage",
+	})
+
+	var productID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO subscription_products (code, name, status, product_family, default_validity_days, daily_limit_usd)
+		VALUES ($1, 'full overage product', 'active', 'gpt_full_overage', 7, 1)
+		RETURNING id
+	`, "full-overage-"+uuid.NewString()).Scan(&productID))
+	_, err = integrationDB.ExecContext(ctx, `
+		INSERT INTO subscription_product_groups (product_id, group_id, debit_multiplier, status, sort_order)
+		VALUES ($1, $2, 1, 'active', 1)
+	`, productID, group.ID)
+	require.NoError(t, err)
+
+	var productSubscriptionID int64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		INSERT INTO user_product_subscriptions (
+			user_id, product_id, starts_at, expires_at, status,
+			daily_window_start, weekly_window_start, monthly_window_start,
+			daily_usage_usd, weekly_usage_usd, monthly_usage_usd
+		)
+		VALUES ($1, $2, NOW() - INTERVAL '1 day', NOW() + INTERVAL '7 days', 'active',
+			date_trunc('day', NOW() AT TIME ZONE 'Asia/Shanghai') AT TIME ZONE 'Asia/Shanghai',
+			date_trunc('day', NOW()), date_trunc('day', NOW()),
+			1, 1, 1)
+		RETURNING id
+	`, user.ID, productID).Scan(&productSubscriptionID))
+
+	result, err := repo.Apply(ctx, &service.UsageBillingCommand{
+		RequestID:                  uuid.NewString(),
+		APIKeyID:                   apiKey.ID,
+		UserID:                     user.ID,
+		ProductSubscriptionID:      &productSubscriptionID,
+		ProductGroupID:             group.ID,
+		ProductDebitCost:           2,
+		ProductBalanceFallbackCost: 2,
+	})
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+
+	var dailyUsage, balance, fallbackUsed float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, `
+		SELECT ups.daily_usage_usd, u.balance, u.subscription_balance_fallback_used_usd
+		FROM user_product_subscriptions ups
+		JOIN users u ON u.id = ups.user_id
+		WHERE ups.id = $1
+	`, productSubscriptionID).Scan(&dailyUsage, &balance, &fallbackUsed))
+	require.InDelta(t, 1, dailyUsage, 0.000001)
+	require.InDelta(t, 18, balance, 0.000001)
+	require.InDelta(t, 2, fallbackUsed, 0.000001)
+	require.NotNil(t, result.ProductDebitApplied)
+	require.InDelta(t, 0, *result.ProductDebitApplied, 0.000001)
+	require.InDelta(t, 2, result.ProductBalanceCost, 0.000001)
+}
+
 func TestUsageBillingRepositoryApply_ProductSubscriptionResetsMonthlyAfter30Days(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)

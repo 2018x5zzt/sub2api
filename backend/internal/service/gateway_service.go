@@ -8027,6 +8027,9 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 			cmd.ProductSubscriptionID = &fields.productSubscriptionID
 			cmd.ProductGroupID = fields.groupID
 			cmd.ProductDebitCost = fields.productDebitCost
+			if p.APIKey != nil && p.APIKey.User != nil && p.APIKey.User.SubscriptionBalanceFallbackEnabled {
+				cmd.ProductBalanceFallbackCost = p.Cost.ActualCost
+			}
 		} else if p.Subscription != nil && p.Cost.TotalCost > 0 {
 			cmd.SubscriptionID = &p.Subscription.ID
 			cmd.SubscriptionCost = p.Cost.ActualCost
@@ -8075,6 +8078,9 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
 		return false, nil
 	}
+	if result.ProductDebitApplied != nil && usageLog != nil {
+		usageLog.ProductDebitCost = result.ProductDebitApplied
+	}
 
 	if result.APIKeyQuotaExhausted {
 		if invalidator, ok := p.APIKeyService.(apiKeyAuthCacheInvalidator); ok && p.APIKey != nil && p.APIKey.Key != "" {
@@ -8097,6 +8103,9 @@ func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps, resu
 		}
 	} else if p.Cost.ActualCost > 0 && p.User != nil {
 		deps.billingCacheService.QueueDeductBalance(p.User.ID, p.Cost.ActualCost)
+	}
+	if result != nil && result.ProductBalanceCost > 0 && p.User != nil {
+		deps.billingCacheService.QueueDeductBalance(p.User.ID, result.ProductBalanceCost)
 	}
 
 	if shouldQueueAPIKeyRateLimitCache(p) {
@@ -8134,10 +8143,11 @@ func notifyBalanceLow(p *postUsageBillingParams, deps *billingDeps, result *Usag
 			slog.Error("panic in notifyBalanceLow", "recover", r)
 		}
 	}()
-	if p.IsSubscriptionBill || p.Cost.ActualCost <= 0 || p.User == nil || deps.balanceNotifyService == nil {
+	deductedCost := balanceDeductedCost(p, result)
+	if deductedCost <= 0 || p.User == nil || deps.balanceNotifyService == nil {
 		slog.Debug("notifyBalanceLow: skipped",
 			"is_subscription", p.IsSubscriptionBill,
-			"actual_cost", p.Cost.ActualCost,
+			"deducted_cost", deductedCost,
 			"user_nil", p.User == nil,
 			"service_nil", deps.balanceNotifyService == nil,
 		)
@@ -8148,22 +8158,32 @@ func notifyBalanceLow(p *postUsageBillingParams, deps *billingDeps, result *Usag
 	slog.Debug("notifyBalanceLow: calling CheckBalanceAfterDeduction",
 		"user_id", p.User.ID,
 		"old_balance", oldBalance,
-		"cost", p.Cost.ActualCost,
+		"cost", deductedCost,
 		"notify_enabled", p.User.BalanceNotifyEnabled,
 		"threshold", p.User.BalanceNotifyThreshold,
 		"result_has_new_balance", result != nil && result.NewBalance != nil,
 	)
-	deps.balanceNotifyService.CheckBalanceAfterDeduction(context.Background(), p.User, oldBalance, p.Cost.ActualCost)
+	deps.balanceNotifyService.CheckBalanceAfterDeduction(context.Background(), p.User, oldBalance, deductedCost)
 }
 
 // resolveOldBalance returns the pre-deduction balance.
 // Prefers the DB transaction result (newBalance + cost) over snapshot.
 func resolveOldBalance(p *postUsageBillingParams, result *UsageBillingApplyResult) float64 {
 	if result != nil && result.NewBalance != nil {
-		return *result.NewBalance + p.Cost.ActualCost
+		return *result.NewBalance + balanceDeductedCost(p, result)
 	}
 	// Legacy fallback: snapshot balance from request context
 	return p.User.Balance
+}
+
+func balanceDeductedCost(p *postUsageBillingParams, result *UsageBillingApplyResult) float64 {
+	if result != nil && result.ProductBalanceCost > 0 {
+		return result.ProductBalanceCost
+	}
+	if p != nil && !p.IsSubscriptionBill && p.Cost != nil {
+		return p.Cost.ActualCost
+	}
+	return 0
 }
 
 // notifyAccountQuota sends account quota threshold notification after increment.

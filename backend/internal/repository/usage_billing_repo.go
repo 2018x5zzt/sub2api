@@ -112,14 +112,27 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		}
 	}
 	if cmd.ProductDebitCost > 0 && cmd.ProductSubscriptionID != nil {
+		productDebitApplied := cmd.ProductDebitCost
 		var err error
 		if cmd.ProductGroupID > 0 {
-			err = splitAndIncrementProductSubscriptionUsage(ctx, tx, cmd.UserID, *cmd.ProductSubscriptionID, cmd.ProductGroupID, cmd.ProductDebitCost)
+			productDebitApplied, err = splitAndIncrementProductSubscriptionUsage(ctx, tx, cmd.UserID, *cmd.ProductSubscriptionID, cmd.ProductGroupID, cmd.ProductDebitCost)
 		} else {
 			err = advanceAndIncrementProductSubscriptionUsage(ctx, tx, *cmd.ProductSubscriptionID, cmd.ProductDebitCost)
 		}
+		result.ProductDebitApplied = &productDebitApplied
 		if err != nil {
-			return err
+			if cmd.ProductBalanceFallbackCost <= 0 || !errors.Is(err, service.ErrDailyLimitExceeded) {
+				return err
+			}
+		}
+		if cmd.ProductBalanceFallbackCost > 0 && productDebitApplied < cmd.ProductDebitCost {
+			fallbackCost := proportionalProductBalanceFallbackCost(cmd.ProductBalanceFallbackCost, cmd.ProductDebitCost, productDebitApplied)
+			newBalance, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, fallbackCost, fallbackCost)
+			if err != nil {
+				return err
+			}
+			result.NewBalance = &newBalance
+			result.ProductBalanceCost = fallbackCost
 		}
 	}
 
@@ -154,6 +167,13 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	return nil
+}
+
+func proportionalProductBalanceFallbackCost(fallbackCost, productDebitCost, productDebitApplied float64) float64 {
+	if fallbackCost <= 0 || productDebitCost <= 0 || productDebitApplied >= productDebitCost {
+		return 0
+	}
+	return fallbackCost * ((productDebitCost - productDebitApplied) / productDebitCost)
 }
 
 func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {

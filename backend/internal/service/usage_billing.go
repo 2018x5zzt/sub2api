@@ -41,6 +41,7 @@ type UsageBillingCommand struct {
 	SubscriptionCost                float64
 	ProductDebitCost                float64
 	SubscriptionBalanceFallbackCost float64
+	ProductBalanceFallbackCost      float64
 	APIKeyQuotaCost                 float64
 	APIKeyRateLimitCost             float64
 	AccountQuotaCost                float64
@@ -61,7 +62,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		return ""
 	}
 	raw := fmt.Sprintf(
-		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%d|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
+		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%d|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
 		c.UserID,
 		c.AccountID,
 		c.APIKeyID,
@@ -83,6 +84,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.SubscriptionCost,
 		c.ProductDebitCost,
 		c.SubscriptionBalanceFallbackCost,
+		c.ProductBalanceFallbackCost,
 		c.APIKeyQuotaCost,
 		c.APIKeyRateLimitCost,
 		c.AccountQuotaCost,
@@ -125,6 +127,8 @@ type UsageBillingApplyResult struct {
 	APIKeyQuotaExhausted bool
 	NewBalance           *float64           // post-deduction balance (nil = no balance deduction)
 	QuotaState           *AccountQuotaState // post-increment quota state (nil = no quota increment)
+	ProductDebitApplied  *float64           // product subscription debit actually applied after quota splitting
+	ProductBalanceCost   float64            // balance charged for product subscription overage
 }
 
 type UsageBillingRepository interface {

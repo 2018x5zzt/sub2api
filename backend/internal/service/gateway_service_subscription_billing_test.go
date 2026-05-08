@@ -127,6 +127,9 @@ func TestBuildUsageBillingCommand_ProductSubscriptionUsesSharedProductDebit(t *t
 	if cmd.ProductDebitCost != 15 {
 		t.Fatalf("ProductDebitCost = %v, want 15", cmd.ProductDebitCost)
 	}
+	if cmd.ProductBalanceFallbackCost != 0 {
+		t.Fatalf("ProductBalanceFallbackCost = %v, want 0 when fallback is disabled", cmd.ProductBalanceFallbackCost)
+	}
 	if log.SubscriptionID != nil {
 		t.Fatalf("usage log SubscriptionID should be cleared for product settlement")
 	}
@@ -135,6 +138,54 @@ func TestBuildUsageBillingCommand_ProductSubscriptionUsesSharedProductDebit(t *t
 	}
 	if log.ProductDebitCost == nil || *log.ProductDebitCost != 15 {
 		t.Fatalf("usage log ProductDebitCost = %v, want 15", log.ProductDebitCost)
+	}
+}
+
+func TestBuildUsageBillingCommand_ProductSubscriptionAllowsBalanceFallbackOverage(t *testing.T) {
+	t.Parallel()
+
+	groupID := int64(7)
+	productID := int64(88)
+	productSubID := int64(99)
+	settlement := &ProductSettlementContext{
+		Binding: &SubscriptionProductBinding{
+			ProductID:       productID,
+			GroupID:         groupID,
+			DebitMultiplier: 1.5,
+		},
+		Subscription: &UserProductSubscription{ID: productSubID},
+	}
+	p := &postUsageBillingParams{
+		Cost: &CostBreakdown{TotalCost: 10, ActualCost: 20},
+		User: &User{
+			ID:                                 1,
+			SubscriptionBalanceFallbackEnabled: true,
+		},
+		APIKey: &APIKey{
+			ID:      2,
+			GroupID: &groupID,
+			User: &User{
+				ID:                                 1,
+				SubscriptionBalanceFallbackEnabled: true,
+			},
+		},
+		Account:            &Account{ID: 3},
+		ProductSettlement:  settlement,
+		IsSubscriptionBill: true,
+	}
+
+	cmd := buildUsageBillingCommand("req-product-fallback", nil, p)
+	if cmd == nil {
+		t.Fatal("buildUsageBillingCommand returned nil")
+	}
+	if cmd.ProductDebitCost != 15 {
+		t.Fatalf("ProductDebitCost = %v, want 15", cmd.ProductDebitCost)
+	}
+	if cmd.ProductBalanceFallbackCost != 20 {
+		t.Fatalf("ProductBalanceFallbackCost = %v, want 20", cmd.ProductBalanceFallbackCost)
+	}
+	if cmd.BalanceCost != 0 || cmd.SubscriptionBalanceFallbackCost != 0 {
+		t.Fatalf("ordinary balance fallback fields = %v/%v, want 0/0", cmd.BalanceCost, cmd.SubscriptionBalanceFallbackCost)
 	}
 }
 

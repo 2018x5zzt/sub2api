@@ -28,7 +28,7 @@ import (
 	gocache "github.com/patrickmn/go-cache"
 )
 
-const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, group_id, subscription_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, created_at"
+const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, group_id, subscription_id, product_id, product_subscription_id, product_debit_cost, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, created_at"
 
 // usageLogInsertArgTypes must stay in the same order as:
 //  1. prepareUsageLogInsert().args
@@ -47,6 +47,9 @@ var usageLogInsertArgTypes = [...]string{
 	"text",        // upstream_model
 	"bigint",      // group_id
 	"bigint",      // subscription_id
+	"bigint",      // product_id
+	"bigint",      // product_subscription_id
+	"numeric",     // product_debit_cost
 	"integer",     // input_tokens
 	"integer",     // output_tokens
 	"integer",     // cache_creation_tokens
@@ -326,6 +329,9 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			upstream_model,
 			group_id,
 			subscription_id,
+			product_id,
+			product_subscription_id,
+			product_debit_cost,
 			input_tokens,
 			output_tokens,
 			cache_creation_tokens,
@@ -365,11 +371,11 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			created_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
-			$8, $9,
-			$10, $11, $12, $13,
-			$14, $15, $16, $17,
-			$18, $19, $20, $21, $22, $23,
-			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46
+			$8, $9, $10, $11, $12,
+			$13, $14, $15, $16,
+			$17, $18, $19, $20,
+			$21, $22, $23, $24, $25, $26,
+			$27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 		RETURNING id, created_at
@@ -764,6 +770,9 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			upstream_model,
 			group_id,
 			subscription_id,
+			product_id,
+			product_subscription_id,
+			product_debit_cost,
 			input_tokens,
 			output_tokens,
 			cache_creation_tokens,
@@ -803,7 +812,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			created_at
 		) AS (VALUES `)
 
-	args := make([]any, 0, len(keys)*46)
+	args := make([]any, 0, len(keys)*(len(usageLogInsertArgTypes)+1))
 	argPos := 1
 	for idx, key := range keys {
 		if idx > 0 {
@@ -841,6 +850,9 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				upstream_model,
 				group_id,
 				subscription_id,
+				product_id,
+				product_subscription_id,
+				product_debit_cost,
 				input_tokens,
 				output_tokens,
 				cache_creation_tokens,
@@ -889,6 +901,9 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				upstream_model,
 				group_id,
 				subscription_id,
+				product_id,
+				product_subscription_id,
+				product_debit_cost,
 				input_tokens,
 				output_tokens,
 				cache_creation_tokens,
@@ -977,6 +992,9 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			upstream_model,
 			group_id,
 			subscription_id,
+			product_id,
+			product_subscription_id,
+			product_debit_cost,
 			input_tokens,
 			output_tokens,
 			cache_creation_tokens,
@@ -1016,7 +1034,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			created_at
 		) AS (VALUES `)
 
-	args := make([]any, 0, len(preparedList)*46)
+	args := make([]any, 0, len(preparedList)*len(usageLogInsertArgTypes))
 	argPos := 1
 	for idx, prepared := range preparedList {
 		if idx > 0 {
@@ -1051,6 +1069,9 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			upstream_model,
 			group_id,
 			subscription_id,
+			product_id,
+			product_subscription_id,
+			product_debit_cost,
 			input_tokens,
 			output_tokens,
 			cache_creation_tokens,
@@ -1099,6 +1120,9 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			upstream_model,
 			group_id,
 			subscription_id,
+			product_id,
+			product_subscription_id,
+			product_debit_cost,
 			input_tokens,
 			output_tokens,
 			cache_creation_tokens,
@@ -1155,6 +1179,9 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			upstream_model,
 			group_id,
 			subscription_id,
+			product_id,
+			product_subscription_id,
+			product_debit_cost,
 			input_tokens,
 			output_tokens,
 			cache_creation_tokens,
@@ -1194,11 +1221,11 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			created_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
-			$8, $9,
-			$10, $11, $12, $13,
-			$14, $15, $16, $17,
-			$18, $19, $20, $21, $22, $23,
-			$24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46
+			$8, $9, $10, $11, $12,
+			$13, $14, $15, $16,
+			$17, $18, $19, $20,
+			$21, $22, $23, $24, $25, $26,
+			$27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 	`, prepared.args...)
@@ -1220,6 +1247,9 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 
 	groupID := nullInt64(log.GroupID)
 	subscriptionID := nullInt64(log.SubscriptionID)
+	productID := nullInt64(log.ProductID)
+	productSubscriptionID := nullInt64(log.ProductSubscriptionID)
+	productDebitCost := nullFloat64(log.ProductDebitCost)
 	duration := nullInt(log.DurationMs)
 	firstToken := nullInt(log.FirstTokenMs)
 	userAgent := nullString(log.UserAgent)
@@ -1259,6 +1289,9 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			upstreamModel,
 			groupID,
 			subscriptionID,
+			productID,
+			productSubscriptionID,
+			productDebitCost,
 			log.InputTokens,
 			log.OutputTokens,
 			log.CacheCreationTokens,
@@ -4058,6 +4091,9 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		upstreamModel         sql.NullString
 		groupID               sql.NullInt64
 		subscriptionID        sql.NullInt64
+		productID             sql.NullInt64
+		productSubscriptionID sql.NullInt64
+		productDebitCost      sql.NullFloat64
 		inputTokens           int
 		outputTokens          int
 		cacheCreationTokens   int
@@ -4108,6 +4144,9 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		&upstreamModel,
 		&groupID,
 		&subscriptionID,
+		&productID,
+		&productSubscriptionID,
+		&productDebitCost,
 		&inputTokens,
 		&outputTokens,
 		&cacheCreationTokens,
@@ -4194,6 +4233,17 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 	if subscriptionID.Valid {
 		value := subscriptionID.Int64
 		log.SubscriptionID = &value
+	}
+	if productID.Valid {
+		value := productID.Int64
+		log.ProductID = &value
+	}
+	if productSubscriptionID.Valid {
+		value := productSubscriptionID.Int64
+		log.ProductSubscriptionID = &value
+	}
+	if productDebitCost.Valid {
+		log.ProductDebitCost = &productDebitCost.Float64
 	}
 	if durationMs.Valid {
 		value := int(durationMs.Int64)
@@ -4361,6 +4411,13 @@ func nullInt(v *int) sql.NullInt64 {
 		return sql.NullInt64{}
 	}
 	return sql.NullInt64{Int64: int64(*v), Valid: true}
+}
+
+func nullFloat64(v *float64) sql.NullFloat64 {
+	if v == nil {
+		return sql.NullFloat64{}
+	}
+	return sql.NullFloat64{Float64: *v, Valid: true}
 }
 
 func nullFloat64Ptr(v sql.NullFloat64) *float64 {

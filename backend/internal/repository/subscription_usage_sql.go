@@ -154,35 +154,37 @@ func advanceAndIncrementProductSubscriptionUsage(ctx context.Context, exec subsc
 	return service.ErrSubscriptionNotFound
 }
 
-func splitAndIncrementProductSubscriptionUsage(ctx context.Context, tx *sql.Tx, userID, productSubscriptionID, groupID int64, costUSD float64) error {
+func splitAndIncrementProductSubscriptionUsage(ctx context.Context, tx *sql.Tx, userID, productSubscriptionID, groupID int64, costUSD float64) (float64, error) {
 	if costUSD <= 0 {
-		return nil
+		return 0, nil
 	}
 
 	candidates, err := listProductDebitCandidates(ctx, tx, userID, productSubscriptionID, groupID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if len(candidates) == 0 {
-		return service.ErrSubscriptionNotFound
+		return 0, service.ErrSubscriptionNotFound
 	}
 
 	remaining := costUSD
+	applied := 0.0
 	for _, candidate := range candidates {
 		debit := math.Min(remaining, candidate.remaining)
 		if debit <= 0 {
 			continue
 		}
 		if err := advanceAndIncrementProductSubscriptionUsage(ctx, tx, candidate.subscriptionID, debit); err != nil {
-			return err
+			return applied, err
 		}
 		remaining -= debit
+		applied += debit
 		if remaining <= 0.0000001 {
-			return nil
+			return applied, nil
 		}
 	}
 
-	return service.ErrDailyLimitExceeded
+	return applied, service.ErrDailyLimitExceeded
 }
 
 type productDebitCandidate struct {
