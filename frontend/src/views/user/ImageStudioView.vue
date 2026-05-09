@@ -24,7 +24,7 @@
             data-testid="legacy-image-studio"
             @click="activeMode = 'legacy'"
           >
-            回到旧版
+            旧版入口
           </button>
           <button
             v-else
@@ -33,7 +33,7 @@
             data-testid="new-image-studio"
             @click="activeMode = 'new'"
           >
-            返回新版
+            新版入口
           </button>
         </div>
       </div>

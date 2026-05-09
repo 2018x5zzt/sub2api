@@ -48,10 +48,10 @@ describe('ImageStudioView', () => {
     })
     expect(iframe.attributes('src')).toBe('https://ai.mikuapi.org/auth/xlab/callback?code=code-from-xlab&state=image-studio')
     expect(wrapper.text()).toContain('新版')
-    expect(wrapper.text()).toContain('回到旧版')
+    expect(wrapper.text()).toContain('旧版入口')
   })
 
-  it('switches the iframe to image-playground only after the xlabapi fallback button is clicked', async () => {
+  it('switches to the gpt image playground when the legacy entry is clicked', async () => {
     const wrapper = mount(ImageStudioView, {
       global: {
         stubs: {
@@ -66,7 +66,7 @@ describe('ImageStudioView', () => {
 
     expect(wrapper.get('iframe').attributes('src')).toBe('https://iframe.mikuapi.org/?codexCli=true')
     expect(wrapper.text()).toContain('旧版')
-    expect(wrapper.text()).toContain('返回新版')
+    expect(wrapper.text()).toContain('新版入口')
 
     await wrapper.get('[data-testid="new-image-studio"]').trigger('click')
     await flushPromises()

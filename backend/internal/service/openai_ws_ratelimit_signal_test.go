@@ -239,6 +239,69 @@ func TestOpenAIGatewayService_Forward_WSv2Handshake429PersistsRateLimit(t *testi
 	require.Contains(t, repo.updateExtra[0], "codex_usage_updated_at")
 }
 
+func TestOpenAIGatewayService_Forward_WSv2Handshake429WithoutSignalDoesNotPersistRateLimit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+	c.Request.Header.Set("User-Agent", "unit-test-agent/1.0")
+
+	upstream := &httpUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"application/json"}},
+			Body:       io.NopCloser(strings.NewReader(`{"id":"resp_http_should_not_run"}`)),
+		},
+	}
+
+	cfg := newOpenAIWSV2TestConfig()
+	cfg.Security.URLAllowlist.Enabled = false
+	cfg.Security.URLAllowlist.AllowInsecureHTTP = true
+
+	account := Account{
+		ID:          504,
+		Name:        "openai-ws-transient-handshake-429",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "sk-test",
+			"base_url": server.URL,
+		},
+		Extra: map[string]any{
+			"responses_websockets_v2_enabled": true,
+		},
+	}
+	repo := &openAIWSRateLimitSignalRepo{stubOpenAIAccountRepo: stubOpenAIAccountRepo{accounts: []Account{account}}}
+	rateSvc := &RateLimitService{accountRepo: repo}
+	svc := &OpenAIGatewayService{
+		accountRepo:      repo,
+		rateLimitService: rateSvc,
+		httpUpstream:     upstream,
+		cache:            &stubGatewayCache{},
+		cfg:              cfg,
+		openaiWSResolver: NewOpenAIWSProtocolResolver(cfg),
+		toolCorrector:    NewCodexToolCorrector(),
+	}
+
+	body := []byte(`{"model":"gpt-5.4","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
+	result, err := svc.Forward(context.Background(), c, &account, body)
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Equal(t, http.StatusTooManyRequests, rec.Code)
+	require.Nil(t, upstream.lastReq, "WS 握手 429 不应回退到同账号 HTTP")
+	require.Empty(t, repo.rateLimitCalls)
+	require.Empty(t, repo.updateExtra)
+}
+
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_ErrorEventUsageLimitPersistsRateLimit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
