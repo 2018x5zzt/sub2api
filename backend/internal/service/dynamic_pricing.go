@@ -26,7 +26,6 @@ var (
 	ErrGroupDefaultBudgetRequired   = infraerrors.BadRequest("GROUP_DEFAULT_BUDGET_REQUIRED", "default budget multiplier is required for dynamic pricing groups")
 	ErrAPIKeyBudgetRequired         = infraerrors.BadRequest("API_KEY_BUDGET_REQUIRED", "budget multiplier is required for dynamic pricing groups")
 	ErrBudgetMultiplierOutOfRange   = infraerrors.BadRequest("BUDGET_MULTIPLIER_OUT_OF_RANGE", "budget multiplier must be between 3 and 50")
-	ErrAPIKeyGroupImmutable         = infraerrors.BadRequest("API_KEY_GROUP_IMMUTABLE", "api key group cannot be changed after creation")
 	ErrDynamicPricingBudgetExceeded = infraerrors.TooManyRequests(
 		"DYNAMIC_PRICING_BUDGET_EXCEEDED",
 		"No available count",

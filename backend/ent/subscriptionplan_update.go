@@ -49,6 +49,33 @@ func (_u *SubscriptionPlanUpdate) AddGroupID(v int64) *SubscriptionPlanUpdate {
 	return _u
 }
 
+// SetProductID sets the "product_id" field.
+func (_u *SubscriptionPlanUpdate) SetProductID(v int64) *SubscriptionPlanUpdate {
+	_u.mutation.ResetProductID()
+	_u.mutation.SetProductID(v)
+	return _u
+}
+
+// SetNillableProductID sets the "product_id" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdate) SetNillableProductID(v *int64) *SubscriptionPlanUpdate {
+	if v != nil {
+		_u.SetProductID(*v)
+	}
+	return _u
+}
+
+// AddProductID adds value to the "product_id" field.
+func (_u *SubscriptionPlanUpdate) AddProductID(v int64) *SubscriptionPlanUpdate {
+	_u.mutation.AddProductID(v)
+	return _u
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (_u *SubscriptionPlanUpdate) ClearProductID() *SubscriptionPlanUpdate {
+	_u.mutation.ClearProductID()
+	return _u
+}
+
 // SetName sets the "name" field.
 func (_u *SubscriptionPlanUpdate) SetName(v string) *SubscriptionPlanUpdate {
 	_u.mutation.SetName(v)
@@ -308,6 +335,15 @@ func (_u *SubscriptionPlanUpdate) sqlSave(ctx context.Context) (_node int, err e
 	if value, ok := _u.mutation.AddedGroupID(); ok {
 		_spec.AddField(subscriptionplan.FieldGroupID, field.TypeInt64, value)
 	}
+	if value, ok := _u.mutation.ProductID(); ok {
+		_spec.SetField(subscriptionplan.FieldProductID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedProductID(); ok {
+		_spec.AddField(subscriptionplan.FieldProductID, field.TypeInt64, value)
+	}
+	if _u.mutation.ProductIDCleared() {
+		_spec.ClearField(subscriptionplan.FieldProductID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(subscriptionplan.FieldName, field.TypeString, value)
 	}
@@ -394,6 +430,33 @@ func (_u *SubscriptionPlanUpdateOne) SetNillableGroupID(v *int64) *SubscriptionP
 // AddGroupID adds value to the "group_id" field.
 func (_u *SubscriptionPlanUpdateOne) AddGroupID(v int64) *SubscriptionPlanUpdateOne {
 	_u.mutation.AddGroupID(v)
+	return _u
+}
+
+// SetProductID sets the "product_id" field.
+func (_u *SubscriptionPlanUpdateOne) SetProductID(v int64) *SubscriptionPlanUpdateOne {
+	_u.mutation.ResetProductID()
+	_u.mutation.SetProductID(v)
+	return _u
+}
+
+// SetNillableProductID sets the "product_id" field if the given value is not nil.
+func (_u *SubscriptionPlanUpdateOne) SetNillableProductID(v *int64) *SubscriptionPlanUpdateOne {
+	if v != nil {
+		_u.SetProductID(*v)
+	}
+	return _u
+}
+
+// AddProductID adds value to the "product_id" field.
+func (_u *SubscriptionPlanUpdateOne) AddProductID(v int64) *SubscriptionPlanUpdateOne {
+	_u.mutation.AddProductID(v)
+	return _u
+}
+
+// ClearProductID clears the value of the "product_id" field.
+func (_u *SubscriptionPlanUpdateOne) ClearProductID() *SubscriptionPlanUpdateOne {
+	_u.mutation.ClearProductID()
 	return _u
 }
 
@@ -685,6 +748,15 @@ func (_u *SubscriptionPlanUpdateOne) sqlSave(ctx context.Context) (_node *Subscr
 	}
 	if value, ok := _u.mutation.AddedGroupID(); ok {
 		_spec.AddField(subscriptionplan.FieldGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.ProductID(); ok {
+		_spec.SetField(subscriptionplan.FieldProductID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedProductID(); ok {
+		_spec.AddField(subscriptionplan.FieldProductID, field.TypeInt64, value)
+	}
+	if _u.mutation.ProductIDCleared() {
+		_spec.ClearField(subscriptionplan.FieldProductID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(subscriptionplan.FieldName, field.TypeString, value)

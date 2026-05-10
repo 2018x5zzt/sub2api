@@ -151,12 +151,12 @@ type APIKeyAuthCacheInvalidator interface {
 
 // CreateAPIKeyRequest 创建API Key请求
 type CreateAPIKeyRequest struct {
-	Name        string   `json:"name"`
-	GroupID     *int64   `json:"group_id"`
+	Name             string   `json:"name"`
+	GroupID          *int64   `json:"group_id"`
 	BudgetMultiplier *float64 `json:"budget_multiplier"`
-	CustomKey   *string  `json:"custom_key"`   // 可选的自定义key
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
+	CustomKey        *string  `json:"custom_key"`   // 可选的自定义key
+	IPWhitelist      []string `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist      []string `json:"ip_blacklist"` // IP 黑名单
 
 	// Quota fields
 	Quota         float64 `json:"quota"`           // Quota limit in USD (0 = unlimited)
@@ -170,12 +170,12 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
-	Name        *string  `json:"name"`
-	GroupID     *int64   `json:"group_id"`
+	Name             *string  `json:"name"`
+	GroupID          *int64   `json:"group_id"`
 	BudgetMultiplier *float64 `json:"budget_multiplier"`
-	Status      *string  `json:"status"`
-	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
-	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
+	Status           *string  `json:"status"`
+	IPWhitelist      []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
+	IPBlacklist      []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
 
 	// Quota fields
 	Quota           *float64   `json:"quota"`       // Quota limit in USD (nil = no change, 0 = unlimited)
@@ -670,9 +670,6 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 
 	groupChanged := false
 	if req.GroupID != nil {
-		if apiKey.GroupID != nil && *apiKey.GroupID != *req.GroupID {
-			return nil, ErrAPIKeyGroupImmutable
-		}
 		// 验证分组权限
 		user, err := s.userRepo.GetByID(ctx, userID)
 		if err != nil {
@@ -692,11 +689,25 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 			return nil, ErrGroupNotAllowed
 		}
 
+		if group.IsDynamicPricing() {
+			validated, err := validateBudgetMultiplier(req.BudgetMultiplier, ErrAPIKeyBudgetRequired)
+			if err != nil {
+				return nil, err
+			}
+			apiKey.BudgetMultiplier = validated
+		} else if req.BudgetMultiplier != nil {
+			validated, err := validateBudgetMultiplier(req.BudgetMultiplier, nil)
+			if err != nil {
+				return nil, err
+			}
+			apiKey.BudgetMultiplier = validated
+		}
+
 		apiKey.GroupID = req.GroupID
 		groupChanged = true
 	}
 
-	if req.BudgetMultiplier != nil {
+	if req.GroupID == nil && req.BudgetMultiplier != nil {
 		validated, err := validateBudgetMultiplier(req.BudgetMultiplier, nil)
 		if err != nil {
 			return nil, err

@@ -413,6 +413,7 @@
             :searchable="true"
             :search-placeholder="t('keys.searchGroup')"
             data-tour="key-form-group"
+            @change="handleFormGroupChange"
           >
             <template #selected="{ option }">
               <GroupBadge
@@ -437,6 +438,25 @@
               />
             </template>
           </Select>
+        </div>
+
+        <div v-if="selectedFormGroup?.pricing_mode === 'dynamic'" class="space-y-2 rounded-lg border border-primary-100 bg-primary-50/60 p-3 dark:border-primary-900/40 dark:bg-primary-900/10">
+          <label class="input-label">{{ t('keys.budgetMultiplierLabel') }}</label>
+          <div class="relative">
+            <input
+              v-model.number="formData.budget_multiplier"
+              type="number"
+              step="0.1"
+              min="3"
+              max="50"
+              class="input pr-10"
+              data-testid="key-form-budget-input"
+            />
+            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">x</span>
+          </div>
+          <p class="input-hint">
+            {{ t('keys.budgetMultiplierHint', { min: 3, max: 50, default: resolveGroupDefaultBudgetMultiplier(selectedFormGroup) }) }}
+          </p>
         </div>
 
         <!-- Custom Key Section (only for create) -->
@@ -920,6 +940,52 @@
       @cancel="showResetRateLimitDialog = false"
     />
 
+    <BaseDialog
+      :show="showDynamicBudgetDialog"
+      :title="t('keys.dynamicBudgetDialogTitle')"
+      width="narrow"
+      @close="cancelDynamicBudgetChange"
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-gray-600 dark:text-gray-300">
+          {{ t('keys.dynamicBudgetDialogDescription', { group: pendingDynamicBudgetGroup?.name || '' }) }}
+        </p>
+        <div>
+          <label class="input-label">{{ t('keys.budgetMultiplierLabel') }}</label>
+          <div class="relative">
+            <input
+              v-model.number="dynamicBudgetDraft"
+              type="number"
+              step="0.1"
+              min="3"
+              max="50"
+              class="input pr-10"
+              data-testid="dynamic-budget-input"
+            />
+            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">x</span>
+          </div>
+          <p class="input-hint">
+            {{ t('keys.dynamicBudgetDialogHint', { default: pendingDynamicBudgetGroup ? resolveGroupDefaultBudgetMultiplier(pendingDynamicBudgetGroup) : 8 }) }}
+          </p>
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <button type="button" class="btn btn-secondary" @click="cancelDynamicBudgetChange">
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            data-testid="dynamic-budget-confirm"
+            @click="confirmDynamicBudgetChange"
+          >
+            {{ t('common.confirm') }}
+          </button>
+        </div>
+      </template>
+    </BaseDialog>
+
     <!-- Use Key Modal -->
     <UseKeyModal
       :show="showUseKeyModal"
@@ -1068,6 +1134,7 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import EndpointPopover from '@/components/keys/EndpointPopover.vue'
 	import GroupBadge from '@/components/common/GroupBadge.vue'
 	import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
+	import type { SelectOption } from '@/components/common/Select.vue'
 	import type { ApiKey, Group, PublicSettings, SubscriptionType, GroupPlatform } from '@/types'
 import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
@@ -1089,6 +1156,8 @@ interface GroupOption {
   userRate: number | null
   subscriptionType: SubscriptionType
   platform: GroupPlatform
+  pricingMode?: 'fixed' | 'dynamic'
+  budgetMultiplier?: number | null
 }
 
 const appStore = useAppStore()
@@ -1140,7 +1209,10 @@ const showResetQuotaDialog = ref(false)
 const showResetRateLimitDialog = ref(false)
 const showUseKeyModal = ref(false)
 const showCcsClientSelect = ref(false)
+const showDynamicBudgetDialog = ref(false)
 const pendingCcsRow = ref<ApiKey | null>(null)
+const pendingDynamicBudgetKey = ref<ApiKey | null>(null)
+const pendingDynamicBudgetGroup = ref<Group | null>(null)
 const selectedKey = ref<ApiKey | null>(null)
 const copiedKeyId = ref<number | null>(null)
 const groupSelectorKeyId = ref<number | null>(null)
@@ -1181,6 +1253,7 @@ const formData = ref({
   rate_limit_5h: null as number | null,
   rate_limit_1d: null as number | null,
   rate_limit_7d: null as number | null,
+  budget_multiplier: null as number | null,
   enable_expiration: false,
   expiration_preset: '30' as '7' | '30' | '90' | 'custom',
   expiration_date: ''
@@ -1246,9 +1319,52 @@ const groupOptions = computed(() =>
     rate: group.rate_multiplier,
     userRate: userGroupRates.value[group.id] ?? null,
     subscriptionType: group.subscription_type,
-    platform: group.platform
+    platform: group.platform,
+    pricingMode: group.pricing_mode,
+    budgetMultiplier: group.default_budget_multiplier ?? null
   }))
 )
+
+const selectedFormGroup = computed(() => {
+  if (formData.value.group_id == null) return null
+  return groups.value.find((group) => group.id === formData.value.group_id) || null
+})
+
+const dynamicBudgetDraft = ref<number | null>(null)
+
+const resolveGroupDefaultBudgetMultiplier = (group: Group | null | undefined) => {
+  return group?.default_budget_multiplier ?? 8
+}
+
+const findGroupByID = (groupID: number | null | undefined) => {
+  if (groupID == null) return null
+  return groups.value.find((group) => group.id === groupID) || null
+}
+
+const resolveInitialFormBudgetMultiplier = (group: Group | null | undefined, key?: ApiKey | null) => {
+  if (!group || group.pricing_mode !== 'dynamic') return null
+  if (key?.group_id === group.id && key.budget_multiplier != null) {
+    return key.budget_multiplier
+  }
+  return resolveGroupDefaultBudgetMultiplier(group)
+}
+
+const handleFormGroupChange = (_value: string | number | boolean | null, option: SelectOption | null) => {
+  const groupOption = option as GroupOption | null
+  if (groupOption?.pricingMode === 'dynamic') {
+    formData.value.budget_multiplier = resolveInitialFormBudgetMultiplier(
+      findGroupByID(groupOption.value),
+      selectedKey.value
+    )
+    return
+  }
+  formData.value.budget_multiplier = null
+}
+
+const resolveFormBudgetMultiplierForSubmit = () => {
+  if (selectedFormGroup.value?.pricing_mode !== 'dynamic') return undefined
+  return formData.value.budget_multiplier ?? resolveGroupDefaultBudgetMultiplier(selectedFormGroup.value)
+}
 
 // Group dropdown search
 const groupSearchQuery = ref('')
@@ -1385,6 +1501,7 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 
 const editKey = (key: ApiKey) => {
   selectedKey.value = key
+  const keyGroup = key.group ?? findGroupByID(key.group_id)
   const hasIPRestriction = (key.ip_whitelist?.length > 0) || (key.ip_blacklist?.length > 0)
   const hasExpiration = !!key.expires_at
   formData.value = {
@@ -1402,6 +1519,7 @@ const editKey = (key: ApiKey) => {
     rate_limit_5h: key.rate_limit_5h || null,
     rate_limit_1d: key.rate_limit_1d || null,
     rate_limit_7d: key.rate_limit_7d || null,
+    budget_multiplier: resolveInitialFormBudgetMultiplier(keyGroup, key),
     enable_expiration: hasExpiration,
     expiration_preset: 'custom',
     expiration_date: key.expires_at ? formatDateTimeLocal(key.expires_at) : ''
@@ -1458,11 +1576,46 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
   dropdownPosition.value = null
   if (key.group_id === newGroupId) return
 
+  const newGroup = findGroupByID(newGroupId)
+  if (newGroup?.pricing_mode === 'dynamic') {
+    pendingDynamicBudgetKey.value = key
+    pendingDynamicBudgetGroup.value = newGroup
+    dynamicBudgetDraft.value = resolveGroupDefaultBudgetMultiplier(newGroup)
+    showDynamicBudgetDialog.value = true
+    return
+  }
+
   try {
     await keysAPI.update(key.id, {
       group_id: newGroupId
     })
     appStore.showSuccess(t('keys.groupChangedSuccess'))
+    loadApiKeys()
+  } catch (error) {
+    appStore.showError(t('keys.failedToChangeGroup'))
+  }
+}
+
+const cancelDynamicBudgetChange = () => {
+  showDynamicBudgetDialog.value = false
+  pendingDynamicBudgetKey.value = null
+  pendingDynamicBudgetGroup.value = null
+  dynamicBudgetDraft.value = null
+}
+
+const confirmDynamicBudgetChange = async () => {
+  if (!pendingDynamicBudgetKey.value || !pendingDynamicBudgetGroup.value) return
+  const key = pendingDynamicBudgetKey.value
+  const group = pendingDynamicBudgetGroup.value
+  const budgetMultiplier = dynamicBudgetDraft.value ?? resolveGroupDefaultBudgetMultiplier(group)
+
+  try {
+    await keysAPI.update(key.id, {
+      group_id: group.id,
+      budget_multiplier: budgetMultiplier
+    })
+    appStore.showSuccess(t('keys.groupChangedSuccess'))
+    cancelDynamicBudgetChange()
     loadApiKeys()
   } catch (error) {
     appStore.showError(t('keys.failedToChangeGroup'))
@@ -1548,6 +1701,7 @@ const handleSubmit = async () => {
         ip_blacklist: ipBlacklist,
         quota: quota,
         expires_at: expiresAt,
+        budget_multiplier: resolveFormBudgetMultiplierForSubmit(),
         rate_limit_5h: rateLimitData.rate_limit_5h,
         rate_limit_1d: rateLimitData.rate_limit_1d,
         rate_limit_7d: rateLimitData.rate_limit_7d,
@@ -1563,7 +1717,8 @@ const handleSubmit = async () => {
         ipBlacklist,
         quota,
         expiresInDays,
-        rateLimitData
+        rateLimitData,
+        resolveFormBudgetMultiplierForSubmit()
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1621,6 +1776,7 @@ const closeModals = () => {
     rate_limit_5h: null,
     rate_limit_1d: null,
     rate_limit_7d: null,
+    budget_multiplier: null,
     enable_expiration: false,
     expiration_preset: '30',
     expiration_date: ''

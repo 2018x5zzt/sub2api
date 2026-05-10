@@ -56,6 +56,7 @@ type APIKey struct {
 	Name                      string     `json:"name"`
 	GroupID                   *int64     `json:"group_id"`
 	SubscriptionProductFamily *string    `json:"subscription_product_family"`
+	BudgetMultiplier          *float64   `json:"budget_multiplier,omitempty"`
 	Status                    string     `json:"status"`
 	IPWhitelist               []string   `json:"ip_whitelist"`
 	IPBlacklist               []string   `json:"ip_blacklist"`

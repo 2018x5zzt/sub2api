@@ -146,6 +146,7 @@ func (s *SubscriptionService) InvalidateSubCache(userID, groupID int64) {
 type AssignSubscriptionInput struct {
 	UserID       int64
 	GroupID      int64
+	ProductID    int64
 	ValidityDays int
 	AssignedBy   int64
 	Notes        string

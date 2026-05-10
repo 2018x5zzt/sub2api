@@ -418,6 +418,86 @@ func TestAPIKeyServiceUpdateAllowsProductSubscriptionGroup(t *testing.T) {
 	require.Equal(t, productGroupID, *repo.updated[0].GroupID)
 }
 
+func TestAPIKeyServiceUpdateAllowsChangingStandardGroup(t *testing.T) {
+	oldGroupID := int64(10)
+	newGroupID := int64(20)
+	repo := &apiKeyProductBindRepo{
+		apiKey: &APIKey{ID: 99, UserID: 7, Key: "existing-key", Name: "old", Status: StatusActive, GroupID: &oldGroupID},
+	}
+	svc := NewAPIKeyService(
+		repo,
+		&apiKeyAvailableGroupsUserRepo{user: &User{ID: 7}},
+		&apiKeyProductBindGroupRepo{group: &Group{ID: newGroupID, Name: "new-public", Status: StatusActive, SubscriptionType: SubscriptionTypeStandard}},
+		&apiKeyAvailableGroupsSubscriptionRepo{},
+		nil,
+		nil,
+		&config.Config{},
+	)
+
+	key, err := svc.Update(context.Background(), 99, 7, UpdateAPIKeyRequest{GroupID: &newGroupID})
+
+	require.NoError(t, err)
+	require.NotNil(t, key.GroupID)
+	require.Equal(t, newGroupID, *key.GroupID)
+	require.Len(t, repo.updated, 1)
+	require.NotNil(t, repo.updated[0].GroupID)
+	require.Equal(t, newGroupID, *repo.updated[0].GroupID)
+}
+
+func TestAPIKeyServiceUpdateRequiresBudgetMultiplierWhenChangingToDynamicGroup(t *testing.T) {
+	oldGroupID := int64(10)
+	dynamicGroupID := int64(20)
+	repo := &apiKeyProductBindRepo{
+		apiKey: &APIKey{ID: 99, UserID: 7, Key: "existing-key", Name: "old", Status: StatusActive, GroupID: &oldGroupID},
+	}
+	svc := NewAPIKeyService(
+		repo,
+		&apiKeyAvailableGroupsUserRepo{user: &User{ID: 7}},
+		&apiKeyProductBindGroupRepo{group: &Group{ID: dynamicGroupID, Name: "dynamic-public", Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, PricingMode: GroupPricingModeDynamic}},
+		&apiKeyAvailableGroupsSubscriptionRepo{},
+		nil,
+		nil,
+		&config.Config{},
+	)
+
+	key, err := svc.Update(context.Background(), 99, 7, UpdateAPIKeyRequest{GroupID: &dynamicGroupID})
+
+	require.ErrorIs(t, err, ErrAPIKeyBudgetRequired)
+	require.Nil(t, key)
+	require.Empty(t, repo.updated)
+}
+
+func TestAPIKeyServiceUpdateAllowsChangingToDynamicGroupWithBudgetMultiplier(t *testing.T) {
+	oldGroupID := int64(10)
+	dynamicGroupID := int64(20)
+	budget := 8.0
+	repo := &apiKeyProductBindRepo{
+		apiKey: &APIKey{ID: 99, UserID: 7, Key: "existing-key", Name: "old", Status: StatusActive, GroupID: &oldGroupID},
+	}
+	svc := NewAPIKeyService(
+		repo,
+		&apiKeyAvailableGroupsUserRepo{user: &User{ID: 7}},
+		&apiKeyProductBindGroupRepo{group: &Group{ID: dynamicGroupID, Name: "dynamic-public", Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, PricingMode: GroupPricingModeDynamic}},
+		&apiKeyAvailableGroupsSubscriptionRepo{},
+		nil,
+		nil,
+		&config.Config{},
+	)
+
+	key, err := svc.Update(context.Background(), 99, 7, UpdateAPIKeyRequest{GroupID: &dynamicGroupID, BudgetMultiplier: &budget})
+
+	require.NoError(t, err)
+	require.NotNil(t, key.GroupID)
+	require.Equal(t, dynamicGroupID, *key.GroupID)
+	require.NotNil(t, key.BudgetMultiplier)
+	require.Equal(t, budget, *key.BudgetMultiplier)
+	require.Len(t, repo.updated, 1)
+	require.NotNil(t, repo.updated[0].GroupID)
+	require.Equal(t, dynamicGroupID, *repo.updated[0].GroupID)
+	require.NotNil(t, repo.updated[0].BudgetMultiplier)
+	require.Equal(t, budget, *repo.updated[0].BudgetMultiplier)
+}
+
 func TestAPIKeyServiceUpdateIgnoresFamilyWhenGroupUnchanged(t *testing.T) {
 	productGroupID := int64(30)
 	oldFamily := "gpt"

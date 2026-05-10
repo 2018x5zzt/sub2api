@@ -20,6 +20,19 @@
           </Select>
         </div>
       </div>
+      <div>
+        <label class="input-label">{{ t('payment.admin.subscriptionProduct') }}</label>
+        <Select v-model="planForm.product_id" :options="productOptions" :placeholder="t('payment.admin.selectSubscriptionProduct')" class="w-full">
+          <template #selected="{ option }">
+            <span>{{ option?.label || t('payment.admin.selectSubscriptionProduct') }}</span>
+          </template>
+          <template #option="{ option, selected }">
+            <span class="flex-1 truncate text-left">{{ option.label }}</span>
+            <Icon v-if="selected" name="check" size="sm" class="text-primary-500" :stroke-width="2" />
+          </template>
+        </Select>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.subscriptionProductHint') }}</p>
+      </div>
 
       <!-- Group Info Preview -->
       <div v-if="selectedGroupInfo" class="rounded-lg border border-gray-200 bg-gray-50 p-3 dark:border-dark-600 dark:bg-dark-800">
@@ -81,9 +94,10 @@ import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminPaymentAPI } from '@/api/admin/payment'
+import { subscriptionProductsAPI } from '@/api/admin/subscriptionProducts'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import type { SubscriptionPlan } from '@/types/payment'
-import type { AdminGroup } from '@/types'
+import type { AdminGroup, AdminSubscriptionProduct } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -105,7 +119,8 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 const saving = ref(false)
-const planForm = reactive({ name: '', group_id: null as number | null, description: '', price: 0, original_price: 0, validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
+const subscriptionProducts = ref<AdminSubscriptionProduct[]>([])
+const planForm = reactive({ name: '', group_id: null as number | null, product_id: null as number | null, description: '', price: 0, original_price: 0, validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
 const planFeaturesText = ref('')
 
 const validityUnitOptions = computed(() => [
@@ -124,19 +139,39 @@ const groupOptions = computed(() =>
     })),
 )
 
+const productOptions = computed(() => [
+  { value: null, label: t('payment.admin.noSubscriptionProduct') },
+  ...subscriptionProducts.value
+    .filter(product => product.status === 'active')
+    .map(product => ({
+      value: product.id,
+      label: `${product.name} (#${product.id}, ${product.code})`,
+    })),
+])
+
 const selectedGroupInfo = computed(() => {
   if (!planForm.group_id) return null
   return props.groups.find(g => g.id === planForm.group_id) || null
 })
 
+async function loadSubscriptionProducts() {
+  try {
+    subscriptionProducts.value = await subscriptionProductsAPI.list()
+  }
+  catch (error: unknown) {
+    appStore.showError(extractApiErrorMessage(error, t('payment.admin.subscriptionProductsLoadError')))
+  }
+}
+
 // Reset form when dialog opens
 watch(() => props.show, (visible) => {
   if (!visible) return
+  loadSubscriptionProducts()
   if (props.plan) {
-    Object.assign(planForm, { name: props.plan.name, group_id: props.plan.group_id, description: props.plan.description, price: props.plan.price, original_price: props.plan.original_price || 0, validity_days: props.plan.validity_days, validity_unit: props.plan.validity_unit || 'days', sort_order: props.plan.sort_order || 0, for_sale: props.plan.for_sale })
+    Object.assign(planForm, { name: props.plan.name, group_id: props.plan.group_id, product_id: props.plan.product_id || null, description: props.plan.description, price: props.plan.price, original_price: props.plan.original_price || 0, validity_days: props.plan.validity_days, validity_unit: props.plan.validity_unit || 'days', sort_order: props.plan.sort_order || 0, for_sale: props.plan.for_sale })
     planFeaturesText.value = (props.plan.features || []).join('\n')
   } else {
-    Object.assign(planForm, { name: '', group_id: null, description: '', price: 0, original_price: 0, validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
+    Object.assign(planForm, { name: '', group_id: null, product_id: null, description: '', price: 0, original_price: 0, validity_days: 30, validity_unit: 'days', sort_order: 0, for_sale: true })
     planFeaturesText.value = ''
   }
 })
@@ -147,6 +182,7 @@ function buildPlanPayload() {
   return {
     name: planForm.name,
     group_id: planForm.group_id,
+    product_id: planForm.product_id || 0,
     description: planForm.description,
     price: planForm.price,
     original_price: planForm.original_price || 0,

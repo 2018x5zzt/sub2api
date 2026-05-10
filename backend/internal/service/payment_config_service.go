@@ -143,6 +143,7 @@ type UpdateProviderInstanceRequest struct {
 }
 type CreatePlanRequest struct {
 	GroupID       int64    `json:"group_id"`
+	ProductID     *int64   `json:"product_id"`
 	Name          string   `json:"name"`
 	Description   string   `json:"description"`
 	Price         float64  `json:"price"`
@@ -157,6 +158,7 @@ type CreatePlanRequest struct {
 
 type UpdatePlanRequest struct {
 	GroupID       *int64   `json:"group_id"`
+	ProductID     *int64   `json:"product_id"`
 	Name          *string  `json:"name"`
 	Description   *string  `json:"description"`
 	Price         *float64 `json:"price"`

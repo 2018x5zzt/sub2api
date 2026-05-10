@@ -19,7 +19,12 @@ func (a *ProductAwareSubscriptionAssigner) AssignOrExtendSubscription(ctx contex
 		return nil, false, ErrSubscriptionNilInput
 	}
 	if a != nil && a.product != nil {
-		productID, ok, err := a.ResolveActiveProductIDByGroupID(ctx, input.GroupID)
+		productID := input.ProductID
+		ok := productID > 0
+		var err error
+		if !ok {
+			productID, ok, err = a.ResolveActiveProductIDByGroupID(ctx, input.GroupID)
+		}
 		if err == nil && ok {
 			productSub, reused, assignErr := a.product.AssignOrExtendProductSubscription(ctx, &AssignProductSubscriptionInput{
 				UserID:       input.UserID,

@@ -338,6 +338,33 @@ func (_u *PaymentOrderUpdate) ClearSubscriptionGroupID() *PaymentOrderUpdate {
 	return _u
 }
 
+// SetSubscriptionProductID sets the "subscription_product_id" field.
+func (_u *PaymentOrderUpdate) SetSubscriptionProductID(v int64) *PaymentOrderUpdate {
+	_u.mutation.ResetSubscriptionProductID()
+	_u.mutation.SetSubscriptionProductID(v)
+	return _u
+}
+
+// SetNillableSubscriptionProductID sets the "subscription_product_id" field if the given value is not nil.
+func (_u *PaymentOrderUpdate) SetNillableSubscriptionProductID(v *int64) *PaymentOrderUpdate {
+	if v != nil {
+		_u.SetSubscriptionProductID(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionProductID adds value to the "subscription_product_id" field.
+func (_u *PaymentOrderUpdate) AddSubscriptionProductID(v int64) *PaymentOrderUpdate {
+	_u.mutation.AddSubscriptionProductID(v)
+	return _u
+}
+
+// ClearSubscriptionProductID clears the value of the "subscription_product_id" field.
+func (_u *PaymentOrderUpdate) ClearSubscriptionProductID() *PaymentOrderUpdate {
+	_u.mutation.ClearSubscriptionProductID()
+	return _u
+}
+
 // SetSubscriptionDays sets the "subscription_days" field.
 func (_u *PaymentOrderUpdate) SetSubscriptionDays(v int) *PaymentOrderUpdate {
 	_u.mutation.ResetSubscriptionDays()
@@ -932,6 +959,15 @@ func (_u *PaymentOrderUpdate) sqlSave(ctx context.Context) (_node int, err error
 	if _u.mutation.SubscriptionGroupIDCleared() {
 		_spec.ClearField(paymentorder.FieldSubscriptionGroupID, field.TypeInt64)
 	}
+	if value, ok := _u.mutation.SubscriptionProductID(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionProductID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionProductID(); ok {
+		_spec.AddField(paymentorder.FieldSubscriptionProductID, field.TypeInt64, value)
+	}
+	if _u.mutation.SubscriptionProductIDCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionProductID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.SubscriptionDays(); ok {
 		_spec.SetField(paymentorder.FieldSubscriptionDays, field.TypeInt, value)
 	}
@@ -1398,6 +1434,33 @@ func (_u *PaymentOrderUpdateOne) AddSubscriptionGroupID(v int64) *PaymentOrderUp
 // ClearSubscriptionGroupID clears the value of the "subscription_group_id" field.
 func (_u *PaymentOrderUpdateOne) ClearSubscriptionGroupID() *PaymentOrderUpdateOne {
 	_u.mutation.ClearSubscriptionGroupID()
+	return _u
+}
+
+// SetSubscriptionProductID sets the "subscription_product_id" field.
+func (_u *PaymentOrderUpdateOne) SetSubscriptionProductID(v int64) *PaymentOrderUpdateOne {
+	_u.mutation.ResetSubscriptionProductID()
+	_u.mutation.SetSubscriptionProductID(v)
+	return _u
+}
+
+// SetNillableSubscriptionProductID sets the "subscription_product_id" field if the given value is not nil.
+func (_u *PaymentOrderUpdateOne) SetNillableSubscriptionProductID(v *int64) *PaymentOrderUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionProductID(*v)
+	}
+	return _u
+}
+
+// AddSubscriptionProductID adds value to the "subscription_product_id" field.
+func (_u *PaymentOrderUpdateOne) AddSubscriptionProductID(v int64) *PaymentOrderUpdateOne {
+	_u.mutation.AddSubscriptionProductID(v)
+	return _u
+}
+
+// ClearSubscriptionProductID clears the value of the "subscription_product_id" field.
+func (_u *PaymentOrderUpdateOne) ClearSubscriptionProductID() *PaymentOrderUpdateOne {
+	_u.mutation.ClearSubscriptionProductID()
 	return _u
 }
 
@@ -2024,6 +2087,15 @@ func (_u *PaymentOrderUpdateOne) sqlSave(ctx context.Context) (_node *PaymentOrd
 	}
 	if _u.mutation.SubscriptionGroupIDCleared() {
 		_spec.ClearField(paymentorder.FieldSubscriptionGroupID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.SubscriptionProductID(); ok {
+		_spec.SetField(paymentorder.FieldSubscriptionProductID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSubscriptionProductID(); ok {
+		_spec.AddField(paymentorder.FieldSubscriptionProductID, field.TypeInt64, value)
+	}
+	if _u.mutation.SubscriptionProductIDCleared() {
+		_spec.ClearField(paymentorder.FieldSubscriptionProductID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.SubscriptionDays(); ok {
 		_spec.SetField(paymentorder.FieldSubscriptionDays, field.TypeInt, value)

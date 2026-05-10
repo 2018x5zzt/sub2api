@@ -173,6 +173,46 @@ func TestSubscriptionProductServiceListActiveUserProductsReturnsSharedProductGro
 	}
 }
 
+func TestProductAwareSubscriptionAssignerUsesExplicitProductID(t *testing.T) {
+	t.Parallel()
+
+	repo := &productSubscriptionRepoStub{
+		assigned: &UserProductSubscription{
+			ID:        9001,
+			UserID:    7,
+			ProductID: 225,
+			Status:    SubscriptionStatusActive,
+			StartsAt:  time.Now(),
+			ExpiresAt: time.Now().Add(225 * 24 * time.Hour),
+		},
+	}
+	assigner := NewProductAwareSubscriptionAssigner(nil, NewSubscriptionProductService(repo))
+
+	sub, reused, err := assigner.AssignOrExtendSubscription(context.Background(), &AssignSubscriptionInput{
+		UserID:       7,
+		GroupID:      45,
+		ProductID:    225,
+		ValidityDays: 225,
+		Notes:        "payment order 1001",
+	})
+
+	if err != nil {
+		t.Fatalf("AssignOrExtendSubscription returned error: %v", err)
+	}
+	if reused {
+		t.Fatalf("reused = true, want false")
+	}
+	if sub == nil || sub.UserID != 7 || sub.GroupID != 45 {
+		t.Fatalf("mapped subscription = %#v, want user 7 group 45", sub)
+	}
+	if len(repo.assignInputs) != 1 {
+		t.Fatalf("assign input count = %d, want 1", len(repo.assignInputs))
+	}
+	if repo.assignInputs[0].ProductID != 225 {
+		t.Fatalf("assigned ProductID = %d, want 225", repo.assignInputs[0].ProductID)
+	}
+}
+
 func TestSubscriptionProductServicePassesExplicitProductFamilyToRepository(t *testing.T) {
 	t.Parallel()
 
