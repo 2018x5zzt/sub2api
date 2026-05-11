@@ -47,7 +47,7 @@ RUN go mod download
 
 COPY backend/ ./
 
-COPY --from=frontend-builder /app/backend/internal/web/dist ./internal/web/dist
+COPY --from=frontend-builder /app/frontend-v2/dist ./internal/web/dist
 
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -tags embed \

@@ -15,8 +15,8 @@ export default defineConfig(({ mode }) => {
       }
     },
     build: {
-      outDir: '../backend/internal/web/dist',
-      emptyOutDir: true,
+      outDir: 'dist',
+      emptyOutDir: false,
       rollupOptions: {
         output: {
           manualChunks(id) {
