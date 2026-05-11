@@ -290,6 +290,7 @@ export default {
     copiedToClipboard: '已复制到剪贴板',
     copied: '已复制',
     copyFailed: '复制失败',
+    backup: '备份',
     verifying: '验证中...',
     processing: '处理中...',
     contactSupport: '联系客服',
@@ -353,13 +354,46 @@ export default {
     github: 'GitHub',
     mySubscriptions: '我的订阅',
     buySubscription: '充值/订阅',
+    myOrders: '我的订单',
+    availableChannels: '可用渠道',
+    channelStatus: '渠道状态',
+    channelPricing: '渠道定价',
+    channelMonitor: '渠道监控',
+    subscriptionProductConfig: '订阅产品配置',
+    affiliate: '邀请返利',
+    affiliateInviteRecords: '邀请记录',
+    affiliateRebateRecords: '返利记录',
+    affiliateTransferRecords: '转账记录',
+    paymentDashboard: '支付仪表盘',
+    orderManagement: '订单管理',
+    paymentPlans: '支付套餐',
     docs: '使用文档',
-    sora: 'Sora 创作'
+    imageStudio: '图片创作'
+  },
+
+  docs: {
+    title: '使用文档',
+    description: '这里会展示后台配置的文档链接，也保留控制台和 API 入口信息。',
+    externalTitle: '外部文档',
+    inlineTitle: '尚未配置文档链接',
+    inlineDescription: '可在管理员系统设置中配置文档 URL，配置后这里会展示直接入口。',
+    openDocs: '打开文档',
+    apiBase: 'API 地址',
+    console: '控制台'
+  },
+
+  parity: {
+    description: '该入口存在于旧版 xlabapi 前端，现在已先在 frontend-v2 恢复路由。完整页面迁移会按一致性计划继续补齐。',
+    entryRestored: '入口已恢复',
+    entryRestoredDescription: '测试前端已经可以访问该路由和导航入口。旧页面的完整 React 实现仍需在正式上线前继续迁移。',
+    legacyPath: '旧版路径',
+    expectedApiSurface: '预期 API 面'
   },
 
   layout: {
     adminConsole: '管理员控制台',
-    userConsole: '用户控制台'
+    userConsole: '用户控制台',
+    adminBanner: '管理'
   },
 
   notFound: {
@@ -5254,6 +5288,29 @@ export default {
     resetIn: '{time} 后重置',
     windowNotActive: '等待首次使用',
     usageOf: '已用 {used} / {limit}'
+  },
+
+  userAffiliate: {
+    description: '邀请用户、查看返利，并将可用返利额度转入余额。',
+    rebateRate: '返利比例',
+    invitedUsers: '邀请用户',
+    availableQuota: '可用额度',
+    totalRebateQuota: '累计返利额度',
+    frozen: '冻结中：{amount}',
+    inviteLink: '邀请链接',
+    inviteLinkDescription: '分享您的邀请码或链接，充值返利会计入邀请返利额度。',
+    code: '邀请码',
+    link: '链接',
+    transferQuota: '转入余额',
+    transferDescription: '将可用邀请返利额度转入账户余额。',
+    transfer: '转入',
+    transferred: '已转入 {amount}',
+    invitees: '被邀请用户',
+    email: '邮箱',
+    username: '用户名',
+    rebate: '返利',
+    joined: '加入时间',
+    copyFailed: '复制失败'
   },
 
   // Onboarding Tour

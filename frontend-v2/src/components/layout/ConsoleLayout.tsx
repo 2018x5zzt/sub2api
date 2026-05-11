@@ -10,7 +10,6 @@ import {
   Menu,
   X,
   LogOut,
-  Shield,
   Megaphone,
   Boxes,
   Layers,
@@ -18,7 +17,16 @@ import {
   Server,
   Settings,
   Ticket,
-  Database
+  Database,
+  CreditCard,
+  RadioTower,
+  Activity,
+  HandCoins,
+  Image,
+  ShoppingCart,
+  Network,
+  LineChart,
+  ReceiptText
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { LocaleSwitcher } from './LocaleSwitcher'
@@ -36,21 +44,38 @@ const userNav: NavItem[] = [
   { to: '/keys', labelKey: 'nav.apiKeys', Icon: KeyRound },
   { to: '/models', labelKey: 'nav.modelHub', Icon: Layers },
   { to: '/usage', labelKey: 'nav.usage', Icon: BarChart3 },
+  { to: '/available-channels', labelKey: 'nav.availableChannels', Icon: Network },
+  { to: '/monitor', labelKey: 'nav.channelStatus', Icon: RadioTower },
   { to: '/subscriptions', labelKey: 'nav.mySubscriptions', Icon: BadgeCheck },
+  { to: '/purchase', labelKey: 'nav.buySubscription', Icon: CreditCard },
+  { to: '/orders', labelKey: 'nav.myOrders', Icon: ReceiptText },
   { to: '/redeem', labelKey: 'nav.redeem', Icon: Gift },
-  { to: '/profile', labelKey: 'nav.profile', Icon: UserCircle }
+  { to: '/affiliate', labelKey: 'nav.affiliate', Icon: HandCoins },
+  { to: '/profile', labelKey: 'nav.profile', Icon: UserCircle },
+  { to: '/image-studio', labelKey: 'nav.imageStudio', Icon: Image }
 ]
 
 const adminNav: NavItem[] = [
-  { to: '/admin', labelKey: 'nav.dashboard', Icon: LayoutDashboard },
+  { to: '/admin/dashboard', labelKey: 'nav.dashboard', Icon: LayoutDashboard },
+  { to: '/admin/ops', labelKey: 'nav.ops', Icon: Activity },
   { to: '/admin/users', labelKey: 'nav.users', Icon: UserCircle },
   { to: '/admin/groups', labelKey: 'nav.groups', Icon: Boxes },
+  { to: '/admin/channels/pricing', labelKey: 'nav.channelPricing', Icon: LineChart },
+  { to: '/admin/channels/monitor', labelKey: 'nav.channelMonitor', Icon: RadioTower },
   { to: '/admin/accounts', labelKey: 'nav.accounts', Icon: Server },
   { to: '/admin/subscriptions', labelKey: 'nav.subscriptions', Icon: BadgeCheck },
+  { to: '/admin/subscription-product-config', labelKey: 'nav.subscriptionProductConfig', Icon: CreditCard },
   { to: '/admin/usage', labelKey: 'nav.usage', Icon: BarChart3 },
   { to: '/admin/redeem', labelKey: 'nav.redeemCodes', Icon: Gift },
   { to: '/admin/promo-codes', labelKey: 'nav.promoCodes', Icon: Ticket },
   { to: '/admin/announcements', labelKey: 'nav.announcements', Icon: Megaphone },
+  { to: '/admin/proxies', labelKey: 'nav.proxies', Icon: Server },
+  { to: '/admin/affiliates/invites', labelKey: 'nav.affiliateInviteRecords', Icon: HandCoins },
+  { to: '/admin/affiliates/rebates', labelKey: 'nav.affiliateRebateRecords', Icon: ReceiptText },
+  { to: '/admin/affiliates/transfers', labelKey: 'nav.affiliateTransferRecords', Icon: CreditCard },
+  { to: '/admin/orders/dashboard', labelKey: 'nav.paymentDashboard', Icon: ShoppingCart },
+  { to: '/admin/orders', labelKey: 'nav.orderManagement', Icon: ReceiptText },
+  { to: '/admin/orders/plans', labelKey: 'nav.paymentPlans', Icon: CreditCard },
   { to: '/admin/backup', labelKey: 'common.backup', Icon: Database },
   { to: '/admin/settings', labelKey: 'nav.settings', Icon: Settings }
 ]
@@ -67,7 +92,8 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
   const siteLogo = publicSettings?.site_logo || '/logo.png'
 
   const [mobileOpen, setMobileOpen] = useState(false)
-  const items = admin ? adminNav : userNav
+  const items = userNav
+  const showAdminItems = isAdmin || admin
 
   useEffect(() => {
     setMobileOpen(false)
@@ -100,7 +126,6 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
             <NavLink
               key={to}
               to={to}
-              end={to === '/admin'}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
@@ -109,29 +134,39 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
                     : 'text-ink-2 hover:bg-bg-3'
                 )
               }
+              end={to === '/admin/dashboard'}
             >
               <Icon className="h-4 w-4 shrink-0" />
               <span>{t(labelKey)}</span>
             </NavLink>
           ))}
 
-          {isAdmin && !admin && (
-            <NavLink
-              to="/admin"
-              className="mt-3 flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-ink-2 hover:bg-bg-3 border border-line-2"
-            >
-              <Shield className="h-4 w-4 shrink-0" />
-              <span>{t('layout.adminConsole')}</span>
-            </NavLink>
-          )}
-          {admin && (
-            <NavLink
-              to="/dashboard"
-              className="mt-3 flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-ink-2 hover:bg-bg-3 border border-line-2"
-            >
-              <LayoutDashboard className="h-4 w-4 shrink-0" />
-              <span>{t('layout.userConsole')}</span>
-            </NavLink>
+          {showAdminItems && (
+            <div className="mt-4 border-t border-line-2 pt-3">
+              <div className="px-3 pb-2 text-[11px] font-mono uppercase tracking-[0.14em] text-ink-3">
+                {t('layout.adminBanner')}
+              </div>
+              <div className="space-y-0.5">
+                {adminNav.map(({ to, labelKey, Icon }) => (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors',
+                        isActive
+                          ? 'bg-orange-soft text-orange font-medium'
+                          : 'text-ink-2 hover:bg-bg-3'
+                      )
+                    }
+                    end={to === '/admin/dashboard'}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span>{t(labelKey)}</span>
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           )}
         </nav>
 

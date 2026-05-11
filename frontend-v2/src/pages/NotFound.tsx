@@ -9,7 +9,7 @@ export default function NotFoundPage() {
       <h1 className="font-display text-display-md text-ink-1 mb-3">{t('notFound.title')}</h1>
       <p className="text-ink-2 mb-8 text-center max-w-md">{t('notFound.description')}</p>
       <Link to="/" className="btn btn-primary">
-        {t('home.goToDashboard')}
+        {t('home.getStarted')}
       </Link>
     </div>
   )

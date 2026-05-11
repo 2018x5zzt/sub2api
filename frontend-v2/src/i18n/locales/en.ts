@@ -290,6 +290,7 @@ export default {
     copiedToClipboard: 'Copied to clipboard',
     copied: 'Copied',
     copyFailed: 'Failed to copy',
+    backup: 'Backup',
     verifying: 'Verifying...',
     processing: 'Processing...',
     contactSupport: 'Contact Support',
@@ -353,13 +354,46 @@ export default {
     github: 'GitHub',
     mySubscriptions: 'My Subscriptions',
     buySubscription: 'Recharge / Subscription',
+    myOrders: 'My Orders',
+    availableChannels: 'Available Channels',
+    channelStatus: 'Channel Status',
+    channelPricing: 'Channel Pricing',
+    channelMonitor: 'Channel Monitor',
+    subscriptionProductConfig: 'Subscription Product Config',
+    affiliate: 'Affiliate',
+    affiliateInviteRecords: 'Affiliate Invites',
+    affiliateRebateRecords: 'Affiliate Rebates',
+    affiliateTransferRecords: 'Affiliate Transfers',
+    paymentDashboard: 'Payment Dashboard',
+    orderManagement: 'Orders',
+    paymentPlans: 'Payment Plans',
     docs: 'Guide',
-    sora: 'Sora Studio'
+    imageStudio: 'Image Studio'
+  },
+
+  docs: {
+    title: 'Documentation',
+    description: 'Use the configured documentation link or the console entry points below.',
+    externalTitle: 'External documentation',
+    inlineTitle: 'Documentation link is not configured',
+    inlineDescription: 'Set a documentation URL in admin settings to expose a direct guide link here.',
+    openDocs: 'Open Docs',
+    apiBase: 'API base',
+    console: 'Console'
+  },
+
+  parity: {
+    description: 'This entry exists in the legacy xlabapi frontend and is now restored in frontend-v2. Full page migration is tracked in the parity plan.',
+    entryRestored: 'Entry restored',
+    entryRestoredDescription: 'The route and navigation entry are available in the test frontend. The old page still needs full React implementation before production rollout.',
+    legacyPath: 'Legacy path',
+    expectedApiSurface: 'Expected API surface'
   },
 
   layout: {
     adminConsole: 'Admin Console',
-    userConsole: 'User Console'
+    userConsole: 'User Console',
+    adminBanner: 'Admin'
   },
 
   notFound: {
@@ -5094,6 +5128,29 @@ export default {
     resetIn: 'Resets in {time}',
     windowNotActive: 'Awaiting first use',
     usageOf: '{used} of {limit}'
+  },
+
+  userAffiliate: {
+    description: 'Invite users, track rebates, and transfer available rebate quota into balance.',
+    rebateRate: 'Rebate rate',
+    invitedUsers: 'Invited users',
+    availableQuota: 'Available quota',
+    totalRebateQuota: 'Total rebate quota',
+    frozen: 'Frozen: {amount}',
+    inviteLink: 'Invite link',
+    inviteLinkDescription: 'Share your invite code or link. Recharge rebates are credited to your affiliate quota.',
+    code: 'Code',
+    link: 'Link',
+    transferQuota: 'Transfer quota',
+    transferDescription: 'Move available affiliate quota into account balance.',
+    transfer: 'Transfer',
+    transferred: 'Transferred {amount}',
+    invitees: 'Invitees',
+    email: 'Email',
+    username: 'Username',
+    rebate: 'Rebate',
+    joined: 'Joined',
+    copyFailed: 'Copy failed'
   },
 
   // Onboarding Tour
