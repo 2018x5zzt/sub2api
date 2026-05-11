@@ -1,0 +1,344 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==================== Xlabapi Plato — design tokens ==================== */
+:root {
+  --bg-0: #000000;
+  --bg-1: #0a0a0a;
+  --bg-2: #0f0f10;
+  --bg-3: #15161a;
+  --bg-4: #1d222c;
+
+  --line-1: rgba(255, 255, 255, 0.06);
+  --line-2: rgba(255, 255, 255, 0.10);
+  --line-3: rgba(255, 255, 255, 0.13);
+  --line-4: rgba(255, 255, 255, 0.16);
+
+  --text-1: #f5f6f8;
+  --text-2: #c8cbd2;
+  --text-3: #8a8f99;
+  --text-4: #5b606b;
+
+  --orange: #ff5722;
+  --orange-hover: #ff693a;
+  --orange-soft: rgba(255, 87, 34, 0.12);
+  --orange-line: rgba(255, 87, 34, 0.30);
+
+  --signal-ok: #34d399;
+  --signal-warn: #fbbf24;
+  --signal-err: #f87171;
+
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-elev: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family:
+    'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  background: var(--bg-0);
+  color: var(--text-1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'ss01', 'cv11';
+  letter-spacing: -0.005em;
+}
+
+.font-mono {
+  font-feature-settings: 'zero', 'ss01';
+}
+
+/* ==================== Component primitives ==================== */
+@layer components {
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 select-none transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: var(--text-1);
+    color: var(--bg-0);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background: #ffffff;
+  }
+  .btn-accent {
+    background: var(--orange);
+    color: #ffffff;
+  }
+  .btn-accent:hover:not(:disabled) {
+    background: var(--orange-hover);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-1);
+    border-color: var(--line-2);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: var(--bg-2);
+    border-color: var(--line-3);
+  }
+  .btn-danger {
+    background: var(--signal-err);
+    color: #1a0000;
+  }
+  .btn-danger:hover:not(:disabled) {
+    background: #ff8a8a;
+  }
+  .btn-sm {
+    height: 30px;
+    padding: 0 12px;
+    font-size: 12.5px;
+    border-radius: 5px;
+  }
+  .btn-lg {
+    height: 46px;
+    padding: 0 22px;
+    font-size: 14.5px;
+  }
+  .btn-icon {
+    padding: 0;
+    width: 36px;
+    border-radius: 999px;
+  }
+  .btn-pill {
+    height: 44px;
+    padding: 0 22px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  /* Input */
+  .input {
+    @apply w-full transition-all duration-150;
+    height: 38px;
+    background: var(--bg-4);
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-md);
+    color: var(--text-1);
+    padding: 0 12px;
+    font-family: inherit;
+    font-size: 13.5px;
+    outline: none;
+  }
+  .input::placeholder {
+    color: var(--text-4);
+  }
+  .input:focus {
+    border-color: var(--orange);
+    box-shadow: 0 0 0 3px rgba(255, 87, 34, 0.18);
+  }
+  .input:disabled {
+    @apply opacity-60 cursor-not-allowed;
+  }
+  .input-error {
+    border-color: var(--signal-err);
+  }
+  .input-error-text {
+    @apply text-xs mt-1;
+    color: var(--signal-err);
+  }
+  .input-label {
+    @apply block mb-1.5;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  }
+
+  /* Card */
+  .card {
+    background: var(--bg-1);
+    border: 1px solid var(--line-1);
+    border-radius: var(--r-xl);
+  }
+  .card-flat {
+    border: 1px solid var(--line-2);
+    border-radius: 0;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center gap-1.5;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    border: 1px solid var(--line-2);
+    background: var(--bg-2);
+    color: var(--text-2);
+  }
+  .badge-success {
+    border-color: rgba(52, 211, 153, 0.30);
+    background: rgba(52, 211, 153, 0.10);
+    color: var(--signal-ok);
+  }
+  .badge-warning {
+    border-color: rgba(251, 191, 36, 0.30);
+    background: rgba(251, 191, 36, 0.10);
+    color: var(--signal-warn);
+  }
+  .badge-danger {
+    border-color: rgba(248, 113, 113, 0.30);
+    background: rgba(248, 113, 113, 0.10);
+    color: var(--signal-err);
+  }
+  .badge-accent {
+    border-color: var(--orange-line);
+    background: var(--orange-soft);
+    color: var(--orange);
+  }
+
+  /* Eyebrow caption (orange square + mono uppercase) */
+  .eyebrow {
+    @apply inline-flex items-center;
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+  .eyebrow::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--orange);
+    margin-right: 10px;
+  }
+
+  /* Inline italic emphasis (Georgia serif italic) */
+  .em-serif {
+    font-family: Georgia, 'Times New Roman', serif;
+    font-style: italic;
+    font-weight: 400;
+  }
+
+  /* Container */
+  .container-bus {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 40px;
+  }
+  .container-console {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 0 40px;
+  }
+
+  /* Pill tab nav */
+  .pill-nav {
+    @apply inline-flex;
+    padding: 4px;
+    gap: 2px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--line-2);
+  }
+  .pill-nav-item {
+    padding: 8px 16px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    letter-spacing: -0.005em;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+  .pill-nav-item:hover {
+    color: rgba(255, 255, 255, 0.85);
+  }
+  .pill-nav-item-active {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .pill-nav-item-light-active {
+    color: #000000;
+    background: #ffffff;
+  }
+
+  /* Subtle dividers */
+  .hr-fade {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--line-2) 20%,
+      var(--line-2) 80%,
+      transparent
+    );
+    border: 0;
+  }
+
+  /* Skeleton */
+  .skeleton {
+    @apply animate-pulse rounded;
+    background: var(--bg-3);
+  }
+
+  /* Data table (mono-flavored, used by Recent Requests) */
+  .data-table {
+    border: 1px solid var(--line-2);
+    font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 12.5px;
+  }
+}
+
+/* ==================== Background utilities ==================== */
+.dot-bg {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.grid-bg {
+  background-image:
+    linear-gradient(var(--line-1) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-1) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+/* ==================== Scrollbars ==================== */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--line-3);
+}
