@@ -26,12 +26,12 @@ export interface UserDashboardStats {
 }
 
 export async function getUserDashboard() {
-  const { data } = await apiClient.get<UserDashboardStats>('/usage/dashboard')
+  const { data } = await apiClient.get<UserDashboardStats>('/usage/dashboard/stats')
   return data
 }
 
 export async function listUsage(params: UsageQueryParams = {}) {
-  const { data } = await apiClient.get<PaginatedResponse<UsageLog>>('/usage/logs', { params })
+  const { data } = await apiClient.get<PaginatedResponse<UsageLog>>('/usage', { params })
   return data
 }
 
@@ -43,12 +43,12 @@ export interface TrendResponse {
 }
 
 export async function getUserTrend(params: { start_date?: string; end_date?: string; granularity?: 'day' | 'hour' } = {}) {
-  const { data } = await apiClient.get<TrendResponse>('/usage/trend', { params })
+  const { data } = await apiClient.get<TrendResponse>('/usage/dashboard/trend', { params })
   return data
 }
 
 export async function getUserModelStats(params: { start_date?: string; end_date?: string } = {}) {
-  const { data } = await apiClient.get<{ models: ModelStat[] }>('/usage/models', { params })
+  const { data } = await apiClient.get<{ models: ModelStat[] }>('/usage/dashboard/models', { params })
   return data
 }
 

@@ -38,12 +38,12 @@ export async function deleteAccount(id: number) {
 }
 
 export async function toggleAccountStatus(id: number, status: 'active' | 'inactive') {
-  const { data } = await apiClient.put<Account>(`/admin/accounts/${id}/status`, { status })
+  const { data } = await apiClient.put<Account>(`/admin/accounts/${id}`, { status })
   return data
 }
 
 export async function setAccountSchedulable(id: number, schedulable: boolean) {
-  const { data } = await apiClient.put<Account>(`/admin/accounts/${id}/schedulable`, { schedulable })
+  const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/schedulable`, { schedulable })
   return data
 }
 
@@ -71,7 +71,7 @@ export async function testAccount(id: number) {
 }
 
 export async function refreshAccountCredentials(id: number) {
-  const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/refresh-credentials`)
+  const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/refresh`)
   return data
 }
 

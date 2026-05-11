@@ -14,7 +14,7 @@ export interface SimpleApiKey {
 }
 
 export async function listAdminUsage(params: UsageQueryParams = {}) {
-  const { data } = await apiClient.get<PaginatedResponse<AdminUsageLog>>('/admin/usage/logs', {
+  const { data } = await apiClient.get<PaginatedResponse<AdminUsageLog>>('/admin/usage', {
     params
   })
   return data

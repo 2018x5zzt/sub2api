@@ -110,7 +110,7 @@ export interface TestSmtpRequest {
 }
 
 export async function testSmtpConnection(config: TestSmtpRequest) {
-  const { data } = await apiClient.post<{ message: string }>('/admin/settings/smtp/test', config)
+  const { data } = await apiClient.post<{ message: string }>('/admin/settings/test-smtp', config)
   return data
 }
 
@@ -121,7 +121,7 @@ export interface SendTestEmailRequest extends TestSmtpRequest {
 }
 
 export async function sendTestEmail(req: SendTestEmailRequest) {
-  const { data } = await apiClient.post<{ message: string }>('/admin/settings/smtp/send-test', req)
+  const { data } = await apiClient.post<{ message: string }>('/admin/settings/send-test-email', req)
   return data
 }
 

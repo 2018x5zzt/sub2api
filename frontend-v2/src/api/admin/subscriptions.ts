@@ -39,7 +39,7 @@ export async function extendSubscription(id: number, payload: ExtendSubscription
 }
 
 export async function revokeSubscription(id: number) {
-  const { data } = await apiClient.post<{ message: string }>(`/admin/subscriptions/${id}/revoke`)
+  const { data } = await apiClient.delete<{ message: string }>(`/admin/subscriptions/${id}`)
   return data
 }
 

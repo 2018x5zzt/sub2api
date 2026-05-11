@@ -40,51 +40,51 @@ export interface TestS3Response {
 }
 
 export async function getS3Config() {
-  const { data } = await apiClient.get<BackupS3Config>('/admin/backup/s3-config')
+  const { data } = await apiClient.get<BackupS3Config>('/admin/backups/s3-config')
   return data
 }
 
 export async function updateS3Config(config: BackupS3Config) {
-  const { data } = await apiClient.put<BackupS3Config>('/admin/backup/s3-config', config)
+  const { data } = await apiClient.put<BackupS3Config>('/admin/backups/s3-config', config)
   return data
 }
 
 export async function testS3Connection(config: BackupS3Config) {
-  const { data } = await apiClient.post<TestS3Response>('/admin/backup/s3-test', config)
+  const { data } = await apiClient.post<TestS3Response>('/admin/backups/s3-config/test', config)
   return data
 }
 
 export async function getSchedule() {
-  const { data } = await apiClient.get<BackupScheduleConfig>('/admin/backup/schedule')
+  const { data } = await apiClient.get<BackupScheduleConfig>('/admin/backups/schedule')
   return data
 }
 
 export async function updateSchedule(config: BackupScheduleConfig) {
-  const { data } = await apiClient.put<BackupScheduleConfig>('/admin/backup/schedule', config)
+  const { data } = await apiClient.put<BackupScheduleConfig>('/admin/backups/schedule', config)
   return data
 }
 
 export async function createBackup(req?: CreateBackupRequest) {
-  const { data } = await apiClient.post<BackupRecord>('/admin/backup', req || {})
+  const { data } = await apiClient.post<BackupRecord>('/admin/backups', req || {})
   return data
 }
 
 export async function listBackups() {
-  const { data } = await apiClient.get<{ items: BackupRecord[] }>('/admin/backup')
+  const { data } = await apiClient.get<{ items: BackupRecord[] }>('/admin/backups')
   return data
 }
 
 export async function deleteBackup(id: string) {
-  await apiClient.delete(`/admin/backup/${id}`)
+  await apiClient.delete(`/admin/backups/${id}`)
 }
 
 export async function getBackupDownloadURL(id: string) {
-  const { data } = await apiClient.get<{ url: string }>(`/admin/backup/${id}/download`)
+  const { data } = await apiClient.get<{ url: string }>(`/admin/backups/${id}/download-url`)
   return data
 }
 
 export async function restoreBackup(id: string, password: string) {
-  const { data } = await apiClient.post<BackupRecord>(`/admin/backup/${id}/restore`, { password })
+  const { data } = await apiClient.post<BackupRecord>(`/admin/backups/${id}/restore`, { password })
   return data
 }
 
