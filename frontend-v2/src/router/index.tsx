@@ -40,6 +40,7 @@ import AdminAnnouncementsPage from '@/pages/admin/Announcements'
 import AdminRedeemCodesPage from '@/pages/admin/RedeemCodes'
 import AdminPromoCodesPage from '@/pages/admin/PromoCodes'
 import AdminSubscriptionsPage from '@/pages/admin/Subscriptions'
+import AdminSubscriptionProductConfigPage from '@/pages/admin/SubscriptionProductConfig'
 import AdminBackupPage from '@/pages/admin/Backup'
 import AdminOpsDashboardPage from '@/pages/admin/OpsDashboard'
 import AdminChannelPricingPage from '@/pages/admin/ChannelPricing'
@@ -49,7 +50,6 @@ import AdminPaymentDashboardPage from '@/pages/admin/PaymentDashboard'
 import AdminPaymentOrdersPage from '@/pages/admin/PaymentOrders'
 import AdminPaymentPlansPage from '@/pages/admin/PaymentPlans'
 import AdminAffiliateRecordsPage from '@/pages/admin/AffiliateRecords'
-import ParityPlaceholder from '@/pages/ParityPlaceholder'
 import NotFoundPage from '@/pages/NotFound'
 import { ConsoleLayout } from '@/components/layout/ConsoleLayout'
 import { BackendModePublicGate, RequireAdmin, RequireAuth, RedirectIfAuthed } from './guards'
@@ -118,7 +118,7 @@ const router = createBrowserRouter([
       { path: '/admin/promo-codes', element: <AdminPromoCodesPage /> },
       { path: '/admin/subscriptions', element: <AdminSubscriptionsPage /> },
       { path: '/admin/subscription-products', element: <Navigate to="/admin/subscriptions" replace /> },
-      { path: '/admin/subscription-product-config', element: <ParityPlaceholder title="Subscription Product Config" legacyPath="/admin/subscription-product-config" endpoints={['GET /admin/subscription-products', 'GET /admin/product-subscriptions']} /> },
+      { path: '/admin/subscription-product-config', element: <AdminSubscriptionProductConfigPage /> },
       { path: '/admin/backup', element: <AdminBackupPage /> },
       { path: '/admin/settings', element: <AdminSettingsPage /> },
       { path: '/admin/ops', element: <AdminOpsDashboardPage /> },
