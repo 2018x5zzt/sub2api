@@ -26,31 +26,35 @@ import {
   ShoppingCart,
   Network,
   LineChart,
-  ReceiptText
+  ReceiptText,
+  Link as LinkIcon
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { LocaleSwitcher } from './LocaleSwitcher'
 import { cn } from '@/lib/cn'
+import type { CustomMenuItem, PublicSettings } from '@/types'
 
 interface NavItem {
   to: string
-  labelKey: string
+  labelKey?: string
+  label?: string
   Icon: typeof LayoutDashboard
-  adminOnly?: boolean
+  hideInSimpleMode?: boolean
+  featureFlag?: (settings: PublicSettings | null) => boolean
 }
 
 const userNav: NavItem[] = [
   { to: '/dashboard', labelKey: 'nav.dashboard', Icon: LayoutDashboard },
   { to: '/keys', labelKey: 'nav.apiKeys', Icon: KeyRound },
   { to: '/models', labelKey: 'nav.modelHub', Icon: Layers },
-  { to: '/usage', labelKey: 'nav.usage', Icon: BarChart3 },
-  { to: '/available-channels', labelKey: 'nav.availableChannels', Icon: Network },
-  { to: '/monitor', labelKey: 'nav.channelStatus', Icon: RadioTower },
-  { to: '/subscriptions', labelKey: 'nav.mySubscriptions', Icon: BadgeCheck },
-  { to: '/purchase', labelKey: 'nav.buySubscription', Icon: CreditCard },
-  { to: '/orders', labelKey: 'nav.myOrders', Icon: ReceiptText },
-  { to: '/redeem', labelKey: 'nav.redeem', Icon: Gift },
-  { to: '/affiliate', labelKey: 'nav.affiliate', Icon: HandCoins },
+  { to: '/usage', labelKey: 'nav.usage', Icon: BarChart3, hideInSimpleMode: true },
+  { to: '/available-channels', labelKey: 'nav.availableChannels', Icon: Network, hideInSimpleMode: true, featureFlag: (s) => s?.available_channels_enabled === true },
+  { to: '/monitor', labelKey: 'nav.channelStatus', Icon: RadioTower, featureFlag: (s) => s?.channel_monitor_enabled !== false },
+  { to: '/subscriptions', labelKey: 'nav.mySubscriptions', Icon: BadgeCheck, hideInSimpleMode: true },
+  { to: '/purchase', labelKey: 'nav.buySubscription', Icon: CreditCard, hideInSimpleMode: true, featureFlag: (s) => s?.payment_enabled !== false },
+  { to: '/orders', labelKey: 'nav.myOrders', Icon: ReceiptText, hideInSimpleMode: true, featureFlag: (s) => s?.payment_enabled !== false },
+  { to: '/redeem', labelKey: 'nav.redeem', Icon: Gift, hideInSimpleMode: true },
+  { to: '/affiliate', labelKey: 'nav.affiliate', Icon: HandCoins, hideInSimpleMode: true, featureFlag: (s) => s?.affiliate_enabled === true },
   { to: '/profile', labelKey: 'nav.profile', Icon: UserCircle },
   { to: '/image-studio', labelKey: 'nav.imageStudio', Icon: Image }
 ]
@@ -70,15 +74,42 @@ const adminNav: NavItem[] = [
   { to: '/admin/promo-codes', labelKey: 'nav.promoCodes', Icon: Ticket },
   { to: '/admin/announcements', labelKey: 'nav.announcements', Icon: Megaphone },
   { to: '/admin/proxies', labelKey: 'nav.proxies', Icon: Server },
-  { to: '/admin/affiliates/invites', labelKey: 'nav.affiliateInviteRecords', Icon: HandCoins },
-  { to: '/admin/affiliates/rebates', labelKey: 'nav.affiliateRebateRecords', Icon: ReceiptText },
-  { to: '/admin/affiliates/transfers', labelKey: 'nav.affiliateTransferRecords', Icon: CreditCard },
-  { to: '/admin/orders/dashboard', labelKey: 'nav.paymentDashboard', Icon: ShoppingCart },
-  { to: '/admin/orders', labelKey: 'nav.orderManagement', Icon: ReceiptText },
-  { to: '/admin/orders/plans', labelKey: 'nav.paymentPlans', Icon: CreditCard },
+  { to: '/admin/affiliates/invites', labelKey: 'nav.affiliateInviteRecords', Icon: HandCoins, hideInSimpleMode: true, featureFlag: (s) => s?.affiliate_enabled === true },
+  { to: '/admin/affiliates/rebates', labelKey: 'nav.affiliateRebateRecords', Icon: ReceiptText, hideInSimpleMode: true, featureFlag: (s) => s?.affiliate_enabled === true },
+  { to: '/admin/affiliates/transfers', labelKey: 'nav.affiliateTransferRecords', Icon: CreditCard, hideInSimpleMode: true, featureFlag: (s) => s?.affiliate_enabled === true },
+  { to: '/admin/orders/dashboard', labelKey: 'nav.paymentDashboard', Icon: ShoppingCart, hideInSimpleMode: true, featureFlag: (s) => s?.payment_enabled !== false },
+  { to: '/admin/orders', labelKey: 'nav.orderManagement', Icon: ReceiptText, hideInSimpleMode: true, featureFlag: (s) => s?.payment_enabled !== false },
+  { to: '/admin/orders/plans', labelKey: 'nav.paymentPlans', Icon: CreditCard, hideInSimpleMode: true, featureFlag: (s) => s?.payment_enabled !== false },
   { to: '/admin/backup', labelKey: 'common.backup', Icon: Database },
   { to: '/admin/settings', labelKey: 'nav.settings', Icon: Settings }
 ]
+
+function customMenuItemPath(item: CustomMenuItem): string {
+  return item.url.startsWith('/') ? item.url : `/custom/${item.id}`
+}
+
+function customNavItems(items: CustomMenuItem[], visibility: CustomMenuItem['visibility']): NavItem[] {
+  return items
+    .filter((item) => item.visibility === visibility)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((item) => ({
+      to: customMenuItemPath(item),
+      label: item.label,
+      Icon: LinkIcon
+    }))
+}
+
+function visibleNavItems(items: NavItem[], settings: PublicSettings | null, runMode: 'standard' | 'simple') {
+  return items.filter((item) => {
+    if (runMode === 'simple' && item.hideInSimpleMode) return false
+    if (item.featureFlag && item.featureFlag(settings) === false) return false
+    return true
+  })
+}
+
+function navLabel(item: NavItem, t: (key: string) => string) {
+  return item.label ?? (item.labelKey ? t(item.labelKey) : '')
+}
 
 export function ConsoleLayout({ admin, children }: { admin?: boolean; children?: ReactNode }) {
   const { t } = useTranslation()
@@ -87,13 +118,16 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
   const user = useAuthStore((s) => s.user)
   const isAdmin = useAuthStore((s) => s.isAdmin())
   const logout = useAuthStore((s) => s.logout)
+  const runMode = useAuthStore((s) => s.runMode)
   const publicSettings = useAuthStore((s) => s.publicSettings)
   const siteName = publicSettings?.site_name || 'XlabAPI'
   const siteLogo = publicSettings?.site_logo || '/logo.png'
 
   const [mobileOpen, setMobileOpen] = useState(false)
-  const items = userNav
+  const userCustomNav = customNavItems(publicSettings?.custom_menu_items ?? [], 'user')
+  const items = publicSettings?.backend_mode_enabled ? [] : visibleNavItems([...userNav, ...userCustomNav], publicSettings, runMode)
   const showAdminItems = isAdmin || admin
+  const adminItems = visibleNavItems(adminNav, publicSettings, runMode)
 
   useEffect(() => {
     setMobileOpen(false)
@@ -122,7 +156,9 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
         </Link>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
-          {items.map(({ to, labelKey, Icon }) => (
+          {items.map((item) => {
+            const { to, Icon } = item
+            return (
             <NavLink
               key={to}
               to={to}
@@ -137,9 +173,10 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
               end={to === '/admin/dashboard'}
             >
               <Icon className="h-4 w-4 shrink-0" />
-              <span>{t(labelKey)}</span>
+              <span>{navLabel(item, t)}</span>
             </NavLink>
-          ))}
+            )
+          })}
 
           {showAdminItems && (
             <div className="mt-4 border-t border-line-2 pt-3">
@@ -147,7 +184,9 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
                 {t('layout.adminBanner')}
               </div>
               <div className="space-y-0.5">
-                {adminNav.map(({ to, labelKey, Icon }) => (
+                {adminItems.map((item) => {
+                  const { to, Icon } = item
+                  return (
                   <NavLink
                     key={to}
                     to={to}
@@ -162,9 +201,10 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
                     end={to === '/admin/dashboard'}
                   >
                     <Icon className="h-4 w-4 shrink-0" />
-                    <span>{t(labelKey)}</span>
+                    <span>{navLabel(item, t)}</span>
                   </NavLink>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}

@@ -26,6 +26,7 @@ import PaymentResultPage from '@/pages/user/PaymentResult'
 import StripePaymentPage from '@/pages/user/StripePayment'
 import StripePopupPage from '@/pages/user/StripePopup'
 import ImageStudioPage from '@/pages/user/ImageStudio'
+import CustomPage from '@/pages/user/CustomPage'
 import XlabOAuthConsentPage from '@/pages/auth/XlabOAuthConsent'
 import AdminDashboard from '@/pages/admin/Dashboard'
 import AdminUsersPage from '@/pages/admin/Users'
@@ -96,7 +97,7 @@ const router = createBrowserRouter([
       { path: '/purchase', element: <PurchasePage /> },
       { path: '/orders', element: <OrdersPage /> },
       { path: '/payment/qrcode', element: <PaymentQRCodePage /> },
-      { path: '/custom/:id', element: <ParityPlaceholder title="Custom Page" legacyPath="/custom/:id" endpoints={['GET /settings/public']} /> },
+      { path: '/custom/:id', element: <CustomPage /> },
       { path: '/oauth/consent', element: <XlabOAuthConsentPage /> }
     ]
   },
