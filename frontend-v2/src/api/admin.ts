@@ -2,7 +2,7 @@ import { apiClient } from './client'
 import type { AdminUser, PaginatedResponse, DashboardStats, UpdateUserRequest } from '@/types'
 
 export async function getDashboard() {
-  const { data } = await apiClient.get<DashboardStats>('/admin/dashboard')
+  const { data } = await apiClient.get<DashboardStats>('/admin/dashboard/stats')
   return data
 }
 
