@@ -36,8 +36,7 @@ export async function updateGroup(id: number, payload: UpdateGroupRequest) {
 }
 
 export async function toggleGroupStatus(id: number, status: 'active' | 'inactive') {
-  const { data } = await apiClient.put<AdminGroup>(`/admin/groups/${id}/status`, { status })
-  return data
+  return updateGroup(id, { status })
 }
 
 export async function deleteGroup(id: number) {

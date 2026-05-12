@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { BenefitLeaderboard, PromoCodeScene, RedeemCodeRequest } from '@/types'
+import type { PromoCodeScene, RedeemCodeRequest } from '@/types'
 
 export interface RedeemHistoryItem {
   id: number
@@ -40,16 +40,10 @@ export async function redeem(code: string): Promise<RedeemResult> {
   return data
 }
 
-export async function getBenefitLeaderboard(code: string): Promise<BenefitLeaderboard> {
-  const payload: RedeemCodeRequest = { code }
-  const { data } = await apiClient.post<BenefitLeaderboard>('/redeem/benefit-leaderboard', payload)
-  return data
-}
-
 export async function getHistory(): Promise<RedeemHistoryItem[]> {
   const { data } = await apiClient.get<RedeemHistoryItem[]>('/redeem/history')
   return data
 }
 
-export const redeemAPI = { redeem, getHistory, getBenefitLeaderboard }
+export const redeemAPI = { redeem, getHistory }
 export default redeemAPI

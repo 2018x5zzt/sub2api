@@ -1569,29 +1569,6 @@ export interface UpdatePromoCodeRequest {
   notes?: string
 }
 
-export interface BenefitLeaderboardEntry {
-  rank: number
-  display_name: string
-  fixed_value: number
-  random_value: number
-  total_value: number
-  used_at: string
-  is_current_user: boolean
-}
-
-export interface BenefitLeaderboard {
-  code: string
-  fixed_value: number
-  random_pool_value: number
-  random_remaining_value: number
-  max_uses: number
-  used_count: number
-  entries: BenefitLeaderboardEntry[]
-  current_user_rank?: number
-  current_user_random_value?: number
-  current_user_total_value?: number
-}
-
 // ==================== TOTP (2FA) Types ====================
 
 export interface TotpStatus {

@@ -35,16 +35,10 @@ export async function getSubscriptionSummary(): Promise<SubscriptionSummary> {
   return data
 }
 
-export async function getSubscriptionProgress(id: number): Promise<SubscriptionProgress> {
-  const { data } = await apiClient.get<SubscriptionProgress>(`/subscriptions/${id}/progress`)
-  return data
-}
-
 export const subscriptionsAPI = {
   getMySubscriptions,
   getActiveSubscriptions,
   getSubscriptionsProgress,
-  getSubscriptionSummary,
-  getSubscriptionProgress
+  getSubscriptionSummary
 }
 export default subscriptionsAPI
