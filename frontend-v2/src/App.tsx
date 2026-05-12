@@ -4,6 +4,7 @@ import { AppRouter } from '@/router'
 import { useAuthStore } from '@/stores/auth'
 import { ToastViewport } from '@/components/ui/Toast'
 import { AnnouncementPopup } from '@/components/AnnouncementPopup'
+import { setupAPI } from '@/api/setup'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +24,18 @@ export default function App() {
     init()
     loadPublicSettings()
   }, [init, loadPublicSettings])
+
+  useEffect(() => {
+    setupAPI.getSetupStatus()
+      .then((status) => {
+        if (status.needs_setup && window.location.pathname !== '/setup') {
+          window.location.replace('/setup')
+        }
+      })
+      .catch(() => {
+        // Normal deployments may not expose setup mode; continue boot.
+      })
+  }, [])
 
   return (
     <QueryClientProvider client={queryClient}>

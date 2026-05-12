@@ -3,6 +3,7 @@ import type { ReactElement } from 'react'
 import Landing from '@/pages/Landing'
 import DocsPage from '@/pages/Docs'
 import KeyUsagePage from '@/pages/KeyUsage'
+import SetupPage from '@/pages/Setup'
 import LoginPage from '@/pages/auth/Login'
 import RegisterPage from '@/pages/auth/Register'
 import ForgotPasswordPage from '@/pages/auth/ForgotPassword'
@@ -62,7 +63,7 @@ const router = createBrowserRouter([
   { path: '/', element: publicGate(<Landing />) },
   { path: '/home', element: publicGate(<Navigate to="/" replace />) },
   { path: '/docs', element: publicGate(<DocsPage />) },
-  { path: '/setup', element: publicGate(<ParityPlaceholder standalone title="Setup Wizard" legacyPath="/setup" endpoints={['GET /setup/status']} actions={[{ label: 'Login', to: '/login' }]} />) },
+  { path: '/setup', element: publicGate(<SetupPage />) },
   { path: '/key-usage', element: publicGate(<KeyUsagePage />) },
 
   // Auth
