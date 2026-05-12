@@ -788,6 +788,10 @@ export default {
     invitationCodeInvalid: '邀请码无效或已被使用',
     invitationCodeValidating: '正在验证邀请码...',
     invitationCodeInvalidCannotRegister: '邀请码无效，请检查后重试',
+    wechatSignIn: '使用微信登录',
+    oidcSignIn: '使用 {providerName} 登录',
+    oauthOrContinue: '或使用邮箱密码继续',
+    oauthUnavailable: '当前环境无法使用该登录方式，请换用邮箱密码登录。',
     linuxdo: {
       signIn: '使用 Linux.do 登录',
       orContinue: '或使用邮箱密码继续',
@@ -803,6 +807,8 @@ export default {
       completeRegistrationFailed: '注册失败，请检查邀请码后重试。'
     },
     oauth: {
+      title: 'OAuth 回调',
+      description: '复制授权信息，或返回登录页重新开始授权流程。',
       code: '授权码',
       state: '状态',
       fullUrl: '完整URL'

@@ -791,6 +791,10 @@ export default {
     invitationCodeInvalid: 'Invalid or used invitation code',
     invitationCodeValidating: 'Validating invitation code...',
     invitationCodeInvalidCannotRegister: 'Invalid invitation code. Please check and try again',
+    wechatSignIn: 'Continue with WeChat',
+    oidcSignIn: 'Continue with {providerName}',
+    oauthOrContinue: 'or continue with email',
+    oauthUnavailable: 'This sign-in method is not available in the current browser. Continue with email instead.',
     linuxdo: {
       signIn: 'Continue with Linux.do',
       orContinue: 'or continue with email',
@@ -806,6 +810,8 @@ export default {
       completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
     },
     oauth: {
+      title: 'OAuth Callback',
+      description: 'Copy the authorization details, or return to login and start the flow again.',
       code: 'Code',
       state: 'State',
       fullUrl: 'Full URL'

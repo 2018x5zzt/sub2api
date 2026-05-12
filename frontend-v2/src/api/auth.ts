@@ -80,6 +80,52 @@ export async function getPublicSettings(): Promise<PublicSettings> {
   return data
 }
 
+export type WeChatOAuthMode = 'open' | 'mp'
+export type WeChatOAuthUnavailableReason =
+  | 'not_configured'
+  | 'external_browser_required'
+  | 'wechat_browser_required'
+  | 'native_app_required'
+
+export interface ResolvedWeChatOAuthStart {
+  mode: WeChatOAuthMode | null
+  unavailableReason: WeChatOAuthUnavailableReason | null
+}
+
+export function isWeChatWebOAuthEnabled(settings: PublicSettings | null | undefined): boolean {
+  const legacyEnabled = settings?.wechat_oauth_enabled === true
+  const hasExplicitCapabilities =
+    typeof settings?.wechat_oauth_open_enabled === 'boolean' ||
+    typeof settings?.wechat_oauth_mp_enabled === 'boolean'
+  if (!hasExplicitCapabilities) return legacyEnabled
+  return settings?.wechat_oauth_open_enabled === true || settings?.wechat_oauth_mp_enabled === true
+}
+
+export function resolveWeChatOAuthStart(
+  settings: PublicSettings | null | undefined,
+  userAgent?: string
+): ResolvedWeChatOAuthStart {
+  const ua = (userAgent ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '') ?? '').trim()
+  const isWeChatBrowser = /MicroMessenger/i.test(ua)
+  const legacyEnabled = settings?.wechat_oauth_enabled === true
+  const openEnabled = typeof settings?.wechat_oauth_open_enabled === 'boolean'
+    ? settings.wechat_oauth_open_enabled
+    : legacyEnabled
+  const mpEnabled = typeof settings?.wechat_oauth_mp_enabled === 'boolean'
+    ? settings.wechat_oauth_mp_enabled
+    : legacyEnabled
+  const mobileEnabled = settings?.wechat_oauth_mobile_enabled === true
+
+  if (isWeChatBrowser) {
+    if (mpEnabled) return { mode: 'mp', unavailableReason: null }
+    if (openEnabled) return { mode: null, unavailableReason: 'external_browser_required' }
+    return { mode: null, unavailableReason: mobileEnabled ? 'native_app_required' : 'not_configured' }
+  }
+  if (openEnabled) return { mode: 'open', unavailableReason: null }
+  if (mpEnabled) return { mode: null, unavailableReason: 'wechat_browser_required' }
+  return { mode: null, unavailableReason: mobileEnabled ? 'native_app_required' : 'not_configured' }
+}
+
 export async function sendVerifyCode(req: SendVerifyCodeRequest): Promise<SendVerifyCodeResponse> {
   const { data } = await apiClient.post<SendVerifyCodeResponse>('/auth/send-verify-code', req)
   return data
@@ -108,22 +154,33 @@ export async function resetPassword(req: ResetPasswordRequest): Promise<{ messag
 
 export interface OAuthTokenPayload {
   access_token: string
-  refresh_token: string
-  expires_in: number
-  token_type: string
+  refresh_token?: string
+  expires_in?: number
+  token_type?: string
+}
+
+export interface PendingOAuthExchangeResponse extends Partial<OAuthTokenPayload> {
+  auth_result?: string
+  redirect?: string
+  error?: string
+  provider?: string
+  requires_2fa?: boolean
+  temp_token?: string
+  user_email_masked?: string
 }
 
 export async function completeLinuxDoOAuthRegistration(
-  pendingOAuthToken: string,
   invitationCode: string
 ): Promise<OAuthTokenPayload> {
   const { data } = await apiClient.post<OAuthTokenPayload>(
     '/auth/oauth/linuxdo/complete-registration',
-    {
-      pending_oauth_token: pendingOAuthToken,
-      invitation_code: invitationCode
-    }
+    { invitation_code: invitationCode }
   )
+  return data
+}
+
+export async function exchangePendingOAuthCompletion(): Promise<PendingOAuthExchangeResponse> {
+  const { data } = await apiClient.post<PendingOAuthExchangeResponse>('/auth/oauth/pending/exchange', {})
   return data
 }
 
@@ -141,10 +198,13 @@ export const authAPI = {
   getRefreshToken,
   clearAuthToken,
   getPublicSettings,
+  isWeChatWebOAuthEnabled,
+  resolveWeChatOAuthStart,
   sendVerifyCode,
   forgotPassword,
   resetPassword,
-  completeLinuxDoOAuthRegistration
+  completeLinuxDoOAuthRegistration,
+  exchangePendingOAuthCompletion
 }
 
 export default authAPI

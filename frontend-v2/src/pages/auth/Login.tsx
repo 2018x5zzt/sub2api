@@ -6,7 +6,7 @@ import { AuthLayout } from '@/components/layout/AuthLayout'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore } from '@/stores/auth'
-import { authAPI, isTotp2FARequired } from '@/api/auth'
+import { authAPI, isTotp2FARequired, isWeChatWebOAuthEnabled, resolveWeChatOAuthStart } from '@/api/auth'
 import { toast } from '@/components/ui/Toast'
 
 interface TwoFAState {
@@ -23,6 +23,9 @@ export default function LoginPage() {
   const login = useAuthStore((s) => s.login)
   const publicSettings = useAuthStore((s) => s.publicSettings)
   const linuxdoEnabled = publicSettings?.linuxdo_oauth_enabled
+  const wechatEnabled = isWeChatWebOAuthEnabled(publicSettings)
+  const oidcEnabled = publicSettings?.oidc_oauth_enabled
+  const oidcProviderName = publicSettings?.oidc_oauth_provider_name?.trim() || 'OIDC'
   const backendModeEnabled = publicSettings?.backend_mode_enabled
 
   const [email, setEmail] = useState('')
@@ -98,6 +101,20 @@ export default function LoginPage() {
     setTotpError(null)
   }
 
+  function startOAuth(provider: 'linuxdo' | 'oidc' | 'wechat') {
+    const base = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
+    if (provider === 'wechat') {
+      const resolved = resolveWeChatOAuthStart(publicSettings)
+      if (!resolved.mode) {
+        setErrors({ form: t('auth.oauthUnavailable') as string })
+        return
+      }
+      window.location.href = `${base}/auth/oauth/wechat/start?mode=${resolved.mode}&redirect=${encodeURIComponent(redirect)}`
+      return
+    }
+    window.location.href = `${base}/auth/oauth/${provider}/start?redirect=${encodeURIComponent(redirect)}`
+  }
+
   if (twoFA) {
     return (
       <AuthLayout
@@ -165,18 +182,28 @@ export default function LoginPage() {
           </div>
         )}
 
-        {linuxdoEnabled && !backendModeEnabled && (
+        {!backendModeEnabled && (linuxdoEnabled || wechatEnabled || oidcEnabled) && (
           <>
-            <a
-              href="/api/v1/auth/oauth/linuxdo/login"
-              className="btn btn-ghost w-full"
-              aria-label={t('auth.linuxdo.signIn') as string}
-            >
-              {t('auth.linuxdo.signIn')}
-            </a>
+            <div className="space-y-2">
+              {linuxdoEnabled && (
+                <button type="button" onClick={() => startOAuth('linuxdo')} className="btn btn-ghost w-full">
+                  {t('auth.linuxdo.signIn')}
+                </button>
+              )}
+              {wechatEnabled && (
+                <button type="button" onClick={() => startOAuth('wechat')} className="btn btn-ghost w-full">
+                  {t('auth.wechatSignIn')}
+                </button>
+              )}
+              {oidcEnabled && (
+                <button type="button" onClick={() => startOAuth('oidc')} className="btn btn-ghost w-full">
+                  {t('auth.oidcSignIn', { providerName: oidcProviderName })}
+                </button>
+              )}
+            </div>
             <div className="flex items-center gap-3 text-xs text-ink-3">
               <div className="flex-1 hr-fade" />
-              <span>{t('auth.linuxdo.orContinue')}</span>
+              <span>{t('auth.oauthOrContinue')}</span>
               <div className="flex-1 hr-fade" />
             </div>
           </>

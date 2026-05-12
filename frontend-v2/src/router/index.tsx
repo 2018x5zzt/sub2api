@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
+import type { ReactElement } from 'react'
 import Landing from '@/pages/Landing'
 import DocsPage from '@/pages/Docs'
 import LoginPage from '@/pages/auth/Login'
@@ -48,30 +49,34 @@ import AdminAffiliateRecordsPage from '@/pages/admin/AffiliateRecords'
 import ParityPlaceholder from '@/pages/ParityPlaceholder'
 import NotFoundPage from '@/pages/NotFound'
 import { ConsoleLayout } from '@/components/layout/ConsoleLayout'
-import { RequireAdmin, RequireAuth, RedirectIfAuthed } from './guards'
+import { BackendModePublicGate, RequireAdmin, RequireAuth, RedirectIfAuthed } from './guards'
+
+const publicGate = (element: ReactElement) => (
+  <BackendModePublicGate>{element}</BackendModePublicGate>
+)
 
 const router = createBrowserRouter([
   // Public marketing
-  { path: '/', element: <Landing /> },
-  { path: '/home', element: <Navigate to="/" replace /> },
-  { path: '/docs', element: <DocsPage /> },
-  { path: '/setup', element: <ParityPlaceholder standalone title="Setup Wizard" legacyPath="/setup" endpoints={['GET /setup/status']} actions={[{ label: 'Login', to: '/login' }]} /> },
-  { path: '/key-usage', element: <ParityPlaceholder standalone title="API Key Usage" legacyPath="/key-usage" endpoints={['GET /usage/dashboard/stats', 'GET /usage/dashboard/models']} actions={[{ label: 'Console', to: '/dashboard' }]} /> },
+  { path: '/', element: publicGate(<Landing />) },
+  { path: '/home', element: publicGate(<Navigate to="/" replace />) },
+  { path: '/docs', element: publicGate(<DocsPage />) },
+  { path: '/setup', element: publicGate(<ParityPlaceholder standalone title="Setup Wizard" legacyPath="/setup" endpoints={['GET /setup/status']} actions={[{ label: 'Login', to: '/login' }]} />) },
+  { path: '/key-usage', element: publicGate(<ParityPlaceholder standalone title="API Key Usage" legacyPath="/key-usage" endpoints={['GET /usage/dashboard/stats', 'GET /usage/dashboard/models']} actions={[{ label: 'Console', to: '/dashboard' }]} />) },
 
   // Auth
   { path: '/login', element: <RedirectIfAuthed><LoginPage /></RedirectIfAuthed> },
-  { path: '/register', element: <RedirectIfAuthed><RegisterPage /></RedirectIfAuthed> },
-  { path: '/email-verify', element: <EmailVerifyPage /> },
-  { path: '/forgot-password', element: <ForgotPasswordPage /> },
-  { path: '/reset-password', element: <ResetPasswordPage /> },
-  { path: '/auth/callback', element: <OAuthCallbackPage /> },
-  { path: '/auth/linuxdo/callback', element: <LinuxDoCallbackPage /> },
-  { path: '/auth/wechat/callback', element: <OAuthCallbackPage /> },
-  { path: '/auth/wechat/payment/callback', element: <OAuthCallbackPage /> },
-  { path: '/auth/oidc/callback', element: <OAuthCallbackPage /> },
-  { path: '/payment/result', element: <PaymentResultPage /> },
-  { path: '/payment/stripe', element: <StripePaymentPage /> },
-  { path: '/payment/stripe-popup', element: <StripePopupPage /> },
+  { path: '/register', element: publicGate(<RedirectIfAuthed><RegisterPage /></RedirectIfAuthed>) },
+  { path: '/email-verify', element: publicGate(<EmailVerifyPage />) },
+  { path: '/forgot-password', element: publicGate(<ForgotPasswordPage />) },
+  { path: '/reset-password', element: publicGate(<ResetPasswordPage />) },
+  { path: '/auth/callback', element: publicGate(<OAuthCallbackPage />) },
+  { path: '/auth/linuxdo/callback', element: publicGate(<LinuxDoCallbackPage />) },
+  { path: '/auth/wechat/callback', element: publicGate(<OAuthCallbackPage />) },
+  { path: '/auth/wechat/payment/callback', element: publicGate(<OAuthCallbackPage />) },
+  { path: '/auth/oidc/callback', element: publicGate(<OAuthCallbackPage />) },
+  { path: '/payment/result', element: publicGate(<PaymentResultPage />) },
+  { path: '/payment/stripe', element: publicGate(<StripePaymentPage />) },
+  { path: '/payment/stripe-popup', element: publicGate(<StripePopupPage />) },
 
   {
     element: <RequireAuth><ConsoleLayout /></RequireAuth>,
