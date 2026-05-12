@@ -183,6 +183,13 @@ body {
     border: 1px solid var(--line-2);
     border-radius: 0;
   }
+  .card-hover {
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .card-hover:hover {
+    border-color: var(--line-3);
+    background: var(--bg-2);
+  }
 
   /* Badges */
   .badge {
