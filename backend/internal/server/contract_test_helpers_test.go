@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -38,8 +39,14 @@ type ContractStubRepos struct {
 	RefreshTokens   map[string]any
 	TwoFAChallenges map[string]any
 	AvailableGroups map[int64]any
+	GroupRates      map[int64]any
+	UsageLogs       map[int64][]any
+	UsageStats      map[int64]*usagestats.DashboardStats
+	DashboardStats  *usagestats.DashboardStats
 	VerifyCodes     map[string]string
 	Registration    map[string]bool
+	nextUserID      int64
+	nextAPIKeyID    int64
 }
 
 func newContractTestServer(t *testing.T) *ContractTestServer {
@@ -54,8 +61,13 @@ func newContractTestServer(t *testing.T) *ContractTestServer {
 			RefreshTokens:   map[string]any{},
 			TwoFAChallenges: map[string]any{},
 			AvailableGroups: map[int64]any{},
+			GroupRates:      map[int64]any{},
+			UsageLogs:       map[int64][]any{},
+			UsageStats:      map[int64]*usagestats.DashboardStats{},
 			VerifyCodes:     map[string]string{},
 			Registration:    map[string]bool{},
+			nextUserID:      1,
+			nextAPIKeyID:    1,
 		},
 	}
 }
@@ -105,56 +117,194 @@ func adminHeader() map[string]string {
 	}
 }
 
+// SeedUser stores a deterministic in-memory user fixture and returns its ID.
+// Optional args are intentionally loose to match the contract-test plan:
+// args[0] email string, args[1] password string.
 func (s *ContractTestServer) SeedUser(args ...any) int64 {
-	panic("TODO: 测试者填充")
+	if s == nil || s.Stubs == nil {
+		panic("nil ContractTestServer or Stubs")
+	}
+
+	id := s.Stubs.nextUserID
+	s.Stubs.nextUserID++
+
+	email := fmt.Sprintf("contract-user-%d@example.com", id)
+	if len(args) > 0 {
+		if value, ok := args[0].(string); ok && value != "" {
+			email = value
+		}
+	}
+	password := "pass"
+	if len(args) > 1 {
+		if value, ok := args[1].(string); ok && value != "" {
+			password = value
+		}
+	}
+
+	s.Stubs.Users[id] = map[string]any{
+		"id":       id,
+		"email":    email,
+		"password": password,
+		"role":     "user",
+		"status":   "active",
+	}
+	return id
 }
 
+// SeedAPIKey stores a deterministic in-memory API key fixture for userID.
 func (s *ContractTestServer) SeedAPIKey(userID int64) int64 {
-	panic("TODO: 测试者填充")
+	if s == nil || s.Stubs == nil {
+		panic("nil ContractTestServer or Stubs")
+	}
+
+	id := s.Stubs.nextAPIKeyID
+	s.Stubs.nextAPIKeyID++
+	s.Stubs.APIKeys[id] = map[string]any{
+		"id":      id,
+		"user_id": userID,
+		"key":     fmt.Sprintf("sk-contract-%d", id),
+		"status":  "active",
+	}
+	return id
 }
 
+// SeedAPIKeys stores count deterministic in-memory API key fixtures for userID.
 func (s *ContractTestServer) SeedAPIKeys(userID int64, count int) []int64 {
-	panic("TODO: 测试者填充")
+	ids := make([]int64, 0, count)
+	for i := 0; i < count; i++ {
+		ids = append(ids, s.SeedAPIKey(userID))
+	}
+	return ids
 }
 
+// SeedRefreshToken stores a deterministic in-memory refresh token fixture.
 func (s *ContractTestServer) SeedRefreshToken(userID int64) string {
-	panic("TODO: 测试者填充")
+	token := fmt.Sprintf("rt_contract_user_%d", userID)
+	s.Stubs.RefreshTokens[token] = map[string]any{
+		"user_id": userID,
+		"token":   token,
+	}
+	return token
 }
 
+// Seed2FAChallenge stores a deterministic in-memory two-factor challenge.
 func (s *ContractTestServer) Seed2FAChallenge(userID int64) string {
-	panic("TODO: 测试者填充")
+	challengeID := fmt.Sprintf("2fa-contract-user-%d", userID)
+	s.Stubs.TwoFAChallenges[challengeID] = map[string]any{
+		"user_id": userID,
+		"id":      challengeID,
+	}
+	return challengeID
 }
 
+// SeedUserProfile marks that profile fixtures exist for userID.
 func (s *ContractTestServer) SeedUserProfile(userID int64) {
-	panic("TODO: 测试者填充")
+	s.Stubs.Users[userID] = mergeContractFixture(s.Stubs.Users[userID], map[string]any{
+		"profile_seeded": true,
+	})
 }
 
+// SeedAvailableGroups stores default available group fixtures for userID.
 func (s *ContractTestServer) SeedAvailableGroups(userID int64) {
-	panic("TODO: 测试者填充")
+	s.SeedAvailableGroup(userID, 1)
+	s.SeedAvailableGroup(userID, 2)
 }
 
+// SeedAvailableGroup stores one available group fixture for userID.
 func (s *ContractTestServer) SeedAvailableGroup(userID, groupID int64) {
-	panic("TODO: 测试者填充")
+	s.Stubs.AvailableGroups[groupID] = map[string]any{
+		"id":      groupID,
+		"user_id": userID,
+		"name":    fmt.Sprintf("contract-group-%d", groupID),
+	}
 }
 
+// SeedGroupRates stores default group-rate fixtures for userID.
 func (s *ContractTestServer) SeedGroupRates(userID int64) {
-	panic("TODO: 测试者填充")
+	s.Stubs.GroupRates[userID] = []map[string]any{
+		{"group_id": int64(1), "rate": 1.0},
+		{"group_id": int64(2), "rate": 1.5},
+	}
 }
 
+// SeedUsageLogs stores deterministic usage-log fixtures for userID.
 func (s *ContractTestServer) SeedUsageLogs(userID int64) {
-	panic("TODO: 测试者填充")
+	s.Stubs.UsageLogs[userID] = []any{
+		map[string]any{
+			"id":            int64(1),
+			"user_id":       userID,
+			"model":         "gpt-4.1-mini",
+			"total_tokens":  int64(450),
+			"actual_cost":   0.45,
+			"duration_ms":   120,
+			"created_at":    "2025-01-02T03:04:05Z",
+			"request_count": int64(1),
+		},
+	}
 }
 
+// SeedUsageStats stores deterministic dashboard-stat fixtures for userID and
+// exposes the same aggregate as the default admin dashboard stats fixture.
 func (s *ContractTestServer) SeedUsageStats(userID int64) {
-	panic("TODO: 测试者填充")
+	stats := &usagestats.DashboardStats{
+		TotalUsers:               3,
+		TodayNewUsers:            1,
+		ActiveUsers:              2,
+		HourlyActiveUsers:        1,
+		StatsUpdatedAt:           "2025-01-02T03:04:05Z",
+		StatsStale:               false,
+		TotalAPIKeys:             5,
+		ActiveAPIKeys:            4,
+		TotalAccounts:            6,
+		NormalAccounts:           4,
+		ErrorAccounts:            1,
+		RateLimitAccounts:        1,
+		OverloadAccounts:         0,
+		TotalRequests:            120,
+		TotalInputTokens:         1000,
+		TotalOutputTokens:        2000,
+		TotalCacheCreationTokens: 300,
+		TotalCacheReadTokens:     400,
+		TotalTokens:              3700,
+		TotalCost:                12.34,
+		TotalActualCost:          10.5,
+		TodayRequests:            12,
+		TodayInputTokens:         100,
+		TodayOutputTokens:        200,
+		TodayCacheCreationTokens: 30,
+		TodayCacheReadTokens:     40,
+		TodayTokens:              370,
+		TodayCost:                1.23,
+		TodayActualCost:          1.05,
+		AverageDurationMs:        98.7,
+		Rpm:                      7,
+		Tpm:                      210,
+	}
+	s.Stubs.UsageStats[userID] = stats
+	s.Stubs.DashboardStats = stats
 }
 
+// AllowRegistration marks registration as enabled for contract tests.
 func (s *ContractTestServer) AllowRegistration() {
-	panic("TODO: 测试者填充")
+	s.Stubs.Registration["enabled"] = true
 }
 
+// AcceptVerifyCode stores the accepted verification code for email.
 func (s *ContractTestServer) AcceptVerifyCode(email, code string) {
-	panic("TODO: 测试者填充")
+	s.Stubs.VerifyCodes[email] = code
+}
+
+func mergeContractFixture(existing any, updates map[string]any) map[string]any {
+	merged := map[string]any{}
+	if current, ok := existing.(map[string]any); ok {
+		for key, value := range current {
+			merged[key] = value
+		}
+	}
+	for key, value := range updates {
+		merged[key] = value
+	}
+	return merged
 }
 
 func normalizeContractJSON(t *testing.T, raw []byte) []byte {
@@ -191,12 +341,12 @@ func normalizeContractValue(value any, key string) any {
 	case string:
 		return normalizeContractString(key, v)
 	case json.Number:
-		if isDynamicIDKey(key) {
+		if isDynamicIDKey(key) || isDynamicRuntimeMetricKey(key) {
 			return "<id>"
 		}
 		return v
 	default:
-		if isDynamicIDKey(key) && isNumericKind(v) {
+		if (isDynamicIDKey(key) || isDynamicRuntimeMetricKey(key)) && isNumericKind(v) {
 			return "<id>"
 		}
 		return v
@@ -238,6 +388,10 @@ func looksLikeTime(value string) bool {
 func isDynamicIDKey(key string) bool {
 	k := strings.ToLower(key)
 	return k == "id" || strings.HasSuffix(k, "_id") || strings.HasSuffix(k, "_ids")
+}
+
+func isDynamicRuntimeMetricKey(key string) bool {
+	return strings.ToLower(key) == "uptime"
 }
 
 func isDynamicTokenKey(key string) bool {
