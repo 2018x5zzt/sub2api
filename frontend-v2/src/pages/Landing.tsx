@@ -7,7 +7,6 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { SectionFrame } from '@/components/bus/SectionFrame'
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher'
-import { PlasmaBlob, HalftoneOverlay } from '@/components/bus/PlasmaBlob'
 
 const ORANGE = '#ff5722'
 
@@ -36,7 +35,7 @@ function Eyebrow({ children, mb = 18 }: { children: ReactNode; mb?: number }) {
         style={{
           fontSize: 11.5,
           letterSpacing: '0.18em',
-          color: 'rgba(255,255,255,0.7)',
+          color: 'var(--text-2)',
           textTransform: 'uppercase'
         }}
       >
@@ -64,9 +63,9 @@ function PillBtn({
         fontSize: 14,
         fontWeight: 500,
         cursor: 'pointer',
-        border: ghost ? '1px solid rgba(255,255,255,0.16)' : 'none',
-        background: primary ? ORANGE : ghost ? 'transparent' : '#fff',
-        color: primary ? '#fff' : ghost ? '#fff' : '#000',
+        border: ghost ? '1px solid var(--line-3)' : 'none',
+        background: primary ? ORANGE : ghost ? 'transparent' : 'var(--text-1)',
+        color: primary ? '#ffffff' : ghost ? 'var(--text-1)' : 'var(--bg-0)',
         letterSpacing: '-0.01em'
       }}
     >
@@ -113,12 +112,12 @@ function NavD() {
             style={{
               position: 'absolute',
               inset: 0,
-              border: '1.5px solid #fff',
+              border: '1.5px solid var(--text-1)',
               transform: 'rotate(45deg)',
               borderRadius: 2
             }}
           />
-          <div style={{ position: 'absolute', inset: 6, border: '1.5px solid #fff', borderRadius: 2 }} />
+          <div style={{ position: 'absolute', inset: 6, border: '1.5px solid var(--text-1)', borderRadius: 2 }} />
         </div>
         XLABAPI
       </div>
@@ -128,8 +127,8 @@ function NavD() {
           gap: 4,
           padding: 4,
           borderRadius: 999,
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.08)'
+          background: 'rgba(255,255,255,0.70)',
+          border: '1px solid var(--line-2)'
         }}
       >
         {navItems.map(([href, label]) => (
@@ -139,7 +138,7 @@ function NavD() {
             style={{
               padding: '8px 16px',
               fontSize: 13.5,
-              color: 'rgba(255,255,255,0.7)',
+              color: 'var(--text-2)',
               textDecoration: 'none',
               borderRadius: 999
             }}
@@ -154,7 +153,7 @@ function NavD() {
           style={{
             padding: '8px 14px',
             fontSize: 13.5,
-            color: 'rgba(255,255,255,0.7)',
+            color: 'var(--text-2)',
             textDecoration: 'none'
           }}
         >
@@ -179,7 +178,7 @@ function HeroD() {
         paddingTop: 180,
         paddingBottom: 120,
         overflow: 'hidden',
-        background: '#000'
+        background: 'var(--bg-0)'
       }}
     >
       <div
@@ -194,15 +193,14 @@ function HeroD() {
         }}
       >
         <div style={{ position: 'absolute', right: -40, top: 0, width: 760, height: 760 }}>
-          <PlasmaBlob />
-          <HalftoneOverlay opacity={0.85} />
+
         </div>
       </div>
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          backgroundImage: 'radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px)',
+          backgroundImage: 'radial-gradient(var(--line-2) 1px, transparent 1px)',
           backgroundSize: '32px 32px',
           pointerEvents: 'none'
         }}
@@ -217,8 +215,8 @@ function HeroD() {
             gap: 10,
             padding: '6px 14px 6px 6px',
             borderRadius: 999,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(255,255,255,0.70)',
+            border: '1px solid var(--line-2)',
             marginBottom: 28
           }}
         >
@@ -229,12 +227,12 @@ function HeroD() {
               background: ORANGE,
               fontSize: 11,
               fontWeight: 600,
-              color: '#fff'
+              color: 'var(--text-1)'
             }}
           >
             {t('landing.hero.badge')}
           </span>
-          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>
+          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
             {t('landing.hero.release')}
           </span>
         </div>
@@ -246,7 +244,7 @@ function HeroD() {
             lineHeight: 1.04,
             letterSpacing: '-0.035em',
             margin: '0 0 28px',
-            color: '#fff',
+            color: 'var(--text-1)',
             maxWidth: 760
           }}
         >
@@ -254,7 +252,7 @@ function HeroD() {
           <br />
           {t('landing.hero.titleLine2Prefix')}{' '}
           <em
-            style={{ fontStyle: 'italic', fontFamily: 'Georgia, serif', fontWeight: 400 }}
+            style={{ fontStyle: 'italic', fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif', fontWeight: 400 }}
           >
             {t('landing.hero.titleEmphasis')}
           </em>{' '}
@@ -264,7 +262,7 @@ function HeroD() {
           style={{
             fontSize: 16,
             lineHeight: 1.6,
-            color: 'rgba(255,255,255,0.55)',
+            color: 'var(--text-3)',
             maxWidth: 540,
             margin: '0 0 36px'
           }}
@@ -287,19 +285,19 @@ function HeroD() {
             gap: 60,
             alignItems: 'flex-end',
             paddingTop: 80,
-            borderTop: '1px solid rgba(255,255,255,0.08)'
+            borderTop: '1px solid var(--line-2)'
           }}
         >
           <div
             style={{
               fontSize: 14,
-              color: 'rgba(255,255,255,0.6)',
+              color: 'var(--text-2)',
               lineHeight: 1.5,
               maxWidth: 280
             }}
           >
             {t('landing.hero.summaryLine1')}<br />
-            <strong style={{ color: '#fff' }}>{t('landing.hero.summaryStrong')}</strong><br />
+            <strong style={{ color: 'var(--text-1)' }}>{t('landing.hero.summaryStrong')}</strong><br />
             {t('landing.hero.summaryLine2')}
           </div>
           {(
@@ -310,14 +308,14 @@ function HeroD() {
             ] as const
           ).map(([n, u, l]) => (
             <div key={l}>
-              <div style={{ display: 'flex', alignItems: 'baseline', color: '#fff' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', color: 'var(--text-1)' }}>
                 <span style={{ fontSize: 56, fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1 }}>{n}</span>
                 <span style={{ fontSize: 32, color: ORANGE, marginLeft: 2, fontWeight: 500 }}>{u}</span>
               </div>
               <div
                 style={{
                   fontSize: 11.5,
-                  color: 'rgba(255,255,255,0.5)',
+                  color: 'var(--text-3)',
                   marginTop: 8,
                   whiteSpace: 'pre-line',
                   lineHeight: 1.4
@@ -336,7 +334,7 @@ function HeroD() {
 function BackedRow() {
   const { t } = useTranslation()
   return (
-    <section style={{ position: 'relative', background: '#000', padding: '40px 0' }}>
+    <section style={{ position: 'relative', background: 'var(--bg-0)', padding: '40px 0' }}>
       <SectionFrame />
       <div
         style={{
@@ -350,7 +348,7 @@ function BackedRow() {
           gap: 40
         }}
       >
-        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
           {t('landing.backed.by')}
           <br />
           {t('landing.backed.teams')}
@@ -359,7 +357,7 @@ function BackedRow() {
           style={{
             display: 'flex',
             gap: 56,
-            color: 'rgba(255,255,255,0.55)',
+            color: 'var(--text-3)',
             fontSize: 16,
             fontWeight: 600
           }}
@@ -368,7 +366,7 @@ function BackedRow() {
             <span
               key={b}
               style={{
-                fontFamily: ['OpenAI', 'Meta', 'Google'].includes(b) ? 'Georgia, serif' : 'inherit',
+                fontFamily: ['OpenAI', 'Meta', 'Google'].includes(b) ? '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif' : 'inherit',
                 letterSpacing: b === 'ANTHROPIC' ? '0.1em' : 0
               }}
             >
@@ -403,7 +401,7 @@ function OperationsHub() {
   ]
 
   return (
-    <section style={{ position: 'relative', background: '#000', padding: '100px 0' }}>
+    <section style={{ position: 'relative', background: 'var(--bg-0)', padding: '100px 0' }}>
       <SectionFrame />
       <div
         style={{
@@ -420,7 +418,7 @@ function OperationsHub() {
             gridTemplateColumns: '1fr 1fr 1fr 1fr',
             gap: 48,
             paddingBottom: 64,
-            borderBottom: '1px solid rgba(255,255,255,0.06)'
+            borderBottom: '1px solid var(--line-1)'
           }}
         >
           {(
@@ -429,13 +427,13 @@ function OperationsHub() {
             <div key={t}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                 <span style={{ width: 12, height: 12, background: ORANGE, borderRadius: 2 }} />
-                <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{t}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>{t}</span>
               </div>
               <p
                 style={{
                   fontSize: 13,
                   lineHeight: 1.6,
-                  color: 'rgba(255,255,255,0.5)',
+                  color: 'var(--text-3)',
                   margin: 0,
                   maxWidth: 240
                 }}
@@ -453,7 +451,7 @@ function OperationsHub() {
                 lineHeight: 1.08,
                 letterSpacing: '-0.025em',
                 margin: 0,
-                color: '#fff'
+                color: 'var(--text-1)'
               }}
             >
               {t('landing.operations.titleLine1')}
@@ -477,11 +475,10 @@ function OperationsHub() {
               height: 540,
               borderRadius: 12,
               overflow: 'hidden',
-              background: '#000'
+              background: 'var(--bg-0)'
             }}
           >
-            <PlasmaBlob />
-            <HalftoneOverlay opacity={0.7} />
+
 
             <div
               style={{
@@ -492,10 +489,10 @@ function OperationsHub() {
                 bottom: '12%',
                 background: 'rgba(20,8,4,0.72)',
                 backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                border: '1px solid var(--line-2)',
                 borderRadius: 14,
                 padding: 24,
-                color: '#fff',
+                color: 'var(--text-1)',
                 display: 'flex',
                 flexDirection: 'column',
                 boxShadow: '0 30px 80px rgba(0,0,0,0.5)'
@@ -507,7 +504,7 @@ function OperationsHub() {
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   paddingBottom: 14,
-                  borderBottom: '1px solid rgba(255,255,255,0.08)'
+                  borderBottom: '1px solid var(--line-2)'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
@@ -538,7 +535,7 @@ function OperationsHub() {
                     style={{
                       padding: '3px 10px',
                       borderRadius: 999,
-                      border: '1px solid rgba(255,255,255,0.15)'
+                      border: '1px solid var(--line-3)'
                     }}
                   >
                     {t('landing.operations.deploy')} ▾
@@ -549,7 +546,7 @@ function OperationsHub() {
                 <div style={{ fontSize: 22, fontWeight: 500, marginBottom: 4 }}>
                   {t('landing.operations.consoleTitle')}
                 </div>
-                <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.5)' }}>
+                <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
                   {t('landing.operations.consoleSubtitle')}
                 </div>
               </div>
@@ -574,7 +571,7 @@ function OperationsHub() {
                         <div
                           style={{
                             fontSize: 10.5,
-                            color: 'rgba(255,255,255,0.5)',
+                            color: 'var(--text-3)',
                             marginBottom: 6
                           }}
                         >
@@ -584,12 +581,12 @@ function OperationsHub() {
                           style={{
                             height: 32,
                             borderRadius: 6,
-                            border: '1px solid rgba(255,255,255,0.12)',
+                            border: '1px solid var(--line-2)',
                             display: 'flex',
                             alignItems: 'center',
                             padding: '0 10px',
                             fontSize: 11.5,
-                            color: 'rgba(255,255,255,0.6)'
+                            color: 'var(--text-2)'
                           }}
                         >
                           {v}
@@ -599,7 +596,7 @@ function OperationsHub() {
                   </div>
                   <div>
                     <div
-                      style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}
+                      style={{ fontSize: 10.5, color: 'var(--text-3)', marginBottom: 6 }}
                     >
                       {t('landing.operations.fallbackChain')}
                     </div>
@@ -607,13 +604,13 @@ function OperationsHub() {
                       style={{
                         height: 32,
                         borderRadius: 6,
-                        border: '1px solid rgba(255,255,255,0.12)'
+                        border: '1px solid var(--line-2)'
                       }}
                     />
                   </div>
                   <div>
                     <div
-                      style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}
+                      style={{ fontSize: 10.5, color: 'var(--text-3)', marginBottom: 6 }}
                     >
                       {t('landing.operations.customRoutingRules')}
                     </div>
@@ -621,13 +618,13 @@ function OperationsHub() {
                       style={{
                         height: 96,
                         borderRadius: 6,
-                        border: '1px solid rgba(255,255,255,0.12)'
+                        border: '1px solid var(--line-2)'
                       }}
                     />
                   </div>
                 </div>
                 <div
-                  style={{ borderLeft: '1px solid rgba(255,255,255,0.08)', paddingLeft: 22 }}
+                  style={{ borderLeft: '1px solid var(--line-2)', paddingLeft: 22 }}
                 >
                   <div style={{ fontSize: 13, fontWeight: 500 }}>
                     {t('landing.operations.routingIntelligence')}
@@ -635,14 +632,14 @@ function OperationsHub() {
                   <div
                     style={{
                       fontSize: 10.5,
-                      color: 'rgba(255,255,255,0.5)',
+                      color: 'var(--text-3)',
                       marginTop: 2,
                       marginBottom: 16
                     }}
                   >
                     {t('landing.operations.insights')}
                   </div>
-                  <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.5)' }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-3)' }}>
                     {t('landing.operations.healthScore')}
                   </div>
                   <div
@@ -679,7 +676,7 @@ function OperationsHub() {
                             display: 'flex',
                             justifyContent: 'space-between',
                             fontSize: 10.5,
-                            color: 'rgba(255,255,255,0.6)',
+                            color: 'var(--text-2)',
                             marginBottom: 4
                           }}
                         >
@@ -692,7 +689,7 @@ function OperationsHub() {
                               key={i}
                               style={{
                                 flex: 1,
-                                background: ((i * 7 + l.length) % 10) > 5 ? c : 'rgba(255,255,255,0.06)',
+                                background: ((i * 7 + l.length) % 10) > 5 ? c : 'var(--bg-3)',
                                 borderRadius: 1
                               }}
                             />
@@ -710,11 +707,11 @@ function OperationsHub() {
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   paddingTop: 16,
-                  borderTop: '1px solid rgba(255,255,255,0.08)',
+                  borderTop: '1px solid var(--line-2)',
                   marginTop: 16
                 }}
               >
-                <span style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.4)' }}>
+                <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
                   {t('common.cancel')}
                 </span>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -722,8 +719,8 @@ function OperationsHub() {
                     style={{
                       padding: '7px 16px',
                       borderRadius: 6,
-                      background: '#fff',
-                      color: '#000',
+                      background: 'var(--bg-1)',
+                      color: 'var(--text-1)',
                       fontSize: 11.5,
                       fontWeight: 500
                     }}
@@ -734,7 +731,7 @@ function OperationsHub() {
                     style={{
                       padding: '7px 14px',
                       borderRadius: 6,
-                      border: '1px solid rgba(255,255,255,0.15)',
+                      border: '1px solid var(--line-3)',
                       fontSize: 11.5
                     }}
                   >
@@ -748,7 +745,7 @@ function OperationsHub() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
             {operationStats.map(([n, u, l]) => (
               <div key={l}>
-                <div style={{ display: 'flex', alignItems: 'baseline', color: '#fff' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', color: 'var(--text-1)' }}>
                   <span
                     style={{ fontSize: 52, fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1 }}
                   >
@@ -759,7 +756,7 @@ function OperationsHub() {
                 <div
                   style={{
                     fontSize: 11.5,
-                    color: 'rgba(255,255,255,0.55)',
+                    color: 'var(--text-3)',
                     marginTop: 10,
                     whiteSpace: 'pre-line',
                     lineHeight: 1.45
@@ -773,10 +770,10 @@ function OperationsHub() {
               style={{
                 paddingTop: 24,
                 marginTop: 12,
-                borderTop: '1px solid rgba(255,255,255,0.08)'
+                borderTop: '1px solid var(--line-2)'
               }}
             >
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 14 }}>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>
                 {t('landing.operations.capabilities.title')}
               </div>
               {capabilities.map((c, i) => (
@@ -785,7 +782,7 @@ function OperationsHub() {
                   style={{
                     padding: '8px 12px',
                     fontSize: 12.5,
-                    color: i === 1 ? '#fff' : 'rgba(255,255,255,0.55)',
+                    color: i === 1 ? 'var(--text-1)' : 'var(--text-3)',
                     background: i === 1 ? 'rgba(255,87,34,0.12)' : 'transparent',
                     border: i === 1 ? '1px solid rgba(255,87,34,0.3)' : 'none',
                     borderRadius: 6,
@@ -806,7 +803,7 @@ function OperationsHub() {
 function SecurityBand() {
   const { t } = useTranslation()
   return (
-    <section style={{ position: 'relative', background: '#000', padding: '80px 0' }}>
+    <section style={{ position: 'relative', background: 'var(--bg-0)', padding: '80px 0' }}>
       <SectionFrame />
       <div
         style={{
@@ -830,7 +827,7 @@ function SecurityBand() {
               lineHeight: 1.05,
               letterSpacing: '-0.025em',
               margin: 0,
-              color: '#fff'
+              color: 'var(--text-1)'
             }}
           >
             {t('landing.security.titleLine1')}
@@ -839,7 +836,7 @@ function SecurityBand() {
           </h2>
         </div>
         <p
-          style={{ fontSize: 14, lineHeight: 1.65, color: 'rgba(255,255,255,0.55)', margin: 0 }}
+          style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--text-3)', margin: 0 }}
         >
           {t('landing.security.description')}
         </p>
@@ -851,14 +848,14 @@ function SecurityBand() {
                 width: 110,
                 height: 110,
                 borderRadius: 999,
-                border: '1px solid rgba(255,255,255,0.15)',
+                border: '1px solid var(--line-3)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: 11,
                 fontWeight: 600,
                 letterSpacing: '0.06em',
-                color: 'rgba(255,255,255,0.7)',
+                color: 'var(--text-2)',
                 textAlign: 'center',
                 lineHeight: 1.3
               }}
@@ -893,7 +890,7 @@ function CaseStudy() {
   ]
 
   return (
-    <section style={{ position: 'relative', background: '#000', padding: '120px 0' }}>
+    <section style={{ position: 'relative', background: 'var(--bg-0)', padding: '120px 0' }}>
       <SectionFrame />
       <div
         style={{ position: 'relative', maxWidth: 1280, margin: '0 auto', padding: '0 40px', zIndex: 5 }}
@@ -914,7 +911,7 @@ function CaseStudy() {
                 lineHeight: 1.2,
                 letterSpacing: '-0.02em',
                 margin: '0 0 28px',
-                color: '#fff'
+                color: 'var(--text-1)'
             }}
           >
               {t('landing.caseStudy.titleLine1')}
@@ -952,8 +949,8 @@ function CaseStudy() {
                   }}
                 />
                 <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 500, color: '#fff' }}>Daniel Reyes</div>
-                  <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.5)' }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text-1)' }}>Daniel Reyes</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
                     {t('landing.caseStudy.personRole')}
                   </div>
                 </div>
@@ -962,7 +959,7 @@ function CaseStudy() {
                 style={{
                   fontSize: 14,
                   lineHeight: 1.65,
-                  color: 'rgba(255,255,255,0.6)',
+                  color: 'var(--text-2)',
                   margin: 0,
                   maxWidth: 420
                 }}
@@ -978,7 +975,7 @@ function CaseStudy() {
               minHeight: 460,
               borderRadius: 12,
               overflow: 'hidden',
-              background: '#000'
+              background: 'var(--bg-0)'
             }}
           >
             <div
@@ -991,17 +988,17 @@ function CaseStudy() {
                 `
               }}
             />
-            <HalftoneOverlay opacity={0.4} />
-            <div style={{ position: 'absolute', left: 32, bottom: 32, color: '#fff' }}>
+
+            <div style={{ position: 'absolute', left: 32, bottom: 32, color: 'var(--text-1)' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                 <span
                   style={{ fontSize: 64, fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1 }}
                 >
                   99.20
                 </span>
-                <span style={{ fontSize: 28, color: 'rgba(255,255,255,0.7)' }}>%</span>
+                <span style={{ fontSize: 28, color: 'var(--text-2)' }}>%</span>
               </div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 6 }}>
+              <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 6 }}>
                 {t('landing.caseStudy.reliabilityRate')}
               </div>
             </div>
@@ -1014,7 +1011,7 @@ function CaseStudy() {
             gridTemplateColumns: '1fr 1fr 1fr',
             gap: 24,
             paddingTop: 56,
-            borderTop: '1px solid rgba(255,255,255,0.08)'
+            borderTop: '1px solid var(--line-2)'
           }}
         >
           {cards.map((c, i) => (
@@ -1029,20 +1026,20 @@ function CaseStudy() {
                   marginBottom: 18
                 } as CSSProperties}
               >
-                <HalftoneOverlay opacity={0.3} />
+
               </div>
               <div
                 style={{
                   fontSize: 14.5,
                   fontWeight: 500,
-                  color: '#fff',
+                  color: 'var(--text-1)',
                   lineHeight: 1.45,
                   marginBottom: 8
                 }}
               >
                 {c.t}
               </div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>{c.sub}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{c.sub}</div>
             </div>
           ))}
         </div>
@@ -1073,7 +1070,7 @@ function CtaFooter() {
   ] as const
 
   return (
-    <section style={{ position: 'relative', background: '#000', padding: '80px 0 0' }}>
+    <section style={{ position: 'relative', background: 'var(--bg-0)', padding: '80px 0 0' }}>
       <SectionFrame showBottom={false} />
       <div
         style={{ position: 'relative', maxWidth: 1280, margin: '0 auto', padding: '0 40px', zIndex: 5 }}
@@ -1096,22 +1093,22 @@ function CtaFooter() {
                 lineHeight: 1.1,
                 letterSpacing: '-0.025em',
                 margin: 0,
-                color: '#fff'
+                color: 'var(--text-1)'
             }}
           >
               {t('landing.cta.titleLine1')}{' '}
-              <em style={{ fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>{t('landing.cta.titleEmphasis1')}</em>
+              <em style={{ fontStyle: 'italic', fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif' }}>{t('landing.cta.titleEmphasis1')}</em>
               <br />
-              <em style={{ fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>{t('landing.cta.titleEmphasis2')}</em>{' '}
+              <em style={{ fontStyle: 'italic', fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif' }}>{t('landing.cta.titleEmphasis2')}</em>{' '}
               {t('landing.cta.titleLine2')}{' '}
-              <em style={{ fontStyle: 'italic', fontFamily: 'Georgia, serif' }}>{t('landing.cta.titleEmphasis3')}</em>?
+              <em style={{ fontStyle: 'italic', fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif' }}>{t('landing.cta.titleEmphasis3')}</em>?
             </h2>
           </div>
           <p
             style={{
               fontSize: 14,
               lineHeight: 1.65,
-              color: 'rgba(255,255,255,0.55)',
+              color: 'var(--text-3)',
               margin: 0,
               paddingTop: 32
             }}
@@ -1127,7 +1124,7 @@ function CtaFooter() {
           style={{
             paddingTop: 48,
             paddingBottom: 32,
-            borderTop: '1px solid rgba(255,255,255,0.08)',
+            borderTop: '1px solid var(--line-2)',
             display: 'grid',
             gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr',
             gap: 32
@@ -1140,7 +1137,7 @@ function CtaFooter() {
                 alignItems: 'center',
                 gap: 10,
                 marginBottom: 16,
-                color: '#fff',
+                color: 'var(--text-1)',
                 fontSize: 14,
                 fontWeight: 600
               }}
@@ -1150,7 +1147,7 @@ function CtaFooter() {
                   style={{
                     position: 'absolute',
                     inset: 0,
-                    border: '1.5px solid #fff',
+                    border: '1.5px solid var(--text-1)',
                     transform: 'rotate(45deg)',
                     borderRadius: 2
                   }}
@@ -1159,7 +1156,7 @@ function CtaFooter() {
                   style={{
                     position: 'absolute',
                     inset: 5,
-                    border: '1.5px solid #fff',
+                    border: '1.5px solid var(--text-1)',
                     borderRadius: 2
                   }}
                 />
@@ -1169,7 +1166,7 @@ function CtaFooter() {
             <p
               style={{
                 fontSize: 12.5,
-                color: 'rgba(255,255,255,0.5)',
+                color: 'var(--text-3)',
                 lineHeight: 1.65,
                 maxWidth: 280,
                 margin: 0
@@ -1181,7 +1178,7 @@ function CtaFooter() {
           {footerGroups.map(([title, items]) => (
             <div key={title}>
               <div
-                style={{ fontSize: 12, color: '#fff', fontWeight: 600, marginBottom: 14 }}
+                style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 600, marginBottom: 14 }}
               >
                 {title}
               </div>
@@ -1192,7 +1189,7 @@ function CtaFooter() {
                   style={{
                     display: 'block',
                     fontSize: 12.5,
-                    color: 'rgba(255,255,255,0.5)',
+                    color: 'var(--text-3)',
                     textDecoration: 'none',
                     padding: '5px 0'
                   }}
@@ -1207,11 +1204,11 @@ function CtaFooter() {
           style={{
             paddingTop: 24,
             paddingBottom: 24,
-            borderTop: '1px solid rgba(255,255,255,0.06)',
+            borderTop: '1px solid var(--line-1)',
             display: 'flex',
             justifyContent: 'space-between',
             fontSize: 11.5,
-            color: 'rgba(255,255,255,0.4)'
+            color: 'var(--text-3)'
           }}
         >
           <span>{t('landing.footer.copyright')}</span>
@@ -1226,8 +1223,8 @@ export default function Landing() {
   return (
     <div
       style={{
-        background: '#000',
-        color: '#fff',
+        background: 'var(--bg-0)',
+        color: 'var(--text-1)',
         minHeight: '100vh',
         fontFamily: 'Inter, "PingFang SC", system-ui, sans-serif'
       }}

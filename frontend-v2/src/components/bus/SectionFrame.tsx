@@ -28,23 +28,23 @@ export function SectionFrame({ showTop = true, showBottom = true, halfWidth = 66
     >
       <div
         className="absolute"
-        style={{ top: 4, left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.45)' }}
+        style={{ top: 4, left: 0, right: 0, height: 1, background: 'var(--text-1)' }}
       />
       <div
         className="absolute"
-        style={{ left: 4, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.45)' }}
+        style={{ left: 4, top: 0, bottom: 0, width: 1, background: 'var(--text-1)' }}
       />
     </div>
   )
   return (
     <div className="absolute inset-0 z-[3] pointer-events-none">
-      <div className="absolute" style={{ top: 0, bottom: 0, left: leftX, width: 1, background: 'rgba(255,255,255,0.13)' }} />
-      <div className="absolute" style={{ top: 0, bottom: 0, right: rightX, width: 1, background: 'rgba(255,255,255,0.13)' }} />
+      <div className="absolute" style={{ top: 0, bottom: 0, left: leftX, width: 1, background: 'var(--line-3)' }} />
+      <div className="absolute" style={{ top: 0, bottom: 0, right: rightX, width: 1, background: 'var(--line-3)' }} />
       {showTop && (
-        <div className="absolute" style={{ top: 0, left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.13)' }} />
+        <div className="absolute" style={{ top: 0, left: 0, right: 0, height: 1, background: 'var(--line-3)' }} />
       )}
       {showBottom && (
-        <div className="absolute" style={{ bottom: 0, left: 0, right: 0, height: 1, background: 'rgba(255,255,255,0.13)' }} />
+        <div className="absolute" style={{ bottom: 0, left: 0, right: 0, height: 1, background: 'var(--line-3)' }} />
       )}
       {showTop && <Cross pos="tl" />}
       {showTop && <Cross pos="tr" />}

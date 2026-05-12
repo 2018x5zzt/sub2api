@@ -10,11 +10,11 @@ export function BusMark({ size = 28, className }: { size?: number; className?: s
       aria-hidden
     >
       <div
-        className="absolute inset-0 border-[1.5px] border-white"
+        className="absolute inset-0 border-[1.5px] border-ink-1"
         style={{ transform: 'rotate(45deg)', borderRadius: 2 }}
       />
       <div
-        className="absolute border-[1.5px] border-white"
+        className="absolute border-[1.5px] border-ink-1"
         style={{ inset, borderRadius: 2 }}
       />
     </div>
@@ -36,7 +36,7 @@ export function Wordmark({
       <span
         className="text-ink-1 tracking-tight"
         style={{
-          fontFamily: 'var(--font-display, Inter)',
+          fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif',
           fontWeight: 600,
           fontSize: small ? 14 : 14.5,
           letterSpacing: '-0.01em',

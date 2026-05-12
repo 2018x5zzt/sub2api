@@ -6,9 +6,9 @@ type Variant = 'accent' | 'light' | 'ghost'
 type Size = 'sm' | 'md' | 'lg'
 
 const variant: Record<Variant, string> = {
-  accent: 'bg-orange text-white hover:bg-orange-hover border-transparent',
-  light: 'bg-white text-black hover:bg-ink-1 border-transparent',
-  ghost: 'bg-transparent text-white border-line-4 hover:bg-bg-2'
+  accent: 'bg-orange-display text-white hover:bg-orange-hover border-transparent',
+  light: 'bg-ink-1 text-bg-0 hover:bg-black border-transparent',
+  ghost: 'bg-transparent text-ink-1 border-line-3 hover:bg-bg-3'
 }
 
 const sizeClass: Record<Size, string> = {

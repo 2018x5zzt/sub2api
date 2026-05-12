@@ -213,7 +213,7 @@ export function PageHeader({ title, description, actions }: { title: ReactNode; 
   return (
     <div className="flex items-start justify-between gap-4 mb-6">
       <div className="min-w-0">
-        <h1 className="font-display text-3xl text-ink-1 leading-tight">{title}</h1>
+        <h1 className="font-display text-display-sm text-ink-1 leading-tight">{title}</h1>
         {description && <p className="mt-1.5 text-sm text-ink-2">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}

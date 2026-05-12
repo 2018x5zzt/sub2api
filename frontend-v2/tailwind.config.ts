@@ -5,40 +5,40 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // BusAPI Plato — dark enterprise tech
+        // Keep legacy class names as aliases while moving the site to a Claude-light palette.
         bg: {
-          0: '#000000',  // page bg
-          1: '#0a0a0a',  // surface
-          2: '#0f0f10',  // elevated
-          3: '#15161a'   // hover / row
+          0: '#FAF9F5',
+          1: '#FFFFFF',
+          2: '#F6F2EA',
+          3: '#F0EEE6',
+          4: '#FFFFFF'
         },
         line: {
-          1: 'rgba(255,255,255,0.06)',
-          2: 'rgba(255,255,255,0.10)',
-          3: 'rgba(255,255,255,0.13)',
-          4: 'rgba(255,255,255,0.16)'
+          1: '#ECEAE0',
+          2: '#E8E6DC',
+          3: '#D8D4C6',
+          4: '#C4BFAE'
         },
         ink: {
-          0: '#ffffff',
-          1: '#f5f6f8',
-          2: '#c8cbd2',
-          3: '#8a8f99',
-          4: '#5b606b'
+          0: '#FFFFFF',
+          1: '#1F1E1D',
+          2: '#3D3D3A',
+          3: '#8A8780',
+          4: '#B7B3A8'
         },
-        // Single accent: warm orange used across all CTAs/highlights
         orange: {
-          DEFAULT: '#ff5722',
-          hover: '#ff693a',
-          soft: 'rgba(255,87,34,0.12)',
-          softer: 'rgba(255,87,34,0.06)',
-          line: 'rgba(255,87,34,0.30)'
+          DEFAULT: '#C0360B',
+          display: '#FF5722',
+          hover: '#E84713',
+          soft: '#FFE5DD',
+          softer: '#FFF2EE',
+          line: '#FFB7A0'
         },
-        // Status hues sampled from console-v4
         signal: {
-          ok: '#34d399',
-          warn: '#fbbf24',
-          err: '#f87171',
-          info: '#a78bfa'
+          ok: '#2F8F5E',
+          warn: '#A8761A',
+          err: '#B3261E',
+          info: '#5F5A9F'
         }
       },
       fontFamily: {
@@ -50,18 +50,18 @@ const config: Config = {
           'system-ui',
           'sans-serif'
         ],
-        display: ['Inter', 'PingFang SC', 'system-ui', 'sans-serif'],
+        display: ['"Source Serif 4"', '"Source Serif Pro"', 'Newsreader', 'Georgia', 'serif'],
         mono: ['"JetBrains Mono"', '"SF Mono"', 'ui-monospace', 'Menlo', 'monospace'],
-        serif: ['Georgia', '"Times New Roman"', 'serif']
+        serif: ['"Source Serif 4"', '"Source Serif Pro"', 'Newsreader', 'Georgia', 'serif']
       },
       fontSize: {
-        // Display headings
         'display-2xl': ['72px', { lineHeight: '1.02', letterSpacing: '-0.035em', fontWeight: '500' }],
-        'display-xl':  ['56px', { lineHeight: '1.05', letterSpacing: '-0.030em', fontWeight: '500' }],
-        'display-lg':  ['48px', { lineHeight: '1.06', letterSpacing: '-0.025em', fontWeight: '500' }],
-        'display-md':  ['40px', { lineHeight: '1.10', letterSpacing: '-0.025em', fontWeight: '500' }],
-        // Eyebrow / mono caption
-        eyebrow: ['11px', { lineHeight: '1.4', letterSpacing: '0.18em' }]
+        'display-xl': ['56px', { lineHeight: '1.05', letterSpacing: '-0.030em', fontWeight: '500' }],
+        'display-lg': ['48px', { lineHeight: '1.06', letterSpacing: '-0.025em', fontWeight: '500' }],
+        'display-md': ['40px', { lineHeight: '1.10', letterSpacing: '-0.025em', fontWeight: '500' }],
+        'display-sm': ['32px', { lineHeight: '1.15', letterSpacing: '-0.020em', fontWeight: '500' }],
+        eyebrow: ['11px', { lineHeight: '1.4', letterSpacing: '0.18em' }],
+        caption: ['12.5px', { lineHeight: '1.5' }]
       },
       borderRadius: {
         none: '0',
@@ -75,10 +75,10 @@ const config: Config = {
         full: '9999px'
       },
       boxShadow: {
-        soft: '0 1px 2px rgba(0,0,0,0.4)',
-        card: '0 8px 24px rgba(0,0,0,0.4)',
-        elevated: '0 30px 80px rgba(0,0,0,0.5)',
-        glow: '0 0 0 1px rgba(255,87,34,0.30), 0 8px 32px rgba(255,87,34,0.18)'
+        soft: '0 1px 2px rgba(31,30,29,0.04)',
+        card: '0 1px 2px rgba(31,30,29,0.04), 0 4px 16px rgba(31,30,29,0.06)',
+        elevated: '0 2px 4px rgba(31,30,29,0.06), 0 12px 32px rgba(31,30,29,0.08)',
+        glow: '0 0 0 3px rgba(255,87,34,0.20)'
       },
       keyframes: {
         pulseDot: {

@@ -2,40 +2,42 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ==================== Xlabapi Plato — design tokens ==================== */
+/* ==================== Xlabapi Claude-light design tokens ==================== */
 :root {
-  --bg-0: #000000;
-  --bg-1: #0a0a0a;
-  --bg-2: #0f0f10;
-  --bg-3: #15161a;
-  --bg-4: #1d222c;
+  --bg-0: #faf9f5;
+  --bg-1: #ffffff;
+  --bg-2: #f6f2ea;
+  --bg-3: #f0eee6;
+  --bg-4: #ffffff;
 
-  --line-1: rgba(255, 255, 255, 0.06);
-  --line-2: rgba(255, 255, 255, 0.10);
-  --line-3: rgba(255, 255, 255, 0.13);
-  --line-4: rgba(255, 255, 255, 0.16);
+  --line-1: #eceae0;
+  --line-2: #e8e6dc;
+  --line-3: #d8d4c6;
+  --line-4: #c4bfae;
 
-  --text-1: #f5f6f8;
-  --text-2: #c8cbd2;
-  --text-3: #8a8f99;
-  --text-4: #5b606b;
+  --text-1: #1f1e1d;
+  --text-2: #3d3d3a;
+  --text-3: #8a8780;
+  --text-4: #b7b3a8;
 
   --orange: #ff5722;
-  --orange-hover: #ff693a;
-  --orange-soft: rgba(255, 87, 34, 0.12);
-  --orange-line: rgba(255, 87, 34, 0.30);
+  --orange-hover: #e84713;
+  --orange-ink: #c0360b;
+  --orange-soft: #ffe5dd;
+  --orange-line: #ffb7a0;
 
-  --signal-ok: #34d399;
-  --signal-warn: #fbbf24;
-  --signal-err: #f87171;
+  --signal-ok: #2f8f5e;
+  --signal-warn: #a8761a;
+  --signal-err: #b3261e;
 
   --r-sm: 4px;
-  --r-md: 6px;
+  --r-md: 8px;
   --r-lg: 10px;
   --r-xl: 14px;
 
-  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --shadow-elev: 0 30px 80px rgba(0, 0, 0, 0.5);
+  --focus-ring: rgba(255, 87, 34, 0.32);
+  --shadow-card: 0 1px 2px rgba(31, 30, 29, 0.04), 0 4px 16px rgba(31, 30, 29, 0.06);
+  --shadow-elev: 0 2px 4px rgba(31, 30, 29, 0.06), 0 12px 32px rgba(31, 30, 29, 0.08);
 }
 
 * {
@@ -45,14 +47,17 @@
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
   margin: 0;
   font-family:
     'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
-  background: var(--bg-0);
+  background:
+    radial-gradient(circle at 18% 10%, rgba(255, 229, 221, 0.72), transparent 28%),
+    radial-gradient(circle at 82% 0%, rgba(232, 230, 220, 0.86), transparent 24%),
+    var(--bg-0);
   color: var(--text-1);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -60,32 +65,54 @@ body {
   letter-spacing: -0.005em;
 }
 
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: var(--orange-soft);
+  color: var(--text-1);
+}
+
 .font-mono {
   font-feature-settings: 'zero', 'ss01';
 }
 
+@layer base {
+  a {
+    color: inherit;
+  }
+}
+
 /* ==================== Component primitives ==================== */
 @layer components {
-  /* Buttons */
   .btn {
     @apply inline-flex items-center justify-center gap-2 select-none transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
     height: 38px;
     padding: 0 16px;
-    border-radius: 6px;
+    border-radius: 999px;
     font-family: inherit;
     font-size: 13.5px;
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: -0.01em;
     border: 1px solid transparent;
     cursor: pointer;
     white-space: nowrap;
+  }
+  .btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--focus-ring);
   }
   .btn-primary {
     background: var(--text-1);
     color: var(--bg-0);
   }
   .btn-primary:hover:not(:disabled) {
-    background: #ffffff;
+    background: #000000;
+    transform: translateY(-1px);
   }
   .btn-accent {
     background: var(--orange);
@@ -93,28 +120,28 @@ body {
   }
   .btn-accent:hover:not(:disabled) {
     background: var(--orange-hover);
+    transform: translateY(-1px);
   }
   .btn-ghost {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.42);
     color: var(--text-1);
-    border-color: var(--line-2);
+    border-color: var(--line-3);
   }
   .btn-ghost:hover:not(:disabled) {
-    background: var(--bg-2);
-    border-color: var(--line-3);
+    background: var(--bg-3);
+    border-color: var(--line-4);
   }
   .btn-danger {
     background: var(--signal-err);
-    color: #1a0000;
+    color: #ffffff;
   }
   .btn-danger:hover:not(:disabled) {
-    background: #ff8a8a;
+    background: #951e18;
   }
   .btn-sm {
     height: 30px;
     padding: 0 12px;
     font-size: 12.5px;
-    border-radius: 5px;
   }
   .btn-lg {
     height: 46px;
@@ -124,21 +151,17 @@ body {
   .btn-icon {
     padding: 0;
     width: 36px;
-    border-radius: 999px;
   }
   .btn-pill {
     height: 44px;
     padding: 0 22px;
-    border-radius: 999px;
     font-size: 14px;
-    font-weight: 500;
   }
 
-  /* Input */
   .input {
     @apply w-full transition-all duration-150;
     height: 38px;
-    background: var(--bg-4);
+    background: var(--bg-1);
     border: 1px solid var(--line-2);
     border-radius: var(--r-md);
     color: var(--text-1);
@@ -152,10 +175,11 @@ body {
   }
   .input:focus {
     border-color: var(--orange);
-    box-shadow: 0 0 0 3px rgba(255, 87, 34, 0.18);
+    box-shadow: 0 0 0 3px var(--focus-ring);
   }
   .input:disabled {
     @apply opacity-60 cursor-not-allowed;
+    background: var(--bg-3);
   }
   .input-error {
     border-color: var(--signal-err);
@@ -173,59 +197,60 @@ body {
     font-family: 'JetBrains Mono', 'SF Mono', monospace;
   }
 
-  /* Card */
   .card {
-    background: var(--bg-1);
-    border: 1px solid var(--line-1);
+    background: color-mix(in srgb, var(--bg-1) 94%, transparent);
+    border: 1px solid var(--line-2);
     border-radius: var(--r-xl);
+    box-shadow: var(--shadow-card);
   }
   .card-flat {
+    background: transparent;
     border: 1px solid var(--line-2);
-    border-radius: 0;
+    border-radius: var(--r-xl);
   }
   .card-hover {
-    transition: border-color 0.15s ease, background 0.15s ease;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
   }
   .card-hover:hover {
     border-color: var(--line-3);
-    background: var(--bg-2);
+    background: var(--bg-1);
+    box-shadow: var(--shadow-elev);
+    transform: translateY(-1px);
   }
 
-  /* Badges */
   .badge {
     @apply inline-flex items-center gap-1.5;
     height: 22px;
     padding: 0 8px;
     border-radius: 999px;
     font-size: 11.5px;
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: -0.005em;
     border: 1px solid var(--line-2);
     background: var(--bg-2);
     color: var(--text-2);
   }
   .badge-success {
-    border-color: rgba(52, 211, 153, 0.30);
-    background: rgba(52, 211, 153, 0.10);
+    border-color: rgba(47, 143, 94, 0.30);
+    background: rgba(47, 143, 94, 0.12);
     color: var(--signal-ok);
   }
   .badge-warning {
-    border-color: rgba(251, 191, 36, 0.30);
-    background: rgba(251, 191, 36, 0.10);
+    border-color: rgba(168, 118, 26, 0.30);
+    background: rgba(168, 118, 26, 0.12);
     color: var(--signal-warn);
   }
   .badge-danger {
-    border-color: rgba(248, 113, 113, 0.30);
-    background: rgba(248, 113, 113, 0.10);
+    border-color: rgba(179, 38, 30, 0.30);
+    background: rgba(179, 38, 30, 0.10);
     color: var(--signal-err);
   }
   .badge-accent {
     border-color: var(--orange-line);
     background: var(--orange-soft);
-    color: var(--orange);
+    color: var(--orange-ink);
   }
 
-  /* Eyebrow caption (orange square + mono uppercase) */
   .eyebrow {
     @apply inline-flex items-center;
     font-family: 'JetBrains Mono', 'SF Mono', monospace;
@@ -243,14 +268,12 @@ body {
     margin-right: 10px;
   }
 
-  /* Inline italic emphasis (Georgia serif italic) */
   .em-serif {
-    font-family: Georgia, 'Times New Roman', serif;
+    font-family: 'Source Serif 4', 'Source Serif Pro', 'Newsreader', Georgia, 'Times New Roman', serif;
     font-style: italic;
     font-weight: 400;
   }
 
-  /* Container */
   .container-bus {
     max-width: 1280px;
     margin: 0 auto;
@@ -262,19 +285,19 @@ body {
     padding: 0 40px;
   }
 
-  /* Pill tab nav */
   .pill-nav {
     @apply inline-flex;
     padding: 4px;
     gap: 2px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(255, 255, 255, 0.58);
     border: 1px solid var(--line-2);
+    box-shadow: 0 1px 8px rgba(31, 30, 29, 0.04);
   }
   .pill-nav-item {
     padding: 8px 16px;
     font-size: 13px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--text-2);
     background: transparent;
     border: none;
     border-radius: 999px;
@@ -284,47 +307,38 @@ body {
     transition: all 0.15s;
   }
   .pill-nav-item:hover {
-    color: rgba(255, 255, 255, 0.85);
+    color: var(--text-1);
+    background: var(--bg-3);
   }
-  .pill-nav-item-active {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.06);
-  }
+  .pill-nav-item-active,
   .pill-nav-item-light-active {
-    color: #000000;
-    background: #ffffff;
+    color: var(--text-1);
+    background: var(--bg-1);
+    box-shadow: var(--shadow-card);
   }
 
-  /* Subtle dividers */
   .hr-fade {
     height: 1px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      var(--line-2) 20%,
-      var(--line-2) 80%,
-      transparent
-    );
+    background: linear-gradient(90deg, transparent, var(--line-2) 20%, var(--line-2) 80%, transparent);
     border: 0;
   }
 
-  /* Skeleton */
   .skeleton {
     @apply animate-pulse rounded;
-    background: var(--bg-3);
+    background: linear-gradient(90deg, var(--bg-3), #f8f5ee, var(--bg-3));
+    background-size: 200% 100%;
   }
 
-  /* Data table (mono-flavored, used by Recent Requests) */
   .data-table {
     border: 1px solid var(--line-2);
     font-family: 'JetBrains Mono', 'SF Mono', monospace;
     font-size: 12.5px;
+    background: var(--bg-1);
   }
 }
 
-/* ==================== Background utilities ==================== */
 .dot-bg {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-image: radial-gradient(var(--line-2) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 .grid-bg {
@@ -334,7 +348,6 @@ body {
   background-size: 56px 56px;
 }
 
-/* ==================== Scrollbars ==================== */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -343,9 +356,16 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--line-2);
+  background: var(--line-3);
   border-radius: 5px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--line-3);
+  background: var(--line-4);
+}
+
+@media (max-width: 768px) {
+  .container-bus,
+  .container-console {
+    padding: 0 20px;
+  }
 }

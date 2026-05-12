@@ -7,12 +7,12 @@ CONTAINER="sub2api"
 REMOTE_TMP="/tmp/sub2api"
 CONTAINER_BIN="/app/sub2api"
 
-FRONTEND_DIR="frontend"
+FRONTEND_DIR="frontend-v2"
 BACKEND_DIR="backend"
 
 # === 1. 构建前端 ===
 echo "▶ [1/4] Building frontend..."
-pnpm --dir "$FRONTEND_DIR" run build
+VITE_BUILD_OUT_DIR="../backend/internal/web/dist" npm --prefix "$FRONTEND_DIR" run build
 
 # === 2. 编译 Go 二进制（embed 前端） ===
 echo "▶ [2/4] Building backend (linux/amd64 + embed)..."
