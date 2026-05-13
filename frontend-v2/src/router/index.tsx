@@ -10,7 +10,8 @@ import ForgotPasswordPage from '@/pages/auth/ForgotPassword'
 import ResetPasswordPage from '@/pages/auth/ResetPassword'
 import EmailVerifyPage from '@/pages/auth/EmailVerify'
 import OAuthCallbackPage from '@/pages/auth/OAuthCallback'
-import LinuxDoCallbackPage from '@/pages/auth/LinuxDoCallback'
+import OAuthFlowCallbackPage from '@/pages/auth/OAuthFlowCallback'
+import WechatPaymentCallbackPage from '@/pages/auth/WechatPaymentCallback'
 import KeysPage from '@/pages/user/Keys'
 import UsagePage from '@/pages/user/Usage'
 import ProfilePage from '@/pages/user/Profile'
@@ -73,10 +74,10 @@ const router = createBrowserRouter([
   { path: '/forgot-password', element: publicGate(<ForgotPasswordPage />) },
   { path: '/reset-password', element: publicGate(<ResetPasswordPage />) },
   { path: '/auth/callback', element: publicGate(<OAuthCallbackPage />) },
-  { path: '/auth/linuxdo/callback', element: publicGate(<LinuxDoCallbackPage />) },
-  { path: '/auth/wechat/callback', element: publicGate(<OAuthCallbackPage />) },
-  { path: '/auth/wechat/payment/callback', element: publicGate(<OAuthCallbackPage />) },
-  { path: '/auth/oidc/callback', element: publicGate(<OAuthCallbackPage />) },
+  { path: '/auth/linuxdo/callback', element: publicGate(<OAuthFlowCallbackPage provider="linuxdo" />) },
+  { path: '/auth/wechat/callback', element: publicGate(<OAuthFlowCallbackPage provider="wechat" />) },
+  { path: '/auth/wechat/payment/callback', element: publicGate(<WechatPaymentCallbackPage />) },
+  { path: '/auth/oidc/callback', element: publicGate(<OAuthFlowCallbackPage provider="oidc" />) },
   { path: '/payment/result', element: publicGate(<PaymentResultPage />) },
   { path: '/payment/stripe', element: publicGate(<StripePaymentPage />) },
   { path: '/payment/stripe-popup', element: publicGate(<StripePopupPage />) },

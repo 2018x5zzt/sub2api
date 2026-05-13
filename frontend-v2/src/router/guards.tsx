@@ -30,8 +30,10 @@ const PAYMENT_PATHS = [
   '/admin/orders',
   '/admin/orders/plans'
 ]
+const BACKEND_MODE_PENDING_AUTH_PATHS = ['/register', '/email-verify']
 
-function isAllowedBackendModePublicPath(path: string) {
+function isAllowedBackendModePublicPath(path: string, hasPendingAuthSession = false) {
+  if (hasPendingAuthSession && BACKEND_MODE_PENDING_AUTH_PATHS.includes(path)) return true
   return BACKEND_MODE_ALLOWED_PUBLIC_PATHS.some((allowed) => path === allowed || path.startsWith(`${allowed}/`)) ||
     BACKEND_MODE_CALLBACK_PATHS.includes(path)
 }
@@ -58,12 +60,13 @@ export function BackendModePublicGate({ children }: { children: ReactElement }) 
   const authed = useAuthStore((s) => s.isAuthenticated())
   const isAdmin = useAuthStore((s) => s.isAdmin())
   const publicSettings = useAuthStore((s) => s.publicSettings)
+  const hasPendingAuthSession = useAuthStore((s) => s.pendingAuthSession !== null)
 
   if (!initialized) return <FullPageSpinner />
-  if (publicSettings?.backend_mode_enabled && !authed && !isAllowedBackendModePublicPath(location.pathname)) {
+  if (publicSettings?.backend_mode_enabled && !authed && !isAllowedBackendModePublicPath(location.pathname, hasPendingAuthSession)) {
     return <Navigate to="/login" replace />
   }
-  if (publicSettings?.backend_mode_enabled && authed && !isAdmin && !isAllowedBackendModePublicPath(location.pathname)) {
+  if (publicSettings?.backend_mode_enabled && authed && !isAdmin && !isAllowedBackendModePublicPath(location.pathname, hasPendingAuthSession)) {
     return <Navigate to="/login" replace />
   }
   return children
@@ -76,12 +79,13 @@ export function RequireAuth({ children }: { children: ReactElement }) {
   const isAdmin = useAuthStore((s) => s.isAdmin())
   const runMode = useAuthStore((s) => s.runMode)
   const publicSettings = useAuthStore((s) => s.publicSettings)
+  const hasPendingAuthSession = useAuthStore((s) => s.pendingAuthSession !== null)
 
   if (!initialized) return <FullPageSpinner />
   if (!authed) {
     return <Navigate to={loginRedirect(location.pathname)} replace />
   }
-  if (publicSettings?.backend_mode_enabled && !isAdmin && !isAllowedBackendModePublicPath(location.pathname)) {
+  if (publicSettings?.backend_mode_enabled && !isAdmin && !isAllowedBackendModePublicPath(location.pathname, hasPendingAuthSession)) {
     return <Navigate to="/login" replace />
   }
   if (runMode === 'simple' && isRestrictedInSimpleMode(location.pathname)) {

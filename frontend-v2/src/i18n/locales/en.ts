@@ -763,6 +763,7 @@ export default {
     clickToResend: 'Click to resend code',
     resendCode: 'Resend verification code',
     sendCodeDesc: "We'll send a verification code to",
+    sendVerificationCode: 'Send verification code',
     codeSentSuccess: 'Verification code sent! Please check your inbox.',
     verifying: 'Verifying...',
     verifyAndCreate: 'Verify & Create Account',
@@ -815,6 +816,45 @@ export default {
       code: 'Code',
       state: 'State',
       fullUrl: 'Full URL'
+    },
+    oidc: {
+      callbackTitle: 'Signing you in with {providerName}',
+      callbackProcessing: 'Completing {providerName} login, please wait...',
+      callbackHint: 'If you are not redirected automatically, go back to the login page and try again.',
+      invitationRequired: 'This {providerName} account is not yet registered. Enter an invitation code to complete registration.'
+    },
+    wechat: {
+      callbackTitle: 'Signing you in with WeChat',
+      callbackProcessing: 'Completing WeChat login, please wait...',
+      callbackHint: 'If you are not redirected automatically, go back to the login page and try again.',
+      invitationRequired: 'This WeChat account is not yet registered. Enter an invitation code to complete registration.'
+    },
+    wechatPayment: {
+      callbackTitle: 'WeChat Payment',
+      callbackProcessing: 'Resuming payment, please wait...',
+      callbackMissingResumeToken: 'Missing WeChat payment resume token. Please restart payment.',
+      backToPayment: 'Back to Payment'
+    },
+    oauthFlow: {
+      chooseAccountActionHint: 'Choose how to continue with this OAuth account.',
+      suggestedEmail: 'Suggested email: {email}',
+      bindCurrentAccount: 'Bind current signed-in account',
+      bindCurrentAccountDescription: 'Bind this {providerName} identity to your current signed-in account.',
+      bindExistingAccount: 'Bind existing account',
+      signInThenBindDescription: 'Sign in to an existing account first, then return here to bind this {providerName} identity.',
+      createNewAccount: 'Create new account',
+      profileDetailsTitle: 'Review profile details',
+      profileDetailsDescription: '{providerName} provided profile details. Choose which ones to use before continuing.',
+      useDisplayName: 'Use display name',
+      useAvatar: 'Use avatar',
+      createAccountHint: 'Create a new account to continue with this OAuth identity.',
+      bindLoginHint: 'Sign in to bind this {providerName} identity to an existing account.',
+      logInAndBind: 'Log in and bind',
+      totpHint: 'Enter the 2FA code for {account} to continue with {providerName}.',
+      yourAccount: 'your account',
+      verifyAndContinue: 'Verify and continue',
+      affiliateCodePlaceholder: 'Affiliate code (optional)',
+      turnstileUnsupported: 'This flow requires Turnstile verification, which is not available in frontend-v2 yet. Please continue with email registration or contact support.'
     },
     // Forgot password
     forgotPassword: 'Forgot password?',
@@ -1229,6 +1269,9 @@ export default {
 
   // Profile
   profile: {
+    authBindings: {
+      bindSuccess: 'Account binding successful.'
+    },
     title: 'Profile Settings',
     description: 'Manage your account information and settings',
     accountBalance: 'Account Balance',

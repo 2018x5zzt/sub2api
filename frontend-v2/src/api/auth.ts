@@ -131,6 +131,18 @@ export async function sendVerifyCode(req: SendVerifyCodeRequest): Promise<SendVe
   return data
 }
 
+export interface SendPendingOAuthVerifyCodeRequest extends SendVerifyCodeRequest {
+  pending_auth_token?: string
+  pending_oauth_token?: string
+}
+
+export async function sendPendingOAuthVerifyCode(
+  req: SendPendingOAuthVerifyCodeRequest
+): Promise<SendVerifyCodeResponse> {
+  const { data } = await apiClient.post<SendVerifyCodeResponse>('/auth/oauth/pending/send-verify-code', req)
+  return data
+}
+
 export interface ForgotPasswordRequest {
   email: string
   turnstile_token?: string
@@ -169,18 +181,50 @@ export interface PendingOAuthExchangeResponse extends Partial<OAuthTokenPayload>
   user_email_masked?: string
 }
 
+export interface OAuthAdoptionDecision {
+  adoptDisplayName?: boolean
+  adoptAvatar?: boolean
+}
+
+function serializeOAuthAdoptionDecision(decision?: OAuthAdoptionDecision): Record<string, boolean> {
+  const payload: Record<string, boolean> = {}
+  if (typeof decision?.adoptDisplayName === 'boolean') payload.adopt_display_name = decision.adoptDisplayName
+  if (typeof decision?.adoptAvatar === 'boolean') payload.adopt_avatar = decision.adoptAvatar
+  return payload
+}
+
 export async function completeLinuxDoOAuthRegistration(
-  invitationCode: string
-): Promise<OAuthTokenPayload> {
-  const { data } = await apiClient.post<OAuthTokenPayload>(
-    '/auth/oauth/linuxdo/complete-registration',
-    { invitation_code: invitationCode }
+  invitationCode: string,
+  decision?: OAuthAdoptionDecision,
+  affiliateCode?: string
+): Promise<PendingOAuthExchangeResponse> {
+  return completeOAuthRegistration('linuxdo', invitationCode, decision, affiliateCode)
+}
+
+export async function completeOAuthRegistration(
+  provider: 'linuxdo' | 'oidc' | 'wechat',
+  invitationCode: string,
+  decision?: OAuthAdoptionDecision,
+  affiliateCode?: string
+): Promise<PendingOAuthExchangeResponse> {
+  const { data } = await apiClient.post<PendingOAuthExchangeResponse>(
+    `/auth/oauth/${provider}/complete-registration`,
+    {
+      invitation_code: invitationCode,
+      ...(affiliateCode?.trim() ? { aff_code: affiliateCode.trim() } : {}),
+      ...serializeOAuthAdoptionDecision(decision)
+    }
   )
   return data
 }
 
-export async function exchangePendingOAuthCompletion(): Promise<PendingOAuthExchangeResponse> {
-  const { data } = await apiClient.post<PendingOAuthExchangeResponse>('/auth/oauth/pending/exchange', {})
+export async function exchangePendingOAuthCompletion(
+  decision?: OAuthAdoptionDecision
+): Promise<PendingOAuthExchangeResponse> {
+  const { data } = await apiClient.post<PendingOAuthExchangeResponse>(
+    '/auth/oauth/pending/exchange',
+    serializeOAuthAdoptionDecision(decision)
+  )
   return data
 }
 
@@ -201,9 +245,11 @@ export const authAPI = {
   isWeChatWebOAuthEnabled,
   resolveWeChatOAuthStart,
   sendVerifyCode,
+  sendPendingOAuthVerifyCode,
   forgotPassword,
   resetPassword,
   completeLinuxDoOAuthRegistration,
+  completeOAuthRegistration,
   exchangePendingOAuthCompletion
 }
 
