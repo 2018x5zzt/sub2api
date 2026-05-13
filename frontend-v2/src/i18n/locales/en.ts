@@ -573,6 +573,7 @@ export default {
 
   landing: {
     nav: {
+      primary: 'Primary navigation',
       caseStudies: 'Case Studies',
       solutions: 'Solutions',
       enterprise: 'Enterprise',
@@ -580,44 +581,67 @@ export default {
       signIn: 'Sign in'
     },
     hero: {
-      badge: 'NEW',
-      release: 'Xlabapi v2.4 now supports Claude Sonnet 4.5 and GPT-5',
+      badge: 'UPDATE',
+      release: 'One gateway for Claude, GPT, Gemini, and other mainstream models',
       titleLine1: 'Enterprise AI,',
       titleLine2Prefix: 'Built on',
       titleEmphasis: 'Reliable',
       titleLine2Suffix: 'Infrastructure',
       description:
-        'Unify 200+ mainstream AI models behind one API. Xlabapi delivers production-grade reliability, auditability, and cost control for teams running AI at scale.',
-      primaryCta: 'Start free ->',
+        'Route Claude, OpenAI, Gemini, and Antigravity through one service with API keys, billing, scheduling, usage analytics, and ops monitoring.',
+      primaryCta: 'Start free →',
       secondaryCta: 'Use guide',
-      summaryLine1: 'Leave fragmented vendor integrations behind.',
-      summaryStrong: 'Run your AI business on one production-ready API layer.',
-      summaryLine2: 'Keep routing, billing, keys, and observability under control.'
+      stats: {
+        accounts: 'Upstream accounts\nOAuth and API key',
+        billing: 'Token billing\nUsage tracking',
+        limits: 'RPM and TPM\nRate limits',
+        observability: 'Ops dashboards\nLogs and alerts'
+      },
+      statDetails: {
+        accounts: 'Manage Claude, OpenAI, Gemini, and Antigravity credentials.',
+        billing: 'Attribute input, output, cache, and image usage to users and keys.',
+        limits: 'Protect keys, groups, and upstream accounts with RPM/TPM controls.',
+        observability: 'Track concurrency, errors, retries, system logs, and alerts.'
+      }
+    },
+    demo: {
+      gatewayTitle: 'Sub2API gateway matrix',
+      fromRoutes: 'Route scan',
+      controlTitle: 'Console interfaces',
+      controls: {
+        keys: 'API keys',
+        usage: 'Usage dashboard',
+        payment: 'Payment',
+        admin: 'Admin'
+      }
     },
     backed: {
-      by: 'Trusted by',
-      teams: '200+ enterprise teams'
+      by: 'Supported ecosystem',
+      teams: 'One gateway for mainstream model platforms'
     },
     operations: {
       eyebrow: 'Operations Hub',
       titleLine1: 'Operate Smarter,',
       titleLine2: 'Scale Faster',
-      consoleTitle: 'AI Routing Console',
-      consoleSubtitle: 'Real-time decisions across 200+ upstream models',
-      systemActive: 'System Active',
+      consoleTitle: 'Scheduling and Ops Console',
+      consoleSubtitle: 'Groups, accounts, subscriptions, and ops APIs support production routing',
+      systemActive: 'Enabled',
       deploy: 'Deploy',
       strategy: 'Strategy',
-      costOptimized: 'Cost-optimized',
+      costOptimized: 'Priority + multipliers',
       tier: 'Tier',
-      production: 'Production',
-      fallbackChain: 'Fallback chain',
-      customRoutingRules: 'Custom routing rules?',
-      routingIntelligence: 'Routing Intelligence',
-      insights: 'Actionable insights to improve performance',
-      healthScore: 'System Health Score',
-      improvement: '3.7% improvement this cycle',
-      createRouting: 'Create Routing',
-      syncHub: 'Sync Hub',
+      production: 'Group scheduling',
+      fallbackChain: 'Group fallback chain',
+      customRoutingRules: 'Real scheduling fields',
+      routingIntelligence: 'Observability',
+      healthScore: 'Covered module',
+      healthScoreValue: 'Usage',
+      apiTitle: 'Admin APIs',
+      apiRows: {
+        dashboard: 'Dashboards',
+        ops: 'Ops monitor',
+        usage: 'Usage logs'
+      },
       features: {
         routing: {
           title: 'Intelligent Routing',
@@ -633,23 +657,55 @@ export default {
         }
       },
       metrics: {
-        accuracy: 'System Accuracy',
-        completeness: 'Completeness',
-        latency: 'Latency'
+        usageDashboard: 'User usage dashboard',
+        opsMonitor: 'Admin ops monitor',
+        retryTrace: 'Error retry and trace',
+        available: 'wired'
       },
       stats: {
-        workflows: 'Workflows automated\nacross teams',
-        tokens: 'Tokens processed\nmonthly',
-        models: 'Connected models &\nplatforms'
+        gatewayFamilies: 'Gateway families\nClaude/OpenAI/Gemini/Antigravity',
+        dashboardFamilies: 'Usage dashboards\nstats/trends/models',
+        adminModules: 'Admin modules\naccounts/groups/payment/backup/ops'
       },
       capabilities: {
         title: 'Capabilities',
-        smartRouting: 'Smart Routing',
-        calculationEngine: 'AI Calculation Engine',
-        predictiveFailover: 'Predictive Failover',
-        integration: 'Seamless Integration',
-        analytics: 'Real-Time Analytics',
-        deployment: 'Rapid Deployment'
+        smartRouting: 'Multi-account Scheduling',
+        calculationEngine: 'Token-Level Billing',
+        predictiveFailover: 'Group Fallback',
+        integration: 'Payment and Subscriptions',
+        analytics: 'Usage Analytics',
+        deployment: 'Backup and Updates'
+      },
+      modules: {
+        title: 'Core modules',
+        accounts: {
+          title: 'Account pool',
+          description: 'Operate Claude, OpenAI, Gemini, and Antigravity upstream accounts.'
+        },
+        groups: {
+          title: 'Group policy',
+          description: 'Set model multipliers, RPM/TPM, fallback groups, and channels.'
+        },
+        commerce: {
+          title: 'Commerce',
+          description: 'Built-in plans, orders, redeem codes, subscriptions, and balances.'
+        },
+        maintenance: {
+          title: 'Maintenance',
+          description: 'S3 backup, restore, system update, log cleanup, and health checks.'
+        }
+      },
+      demo: {
+        chain: {
+          group: 'user-group',
+          account: 'account-pool',
+          fallback: 'fallback-group'
+        },
+        rules: {
+          priority: 'priority / concurrency -> account selection',
+          rpm: 'rpm_limit / tpm        -> rate protection',
+          fallback: 'fallback_group_id   -> balance fallback'
+        }
       }
     },
     security: {
@@ -657,27 +713,65 @@ export default {
       titleLine1: 'Enterprise-Grade',
       titleLine2: 'Protection from Day One',
       description:
-        'Built with enterprise-level security at its core. Keep data, requests, and operations protected from the first day.'
+        'Use the shipped interfaces for TOTP, API keys, backup and restore, runtime logs, and alert configuration.',
+      badges: {
+        totp: 'TOTP\n2FA',
+        backup: 'S3\nbackup',
+        logs: 'system logs\nalerts'
+      },
+      items: {
+        identity: {
+          title: 'Identity and keys',
+          description: 'TOTP, JWT sessions, API key group binding, and user scopes.'
+        },
+        backup: {
+          title: 'Backup restore',
+          description: 'Configure S3, create backups, download archives, and restore.'
+        },
+        audit: {
+          title: 'Runtime logs',
+          description: 'Inspect system logs, request errors, upstream errors, and retries.'
+        },
+        alerts: {
+          title: 'Alert rules',
+          description: 'Configure thresholds, alert events, silence windows, and email.'
+        }
+      }
     },
     caseStudy: {
       titleLine1: 'How teams build',
       titleLine2: 'resilient AI infrastructure at scale',
-      personRole: 'Founder at NovaGrid',
-      reliabilityRate: 'API Reliability Rate',
-      quote:
-        '"Xlabapi gives us a unified reliability view across models. Cross-vendor failover moved from manual work to automatic decisions, so we can scale production usage with confidence."',
+      reliabilityRate: 'Feature coverage',
+      production: 'Available product modules',
+      window7d: 'API path',
+      panel: {
+        keys: 'Key management',
+        usage: 'Usage queries',
+        ops: 'Ops monitor',
+        value: 'API',
+        unit: 'ready'
+      },
+      highlights: {
+        gateway: 'Claude gateway',
+        responses: 'Responses compat',
+        gemini: 'Gemini native',
+        ops: 'Ops APIs'
+      },
       cards: {
         clarity: {
-          title: 'Designed to deliver clarity, consistency, and trust across complex AI environments.',
-          sub: 'Backbone of reliable orchestration'
+          title: 'Create, update, delete, and bind API keys to available groups.',
+          sub: 'Keys and group access',
+          metric: 'API Key management'
         },
         performance: {
-          title: 'From daily operations to peak loads, Xlabapi ensures dependable performance.',
-          sub: 'Infrastructure that keeps AI in control'
+          title: 'Inspect real-time traffic, concurrency, account availability, and retryable errors.',
+          sub: 'Operational monitoring',
+          metric: 'Ops console'
         },
         consistency: {
-          title: 'Powering high-volume systems with precision, speed, and uninterrupted performance.',
-          sub: 'Engineered for Consistency'
+          title: 'Built-in payment, subscriptions, redeem codes, backup, and system update management.',
+          sub: 'Commerce and maintenance',
+          metric: 'Payment subscriptions'
         }
       }
     },
@@ -689,10 +783,11 @@ export default {
       titleLine2: 'into',
       titleEmphasis3: 'reliable APIs',
       description:
-        'Built for enterprise AI systems, Xlabapi routes, validates, and executes workflows at scale while maintaining exceptional reliability.'
+        'Sub2API turns API keys, upstream account pools, grouped billing, and ops monitoring into a deployable production gateway.'
     },
     footer: {
-      description: 'Enterprise AI infrastructure. One unified API for every model that matters.',
+      description:
+        'Enterprise AI infrastructure. One unified API for Claude, OpenAI, Gemini, and Antigravity.',
       product: 'Product',
       routing: 'Routing',
       analytics: 'Analytics',

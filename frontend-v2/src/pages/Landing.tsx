@@ -1,41 +1,82 @@
-/**
- * Landing v4 — Plato (Xlabapi dark + warm orange)
- * Adapted from the frontend-v2 landing prototype.
- */
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { SectionFrame } from '@/components/bus/SectionFrame'
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher'
 
 const ORANGE = '#ff5722'
+const GREEN = '#22c55e'
+const SKY = '#38bdf8'
+const VIOLET = '#a78bfa'
+const INK = '#191715'
+const PAPER = '#f4f0e7'
 
-function OrangeMark({ size = 8 }: { size?: number }) {
+const heroEndpointRows = [
+  { name: 'Claude Messages', endpoint: '/v1/messages', color: ORANGE },
+  { name: 'OpenAI Responses', endpoint: '/v1/responses', color: GREEN },
+  { name: 'Gemini Native', endpoint: '/v1beta/models/*', color: SKY },
+  { name: 'Antigravity', endpoint: '/antigravity/v1', color: VIOLET }
+] as const
+
+const heroControlRows = [
+  { labelKey: 'landing.demo.controls.keys', route: '/api/v1/keys', color: ORANGE },
+  { labelKey: 'landing.demo.controls.usage', route: '/api/v1/usage/dashboard/*', color: GREEN },
+  { labelKey: 'landing.demo.controls.payment', route: '/api/v1/payment/*', color: SKY },
+  { labelKey: 'landing.demo.controls.admin', route: '/api/v1/admin/*', color: VIOLET }
+] as const
+
+const heroSummaryStats = [
+  ['OAuth', '+ API Key', 'landing.hero.stats.accounts', 'landing.hero.statDetails.accounts'],
+  ['Token', '', 'landing.hero.stats.billing', 'landing.hero.statDetails.billing'],
+  ['RPM', '+ TPM', 'landing.hero.stats.limits', 'landing.hero.statDetails.limits'],
+  ['Ops', '', 'landing.hero.stats.observability', 'landing.hero.statDetails.observability']
+] as const
+
+const operationsModules = [
+  ['landing.operations.modules.accounts.title', 'landing.operations.modules.accounts.description', '/api/v1/admin/accounts', ORANGE],
+  ['landing.operations.modules.groups.title', 'landing.operations.modules.groups.description', '/api/v1/admin/groups', GREEN],
+  ['landing.operations.modules.commerce.title', 'landing.operations.modules.commerce.description', '/api/v1/payment/*', SKY],
+  ['landing.operations.modules.maintenance.title', 'landing.operations.modules.maintenance.description', '/api/v1/admin/backups', VIOLET]
+] as const
+
+const topologyRows = [
+  ['landing.operations.demo.chain.group', 'priority / rpm / tpm'],
+  ['landing.operations.demo.chain.account', 'concurrency / schedulable'],
+  ['landing.operations.demo.chain.fallback', 'fallback_group_id'],
+  ['landing.operations.apiRows.ops', '/api/v1/admin/ops/*']
+] as const
+
+function LogoMark({ dark = false }: { dark?: boolean }) {
+  const color = dark ? '#ffffff' : INK
+
   return (
-    <span
-      style={{
-        display: 'inline-block',
-        width: size,
-        height: size,
-        background: ORANGE,
-        marginRight: 10,
-        verticalAlign: 'middle',
-        flexShrink: 0
-      }}
-    />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, color, fontSize: 15, fontWeight: 700 }}>
+      <div style={{ width: 28, height: 28, position: 'relative' }}>
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            border: `1.5px solid ${color}`,
+            transform: 'rotate(45deg)',
+            borderRadius: 3
+          }}
+        />
+        <div style={{ position: 'absolute', inset: 7, border: `1.5px solid ${color}`, borderRadius: 2 }} />
+      </div>
+      XLABAPI
+    </div>
   )
 }
 
-function Eyebrow({ children, mb = 18 }: { children: ReactNode; mb?: number }) {
+function Eyebrow({ children, dark }: { children: ReactNode; dark?: boolean }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: mb }}>
-      <OrangeMark />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+      <span style={{ width: 8, height: 8, background: ORANGE, flexShrink: 0 }} />
       <span
         className="font-mono"
         style={{
           fontSize: 11.5,
-          letterSpacing: '0.18em',
-          color: 'var(--text-2)',
+          letterSpacing: 0,
+          color: dark ? 'rgba(255,255,255,0.62)' : 'var(--text-3)',
           textTransform: 'uppercase'
         }}
       >
@@ -45,335 +86,326 @@ function Eyebrow({ children, mb = 18 }: { children: ReactNode; mb?: number }) {
   )
 }
 
-function PillBtn({
-  children,
-  primary,
-  ghost
-}: {
-  children: ReactNode
-  primary?: boolean
-  ghost?: boolean
-}) {
+function PillBtn({ children, primary, dark }: { children: ReactNode; primary?: boolean; dark?: boolean }) {
   return (
-    <button
+    <span
+      className="landing-pill"
       style={{
-        height: 44,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 44,
         padding: '0 22px',
         borderRadius: 999,
         fontSize: 14,
-        fontWeight: 500,
+        fontWeight: 650,
         cursor: 'pointer',
-        border: ghost ? '1px solid var(--line-3)' : 'none',
-        background: primary ? ORANGE : ghost ? 'transparent' : 'var(--text-1)',
-        color: primary ? '#ffffff' : ghost ? 'var(--text-1)' : 'var(--bg-0)',
-        letterSpacing: '-0.01em'
+        background: primary ? ORANGE : dark ? 'rgba(255,255,255,0.10)' : INK,
+        color: primary || dark ? '#ffffff' : PAPER,
+        letterSpacing: 0,
+        whiteSpace: 'nowrap'
       }}
     >
       {children}
-    </button>
+    </span>
   )
 }
 
 function NavD() {
   const { t } = useTranslation()
   const navItems = [
-    ['#case-studies', t('landing.nav.caseStudies')],
     ['#solutions', t('landing.nav.solutions')],
     ['#enterprise', t('landing.nav.enterprise')],
+    ['#case-studies', t('landing.nav.caseStudies')],
     ['#company', t('landing.nav.company')]
   ] as const
 
   return (
     <nav
+      className="landing-nav"
+      aria-label={t('landing.nav.primary')}
       style={{
         position: 'absolute',
         top: 24,
         left: 0,
         right: 0,
-        zIndex: 10,
-        padding: '0 40px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
+        zIndex: 30,
+        padding: '0 40px'
       }}
     >
       <div
         style={{
-          display: 'flex',
+          maxWidth: 1280,
+          margin: '0 auto',
+          display: 'grid',
+          gridTemplateColumns: '1fr auto 1fr',
           alignItems: 'center',
-          gap: 12,
-          fontSize: 15,
-          fontWeight: 600,
-          letterSpacing: '-0.01em'
+          gap: 20
         }}
       >
-        <div style={{ width: 28, height: 28, position: 'relative' }}>
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              border: '1.5px solid var(--text-1)',
-              transform: 'rotate(45deg)',
-              borderRadius: 2
-            }}
-          />
-          <div style={{ position: 'absolute', inset: 6, border: '1.5px solid var(--text-1)', borderRadius: 2 }} />
-        </div>
-        XLABAPI
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          gap: 4,
-          padding: 4,
-          borderRadius: 999,
-          background: 'rgba(255,255,255,0.70)',
-          border: '1px solid var(--line-2)'
-        }}
-      >
-        {navItems.map(([href, label]) => (
-          <a
-            key={href}
-            href={href}
-            style={{
-              padding: '8px 16px',
-              fontSize: 13.5,
-              color: 'var(--text-2)',
-              textDecoration: 'none',
-              borderRadius: 999
-            }}
-          >
-            {label}
-          </a>
-        ))}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <a
-          href="/docs"
+        <LogoMark />
+        <div
+          className="landing-nav-menu"
           style={{
-            padding: '8px 14px',
-            fontSize: 13.5,
-            color: 'var(--text-2)',
-            textDecoration: 'none'
+            display: 'flex',
+            gap: 4,
+            padding: 5,
+            borderRadius: 999,
+            background: 'rgba(255,255,255,0.76)',
+            boxShadow: '0 10px 30px rgba(35,25,10,0.08)',
+            backdropFilter: 'blur(18px)'
           }}
         >
-          {t('nav.docs')}
-        </a>
-        <LocaleSwitcher compact />
-        <Link to="/login" style={{ textDecoration: 'none' }}>
-          <PillBtn primary>{t('landing.nav.signIn')}</PillBtn>
-        </Link>
+          {navItems.map(([href, label]) => (
+            <a
+              key={href}
+              href={href}
+              style={{
+                padding: '8px 16px',
+                fontSize: 13,
+                color: 'var(--text-2)',
+                textDecoration: 'none',
+                borderRadius: 999
+              }}
+            >
+              {label}
+            </a>
+          ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
+          <a className="landing-doc-link" href="/docs" style={{ fontSize: 13, color: 'var(--text-2)', textDecoration: 'none' }}>
+            {t('nav.docs')}
+          </a>
+          <LocaleSwitcher compact />
+          <Link to="/login" style={{ textDecoration: 'none' }}>
+            <PillBtn primary>{t('landing.nav.signIn')}</PillBtn>
+          </Link>
+        </div>
       </div>
     </nav>
   )
 }
 
-function HeroD() {
+function EndpointDeck() {
   const { t } = useTranslation()
+
   return (
-    <section
+    <div
+      className="landing-endpoint-deck"
       style={{
-        position: 'relative',
-        minHeight: 880,
-        paddingTop: 180,
-        paddingBottom: 120,
-        overflow: 'hidden',
-        background: 'var(--bg-0)'
+        borderRadius: 26,
+        background: 'rgba(18,15,13,0.82)',
+        boxShadow: '0 42px 110px rgba(20,10,0,0.38)',
+        backdropFilter: 'blur(24px)',
+        color: '#ffffff',
+        overflow: 'hidden'
       }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          top: 60,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 1280,
-          height: 800,
-          pointerEvents: 'none'
-        }}
-      >
-        <div style={{ position: 'absolute', right: -40, top: 0, width: 760, height: 760 }}>
-
+      <div style={{ padding: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20 }}>
+        <div>
+          <div style={{ fontSize: 24, fontWeight: 650 }}>{t('landing.demo.gatewayTitle')}</div>
+          <div style={{ marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.54)' }}>{t('landing.demo.fromRoutes')}</div>
+        </div>
+        <div style={{ padding: '7px 11px', borderRadius: 999, background: 'rgba(34,197,94,0.15)', color: '#86efac', fontSize: 12 }}>
+          {t('landing.operations.systemActive')}
         </div>
       </div>
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: 'radial-gradient(var(--line-2) 1px, transparent 1px)',
-          backgroundSize: '32px 32px',
-          pointerEvents: 'none'
-        }}
-      />
-      <SectionFrame showTop={false} />
 
-      <div style={{ position: 'relative', maxWidth: 1280, margin: '0 auto', padding: '0 40px' }}>
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '6px 14px 6px 6px',
-            borderRadius: 999,
-            background: 'rgba(255,255,255,0.70)',
-            border: '1px solid var(--line-2)',
-            marginBottom: 28
-          }}
-        >
-          <span
-            style={{
-              padding: '2px 10px',
-              borderRadius: 999,
-              background: ORANGE,
-              fontSize: 11,
-              fontWeight: 600,
-              color: 'var(--text-1)'
-            }}
-          >
-            {t('landing.hero.badge')}
-          </span>
-          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-            {t('landing.hero.release')}
-          </span>
-        </div>
-
-        <h1
-          style={{
-            fontSize: 84,
-            fontWeight: 500,
-            lineHeight: 1.04,
-            letterSpacing: '-0.035em',
-            margin: '0 0 28px',
-            color: 'var(--text-1)',
-            maxWidth: 760
-          }}
-        >
-          {t('landing.hero.titleLine1')}
-          <br />
-          {t('landing.hero.titleLine2Prefix')}{' '}
-          <em
-            style={{ fontStyle: 'italic', fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif', fontWeight: 400 }}
-          >
-            {t('landing.hero.titleEmphasis')}
-          </em>{' '}
-          {t('landing.hero.titleLine2Suffix')}
-        </h1>
-        <p
-          style={{
-            fontSize: 16,
-            lineHeight: 1.6,
-            color: 'var(--text-3)',
-            maxWidth: 540,
-            margin: '0 0 36px'
-          }}
-        >
-          {t('landing.hero.description')}
-        </p>
-        <div style={{ display: 'flex', gap: 12, marginBottom: 100 }}>
-          <Link to="/register" style={{ textDecoration: 'none' }}>
-            <PillBtn primary>{t('landing.hero.primaryCta')}</PillBtn>
-          </Link>
-          <a href="/docs" style={{ textDecoration: 'none' }}>
-            <PillBtn>{t('landing.hero.secondaryCta')}</PillBtn>
-          </a>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr 1fr',
-            gap: 60,
-            alignItems: 'flex-end',
-            paddingTop: 80,
-            borderTop: '1px solid var(--line-2)'
-          }}
-        >
-          <div
-            style={{
-              fontSize: 14,
-              color: 'var(--text-2)',
-              lineHeight: 1.5,
-              maxWidth: 280
-            }}
-          >
-            {t('landing.hero.summaryLine1')}<br />
-            <strong style={{ color: 'var(--text-1)' }}>{t('landing.hero.summaryStrong')}</strong><br />
-            {t('landing.hero.summaryLine2')}
-          </div>
-          {(
-            [
-              ['99', '%', 'Uptime\nSLA 保证'],
-              ['5.5', 'x', 'Faster Failover\n上游切换速度'],
-              ['10B', '+', 'Tokens Processed\n每月调用量']
-            ] as const
-          ).map(([n, u, l]) => (
-            <div key={l}>
-              <div style={{ display: 'flex', alignItems: 'baseline', color: 'var(--text-1)' }}>
-                <span style={{ fontSize: 56, fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1 }}>{n}</span>
-                <span style={{ fontSize: 32, color: ORANGE, marginLeft: 2, fontWeight: 500 }}>{u}</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.82fr' }} className="landing-deck-body">
+        <div style={{ padding: '8px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {heroEndpointRows.map((row) => (
+            <div key={row.name}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12, color: 'rgba(255,255,255,0.72)', marginBottom: 8 }}>
+                <span>{row.name}</span>
+                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }}>{row.endpoint}</span>
               </div>
-              <div
-                style={{
-                  fontSize: 11.5,
-                  color: 'var(--text-3)',
-                  marginTop: 8,
-                  whiteSpace: 'pre-line',
-                  lineHeight: 1.4
-                }}
-              >
-                {l}
+              <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.10)', overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: '100%', borderRadius: 999, background: row.color }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
+            padding: 20,
+            background: 'rgba(255,255,255,0.06)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10
+          }}
+        >
+          <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.48)', marginBottom: 2 }}>
+            {t('landing.demo.controlTitle')}
+          </div>
+          {heroControlRows.map((row) => (
+            <div key={row.labelKey} style={{ display: 'grid', gridTemplateColumns: '16px 1fr', gap: 10, alignItems: 'center' }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: row.color }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 650 }}>{t(row.labelKey)}</div>
+                <div
+                  style={{
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                    fontSize: 10,
+                    color: 'rgba(255,255,255,0.46)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {row.route}
+                </div>
               </div>
             </div>
           ))}
         </div>
       </div>
-    </section>
+    </div>
   )
 }
 
-function BackedRow() {
+function HeroD() {
   const { t } = useTranslation()
+
   return (
-    <section style={{ position: 'relative', background: 'var(--bg-0)', padding: '40px 0' }}>
-      <SectionFrame />
+    <section
+      className="landing-hero landing-hero-advanced"
+      style={{
+        position: 'relative',
+        minHeight: 920,
+        padding: '172px 0 70px',
+        overflow: 'hidden',
+        background: PAPER
+      }}
+    >
       <div
+        className="landing-hero-photo"
+        style={{
+          position: 'absolute',
+          inset: '0 0 0 auto',
+          width: '58vw',
+          backgroundImage:
+            'linear-gradient(90deg, rgba(244,240,231,0.92), rgba(244,240,231,0.15) 34%, rgba(13,10,8,0.42)), url("/landing/case-datacenter-aisle.jpg")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          clipPath: 'polygon(16% 0, 100% 0, 100% 100%, 0 100%)'
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 210,
+          background: 'linear-gradient(0deg, rgba(244,240,231,1), rgba(244,240,231,0))'
+        }}
+      />
+
+      <div className="landing-hero-grid" style={{ position: 'relative', maxWidth: 1280, margin: '0 auto', padding: '0 40px', display: 'grid', gridTemplateColumns: '0.92fr 1.08fr', gap: 54, alignItems: 'center' }}>
+        <div>
+          <Eyebrow>{t('landing.hero.release')}</Eyebrow>
+          <h1
+            className="landing-hero-title"
+            style={{
+              fontSize: 86,
+              lineHeight: 0.98,
+              fontWeight: 680,
+              letterSpacing: 0,
+              margin: '0 0 28px',
+              color: INK,
+              maxWidth: 700
+            }}
+          >
+            {t('landing.hero.titleLine1')}
+            <br />
+            {t('landing.hero.titleLine2Prefix')}{' '}
+            <em style={{ fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif', fontStyle: 'italic', fontWeight: 400 }}>
+              {t('landing.hero.titleEmphasis')}
+            </em>
+            <br />
+            {t('landing.hero.titleLine2Suffix')}
+          </h1>
+          <p style={{ fontSize: 16, lineHeight: 1.72, color: 'var(--text-3)', maxWidth: 540, margin: '0 0 34px' }}>
+            {t('landing.hero.description')}
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 46 }}>
+            <Link to="/register" style={{ textDecoration: 'none' }}>
+              <PillBtn primary>{t('landing.hero.primaryCta')}</PillBtn>
+            </Link>
+            <a href="/docs" style={{ textDecoration: 'none' }}>
+              <PillBtn>{t('landing.hero.secondaryCta')}</PillBtn>
+            </a>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            {heroEndpointRows.map((row) => (
+              <span
+                key={row.name}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '8px 11px',
+                  borderRadius: 999,
+                  background: 'rgba(255,255,255,0.72)',
+                  boxShadow: '0 8px 24px rgba(31,25,18,0.05)',
+                  fontSize: 11.5,
+                  color: 'var(--text-2)'
+                }}
+              >
+                <span style={{ width: 7, height: 7, borderRadius: 999, background: row.color }} />
+                {row.endpoint}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="landing-hero-stage" style={{ minHeight: 620, display: 'flex', alignItems: 'center' }}>
+          <EndpointDeck />
+        </div>
+      </div>
+
+      <div
+        className="landing-capability-rail"
         style={{
           position: 'relative',
           maxWidth: 1280,
-          margin: '0 auto',
+          margin: '72px auto 0',
           padding: '0 40px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 40
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: 12
         }}
       >
-        <div style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
-          {t('landing.backed.by')}
-          <br />
-          {t('landing.backed.teams')}
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            gap: 56,
-            color: 'var(--text-3)',
-            fontSize: 16,
-            fontWeight: 600
-          }}
-        >
-          {['OpenAI', 'ANTHROPIC', 'Meta', 'DeepMind', 'Google', 'Mistral'].map((b) => (
-            <span
-              key={b}
-              style={{
-                fontFamily: ['OpenAI', 'Meta', 'Google'].includes(b) ? '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif' : 'inherit',
-                letterSpacing: b === 'ANTHROPIC' ? '0.1em' : 0
-              }}
-            >
-              {b}
-            </span>
-          ))}
-        </div>
+        {heroSummaryStats.map(([n, u, labelKey, detailKey], index) => (
+          <div
+            key={labelKey}
+            style={{
+              minHeight: 184,
+              padding: 20,
+              borderRadius: 18,
+              background: index === 0 ? INK : 'rgba(255,255,255,0.68)',
+              color: index === 0 ? '#ffffff' : INK,
+              boxShadow: index === 0 ? '0 24px 70px rgba(20,15,8,0.18)' : '0 16px 44px rgba(30,23,12,0.06)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 44, lineHeight: 1, fontWeight: 650 }}>{n}</span>
+              <span style={{ fontSize: 24, color: ORANGE, marginLeft: 3, fontWeight: 650 }}>{u}</span>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, lineHeight: 1.45, whiteSpace: 'pre-line', color: index === 0 ? 'rgba(255,255,255,0.64)' : 'var(--text-3)' }}>
+                {t(labelKey)}
+              </div>
+              <div style={{ marginTop: 12, fontSize: 12.5, lineHeight: 1.55, color: index === 0 ? 'rgba(255,255,255,0.80)' : 'var(--text-2)' }}>
+                {t(detailKey)}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   )
@@ -381,418 +413,135 @@ function BackedRow() {
 
 function OperationsHub() {
   const { t } = useTranslation()
-  const featureCards = [
-    [t('landing.operations.features.routing.title'), t('landing.operations.features.routing.description')],
-    [t('landing.operations.features.unified.title'), t('landing.operations.features.unified.description')],
-    [t('landing.operations.features.reliability.title'), t('landing.operations.features.reliability.description')]
-  ] as const
-  const operationStats = [
-    ['60K', '+', t('landing.operations.stats.workflows')],
-    ['18B', '+', t('landing.operations.stats.tokens')],
-    ['100', '+', t('landing.operations.stats.models')]
-  ] as const
-  const capabilities = [
-    t('landing.operations.capabilities.smartRouting'),
-    t('landing.operations.capabilities.calculationEngine'),
-    t('landing.operations.capabilities.predictiveFailover'),
-    t('landing.operations.capabilities.integration'),
-    t('landing.operations.capabilities.analytics'),
-    t('landing.operations.capabilities.deployment')
-  ]
 
   return (
-    <section style={{ position: 'relative', background: 'var(--bg-0)', padding: '100px 0' }}>
-      <SectionFrame />
-      <div
-        style={{
-          maxWidth: 1280,
-          margin: '0 auto',
-          padding: '0 40px',
-          position: 'relative',
-          zIndex: 5
-        }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr 1fr',
-            gap: 48,
-            paddingBottom: 64,
-            borderBottom: '1px solid var(--line-1)'
-          }}
-        >
-          {(
-            featureCards
-          ).map(([t, d]) => (
-            <div key={t}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                <span style={{ width: 12, height: 12, background: ORANGE, borderRadius: 2 }} />
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>{t}</span>
-              </div>
-              <p
-                style={{
-                  fontSize: 13,
-                  lineHeight: 1.6,
-                  color: 'var(--text-3)',
-                  margin: 0,
-                  maxWidth: 240
-                }}
-              >
-                {d}
-              </p>
-            </div>
-          ))}
+    <section id="solutions" style={{ background: PAPER, padding: '96px 0 116px', scrollMarginTop: 96 }}>
+      <div className="landing-section-container" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 40px' }}>
+        <div className="landing-section-head" style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr', gap: 60, alignItems: 'end', marginBottom: 46 }}>
           <div>
-            <Eyebrow mb={16}>{t('landing.operations.eyebrow')}</Eyebrow>
-            <h2
-              style={{
-                fontSize: 38,
-                fontWeight: 500,
-                lineHeight: 1.08,
-                letterSpacing: '-0.025em',
-                margin: 0,
-                color: 'var(--text-1)'
-              }}
-            >
+            <Eyebrow>{t('landing.operations.eyebrow')}</Eyebrow>
+            <h2 style={{ fontSize: 58, lineHeight: 1.02, letterSpacing: 0, fontWeight: 680, margin: 0, color: INK }}>
               {t('landing.operations.titleLine1')}
               <br />
               {t('landing.operations.titleLine2')}
             </h2>
           </div>
+          <p style={{ margin: 0, maxWidth: 620, fontSize: 15, lineHeight: 1.8, color: 'var(--text-3)' }}>
+            {t('landing.operations.consoleSubtitle')}
+          </p>
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 280px',
-            gap: 48,
-            padding: '48px 0'
-          }}
-        >
+        <div className="landing-atlas-grid" style={{ display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: 18, alignItems: 'stretch' }}>
           <div
             style={{
-              position: 'relative',
-              height: 540,
-              borderRadius: 12,
-              overflow: 'hidden',
-              background: 'var(--bg-0)'
+              minHeight: 640,
+              borderRadius: 28,
+              background: INK,
+              color: '#ffffff',
+              padding: 28,
+              display: 'grid',
+              gridTemplateRows: 'auto 1fr auto',
+              gap: 26,
+              boxShadow: '0 34px 90px rgba(31,22,12,0.22)'
             }}
           >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, alignItems: 'flex-start' }}>
+              <div>
+                <div style={{ fontSize: 28, fontWeight: 680 }}>{t('landing.operations.consoleTitle')}</div>
+                <div style={{ marginTop: 8, fontSize: 12.5, color: 'rgba(255,255,255,0.52)' }}>{t('landing.operations.apiTitle')}</div>
+              </div>
+              <span style={{ padding: '7px 11px', borderRadius: 999, background: 'rgba(255,255,255,0.10)', fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>
+                {t('landing.operations.deploy')}
+              </span>
+            </div>
 
-
-            <div
-              style={{
-                position: 'absolute',
-                left: '12%',
-                top: '12%',
-                right: '8%',
-                bottom: '12%',
-                background: 'rgba(20,8,4,0.72)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid var(--line-2)',
-                borderRadius: 14,
-                padding: 24,
-                color: 'var(--text-1)',
-                display: 'flex',
-                flexDirection: 'column',
-                boxShadow: '0 30px 80px rgba(0,0,0,0.5)'
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  paddingBottom: 14,
-                  borderBottom: '1px solid var(--line-2)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                  <span
-                    style={{ width: 14, height: 14, borderRadius: 3, background: ORANGE, opacity: 0.9 }}
-                  />
-                  {t('landing.operations.consoleTitle')}
-                </div>
-                <div style={{ display: 'flex', gap: 10, fontSize: 11.5 }}>
-                  <span
+            <div className="landing-topology-grid" style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr', gap: 18, alignItems: 'stretch' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {topologyRows.map(([labelKey, route], index) => (
+                  <div
+                    key={labelKey}
                     style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '3px 10px',
-                      borderRadius: 999,
-                      background: 'rgba(34,197,94,0.15)',
-                      border: '1px solid rgba(34,197,94,0.3)',
-                      color: '#4ade80'
+                      padding: 16,
+                      borderRadius: 16,
+                      background: index === 0 ? 'rgba(255,87,34,0.18)' : 'rgba(255,255,255,0.075)'
                     }}
                   >
-                    <span
-                      style={{ width: 6, height: 6, borderRadius: 999, background: '#22c55e' }}
-                    />
-                    {t('landing.operations.systemActive')}
-                  </span>
-                  <span
-                    style={{
-                      padding: '3px 10px',
-                      borderRadius: 999,
-                      border: '1px solid var(--line-3)'
-                    }}
-                  >
-                    {t('landing.operations.deploy')} ▾
-                  </span>
-                </div>
-              </div>
-              <div style={{ paddingTop: 18, paddingBottom: 14 }}>
-                <div style={{ fontSize: 22, fontWeight: 500, marginBottom: 4 }}>
-                  {t('landing.operations.consoleTitle')}
-                </div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
-                  {t('landing.operations.consoleSubtitle')}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: 28,
-                  flex: 1
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    {(
-                      [
-                        [t('landing.operations.strategy'), t('landing.operations.costOptimized')],
-                        [t('landing.operations.tier'), t('landing.operations.production')]
-                      ] as const
-                    ).map(([k, v]) => (
-                      <div key={k}>
-                        <div
-                          style={{
-                            fontSize: 10.5,
-                            color: 'var(--text-3)',
-                            marginBottom: 6
-                          }}
-                        >
-                          {k}
-                        </div>
-                        <div
-                          style={{
-                            height: 32,
-                            borderRadius: 6,
-                            border: '1px solid var(--line-2)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            padding: '0 10px',
-                            fontSize: 11.5,
-                            color: 'var(--text-2)'
-                          }}
-                        >
-                          {v}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div>
-                    <div
-                      style={{ fontSize: 10.5, color: 'var(--text-3)', marginBottom: 6 }}
-                    >
-                      {t('landing.operations.fallbackChain')}
+                    <div style={{ fontSize: 13, fontWeight: 650 }}>{t(labelKey)}</div>
+                    <div style={{ marginTop: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 10.5, color: 'rgba(255,255,255,0.50)' }}>
+                      {route}
                     </div>
-                    <div
-                      style={{
-                        height: 32,
-                        borderRadius: 6,
-                        border: '1px solid var(--line-2)'
-                      }}
-                    />
                   </div>
-                  <div>
-                    <div
-                      style={{ fontSize: 10.5, color: 'var(--text-3)', marginBottom: 6 }}
-                    >
-                      {t('landing.operations.customRoutingRules')}
-                    </div>
-                    <div
-                      style={{
-                        height: 96,
-                        borderRadius: 6,
-                        border: '1px solid var(--line-2)'
-                      }}
-                    />
-                  </div>
-                </div>
-                <div
-                  style={{ borderLeft: '1px solid var(--line-2)', paddingLeft: 22 }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>
-                    {t('landing.operations.routingIntelligence')}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 10.5,
-                      color: 'var(--text-3)',
-                      marginTop: 2,
-                      marginBottom: 16
-                    }}
-                  >
-                    {t('landing.operations.insights')}
-                  </div>
-                  <div style={{ fontSize: 10.5, color: 'var(--text-3)' }}>
-                    {t('landing.operations.healthScore')}
-                  </div>
-                  <div
-                    style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 4 }}
-                  >
-                    <span
-                      style={{ fontSize: 42, fontWeight: 500, letterSpacing: '-0.02em' }}
-                    >
-                      96%
-                    </span>
-                    <span style={{ color: ORANGE, fontSize: 18 }}>↗</span>
-                  </div>
-                  <div style={{ fontSize: 10.5, color: ORANGE, marginTop: 4 }}>
-                    {t('landing.operations.improvement')}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: 18,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 12
-                    }}
-                  >
-                    {(
-                      [
-                        [t('landing.operations.metrics.accuracy'), '#22c55e', '2.8%'],
-                        [t('landing.operations.metrics.completeness'), '#a78bfa', '3.9%'],
-                        [t('landing.operations.metrics.latency'), '#fb923c', '1.8%']
-                      ] as const
-                    ).map(([l, c, v]) => (
-                      <div key={l}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            fontSize: 10.5,
-                            color: 'var(--text-2)',
-                            marginBottom: 4
-                          }}
-                        >
-                          <span>{l}</span>
-                          <span>{v}</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: 1.5, height: 8 }}>
-                          {Array.from({ length: 32 }).map((_, i) => (
-                            <div
-                              key={i}
-                              style={{
-                                flex: 1,
-                                background: ((i * 7 + l.length) % 10) > 5 ? c : 'var(--bg-3)',
-                                borderRadius: 1
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                ))}
               </div>
 
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  paddingTop: 16,
-                  borderTop: '1px solid var(--line-2)',
-                  marginTop: 16
-                }}
-              >
-                <span style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
-                  {t('common.cancel')}
-                </span>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <span
-                    style={{
-                      padding: '7px 16px',
-                      borderRadius: 6,
-                      background: 'var(--bg-1)',
-                      color: 'var(--text-1)',
-                      fontSize: 11.5,
-                      fontWeight: 500
-                    }}
-                  >
-                    {t('landing.operations.createRouting')}
-                  </span>
-                  <span
-                    style={{
-                      padding: '7px 14px',
-                      borderRadius: 6,
-                      border: '1px solid var(--line-3)',
-                      fontSize: 11.5
-                    }}
-                  >
-                    {t('landing.operations.syncHub')} →
-                  </span>
-                </div>
+              <div style={{ borderRadius: 20, background: 'rgba(255,255,255,0.06)', padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                {heroEndpointRows.map((row, index) => (
+                  <div key={row.name}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 12, color: 'rgba(255,255,255,0.72)', marginBottom: 8 }}>
+                      <span>{row.name}</span>
+                      <span>{index === 0 ? t('landing.operations.metrics.available') : row.endpoint}</span>
+                    </div>
+                    <div style={{ height: 10, borderRadius: 999, background: 'rgba(255,255,255,0.10)', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${100 - index * 13}%`, borderRadius: 999, background: row.color }} />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 36 }}>
-            {operationStats.map(([n, u, l]) => (
-              <div key={l}>
-                <div style={{ display: 'flex', alignItems: 'baseline', color: 'var(--text-1)' }}>
-                  <span
-                    style={{ fontSize: 52, fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1 }}
-                  >
-                    {n}
-                  </span>
-                  <span style={{ fontSize: 32, color: ORANGE, marginLeft: 2 }}>{u}</span>
-                </div>
-                <div
-                  style={{
-                    fontSize: 11.5,
-                    color: 'var(--text-3)',
-                    marginTop: 10,
-                    whiteSpace: 'pre-line',
-                    lineHeight: 1.45
-                  }}
-                >
-                  {l}
-                </div>
-              </div>
-            ))}
-            <div
-              style={{
-                paddingTop: 24,
-                marginTop: 12,
-                borderTop: '1px solid var(--line-2)'
-              }}
-            >
-              <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 14 }}>
-                {t('landing.operations.capabilities.title')}
-              </div>
-              {capabilities.map((c, i) => (
-                <div
-                  key={c}
-                  style={{
-                    padding: '8px 12px',
-                    fontSize: 12.5,
-                    color: i === 1 ? 'var(--text-1)' : 'var(--text-3)',
-                    background: i === 1 ? 'rgba(255,87,34,0.12)' : 'transparent',
-                    border: i === 1 ? '1px solid rgba(255,87,34,0.3)' : 'none',
-                    borderRadius: 6,
-                    marginBottom: 1
-                  }}
-                >
-                  {c}
+            <div className="landing-console-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              {[
+                ['landing.operations.metrics.usageDashboard', '/api/v1/usage/dashboard/*'],
+                ['landing.operations.metrics.opsMonitor', '/api/v1/admin/ops/*'],
+                ['landing.operations.metrics.retryTrace', '/api/v1/admin/ops/errors']
+              ].map(([labelKey, route]) => (
+                <div key={labelKey} style={{ padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.075)' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 650 }}>{t(labelKey)}</div>
+                  <div style={{ marginTop: 8, fontSize: 10, color: 'rgba(255,255,255,0.46)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {route}
+                  </div>
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="landing-module-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+            {operationsModules.map(([titleKey, descriptionKey, route, color], index) => (
+              <div
+                key={titleKey}
+                style={{
+                  borderRadius: 24,
+                  minHeight: 300,
+                  padding: 22,
+                  background: index === 3 ? 'linear-gradient(145deg, #271915, #11100f)' : 'rgba(255,255,255,0.70)',
+                  color: index === 3 ? '#ffffff' : INK,
+                  boxShadow: '0 18px 54px rgba(31,25,18,0.07)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
+                }}
+              >
+                <div>
+                  <span style={{ display: 'inline-block', width: 10, height: 10, background: color as string, marginBottom: 20 }} />
+                  <h3 style={{ fontSize: 23, lineHeight: 1.15, margin: '0 0 12px', fontWeight: 680 }}>{t(titleKey)}</h3>
+                  <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.7, color: index === 3 ? 'rgba(255,255,255,0.68)' : 'var(--text-3)' }}>
+                    {t(descriptionKey)}
+                  </p>
+                </div>
+                <div
+                  style={{
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                    fontSize: 10.5,
+                    color: index === 3 ? 'rgba(255,255,255,0.48)' : 'var(--text-3)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {route}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -802,65 +551,56 @@ function OperationsHub() {
 
 function SecurityBand() {
   const { t } = useTranslation()
+  const securityItems = [
+    ['landing.security.items.identity.title', 'landing.security.items.identity.description'],
+    ['landing.security.items.backup.title', 'landing.security.items.backup.description'],
+    ['landing.security.items.audit.title', 'landing.security.items.audit.description'],
+    ['landing.security.items.alerts.title', 'landing.security.items.alerts.description']
+  ] as const
+
   return (
-    <section style={{ position: 'relative', background: 'var(--bg-0)', padding: '80px 0' }}>
-      <SectionFrame />
-      <div
-        style={{
-          position: 'relative',
-          maxWidth: 1280,
-          margin: '0 auto',
-          padding: '0 40px',
-          display: 'grid',
-          gridTemplateColumns: '1.2fr 1fr 0.8fr',
-          gap: 48,
-          alignItems: 'center',
-          zIndex: 5
-        }}
-      >
+    <section id="enterprise" style={{ background: '#151311', color: '#ffffff', padding: '110px 0', scrollMarginTop: 96 }}>
+      <div className="landing-security-stack" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 40px', display: 'grid', gridTemplateColumns: '0.84fr 1.16fr', gap: 52, alignItems: 'center' }}>
         <div>
-          <Eyebrow>{t('landing.security.eyebrow')}</Eyebrow>
-          <h2
-            style={{
-              fontSize: 44,
-              fontWeight: 500,
-              lineHeight: 1.05,
-              letterSpacing: '-0.025em',
-              margin: 0,
-              color: 'var(--text-1)'
-            }}
-          >
+          <Eyebrow dark>{t('landing.security.eyebrow')}</Eyebrow>
+          <h2 style={{ fontSize: 62, lineHeight: 1.02, letterSpacing: 0, fontWeight: 680, margin: '0 0 26px' }}>
             {t('landing.security.titleLine1')}
             <br />
             {t('landing.security.titleLine2')}
           </h2>
+          <p style={{ margin: 0, maxWidth: 500, fontSize: 15, lineHeight: 1.8, color: 'rgba(255,255,255,0.62)' }}>
+            {t('landing.security.description')}
+          </p>
         </div>
-        <p
-          style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--text-3)', margin: 0 }}
+        <div
+          style={{
+            minHeight: 500,
+            borderRadius: 30,
+            backgroundImage:
+              'linear-gradient(90deg, rgba(10,8,6,0.84), rgba(10,8,6,0.46)), url("/landing/case-server-racks.jpg")',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center 44%',
+            padding: 26,
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 14,
+            alignContent: 'end'
+          }}
+          className="landing-security-items"
         >
-          {t('landing.security.description')}
-        </p>
-        <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end' }}>
-          {['SOC 2 TYPE II', 'ISO 27001'].map((b) => (
+          {securityItems.map(([titleKey, descriptionKey], index) => (
             <div
-              key={b}
+              key={titleKey}
               style={{
-                width: 110,
-                height: 110,
-                borderRadius: 999,
-                border: '1px solid var(--line-3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 11,
-                fontWeight: 600,
-                letterSpacing: '0.06em',
-                color: 'var(--text-2)',
-                textAlign: 'center',
-                lineHeight: 1.3
+                minHeight: 142,
+                padding: 18,
+                borderRadius: 18,
+                background: index === 0 ? 'rgba(255,87,34,0.22)' : 'rgba(255,255,255,0.10)',
+                backdropFilter: 'blur(14px)'
               }}
             >
-              {b}
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 9 }}>{t(titleKey)}</div>
+              <div style={{ fontSize: 12.5, lineHeight: 1.65, color: 'rgba(255,255,255,0.66)' }}>{t(descriptionKey)}</div>
             </div>
           ))}
         </div>
@@ -873,174 +613,73 @@ function CaseStudy() {
   const { t } = useTranslation()
   const cards = [
     {
-      gradient: 'linear-gradient(135deg, #1a1f3a, #2a3550 40%, #f97316 90%)',
-      t: t('landing.caseStudy.cards.clarity.title'),
-      sub: t('landing.caseStudy.cards.clarity.sub')
+      image: '/landing/case-server-closeup.jpg',
+      title: t('landing.caseStudy.cards.clarity.metric'),
+      body: t('landing.caseStudy.cards.clarity.title'),
+      route: '/api/v1/keys'
     },
     {
-      gradient: 'linear-gradient(160deg, #0f172a, #1e293b 30%, #f97316 90%)',
-      t: t('landing.caseStudy.cards.performance.title'),
-      sub: t('landing.caseStudy.cards.performance.sub')
+      image: '/landing/case-ops-room.jpg',
+      title: t('landing.caseStudy.cards.performance.metric'),
+      body: t('landing.caseStudy.cards.performance.title'),
+      route: '/api/v1/admin/ops/*'
     },
     {
-      gradient: 'linear-gradient(135deg, #c2780f, #d97757 50%, #fbbf24 100%)',
-      t: t('landing.caseStudy.cards.consistency.title'),
-      sub: t('landing.caseStudy.cards.consistency.sub')
+      image: '/landing/case-datacenter-aisle.jpg',
+      title: t('landing.caseStudy.cards.consistency.metric'),
+      body: t('landing.caseStudy.cards.consistency.title'),
+      route: '/api/v1/payment/*'
     }
   ]
 
   return (
-    <section style={{ position: 'relative', background: 'var(--bg-0)', padding: '120px 0' }}>
-      <SectionFrame />
-      <div
-        style={{ position: 'relative', maxWidth: 1280, margin: '0 auto', padding: '0 40px', zIndex: 5 }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1.4fr',
-            gap: 48,
-            paddingBottom: 80
-          }}
-        >
-          <div>
-            <h2
-              style={{
-                fontSize: 32,
-                fontWeight: 500,
-                lineHeight: 1.2,
-                letterSpacing: '-0.02em',
-                margin: '0 0 28px',
-                color: 'var(--text-1)'
-            }}
-          >
-              {t('landing.caseStudy.titleLine1')}
-              <br />
-              {t('landing.caseStudy.titleLine2')}
-            </h2>
-            <PillBtn primary>{t('common.more')}</PillBtn>
-
-            <div style={{ marginTop: 80 }}>
-              <div
-                style={{
-                  fontSize: 22,
-                  fontWeight: 700,
-                  letterSpacing: '0.02em',
-                  color: ORANGE,
-                  marginBottom: 28
-                }}
-              >
-                NOVAGRID
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  marginBottom: 18
-                }}
-              >
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 999,
-                    background: 'linear-gradient(135deg, #d97757, #6c4434)'
-                  }}
-                />
-                <div>
-                  <div style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text-1)' }}>Daniel Reyes</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
-                    {t('landing.caseStudy.personRole')}
-                  </div>
+    <section id="case-studies" style={{ background: PAPER, padding: '116px 0 104px', scrollMarginTop: 96 }}>
+      <div className="landing-section-container" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 40px' }}>
+        <div className="landing-blueprint-head" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 44, alignItems: 'end', marginBottom: 38 }}>
+          <h2 style={{ fontSize: 58, lineHeight: 1.04, letterSpacing: 0, fontWeight: 680, margin: 0, color: INK }}>
+            {t('landing.caseStudy.titleLine1')}
+            <br />
+            {t('landing.caseStudy.titleLine2')}
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {[
+              ['landing.caseStudy.highlights.gateway', '/v1/messages'],
+              ['landing.caseStudy.highlights.responses', '/v1/responses'],
+              ['landing.caseStudy.highlights.gemini', '/v1beta/models'],
+              ['landing.caseStudy.highlights.ops', '/api/v1/admin/ops']
+            ].map(([labelKey, route]) => (
+              <div key={labelKey} style={{ padding: 14, borderRadius: 16, background: 'rgba(255,255,255,0.70)' }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: INK, marginBottom: 7 }}>{t(labelKey)}</div>
+                <div style={{ fontSize: 10, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {route}
                 </div>
               </div>
-              <p
-                style={{
-                  fontSize: 14,
-                  lineHeight: 1.65,
-                  color: 'var(--text-2)',
-                  margin: 0,
-                  maxWidth: 420
-                }}
-              >
-                {t('landing.caseStudy.quote')}
-              </p>
-            </div>
-          </div>
-
-          <div
-            style={{
-              position: 'relative',
-              minHeight: 460,
-              borderRadius: 12,
-              overflow: 'hidden',
-              background: 'var(--bg-0)'
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                background: `
-                  linear-gradient(135deg, transparent 0%, rgba(255,87,34,0.4) 30%, rgba(255,140,60,0.7) 60%, rgba(255,180,80,0.5) 100%),
-                  repeating-linear-gradient(45deg, rgba(255,87,34,0.2) 0px, rgba(255,87,34,0.2) 80px, rgba(150,40,10,0.4) 80px, rgba(150,40,10,0.4) 160px)
-                `
-              }}
-            />
-
-            <div style={{ position: 'absolute', left: 32, bottom: 32, color: 'var(--text-1)' }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                <span
-                  style={{ fontSize: 64, fontWeight: 500, letterSpacing: '-0.03em', lineHeight: 1 }}
-                >
-                  99.20
-                </span>
-                <span style={{ fontSize: 28, color: 'var(--text-2)' }}>%</span>
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--text-2)', marginTop: 6 }}>
-                {t('landing.caseStudy.reliabilityRate')}
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
-            gap: 24,
-            paddingTop: 56,
-            borderTop: '1px solid var(--line-2)'
-          }}
-        >
-          {cards.map((c, i) => (
-            <div key={i}>
-              <div
-                style={{
-                  height: 200,
-                  borderRadius: 8,
-                  background: c.gradient,
-                  position: 'relative',
-                  overflow: 'hidden',
-                  marginBottom: 18
-                } as CSSProperties}
-              >
-
-              </div>
-              <div
-                style={{
-                  fontSize: 14.5,
-                  fontWeight: 500,
-                  color: 'var(--text-1)',
-                  lineHeight: 1.45,
-                  marginBottom: 8
-                }}
-              >
-                {c.t}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{c.sub}</div>
-            </div>
+        <div className="landing-blueprint-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 18 }}>
+          {cards.map((card, index) => (
+            <article
+              key={card.title}
+              style={{
+                minHeight: 520,
+                borderRadius: 28,
+                overflow: 'hidden',
+                backgroundImage: `linear-gradient(0deg, rgba(10,8,6,0.84), rgba(10,8,6,0.18) 54%, rgba(10,8,6,0.10)), url("${card.image}")`,
+                backgroundSize: 'cover',
+                backgroundPosition: index === 1 ? 'center' : 'center 48%',
+                color: '#ffffff',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'flex-end',
+                padding: 24
+              }}
+            >
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.56)', marginBottom: 12 }}>{card.route}</div>
+              <h3 style={{ fontSize: 28, lineHeight: 1.1, margin: '0 0 12px', fontWeight: 700 }}>{card.title}</h3>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.68, color: 'rgba(255,255,255,0.72)' }}>{card.body}</p>
+            </article>
           ))}
         </div>
       </div>
@@ -1053,164 +692,90 @@ function CtaFooter() {
   const footerGroups = [
     [
       t('landing.footer.product'),
-      [t('landing.footer.routing'), t('landing.footer.analytics'), t('landing.footer.auditLogs'), t('landing.footer.pricing')]
+      [
+        [t('landing.footer.routing'), '#solutions'],
+        [t('landing.footer.analytics'), '/dashboard'],
+        [t('landing.footer.auditLogs'), '/admin/ops'],
+        [t('landing.footer.pricing'), '/models']
+      ]
     ],
     [
       t('landing.footer.platform'),
-      [t('landing.footer.models'), t('landing.footer.playground'), t('landing.footer.enterprise'), t('landing.footer.status')]
+      [
+        [t('landing.footer.models'), '/models'],
+        [t('landing.footer.playground'), '/keys'],
+        [t('landing.footer.enterprise'), '#enterprise'],
+        [t('landing.footer.status'), '/monitor']
+      ]
     ],
     [
       t('landing.footer.resources'),
-      [t('landing.footer.documentation'), t('landing.footer.changelog'), t('landing.footer.guides'), t('landing.footer.helpCenter')]
+      [
+        [t('landing.footer.documentation'), '/docs'],
+        [t('landing.footer.changelog'), '/docs'],
+        [t('landing.footer.guides'), '/docs'],
+        [t('landing.footer.helpCenter'), '/docs']
+      ]
     ],
     [
       t('landing.footer.company'),
-      [t('landing.footer.about'), t('landing.footer.customers'), t('landing.footer.careers'), t('landing.footer.contact')]
+      [
+        [t('landing.footer.about'), '#company'],
+        [t('landing.footer.customers'), '#case-studies'],
+        [t('landing.footer.careers'), 'mailto:hello@xlabapi.com'],
+        [t('landing.footer.contact'), 'mailto:hello@xlabapi.com']
+      ]
     ]
   ] as const
 
   return (
-    <section style={{ position: 'relative', background: 'var(--bg-0)', padding: '80px 0 0' }}>
-      <SectionFrame showBottom={false} />
-      <div
-        style={{ position: 'relative', maxWidth: 1280, margin: '0 auto', padding: '0 40px', zIndex: 5 }}
-      >
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1.1fr 1fr 0.6fr',
-            gap: 48,
-            alignItems: 'flex-start',
-            paddingBottom: 80
-          }}
-        >
+    <section id="company" style={{ background: '#151311', color: '#ffffff', padding: '92px 0 0', scrollMarginTop: 96 }}>
+      <div className="landing-section-container" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 40px' }}>
+        <div className="landing-footer-advanced" style={{ display: 'grid', gridTemplateColumns: '1fr 0.78fr', gap: 60, alignItems: 'start', paddingBottom: 78 }}>
           <div>
-            <Eyebrow>{t('landing.cta.eyebrow')}</Eyebrow>
-            <h2
-              style={{
-                fontSize: 40,
-                fontWeight: 500,
-                lineHeight: 1.1,
-                letterSpacing: '-0.025em',
-                margin: 0,
-                color: 'var(--text-1)'
-            }}
-          >
+            <Eyebrow dark>{t('landing.cta.eyebrow')}</Eyebrow>
+            <h2 style={{ fontSize: 60, lineHeight: 1.02, letterSpacing: 0, fontWeight: 680, margin: '0 0 24px' }}>
               {t('landing.cta.titleLine1')}{' '}
-              <em style={{ fontStyle: 'italic', fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif' }}>{t('landing.cta.titleEmphasis1')}</em>
+              <em style={{ fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif', fontStyle: 'italic', fontWeight: 400 }}>
+                {t('landing.cta.titleEmphasis1')}
+              </em>
               <br />
-              <em style={{ fontStyle: 'italic', fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif' }}>{t('landing.cta.titleEmphasis2')}</em>{' '}
-              {t('landing.cta.titleLine2')}{' '}
-              <em style={{ fontStyle: 'italic', fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif' }}>{t('landing.cta.titleEmphasis3')}</em>?
+              {t('landing.cta.titleEmphasis2')} {t('landing.cta.titleLine2')}{' '}
+              <em style={{ fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif', fontStyle: 'italic', fontWeight: 400 }}>
+                {t('landing.cta.titleEmphasis3')}
+              </em>
+              ?
             </h2>
+            <p style={{ maxWidth: 580, margin: 0, fontSize: 15, lineHeight: 1.8, color: 'rgba(255,255,255,0.62)' }}>
+              {t('landing.cta.description')}
+            </p>
           </div>
-          <p
-            style={{
-              fontSize: 14,
-              lineHeight: 1.65,
-              color: 'var(--text-3)',
-              margin: 0,
-              paddingTop: 32
-            }}
-          >
-            {t('landing.cta.description')}
-          </p>
-          <div style={{ paddingTop: 32, display: 'flex', justifyContent: 'flex-end' }}>
-            <PillBtn primary>{t('landing.footer.contact')} →</PillBtn>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 46 }}>
+            <a href="mailto:hello@xlabapi.com" style={{ textDecoration: 'none' }}>
+              <PillBtn primary>{t('landing.footer.contact')} →</PillBtn>
+            </a>
           </div>
         </div>
 
-        <div
-          style={{
-            paddingTop: 48,
-            paddingBottom: 32,
-            borderTop: '1px solid var(--line-2)',
-            display: 'grid',
-            gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr',
-            gap: 32
-          }}
-        >
+        <div className="landing-footer-links" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr', gap: 32, padding: '32px 0' }}>
           <div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                marginBottom: 16,
-                color: 'var(--text-1)',
-                fontSize: 14,
-                fontWeight: 600
-              }}
-            >
-              <div style={{ width: 24, height: 24, position: 'relative' }}>
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    border: '1.5px solid var(--text-1)',
-                    transform: 'rotate(45deg)',
-                    borderRadius: 2
-                  }}
-                />
-                <div
-                  style={{
-                    position: 'absolute',
-                    inset: 5,
-                    border: '1.5px solid var(--text-1)',
-                    borderRadius: 2
-                  }}
-                />
-              </div>
-              XLABAPI
-            </div>
-            <p
-              style={{
-                fontSize: 12.5,
-                color: 'var(--text-3)',
-                lineHeight: 1.65,
-                maxWidth: 280,
-                margin: 0
-              }}
-            >
+            <LogoMark dark />
+            <p style={{ maxWidth: 280, fontSize: 12.5, lineHeight: 1.7, color: 'rgba(255,255,255,0.50)', margin: '18px 0 0' }}>
               {t('landing.footer.description')}
             </p>
           </div>
           {footerGroups.map(([title, items]) => (
             <div key={title}>
-              <div
-                style={{ fontSize: 12, color: 'var(--text-1)', fontWeight: 600, marginBottom: 14 }}
-              >
-                {title}
-              </div>
-              {items.map((it) => (
-                <a
-                  key={it}
-                  href="#"
-                  style={{
-                    display: 'block',
-                    fontSize: 12.5,
-                    color: 'var(--text-3)',
-                    textDecoration: 'none',
-                    padding: '5px 0'
-                  }}
-                >
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.84)', fontWeight: 700, marginBottom: 14 }}>{title}</div>
+              {items.map(([it, href]) => (
+                <a key={it} href={href} style={{ display: 'block', fontSize: 12.5, color: 'rgba(255,255,255,0.46)', textDecoration: 'none', padding: '5px 0' }}>
                   {it}
                 </a>
               ))}
             </div>
           ))}
         </div>
-        <div
-          style={{
-            paddingTop: 24,
-            paddingBottom: 24,
-            borderTop: '1px solid var(--line-1)',
-            display: 'flex',
-            justifyContent: 'space-between',
-            fontSize: 11.5,
-            color: 'var(--text-3)'
-          }}
-        >
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, padding: '24px 0', fontSize: 11.5, color: 'rgba(255,255,255,0.38)' }}>
           <span>{t('landing.footer.copyright')}</span>
           <span>{t('landing.footer.legal')}</span>
         </div>
@@ -1222,16 +787,16 @@ function CtaFooter() {
 export default function Landing() {
   return (
     <div
+      className="landing-page landing-page-advanced"
       style={{
-        background: 'var(--bg-0)',
-        color: 'var(--text-1)',
+        background: PAPER,
+        color: INK,
         minHeight: '100vh',
         fontFamily: 'Inter, "PingFang SC", system-ui, sans-serif'
       }}
     >
       <NavD />
       <HeroD />
-      <BackedRow />
       <OperationsHub />
       <SecurityBand />
       <CaseStudy />

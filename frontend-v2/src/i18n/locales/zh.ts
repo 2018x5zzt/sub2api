@@ -573,6 +573,7 @@ export default {
 
   landing: {
     nav: {
+      primary: '主导航',
       caseStudies: '案例',
       solutions: '解决方案',
       enterprise: '企业版',
@@ -580,44 +581,67 @@ export default {
       signIn: '登录'
     },
     hero: {
-      badge: '最新',
-      release: 'Xlabapi v2.4 已支持 Claude Sonnet 4.5 与 GPT-5',
+      badge: '更新',
+      release: '统一接入 Claude、GPT、Gemini 等主流模型',
       titleLine1: '企业级 AI，',
       titleLine2Prefix: '构建在',
       titleEmphasis: '可靠',
       titleLine2Suffix: '基础设施之上',
       description:
-        '把 200+ 主流大模型整合为一个统一接口。Xlabapi 为生产环境提供稳定调度、合规审计和成本控制。',
-      primaryCta: '免费开始 ->',
+        '统一接入 Claude、OpenAI、Gemini 与 Antigravity，提供 API Key、计费、调度、用量统计和运维监控。',
+      primaryCta: '免费开始 →',
       secondaryCta: '使用指南',
-      summaryLine1: '告别碎片化的多家厂商集成。',
-      summaryStrong: '在统一、可生产化的 API 层上运行你的 AI 业务。',
-      summaryLine2: '统一管理路由、计费、密钥和可观测性。'
+      stats: {
+        accounts: '上游账号\nOAuth 与 API Key',
+        billing: 'Token 级计费\n用量追踪',
+        limits: '请求与 Token\n速率限制',
+        observability: '运维看板\n日志与告警'
+      },
+      statDetails: {
+        accounts: '支持 Claude、OpenAI、Gemini、Antigravity 多类上游凭据。',
+        billing: '按输入、输出、缓存与图片用量归集到用户和 Key。',
+        limits: '在 Key、分组与上游账号之间设置 RPM/TPM 保护。',
+        observability: '管理员可以追踪并发、错误、重试、系统日志和告警。'
+      }
+    },
+    demo: {
+      gatewayTitle: 'Sub2API 网关矩阵',
+      fromRoutes: '来自路由扫描',
+      controlTitle: '控制台接口',
+      controls: {
+        keys: 'API Key',
+        usage: '用量看板',
+        payment: '支付订阅',
+        admin: '管理后台'
+      }
     },
     backed: {
-      by: '已获得',
-      teams: '200+ 企业团队信任'
+      by: '兼容生态',
+      teams: '统一接入主流模型与平台'
     },
     operations: {
       eyebrow: '运营中枢',
       titleLine1: '更聪明地运营，',
       titleLine2: '更快速地扩展',
-      consoleTitle: 'AI 路由控制台',
-      consoleSubtitle: '跨 200+ 上游模型实时做出调度决策',
-      systemActive: '系统运行中',
+      consoleTitle: '调度与运维控制台',
+      consoleSubtitle: '分组、账号、订阅与运维接口共同支撑生产调度',
+      systemActive: '能力启用',
       deploy: '部署',
       strategy: '策略',
-      costOptimized: '成本优先',
+      costOptimized: '优先级 + 倍率',
       tier: '档位',
-      production: '生产环境',
-      fallbackChain: '故障切换链路',
-      customRoutingRules: '自定义路由规则？',
-      routingIntelligence: '路由智能分析',
-      insights: '可执行的性能优化洞察',
-      healthScore: '系统健康评分',
-      improvement: '本周期提升 3.7%',
-      createRouting: '创建路由',
-      syncHub: '同步中心',
+      production: '分组调度',
+      fallbackChain: '分组兜底链路',
+      customRoutingRules: '真实调度字段',
+      routingIntelligence: '可观测能力',
+      healthScore: '覆盖模块',
+      healthScoreValue: 'Usage',
+      apiTitle: '管理接口',
+      apiRows: {
+        dashboard: '统计看板',
+        ops: '运维监控',
+        usage: '用量记录'
+      },
       features: {
         routing: {
           title: '智能路由',
@@ -633,50 +657,120 @@ export default {
         }
       },
       metrics: {
-        accuracy: '系统准确性',
-        completeness: '完整性',
-        latency: '延迟'
+        usageDashboard: '用户用量看板',
+        opsMonitor: '管理员运维监控',
+        retryTrace: '错误重试与追踪',
+        available: '已接入'
       },
       stats: {
-        workflows: '自动化工作流\n覆盖多个团队',
-        tokens: '每月处理 Token',
-        models: '已连接模型与\n平台'
+        gatewayFamilies: '兼容网关族\nClaude/OpenAI/Gemini/Antigravity',
+        dashboardFamilies: '用量看板族\n统计/趋势/模型',
+        adminModules: '管理员模块\n账号/分组/支付/备份/运维'
       },
       capabilities: {
         title: '能力',
-        smartRouting: '智能路由',
-        calculationEngine: 'AI 计算引擎',
-        predictiveFailover: '预测式故障切换',
-        integration: '无缝集成',
-        analytics: '实时分析',
-        deployment: '快速部署'
+        smartRouting: '多账号调度',
+        calculationEngine: 'Token 级计费',
+        predictiveFailover: '分组兜底',
+        integration: '支付与订阅',
+        analytics: '用量统计',
+        deployment: '备份与更新'
+      },
+      modules: {
+        title: '核心模块',
+        accounts: {
+          title: '账号池',
+          description: '维护 Claude、OpenAI、Gemini 与 Antigravity 上游账号。'
+        },
+        groups: {
+          title: '分组策略',
+          description: '配置模型倍率、RPM/TPM、兜底分组和可用渠道。'
+        },
+        commerce: {
+          title: '商业化',
+          description: '内置支付计划、订单、兑换码、订阅和余额流转。'
+        },
+        maintenance: {
+          title: '维护工具',
+          description: '提供 S3 备份恢复、系统更新、日志清理和健康检查。'
+        }
+      },
+      demo: {
+        chain: {
+          group: '用户分组',
+          account: '账号池',
+          fallback: '兜底分组'
+        },
+        rules: {
+          priority: 'priority / concurrency -> 账号选择',
+          rpm: 'rpm_limit / tpm        -> 限流保护',
+          fallback: 'fallback_group_id   -> 余额兜底'
+        }
       }
     },
     security: {
       eyebrow: '安全',
       titleLine1: '企业级',
       titleLine2: '全链路保护',
-      description: '以企业级安全能力为核心构建，从第一天起保护你的数据、请求和运营。'
+      description: '基于现有接口提供 TOTP、密钥管理、备份恢复、运行日志和告警配置，保护你的部署与运营。',
+      badges: {
+        totp: 'TOTP\n二次验证',
+        backup: 'S3\n备份恢复',
+        logs: '系统日志\n告警配置'
+      },
+      items: {
+        identity: {
+          title: '身份与密钥',
+          description: '支持 TOTP、JWT 会话、API Key 绑定分组和用户可用范围。'
+        },
+        backup: {
+          title: '备份恢复',
+          description: '管理员可配置 S3、创建备份、下载备份并执行恢复。'
+        },
+        audit: {
+          title: '运行日志',
+          description: '系统日志、请求错误、上游错误和重试记录可集中查看。'
+        },
+        alerts: {
+          title: '告警规则',
+          description: '可配置指标阈值、告警事件、静默窗口和邮件通知。'
+        }
+      }
     },
     caseStudy: {
       titleLine1: '团队如何构建',
       titleLine2: '可规模化的可靠 AI 基础设施',
-      personRole: 'NovaGrid 创始人',
-      reliabilityRate: 'API 可靠性',
-      quote:
-        '“Xlabapi 让我们在多模型间获得了统一的可靠性视角，跨厂商的故障切换从手动操作变成自动决策，我们终于可以在生产环境里放心扩张。”',
+      reliabilityRate: '功能覆盖',
+      production: '可用产品模块',
+      window7d: '接口路径',
+      panel: {
+        keys: '密钥管理',
+        usage: '用量查询',
+        ops: '运维监控',
+        value: 'API',
+        unit: 'ready'
+      },
+      highlights: {
+        gateway: 'Claude 网关',
+        responses: 'Responses 兼容',
+        gemini: 'Gemini 原生',
+        ops: '运维接口'
+      },
       cards: {
         clarity: {
-          title: '为复杂 AI 环境提供清晰、一致、可信赖的运营体验。',
-          sub: '可靠编排的基础'
+          title: '为用户生成、更新、删除 API Key，并绑定可用分组。',
+          sub: '密钥与分组能力',
+          metric: 'API Key 管理'
         },
         performance: {
-          title: '从日常运营到高峰流量，Xlabapi 都能保持稳定表现。',
-          sub: '让 AI 系统保持可控'
+          title: '管理员可查看实时流量、并发、账号可用性和错误重试。',
+          sub: '运维监控能力',
+          metric: 'Ops 控制台'
         },
         consistency: {
-          title: '以精确、快速、不中断的性能支撑高并发系统。',
-          sub: '为一致性而设计'
+          title: '内置支付、订阅、兑换码、备份和系统更新管理。',
+          sub: '商业化与维护能力',
+          metric: '支付订阅'
         }
       }
     },
@@ -687,10 +781,10 @@ export default {
       titleEmphasis2: '模型',
       titleLine2: '变成',
       titleEmphasis3: '可靠 API',
-      description: 'Xlabapi 为企业级 AI 系统提供路由、校验和规模化工作流执行，同时保持高可靠性。'
+      description: '从用户 API Key、上游账号池、分组计费到运维监控，Sub2API 把可部署的功能直接组织成生产网关。'
     },
     footer: {
-      description: '企业级 AI 基础设施。一个统一 API，接入所有关键模型。',
+      description: '企业级 AI 基础设施。一个统一 API，接入 Claude、OpenAI、Gemini 与 Antigravity。',
       product: '产品',
       routing: '路由',
       analytics: '分析',
