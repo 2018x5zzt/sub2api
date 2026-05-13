@@ -5,8 +5,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Keep legacy class names as aliases while moving the site to a Claude-light palette.
+        // Spec v2 附录 B — new semantic namespaces are the single source of truth;
+        // legacy `bg.0..4`, `orange.*` etc. are preserved during Phase 1-4 migration
+        // and will be removed in Phase 4 once call sites are migrated.
         bg: {
+          // --- spec v2 semantic surfaces ---
+          canvas: '#FAF9F5',
+          surface: '#FFFFFF',
+          subtle: '#F0EEE6',
+          // --- legacy aliases (kept for in-flight call sites) ---
           0: '#FAF9F5',
           1: '#FFFFFF',
           2: '#F6F2EA',
@@ -26,10 +33,19 @@ const config: Config = {
           3: '#8A8780',
           4: '#B7B3A8'
         },
-        orange: {
-          DEFAULT: '#C0360B',
-          display: '#FF5722',
+        accent: {
+          DEFAULT: '#FF5722',
           hover: '#E84713',
+          ink: '#C0360B',
+          soft: '#FFE5DD',
+          line: '#FFB7A0'
+        },
+        orange: {
+          // Phase-1 transition alias: literals revert to brand orange (button/highlight),
+          // not text-ink. `accent.*` is the canonical namespace going forward.
+          DEFAULT: '#FF5722',
+          hover: '#E84713',
+          ink: '#C0360B',
           soft: '#FFE5DD',
           softer: '#FFF2EE',
           line: '#FFB7A0'

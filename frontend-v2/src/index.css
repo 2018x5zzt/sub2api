@@ -2,29 +2,74 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==================== Source Serif 4 — self-hosted variable webfont ==================== */
+/* Adobe Source Serif 4 v4.005R, SIL OFL 1.1 (see /fonts/LICENSE.md).                       */
+/* Variable font: single file covers weight 200..900 + optical size — used for display      */
+/* type and em-serif emphasis per Claude-light spec v2 §2.                                  */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src:
+    url('/fonts/SourceSerif4Variable-Roman.otf.woff2') format('woff2-variations'),
+    url('/fonts/SourceSerif4Variable-Roman.otf.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 200 900;
+  font-display: swap;
+  src:
+    url('/fonts/SourceSerif4Variable-Italic.otf.woff2') format('woff2-variations'),
+    url('/fonts/SourceSerif4Variable-Italic.otf.woff2') format('woff2');
+}
+
 /* ==================== Xlabapi Claude-light design tokens ==================== */
+/* Spec v2 §1 + 附录 A semantic slots — single source of truth.                  */
+/* Legacy --bg-*, --text-*, --orange-* below are kept as alias references to    */
+/* these new slots to avoid double-source drift during Phase 1→4 migration.     */
 :root {
-  --bg-0: #faf9f5;
-  --bg-1: #ffffff;
+  /* --- spec v2 semantic surfaces --- */
+  --bg-canvas: #faf9f5;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f0eee6;
+
+  /* --- spec v2 semantic ink --- */
+  --ink-1: #1f1e1d;
+  --ink-2: #3d3d3a;
+  --ink-3: #8a8780;
+  --ink-4: #b7b3a8;
+
+  /* --- spec v2 accent ramp --- */
+  --accent: #ff5722;
+  --accent-hover: #e84713;
+  --accent-ink: #c0360b;
+  --accent-soft: #ffe5dd;
+  --accent-line: #ffb7a0;
+
+  /* --- legacy aliases (alias to new slots; do not re-introduce literals) --- */
+  --bg-0: var(--bg-canvas);
+  --bg-1: var(--bg-surface);
   --bg-2: #f6f2ea;
-  --bg-3: #f0eee6;
-  --bg-4: #ffffff;
+  --bg-3: var(--bg-subtle);
+  --bg-4: var(--bg-surface);
 
   --line-1: #eceae0;
   --line-2: #e8e6dc;
   --line-3: #d8d4c6;
   --line-4: #c4bfae;
 
-  --text-1: #1f1e1d;
-  --text-2: #3d3d3a;
-  --text-3: #8a8780;
-  --text-4: #b7b3a8;
+  --text-1: var(--ink-1);
+  --text-2: var(--ink-2);
+  --text-3: var(--ink-3);
+  --text-4: var(--ink-4);
 
-  --orange: #ff5722;
-  --orange-hover: #e84713;
-  --orange-ink: #c0360b;
-  --orange-soft: #ffe5dd;
-  --orange-line: #ffb7a0;
+  --orange: var(--accent);
+  --orange-hover: var(--accent-hover);
+  --orange-ink: var(--accent-ink);
+  --orange-soft: var(--accent-soft);
+  --orange-line: var(--accent-line);
 
   --signal-ok: #2f8f5e;
   --signal-warn: #a8761a;
