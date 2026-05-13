@@ -267,41 +267,6 @@ function ModelLaunchpad() {
           </div>
         </div>
 
-        <div
-          style={{
-            borderRadius: 22,
-            background: INK,
-            color: '#ffffff',
-            padding: 18,
-            marginBottom: 14,
-            boxShadow: '0 18px 52px rgba(31,23,12,0.16)'
-          }}
-        >
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.58)', marginBottom: 12 }}>快速测试</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
-            <div
-              style={{
-                minHeight: 46,
-                borderRadius: 15,
-                background: 'rgba(255,255,255,0.10)',
-                display: 'flex',
-                alignItems: 'center',
-                padding: '0 14px',
-                fontSize: 13,
-                color: 'rgba(255,255,255,0.82)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              输入请求后自动匹配模型、账号池和计费规则
-            </div>
-            <span style={{ height: 46, padding: '0 16px', borderRadius: 15, background: ORANGE, display: 'inline-flex', alignItems: 'center', fontSize: 13, fontWeight: 700 }}>
-              发送
-            </span>
-          </div>
-        </div>
-
         <div className="landing-quick-start-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
           {quickStartRows.map(([label, value], index) => (
             <div
