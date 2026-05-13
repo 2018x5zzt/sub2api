@@ -12,17 +12,23 @@ const PAPER = '#f4f0e7'
 const UI_FONT = '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Inter", system-ui, sans-serif'
 
 const heroEndpointRows = [
-  { name: 'Claude Messages', endpoint: '/v1/messages', color: ORANGE },
-  { name: 'OpenAI Responses', endpoint: '/v1/responses', color: GREEN },
-  { name: 'Gemini Native', endpoint: '/v1beta/models/*', color: SKY },
-  { name: 'Antigravity', endpoint: '/antigravity/v1', color: VIOLET }
+  { name: 'Claude', endpoint: '消息模型', color: ORANGE },
+  { name: 'OpenAI', endpoint: '响应模型', color: GREEN },
+  { name: 'Gemini', endpoint: '原生模型', color: SKY },
+  { name: 'Antigravity', endpoint: '代码智能体', color: VIOLET }
 ] as const
 
-const heroControlRows = [
-  { labelKey: 'landing.demo.controls.keys', route: '/api/v1/keys', color: ORANGE },
-  { labelKey: 'landing.demo.controls.usage', route: '/api/v1/usage/dashboard/*', color: GREEN },
-  { labelKey: 'landing.demo.controls.payment', route: '/api/v1/payment/*', color: SKY },
-  { labelKey: 'landing.demo.controls.admin', route: '/api/v1/admin/*', color: VIOLET }
+const modelLaunchpadRows = [
+  ['Claude', '高上下文推理', '稳定接入', ORANGE],
+  ['OpenAI', '响应式接口', '快速切换', GREEN],
+  ['Gemini', '原生模型族', '多模态支持', SKY],
+  ['Antigravity', '代码智能体', '研发场景', VIOLET]
+] as const
+
+const quickStartRows = [
+  ['密钥接入', 'API Key'],
+  ['用量追踪', '用量'],
+  ['余额计费', '计费']
 ] as const
 
 const heroSummaryStats = [
@@ -39,11 +45,17 @@ const operationsModules = [
   ['landing.operations.modules.maintenance.title', 'landing.operations.modules.maintenance.description', '/api/v1/admin/backups', VIOLET]
 ] as const
 
-const topologyRows = [
-  ['landing.operations.demo.chain.group', 'priority / rpm / tpm'],
-  ['landing.operations.demo.chain.account', 'concurrency / schedulable'],
-  ['landing.operations.demo.chain.fallback', 'fallback_group_id'],
-  ['landing.operations.apiRows.ops', '/api/v1/admin/ops/*']
+const enterpriseStackRows = [
+  ['订阅转 API', '把上游订阅、账号池和用户 Key 统一成可分发的 API 能力。', '订阅 / API', ORANGE],
+  ['统一身份', '支持 OIDC、GitHub、JWT 与管理员后台权限控制。', '登录 / 权限', GREEN],
+  ['分组调度', '按模型倍率、RPM/TPM、账号状态和兜底分组控制请求。', '策略 / 限流', SKY],
+  ['运维治理', '用量、错误、备份、日志和告警集中在一个运营面板。', '监控 / 备份', VIOLET]
+] as const
+
+const operationsSignalRows = [
+  ['模型接入', 'Claude / OpenAI / Gemini'],
+  ['商业化', '套餐 / 订单 / 兑换码'],
+  ['管理后台', '账号 / 分组 / 运维']
 ] as const
 
 function LogoMark({ dark = false }: { dark?: boolean }) {
@@ -215,78 +227,136 @@ function NavD() {
   )
 }
 
-function EndpointDeck() {
+function ModelLaunchpad() {
   const { t } = useTranslation()
 
   return (
     <div
-      className="landing-endpoint-deck"
+      className="landing-model-launchpad"
       style={{
-        borderRadius: 26,
-        background: 'rgba(18,15,13,0.92)',
-        boxShadow: '0 42px 110px rgba(20,10,0,0.38)',
-        color: '#ffffff',
+        position: 'relative',
+        width: '100%',
+        borderRadius: 30,
+        padding: 22,
         overflow: 'hidden',
+        background: 'rgba(255,255,255,0.88)',
+        border: '1px solid rgba(31,23,12,0.10)',
+        boxShadow: '0 28px 90px rgba(31,22,12,0.12)',
         fontFamily: UI_FONT
       }}
     >
-      <div style={{ padding: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20 }}>
-        <div>
-          <div style={{ fontSize: 24, fontWeight: 700 }}>{t('landing.demo.gatewayTitle')}</div>
-          <div style={{ marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.68)' }}>{t('landing.demo.fromRoutes')}</div>
-        </div>
-        <div style={{ padding: '7px 11px', borderRadius: 999, background: 'rgba(34,197,94,0.15)', color: '#86efac', fontSize: 12 }}>
-          {t('landing.operations.systemActive')}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.82fr' }} className="landing-deck-body">
-        <div style={{ padding: '8px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {heroEndpointRows.map((row) => (
-            <div key={row.name}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12, color: 'rgba(255,255,255,0.72)', marginBottom: 8 }}>
-                <span>{row.name}</span>
-                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' }}>{row.endpoint}</span>
-              </div>
-              <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.10)', overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: '100%', borderRadius: 999, background: row.color }} />
-              </div>
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: 'linear-gradient(rgba(31,23,12,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(31,23,12,0.035) 1px, transparent 1px)',
+          backgroundSize: '34px 34px',
+          pointerEvents: 'none'
+        }}
+      />
+      <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'flex-start', marginBottom: 22 }}>
+          <div style={{ maxWidth: 420 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 8 }}>模型启动台</div>
+            <div style={{ fontSize: 30, lineHeight: 1.08, fontWeight: 700, color: INK }}>
+              一个入口，调度所有主流模型
             </div>
-          ))}
+          </div>
+          <div style={{ padding: '8px 11px', borderRadius: 999, background: INK, color: '#ffffff', fontSize: 12, whiteSpace: 'nowrap' }}>
+            API
+          </div>
         </div>
 
         <div
           style={{
-            padding: 20,
-            background: 'rgba(255,255,255,0.06)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10
+            borderRadius: 22,
+            background: INK,
+            color: '#ffffff',
+            padding: 18,
+            marginBottom: 14,
+            boxShadow: '0 18px 52px rgba(31,23,12,0.16)'
           }}
         >
-          <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.66)', marginBottom: 2 }}>
-            {t('landing.demo.controlTitle')}
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.58)', marginBottom: 12 }}>快速测试</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
+            <div
+              style={{
+                minHeight: 46,
+                borderRadius: 15,
+                background: 'rgba(255,255,255,0.10)',
+                display: 'flex',
+                alignItems: 'center',
+                padding: '0 14px',
+                fontSize: 13,
+                color: 'rgba(255,255,255,0.82)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              输入请求后自动匹配模型、账号池和计费规则
+            </div>
+            <span style={{ height: 46, padding: '0 16px', borderRadius: 15, background: ORANGE, display: 'inline-flex', alignItems: 'center', fontSize: 13, fontWeight: 700 }}>
+              发送
+            </span>
           </div>
-          {heroControlRows.map((row) => (
-            <div key={row.labelKey} style={{ display: 'grid', gridTemplateColumns: '16px 1fr', gap: 10, alignItems: 'center' }}>
-              <span style={{ width: 8, height: 8, borderRadius: 999, background: row.color }} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600 }}>{t(row.labelKey)}</div>
-                <div
-                  style={{
-                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-                    fontSize: 10,
-                    color: 'rgba(255,255,255,0.62)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {row.route}
-                </div>
+        </div>
+
+        <div className="landing-quick-start-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+          {quickStartRows.map(([label, value], index) => (
+            <div
+              key={label}
+              style={{
+                minHeight: 94,
+                borderRadius: 18,
+                background: 'rgba(255,255,255,0.74)',
+                border: '1px solid rgba(31,23,12,0.06)',
+                padding: 14,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between'
+              }}
+            >
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: [ORANGE, GREEN, SKY][index] }} />
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>{value}</div>
+                <div style={{ marginTop: 4, fontSize: 11.5, color: 'var(--text-3)' }}>{label}</div>
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="landing-model-board" style={{ display: 'grid', gridTemplateColumns: '1fr 0.72fr', gap: 12 }}>
+          <div style={{ borderRadius: 22, background: 'rgba(255,255,255,0.78)', border: '1px solid rgba(31,23,12,0.06)', padding: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>模型能力</div>
+            <div style={{ fontSize: 11, color: GREEN, fontWeight: 700 }}>能力启用</div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {modelLaunchpadRows.map(([name, summary, detail, color]) => (
+              <div key={name} className="landing-route-row" style={{ display: 'grid', gridTemplateColumns: '14px 1fr auto', gap: 10, alignItems: 'center' }}>
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: color as string }} />
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 12.5, color: 'var(--text-2)' }}>{name}</span>
+                  <span style={{ display: 'block', marginTop: 2, fontSize: 10.5, color: 'var(--text-3)' }}>{summary}</span>
+                </span>
+                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 10.5, color: 'var(--text-3)' }}>
+                  {detail}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+          <div style={{ borderRadius: 22, background: 'rgba(255,87,34,0.10)', border: '1px solid rgba(255,87,34,0.18)', padding: 18, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>可接入模型</div>
+              <div style={{ fontSize: 38, lineHeight: 1, fontWeight: 700, color: INK }}>100+</div>
+            </div>
+            <div style={{ marginTop: 24, fontSize: 12.5, lineHeight: 1.55, color: 'var(--text-2)' }}>
+              按团队策略统一分发，减少多平台密钥和账号管理成本。
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -390,7 +460,7 @@ function HeroD() {
         </div>
 
         <div className="landing-hero-stage" style={{ minHeight: 620, display: 'flex', alignItems: 'center' }}>
-          <EndpointDeck />
+          <ModelLaunchpad />
         </div>
       </div>
 
@@ -460,60 +530,60 @@ function OperationsHub() {
           </p>
         </div>
 
-        <div className="landing-atlas-grid" style={{ display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: 18, alignItems: 'stretch' }}>
+        <div className="landing-atlas-grid" style={{ display: 'grid', gridTemplateColumns: '0.98fr 1.02fr', gap: 18, alignItems: 'stretch' }}>
           <div
-            className="landing-ops-console"
+            className="landing-enterprise-stack"
             style={{
               minHeight: 640,
-              borderRadius: 28,
+              borderRadius: 30,
               background: INK,
               color: '#ffffff',
+              border: '1px solid rgba(31,23,12,0.08)',
               padding: 28,
-              display: 'grid',
-              gridTemplateRows: 'auto 1fr auto',
-              gap: 26,
-              boxShadow: '0 34px 90px rgba(31,22,12,0.22)',
+              boxShadow: '0 26px 80px rgba(31,22,12,0.10)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              gap: 28,
               fontFamily: UI_FONT
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontSize: 28, fontWeight: 700 }}>{t('landing.operations.consoleTitle')}</div>
-                <div style={{ marginTop: 8, fontSize: 12.5, color: 'rgba(255,255,255,0.66)' }}>{t('landing.operations.apiTitle')}</div>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, alignItems: 'flex-start', marginBottom: 26 }}>
+                <div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.58)', marginBottom: 10 }}>企业级中转</div>
+                  <div style={{ fontSize: 30, lineHeight: 1.08, color: '#ffffff', fontWeight: 700 }}>从订阅、账号到 API 分发</div>
+                </div>
+                <span style={{ padding: '8px 12px', borderRadius: 999, background: 'rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.82)', fontSize: 12 }}>
+                  Dragon style
+                </span>
               </div>
-              <span style={{ padding: '7px 11px', borderRadius: 999, background: 'rgba(255,255,255,0.10)', fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>
-                {t('landing.operations.deploy')}
-              </span>
-            </div>
 
-            <div className="landing-topology-grid" style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr', gap: 18, alignItems: 'stretch' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {topologyRows.map(([labelKey, route], index) => (
+                {enterpriseStackRows.map(([title, detail, token, color], index) => (
                   <div
-                    key={labelKey}
+                    key={title}
+                    className="landing-ops-flow-row"
                     style={{
+                      display: 'grid',
+                      gridTemplateColumns: '38px 1fr auto',
+                      gap: 14,
+                      alignItems: 'center',
                       padding: 16,
-                      borderRadius: 16,
-                      background: index === 0 ? 'rgba(255,87,34,0.18)' : 'rgba(255,255,255,0.075)'
+                      borderRadius: 20,
+                      background: index === 0 ? 'rgba(255,87,34,0.18)' : 'rgba(255,255,255,0.075)',
+                      border: '1px solid rgba(255,255,255,0.08)'
                     }}
                   >
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{t(labelKey)}</div>
-                    <div style={{ marginTop: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 10.5, color: 'rgba(255,255,255,0.64)' }}>
-                      {route}
+                    <div style={{ width: 38, height: 38, borderRadius: 14, background: color as string, color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700 }}>
+                      0{index + 1}
                     </div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ borderRadius: 20, background: 'rgba(255,255,255,0.06)', padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                {heroEndpointRows.map((row, index) => (
-                  <div key={row.name}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 14, fontSize: 12, color: 'rgba(255,255,255,0.72)', marginBottom: 8 }}>
-                      <span>{row.name}</span>
-                      <span>{index === 0 ? t('landing.operations.metrics.available') : row.endpoint}</span>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: '#ffffff', marginBottom: 5 }}>{title}</div>
+                      <div style={{ fontSize: 12.5, lineHeight: 1.55, color: 'rgba(255,255,255,0.62)' }}>{detail}</div>
                     </div>
-                    <div style={{ height: 10, borderRadius: 999, background: 'rgba(255,255,255,0.10)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${100 - index * 13}%`, borderRadius: 999, background: row.color }} />
+                    <div style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 10.5, color: 'rgba(255,255,255,0.50)', whiteSpace: 'nowrap' }}>
+                      {token}
                     </div>
                   </div>
                 ))}
@@ -521,15 +591,12 @@ function OperationsHub() {
             </div>
 
             <div className="landing-console-strip" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-              {[
-                ['landing.operations.metrics.usageDashboard', '/api/v1/usage/dashboard/*'],
-                ['landing.operations.metrics.opsMonitor', '/api/v1/admin/ops/*'],
-                ['landing.operations.metrics.retryTrace', '/api/v1/admin/ops/errors']
-              ].map(([labelKey, route]) => (
-                <div key={labelKey} style={{ padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.075)' }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>{t(labelKey)}</div>
-                  <div style={{ marginTop: 8, fontSize: 10, color: 'rgba(255,255,255,0.62)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {route}
+              {operationsSignalRows.map(([label, value], index) => (
+                <div key={label} style={{ padding: 14, borderRadius: 16, background: 'rgba(255,255,255,0.075)', color: '#ffffff', minHeight: 96 }}>
+                  <span style={{ display: 'block', width: 8, height: 8, borderRadius: 999, background: [ORANGE, GREEN, SKY][index], marginBottom: 12 }} />
+                  <div style={{ fontSize: 12.5, fontWeight: 700 }}>{label}</div>
+                  <div style={{ marginTop: 8, fontSize: 10.5, color: 'rgba(255,255,255,0.58)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {value}
                   </div>
                 </div>
               ))}
@@ -544,9 +611,10 @@ function OperationsHub() {
                   borderRadius: 24,
                   minHeight: 300,
                   padding: 22,
-                  background: index === 3 ? 'linear-gradient(145deg, #271915, #11100f)' : 'rgba(255,255,255,0.70)',
+                  background: index === 3 ? INK : 'rgba(255,255,255,0.72)',
                   color: index === 3 ? '#ffffff' : INK,
                   boxShadow: '0 18px 54px rgba(31,25,18,0.07)',
+                  border: index === 3 ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(31,23,12,0.06)',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between'
