@@ -152,29 +152,40 @@ select {
     box-shadow: 0 0 0 3px var(--focus-ring);
   }
   .btn-primary {
-    background: var(--text-1);
-    color: var(--bg-0);
+    background: var(--ink-1);
+    color: var(--bg-canvas);
   }
   .btn-primary:hover:not(:disabled) {
     background: #000000;
     transform: translateY(-1px);
   }
+  .btn-primary:active:not(:disabled) {
+    background: var(--ink-2);
+    box-shadow: inset 0 0 0 1px var(--line-4);
+  }
   .btn-accent {
-    background: var(--orange);
+    background: var(--accent);
     color: #ffffff;
   }
   .btn-accent:hover:not(:disabled) {
-    background: var(--orange-hover);
+    background: var(--accent-hover);
     transform: translateY(-1px);
+  }
+  .btn-accent:active:not(:disabled) {
+    background: var(--accent-ink);
   }
   .btn-ghost {
     background: rgba(255, 255, 255, 0.42);
-    color: var(--text-1);
+    color: var(--ink-1);
     border-color: var(--line-3);
   }
   .btn-ghost:hover:not(:disabled) {
-    background: var(--bg-3);
+    background: var(--bg-subtle);
     border-color: var(--line-4);
+  }
+  .btn-ghost:active:not(:disabled) {
+    background: var(--bg-subtle);
+    border-color: var(--ink-3);
   }
   .btn-danger {
     background: var(--signal-err);
@@ -182,6 +193,12 @@ select {
   }
   .btn-danger:hover:not(:disabled) {
     background: #951e18;
+  }
+  .btn-danger:active:not(:disabled) {
+    background: #7d1913;
+  }
+  .btn-danger:focus-visible {
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.40);
   }
   .btn-sm {
     height: 30px;
@@ -206,25 +223,26 @@ select {
   .input {
     @apply w-full transition-all duration-150;
     height: 38px;
-    background: var(--bg-1);
+    background: var(--bg-surface);
     border: 1px solid var(--line-2);
     border-radius: var(--r-md);
-    color: var(--text-1);
+    color: var(--ink-1);
     padding: 0 12px;
     font-family: inherit;
     font-size: 13.5px;
     outline: none;
   }
   .input::placeholder {
-    color: var(--text-4);
+    color: var(--ink-4);
   }
   .input:focus {
-    border-color: var(--orange);
+    border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--focus-ring);
   }
   .input:disabled {
     @apply opacity-60 cursor-not-allowed;
-    background: var(--bg-3);
+    background: var(--bg-subtle);
+    color: var(--ink-4);
   }
   .input-error {
     border-color: var(--signal-err);
@@ -238,12 +256,12 @@ select {
     font-size: 11px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--ink-3);
     font-family: 'JetBrains Mono', 'SF Mono', monospace;
   }
 
   .card {
-    background: color-mix(in srgb, var(--bg-1) 94%, transparent);
+    background: var(--bg-surface);
     border: 1px solid var(--line-2);
     border-radius: var(--r-xl);
     box-shadow: var(--shadow-card);
@@ -258,7 +276,7 @@ select {
   }
   .card-hover:hover {
     border-color: var(--line-3);
-    background: var(--bg-1);
+    background: var(--bg-subtle);
     box-shadow: var(--shadow-elev);
     transform: translateY(-1px);
   }
@@ -272,8 +290,8 @@ select {
     font-weight: 600;
     letter-spacing: -0.005em;
     border: 1px solid var(--line-2);
-    background: var(--bg-2);
-    color: var(--text-2);
+    background: var(--bg-subtle);
+    color: var(--ink-2);
   }
   .badge-success {
     border-color: rgba(47, 143, 94, 0.30);
@@ -291,9 +309,9 @@ select {
     color: var(--signal-err);
   }
   .badge-accent {
-    border-color: var(--orange-line);
-    background: var(--orange-soft);
-    color: var(--orange-ink);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
   }
 
   .eyebrow {
@@ -342,7 +360,7 @@ select {
   .pill-nav-item {
     padding: 8px 16px;
     font-size: 13px;
-    color: var(--text-2);
+    color: var(--ink-3);
     background: transparent;
     border: none;
     border-radius: 999px;
@@ -352,14 +370,17 @@ select {
     transition: all 0.15s;
   }
   .pill-nav-item:hover {
-    color: var(--text-1);
-    background: var(--bg-3);
+    color: var(--ink-1);
+    background: var(--bg-subtle);
   }
-  .pill-nav-item-active,
+  .pill-nav-item-active {
+    color: var(--ink-1);
+    background: var(--bg-subtle);
+    box-shadow: inset 0 0 0 1px var(--line-3);
+  }
   .pill-nav-item-light-active {
-    color: var(--text-1);
-    background: var(--bg-1);
-    box-shadow: var(--shadow-card);
+    color: var(--bg-canvas);
+    background: var(--ink-1);
   }
 
   .hr-fade {
