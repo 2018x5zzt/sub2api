@@ -2,7 +2,7 @@
 title: frontend-v2 Claude-Light Design Spec (v2)
 scope: frontend-v2 (test/xlabapi) — visual refresh only, no functional change
 supersedes: docs/superpowers/specs/2026-05-11-frontend-v2-xlabapi-parity-design.md (visual sections only; P0/P1 routing & API contract sections remain authoritative)
-status: draft-v1 (2026-05-12)
+status: signed-off-v1 (2026-05-13; 领班 review 通过 6 项决策 + 3 条边界硬约束，见附录 D)
 author: 前端开发实现者
 reviewers: 领班
 references:
@@ -86,16 +86,18 @@ hard_lines:
 
 | Family | 用途 | Stack | 运行时 |
 |---|---|---|---|
-| Display (serif) | 标题（h1/h2/h3 的 hero/landing 强调位 + PageHeader display） | **`'Source Serif 4', 'Source Serif Pro', 'Newsreader', Georgia, 'Times New Roman', serif`** | self-host `/fonts/SourceSerif4-[400,500,600].woff2`（3 weight，约 180KB gzip），或 next-safe fallback 链先跑，字体懒加载不阻塞 FCP |
+| Display (serif) | 标题（h1/h2/h3 的 hero/landing 强调位 + PageHeader display） | **`'Source Serif 4', 'Source Serif Pro', 'Newsreader', Georgia, 'Times New Roman', serif`** | self-host `/fonts/SourceSerif4Variable-Roman.otf.woff2` + `/fonts/SourceSerif4Variable-Italic.otf.woff2`（Variable Roman + Italic 双文件，font-weight: 200 900；~740KB total / ~417KB preload Roman，Italic 懒加载），或 next-safe fallback 链先跑，字体懒加载不阻塞 FCP |
 | Sans (body) | 正文、按钮、表单、data-table、caption | `'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif`（保持现有） | 已存在 |
 | Mono | eyebrow / kbd / token 展示 | `'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, monospace`（保持现有） | 已存在 |
-| Italic emphasis | Hero "connect to / *transform* / across" 风格强调字 | 用 Display stack + `font-style: italic`（Source Serif 4 自带 italic），不再单独拉 Georgia italic | 合并入 Display self-host |
+| Italic emphasis | Hero "connect to / *transform* / across" 风格强调字 | 用 Display stack + `font-style: italic`（Source Serif 4 自带 italic），不再单独拉 Georgia italic | 合并入 Display self-host（Variable Italic 懒加载） |
+
+> Footnote: Source Serif 4 4.005R 静态档无 Medium 500；display 字号 weight 500 由 Variable 提供，落地形式为 Variable Roman + Italic 双文件，单字族保留。Evidence: frontend Phase 1 commit `1be3ee54`。
 
 ### 2.2 衬线三候选（推荐 Source Serif 4）
 
 | 候选 | 授权 | 像素级匹配 Claude.ai Tiempos | 运行时重量 | 推荐度 |
 |---|---|---|---|---|
-| **Source Serif 4 ✅** | Adobe OFL（开源免费） | 字重/x-height/收尾切刀极接近 Tiempos Headline；意大利体一致 | 3 weight self-host 约 180KB | **推荐** |
+| **Source Serif 4 ✅** | Adobe OFL（开源免费） | 字重/x-height/收尾切刀极接近 Tiempos Headline；意大利体一致 | Variable Roman + Italic 双文件；~740KB total / ~417KB preload Roman，Italic 懒加载 | **推荐** |
 | Newsreader | Google Fonts（免费） | 偏编辑体，衬线更圆；x-height 略低，小字号易显窄 | 同 self-host 约 150KB | 备选 |
 | Tiempos Headline | Klim 商业授权（需付费） | 与 Claude.ai 完全一致 | 授权成本 + self-host 约 120KB | **不推荐**（授权不明、用户未批预算） |
 
@@ -137,7 +139,7 @@ hard_lines:
 
 | 元素 | 原态 | 新态 |
 |---|---|---|
-| `SectionFrame` hairline + 十字 marker | `rgba(255,255,255,0.10)` 白线 + 橙色十字 | 线改 `--line-3=#D8D4C6` 1px；十字 marker 改 `--ink-1=#1F1E1D` 1px 10×10px；`halfWidth=660` 保持与 `.container-bus=1280` 对齐 |
+| `SectionFrame` hairline + 十字 marker | `rgba(255,255,255,0.10)` 白线 + 橙色十字 | 线改 `--line-3=#D8D4C6` 1px；十字 marker 改 `--ink-1=#1F1E1D` 1px 10×10px；`halfWidth=600`（详见 §4.11） |
 | `.eyebrow` 橙方块 marker | 8×8 `--orange` | 保持 8×8 `--accent=#FF5722`（装饰方块，非文本，AA 不适用） |
 | `.dot-bg` radial dot | `rgba(255,255,255,0.06)` 白点 | 改 `--line-2=#E8E6DC` 1px 点 / 32px 间距（极淡，仅作纸面纹理） |
 | `.grid-bg` 栅格线 | 两向 `--line-1` 白 alpha | 改 `--line-1=#ECEAE0` 深空间方向线 / 56px 间距 |
@@ -474,7 +476,7 @@ colors: {
 
 ## 附录 C：决策点汇总（给 @领班）
 
-1. **衬线字体**：推 **Source Serif 4**（Adobe OFL 免费，self-host 180KB）；备选 Newsreader；不取 Tiempos Headline（授权未批）。
+1. **衬线字体**：推 **Source Serif 4**（Adobe OFL 免费，Variable Roman + Italic 双文件；~740KB total / ~417KB preload Roman，Italic 懒加载）；备选 Newsreader；不取 Tiempos Headline（授权未批）。
 2. **display-2xl 是否扩 84px**：**不扩**；Hero 降到 72px。
 3. **是否引入 `--accent-ink=#C0360B`**（v2 新增 token）：**推荐引入**；否则所有"橙色正文级用法"必须改黑字，失去"橙色链接"体验。
 4. **装饰 PlasmaBlob/HalftoneOverlay**：**完全去除**消费；组件文件保留。
