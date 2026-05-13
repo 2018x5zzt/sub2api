@@ -7,8 +7,11 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
+import { apiClient } from '@/api/client'
 import { authAPI, type OAuthTokenPayload, type PendingOAuthExchangeResponse } from '@/api/auth'
 import { toast } from '@/components/ui/Toast'
+
+const OAUTH_AFFILIATE_CODE_KEY = 'oauth_aff_code'
 
 function parseFragmentParams(): URLSearchParams {
   if (typeof window === 'undefined') return new URLSearchParams()
@@ -36,6 +39,14 @@ function hasOAuthToken(data: PendingOAuthExchangeResponse): data is OAuthTokenPa
   return typeof data.access_token === 'string' && data.access_token.trim().length > 0
 }
 
+function loadOAuthAffiliateCode(): string {
+  try {
+    return sessionStorage.getItem(OAUTH_AFFILIATE_CODE_KEY)?.trim() || ''
+  } catch {
+    return ''
+  }
+}
+
 export default function LinuxDoCallbackPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -49,6 +60,7 @@ export default function LinuxDoCallbackPage() {
   const [invitationError, setInvitationError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [redirectTo, setRedirectTo] = useState('/dashboard')
+  const [legacyPendingToken, setLegacyPendingToken] = useState('')
   const ranRef = useRef(false)
 
   useEffect(() => {
@@ -75,6 +87,7 @@ export default function LinuxDoCallbackPage() {
             setProcessing(false)
             return
           }
+          setLegacyPendingToken(pt)
           setNeedsInvitation(true)
           setProcessing(false)
           return
@@ -135,7 +148,17 @@ export default function LinuxDoCallbackPage() {
     if (!invitationCode.trim()) return
     setSubmitting(true)
     try {
-      const tokenData = await authAPI.completeLinuxDoOAuthRegistration(invitationCode.trim())
+      const affCode = loadOAuthAffiliateCode()
+      const tokenData = legacyPendingToken
+        ? (await apiClient.post<PendingOAuthExchangeResponse>('/auth/oauth/linuxdo/complete-registration', {
+            pending_oauth_token: legacyPendingToken,
+            invitation_code: invitationCode.trim(),
+            ...(affCode ? { aff_code: affCode } : {})
+          })).data
+        : await authAPI.completeLinuxDoOAuthRegistration(invitationCode.trim(), undefined, affCode || undefined)
+      if (!hasOAuthToken(tokenData)) {
+        throw new Error(tokenData.error || (t('auth.linuxdo.completeRegistrationFailed') as string))
+      }
       persistTokenContext(tokenData)
       await setToken(tokenData.access_token)
       toast.success(t('auth.loginSuccess') as string)

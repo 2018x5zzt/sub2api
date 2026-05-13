@@ -760,6 +760,7 @@ export default {
     clickToResend: '点击重新发送验证码',
     resendCode: '重新发送验证码',
     sendCodeDesc: '我们将发送验证码到',
+    sendVerificationCode: '发送验证码',
     codeSentSuccess: '验证码已发送！请查收您的邮箱。',
     verifying: '验证中...',
     verifyAndCreate: '验证并创建账户',
@@ -812,6 +813,45 @@ export default {
       code: '授权码',
       state: '状态',
       fullUrl: '完整URL'
+    },
+    oidc: {
+      callbackTitle: '正在使用 {providerName} 登录',
+      callbackProcessing: '正在完成 {providerName} 登录，请稍候...',
+      callbackHint: '如果页面未自动跳转，请返回登录页重试。',
+      invitationRequired: '该 {providerName} 账号尚未注册，请输入邀请码完成注册。'
+    },
+    wechat: {
+      callbackTitle: '正在使用微信登录',
+      callbackProcessing: '正在完成微信登录，请稍候...',
+      callbackHint: '如果页面未自动跳转，请返回登录页重试。',
+      invitationRequired: '该微信账号尚未注册，请输入邀请码完成注册。'
+    },
+    wechatPayment: {
+      callbackTitle: '微信支付',
+      callbackProcessing: '正在恢复支付，请稍候...',
+      callbackMissingResumeToken: '缺少微信支付恢复凭证，请重新发起支付。',
+      backToPayment: '返回支付'
+    },
+    oauthFlow: {
+      chooseAccountActionHint: '请选择如何继续使用此 OAuth 账号。',
+      suggestedEmail: '建议邮箱：{email}',
+      bindCurrentAccount: '绑定当前已登录账户',
+      bindCurrentAccountDescription: '将此 {providerName} 身份绑定到当前已登录账户。',
+      bindExistingAccount: '绑定已有账户',
+      signInThenBindDescription: '先登录已有账户，然后返回这里绑定此 {providerName} 身份。',
+      createNewAccount: '创建新账户',
+      profileDetailsTitle: '确认资料信息',
+      profileDetailsDescription: '{providerName} 提供了资料信息，请选择继续时要使用的内容。',
+      useDisplayName: '使用显示名称',
+      useAvatar: '使用头像',
+      createAccountHint: '创建新账户以继续使用此 OAuth 身份。',
+      bindLoginHint: '登录已有账户并绑定此 {providerName} 身份。',
+      logInAndBind: '登录并绑定',
+      totpHint: '请输入 {account} 的双因素验证码以继续 {providerName} 登录。',
+      yourAccount: '您的账户',
+      verifyAndContinue: '验证并继续',
+      affiliateCodePlaceholder: '返利邀请码（可选）',
+      turnstileUnsupported: '当前流程需要 Turnstile 验证，但 frontend-v2 暂未提供该验证组件。请改用邮箱注册或联系支持。'
     },
     // 忘记密码
     forgotPassword: '忘记密码？',
@@ -1232,6 +1272,9 @@ export default {
 
   // Profile
   profile: {
+    authBindings: {
+      bindSuccess: '账户绑定成功。'
+    },
     title: '个人设置',
     description: '管理您的账户信息和设置',
     accountBalance: '账户余额',

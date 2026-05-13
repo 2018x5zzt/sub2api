@@ -2,29 +2,74 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==================== Source Serif 4 — self-hosted variable webfont ==================== */
+/* Adobe Source Serif 4 v4.005R, SIL OFL 1.1 (see /fonts/LICENSE.md).                       */
+/* Variable font: single file covers weight 200..900 + optical size — used for display      */
+/* type and em-serif emphasis per Claude-light spec v2 §2.                                  */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src:
+    url('/fonts/SourceSerif4Variable-Roman.otf.woff2') format('woff2-variations'),
+    url('/fonts/SourceSerif4Variable-Roman.otf.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 200 900;
+  font-display: swap;
+  src:
+    url('/fonts/SourceSerif4Variable-Italic.otf.woff2') format('woff2-variations'),
+    url('/fonts/SourceSerif4Variable-Italic.otf.woff2') format('woff2');
+}
+
 /* ==================== Xlabapi Claude-light design tokens ==================== */
+/* Spec v2 §1 + 附录 A semantic slots — single source of truth.                  */
+/* Legacy --bg-*, --text-*, --orange-* below are kept as alias references to    */
+/* these new slots to avoid double-source drift during Phase 1→4 migration.     */
 :root {
-  --bg-0: #faf9f5;
-  --bg-1: #ffffff;
+  /* --- spec v2 semantic surfaces --- */
+  --bg-canvas: #faf9f5;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f0eee6;
+
+  /* --- spec v2 semantic ink --- */
+  --ink-1: #1f1e1d;
+  --ink-2: #3d3d3a;
+  --ink-3: #8a8780;
+  --ink-4: #b7b3a8;
+
+  /* --- spec v2 accent ramp --- */
+  --accent: #ff5722;
+  --accent-hover: #e84713;
+  --accent-ink: #c0360b;
+  --accent-soft: #ffe5dd;
+  --accent-line: #ffb7a0;
+
+  /* --- legacy aliases (alias to new slots; do not re-introduce literals) --- */
+  --bg-0: var(--bg-canvas);
+  --bg-1: var(--bg-surface);
   --bg-2: #f6f2ea;
-  --bg-3: #f0eee6;
-  --bg-4: #ffffff;
+  --bg-3: var(--bg-subtle);
+  --bg-4: var(--bg-surface);
 
   --line-1: #eceae0;
   --line-2: #e8e6dc;
   --line-3: #d8d4c6;
   --line-4: #c4bfae;
 
-  --text-1: #1f1e1d;
-  --text-2: #3d3d3a;
-  --text-3: #8a8780;
-  --text-4: #b7b3a8;
+  --text-1: var(--ink-1);
+  --text-2: var(--ink-2);
+  --text-3: var(--ink-3);
+  --text-4: var(--ink-4);
 
-  --orange: #ff5722;
-  --orange-hover: #e84713;
-  --orange-ink: #c0360b;
-  --orange-soft: #ffe5dd;
-  --orange-line: #ffb7a0;
+  --orange: var(--accent);
+  --orange-hover: var(--accent-hover);
+  --orange-ink: var(--accent-ink);
+  --orange-soft: var(--accent-soft);
+  --orange-line: var(--accent-line);
 
   --signal-ok: #2f8f5e;
   --signal-warn: #a8761a;
@@ -107,29 +152,40 @@ select {
     box-shadow: 0 0 0 3px var(--focus-ring);
   }
   .btn-primary {
-    background: var(--text-1);
-    color: var(--bg-0);
+    background: var(--ink-1);
+    color: var(--bg-canvas);
   }
   .btn-primary:hover:not(:disabled) {
     background: #000000;
     transform: translateY(-1px);
   }
+  .btn-primary:active:not(:disabled) {
+    background: var(--ink-2);
+    box-shadow: inset 0 0 0 1px var(--line-4);
+  }
   .btn-accent {
-    background: var(--orange);
+    background: var(--accent);
     color: #ffffff;
   }
   .btn-accent:hover:not(:disabled) {
-    background: var(--orange-hover);
+    background: var(--accent-hover);
     transform: translateY(-1px);
+  }
+  .btn-accent:active:not(:disabled) {
+    background: var(--accent-ink);
   }
   .btn-ghost {
     background: rgba(255, 255, 255, 0.42);
-    color: var(--text-1);
+    color: var(--ink-1);
     border-color: var(--line-3);
   }
   .btn-ghost:hover:not(:disabled) {
-    background: var(--bg-3);
+    background: var(--bg-subtle);
     border-color: var(--line-4);
+  }
+  .btn-ghost:active:not(:disabled) {
+    background: var(--bg-subtle);
+    border-color: var(--ink-3);
   }
   .btn-danger {
     background: var(--signal-err);
@@ -137,6 +193,12 @@ select {
   }
   .btn-danger:hover:not(:disabled) {
     background: #951e18;
+  }
+  .btn-danger:active:not(:disabled) {
+    background: #7d1913;
+  }
+  .btn-danger:focus-visible {
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.40);
   }
   .btn-sm {
     height: 30px;
@@ -161,25 +223,26 @@ select {
   .input {
     @apply w-full transition-all duration-150;
     height: 38px;
-    background: var(--bg-1);
+    background: var(--bg-surface);
     border: 1px solid var(--line-2);
     border-radius: var(--r-md);
-    color: var(--text-1);
+    color: var(--ink-1);
     padding: 0 12px;
     font-family: inherit;
     font-size: 13.5px;
     outline: none;
   }
   .input::placeholder {
-    color: var(--text-4);
+    color: var(--ink-4);
   }
   .input:focus {
-    border-color: var(--orange);
+    border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--focus-ring);
   }
   .input:disabled {
     @apply opacity-60 cursor-not-allowed;
-    background: var(--bg-3);
+    background: var(--bg-subtle);
+    color: var(--ink-4);
   }
   .input-error {
     border-color: var(--signal-err);
@@ -193,12 +256,12 @@ select {
     font-size: 11px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--ink-3);
     font-family: 'JetBrains Mono', 'SF Mono', monospace;
   }
 
   .card {
-    background: color-mix(in srgb, var(--bg-1) 94%, transparent);
+    background: var(--bg-surface);
     border: 1px solid var(--line-2);
     border-radius: var(--r-xl);
     box-shadow: var(--shadow-card);
@@ -213,7 +276,7 @@ select {
   }
   .card-hover:hover {
     border-color: var(--line-3);
-    background: var(--bg-1);
+    background: var(--bg-subtle);
     box-shadow: var(--shadow-elev);
     transform: translateY(-1px);
   }
@@ -227,8 +290,8 @@ select {
     font-weight: 600;
     letter-spacing: -0.005em;
     border: 1px solid var(--line-2);
-    background: var(--bg-2);
-    color: var(--text-2);
+    background: var(--bg-subtle);
+    color: var(--ink-2);
   }
   .badge-success {
     border-color: rgba(47, 143, 94, 0.30);
@@ -246,9 +309,9 @@ select {
     color: var(--signal-err);
   }
   .badge-accent {
-    border-color: var(--orange-line);
-    background: var(--orange-soft);
-    color: var(--orange-ink);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
   }
 
   .eyebrow {
@@ -257,14 +320,14 @@ select {
     font-size: 11px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--ink-3);
   }
   .eyebrow::before {
     content: '';
     display: inline-block;
     width: 8px;
     height: 8px;
-    background: var(--orange);
+    background: var(--accent);
     margin-right: 10px;
   }
 
@@ -297,7 +360,7 @@ select {
   .pill-nav-item {
     padding: 8px 16px;
     font-size: 13px;
-    color: var(--text-2);
+    color: var(--ink-3);
     background: transparent;
     border: none;
     border-radius: 999px;
@@ -307,14 +370,17 @@ select {
     transition: all 0.15s;
   }
   .pill-nav-item:hover {
-    color: var(--text-1);
-    background: var(--bg-3);
+    color: var(--ink-1);
+    background: var(--bg-subtle);
   }
-  .pill-nav-item-active,
+  .pill-nav-item-active {
+    color: var(--ink-1);
+    background: var(--bg-subtle);
+    box-shadow: inset 0 0 0 1px var(--line-3);
+  }
   .pill-nav-item-light-active {
-    color: var(--text-1);
-    background: var(--bg-1);
-    box-shadow: var(--shadow-card);
+    color: var(--bg-canvas);
+    background: var(--ink-1);
   }
 
   .hr-fade {
