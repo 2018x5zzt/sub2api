@@ -418,6 +418,20 @@ select {
   overflow-x: hidden;
 }
 
+.landing-page-advanced {
+  font-synthesis-weight: none;
+  text-rendering: geometricPrecision;
+}
+
+.landing-nav-menu,
+.landing-nav-actions,
+.landing-endpoint-deck,
+.landing-ops-console {
+  -webkit-font-smoothing: antialiased;
+  font-synthesis-weight: none;
+  text-rendering: geometricPrecision;
+}
+
 .landing-pill {
   transition:
     transform 0.16s ease,
@@ -427,6 +441,19 @@ select {
 
 a:hover .landing-pill {
   transform: translateY(-1px);
+}
+
+.landing-doc-link {
+  transition:
+    transform 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease;
+}
+
+.landing-doc-link:hover {
+  transform: translateY(-1px);
+  background: #ffffff !important;
+  color: var(--ink-1) !important;
 }
 
 @media (max-width: 1180px) {
@@ -499,6 +526,7 @@ a:hover .landing-pill {
   }
 
   .landing-nav-menu,
+  .landing-nav-actions,
   .landing-doc-link {
     display: none !important;
   }

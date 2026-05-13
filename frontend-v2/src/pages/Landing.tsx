@@ -9,6 +9,7 @@ const SKY = '#38bdf8'
 const VIOLET = '#a78bfa'
 const INK = '#191715'
 const PAPER = '#f4f0e7'
+const UI_FONT = '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Inter", system-ui, sans-serif'
 
 const heroEndpointRows = [
   { name: 'Claude Messages', endpoint: '/v1/messages', color: ORANGE },
@@ -98,7 +99,7 @@ function PillBtn({ children, primary, dark }: { children: ReactNode; primary?: b
         padding: '0 22px',
         borderRadius: 999,
         fontSize: 14,
-        fontWeight: 650,
+        fontWeight: 600,
         cursor: 'pointer',
         background: primary ? ORANGE : dark ? 'rgba(255,255,255,0.10)' : INK,
         color: primary || dark ? '#ffffff' : PAPER,
@@ -151,9 +152,8 @@ function NavD() {
             gap: 4,
             padding: 5,
             borderRadius: 999,
-            background: 'rgba(255,255,255,0.76)',
-            boxShadow: '0 10px 30px rgba(35,25,10,0.08)',
-            backdropFilter: 'blur(18px)'
+            background: 'rgba(255,255,255,0.92)',
+            boxShadow: '0 10px 30px rgba(35,25,10,0.08)'
           }}
         >
           {navItems.map(([href, label]) => (
@@ -172,8 +172,37 @@ function NavD() {
             </a>
           ))}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
-          <a className="landing-doc-link" href="/docs" style={{ fontSize: 13, color: 'var(--text-2)', textDecoration: 'none' }}>
+        <div
+          className="landing-nav-actions"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 8,
+            justifySelf: 'end',
+            padding: 5,
+            borderRadius: 999,
+            background: 'rgba(255,255,255,0.94)',
+            boxShadow: '0 10px 30px rgba(35,25,10,0.10)'
+          }}
+        >
+          <a
+            className="landing-doc-link"
+            href="/docs"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 44,
+              padding: '0 16px',
+              borderRadius: 999,
+              fontSize: 13,
+              fontWeight: 600,
+              color: INK,
+              textDecoration: 'none',
+              background: '#ffffff'
+            }}
+          >
             {t('nav.docs')}
           </a>
           <LocaleSwitcher compact />
@@ -194,17 +223,17 @@ function EndpointDeck() {
       className="landing-endpoint-deck"
       style={{
         borderRadius: 26,
-        background: 'rgba(18,15,13,0.82)',
+        background: 'rgba(18,15,13,0.92)',
         boxShadow: '0 42px 110px rgba(20,10,0,0.38)',
-        backdropFilter: 'blur(24px)',
         color: '#ffffff',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        fontFamily: UI_FONT
       }}
     >
       <div style={{ padding: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20 }}>
         <div>
-          <div style={{ fontSize: 24, fontWeight: 650 }}>{t('landing.demo.gatewayTitle')}</div>
-          <div style={{ marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.54)' }}>{t('landing.demo.fromRoutes')}</div>
+          <div style={{ fontSize: 24, fontWeight: 700 }}>{t('landing.demo.gatewayTitle')}</div>
+          <div style={{ marginTop: 8, fontSize: 12, color: 'rgba(255,255,255,0.68)' }}>{t('landing.demo.fromRoutes')}</div>
         </div>
         <div style={{ padding: '7px 11px', borderRadius: 999, background: 'rgba(34,197,94,0.15)', color: '#86efac', fontSize: 12 }}>
           {t('landing.operations.systemActive')}
@@ -235,19 +264,19 @@ function EndpointDeck() {
             gap: 10
           }}
         >
-          <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.48)', marginBottom: 2 }}>
+          <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.66)', marginBottom: 2 }}>
             {t('landing.demo.controlTitle')}
           </div>
           {heroControlRows.map((row) => (
             <div key={row.labelKey} style={{ display: 'grid', gridTemplateColumns: '16px 1fr', gap: 10, alignItems: 'center' }}>
               <span style={{ width: 8, height: 8, borderRadius: 999, background: row.color }} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 650 }}>{t(row.labelKey)}</div>
+                <div style={{ fontSize: 12.5, fontWeight: 600 }}>{t(row.labelKey)}</div>
                 <div
                   style={{
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
                     fontSize: 10,
-                    color: 'rgba(255,255,255,0.46)',
+                    color: 'rgba(255,255,255,0.62)',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap'
@@ -310,7 +339,7 @@ function HeroD() {
             style={{
               fontSize: 86,
               lineHeight: 0.98,
-              fontWeight: 680,
+              fontWeight: 700,
               letterSpacing: 0,
               margin: '0 0 28px',
               color: INK,
@@ -393,8 +422,8 @@ function HeroD() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'baseline' }}>
-              <span style={{ fontSize: 44, lineHeight: 1, fontWeight: 650 }}>{n}</span>
-              <span style={{ fontSize: 24, color: ORANGE, marginLeft: 3, fontWeight: 650 }}>{u}</span>
+              <span style={{ fontSize: 44, lineHeight: 1, fontWeight: 600 }}>{n}</span>
+              <span style={{ fontSize: 24, color: ORANGE, marginLeft: 3, fontWeight: 600 }}>{u}</span>
             </div>
             <div>
               <div style={{ fontSize: 12, lineHeight: 1.45, whiteSpace: 'pre-line', color: index === 0 ? 'rgba(255,255,255,0.64)' : 'var(--text-3)' }}>
@@ -420,7 +449,7 @@ function OperationsHub() {
         <div className="landing-section-head" style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr', gap: 60, alignItems: 'end', marginBottom: 46 }}>
           <div>
             <Eyebrow>{t('landing.operations.eyebrow')}</Eyebrow>
-            <h2 style={{ fontSize: 58, lineHeight: 1.02, letterSpacing: 0, fontWeight: 680, margin: 0, color: INK }}>
+            <h2 style={{ fontSize: 58, lineHeight: 1.02, letterSpacing: 0, fontWeight: 700, margin: 0, color: INK }}>
               {t('landing.operations.titleLine1')}
               <br />
               {t('landing.operations.titleLine2')}
@@ -433,6 +462,7 @@ function OperationsHub() {
 
         <div className="landing-atlas-grid" style={{ display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: 18, alignItems: 'stretch' }}>
           <div
+            className="landing-ops-console"
             style={{
               minHeight: 640,
               borderRadius: 28,
@@ -442,13 +472,14 @@ function OperationsHub() {
               display: 'grid',
               gridTemplateRows: 'auto 1fr auto',
               gap: 26,
-              boxShadow: '0 34px 90px rgba(31,22,12,0.22)'
+              boxShadow: '0 34px 90px rgba(31,22,12,0.22)',
+              fontFamily: UI_FONT
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 20, alignItems: 'flex-start' }}>
               <div>
-                <div style={{ fontSize: 28, fontWeight: 680 }}>{t('landing.operations.consoleTitle')}</div>
-                <div style={{ marginTop: 8, fontSize: 12.5, color: 'rgba(255,255,255,0.52)' }}>{t('landing.operations.apiTitle')}</div>
+                <div style={{ fontSize: 28, fontWeight: 700 }}>{t('landing.operations.consoleTitle')}</div>
+                <div style={{ marginTop: 8, fontSize: 12.5, color: 'rgba(255,255,255,0.66)' }}>{t('landing.operations.apiTitle')}</div>
               </div>
               <span style={{ padding: '7px 11px', borderRadius: 999, background: 'rgba(255,255,255,0.10)', fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>
                 {t('landing.operations.deploy')}
@@ -466,8 +497,8 @@ function OperationsHub() {
                       background: index === 0 ? 'rgba(255,87,34,0.18)' : 'rgba(255,255,255,0.075)'
                     }}
                   >
-                    <div style={{ fontSize: 13, fontWeight: 650 }}>{t(labelKey)}</div>
-                    <div style={{ marginTop: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 10.5, color: 'rgba(255,255,255,0.50)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{t(labelKey)}</div>
+                    <div style={{ marginTop: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', fontSize: 10.5, color: 'rgba(255,255,255,0.64)' }}>
                       {route}
                     </div>
                   </div>
@@ -496,8 +527,8 @@ function OperationsHub() {
                 ['landing.operations.metrics.retryTrace', '/api/v1/admin/ops/errors']
               ].map(([labelKey, route]) => (
                 <div key={labelKey} style={{ padding: 14, borderRadius: 14, background: 'rgba(255,255,255,0.075)' }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 650 }}>{t(labelKey)}</div>
-                  <div style={{ marginTop: 8, fontSize: 10, color: 'rgba(255,255,255,0.46)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600 }}>{t(labelKey)}</div>
+                  <div style={{ marginTop: 8, fontSize: 10, color: 'rgba(255,255,255,0.62)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {route}
                   </div>
                 </div>
@@ -523,7 +554,7 @@ function OperationsHub() {
               >
                 <div>
                   <span style={{ display: 'inline-block', width: 10, height: 10, background: color as string, marginBottom: 20 }} />
-                  <h3 style={{ fontSize: 23, lineHeight: 1.15, margin: '0 0 12px', fontWeight: 680 }}>{t(titleKey)}</h3>
+                  <h3 style={{ fontSize: 23, lineHeight: 1.15, margin: '0 0 12px', fontWeight: 700 }}>{t(titleKey)}</h3>
                   <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.7, color: index === 3 ? 'rgba(255,255,255,0.68)' : 'var(--text-3)' }}>
                     {t(descriptionKey)}
                   </p>
@@ -532,7 +563,7 @@ function OperationsHub() {
                   style={{
                     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
                     fontSize: 10.5,
-                    color: index === 3 ? 'rgba(255,255,255,0.48)' : 'var(--text-3)',
+                    color: index === 3 ? 'rgba(255,255,255,0.62)' : 'var(--text-3)',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap'
@@ -563,7 +594,7 @@ function SecurityBand() {
       <div className="landing-security-stack" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 40px', display: 'grid', gridTemplateColumns: '0.84fr 1.16fr', gap: 52, alignItems: 'center' }}>
         <div>
           <Eyebrow dark>{t('landing.security.eyebrow')}</Eyebrow>
-          <h2 style={{ fontSize: 62, lineHeight: 1.02, letterSpacing: 0, fontWeight: 680, margin: '0 0 26px' }}>
+          <h2 style={{ fontSize: 62, lineHeight: 1.02, letterSpacing: 0, fontWeight: 700, margin: '0 0 26px' }}>
             {t('landing.security.titleLine1')}
             <br />
             {t('landing.security.titleLine2')}
@@ -596,7 +627,7 @@ function SecurityBand() {
                 padding: 18,
                 borderRadius: 18,
                 background: index === 0 ? 'rgba(255,87,34,0.22)' : 'rgba(255,255,255,0.10)',
-                backdropFilter: 'blur(14px)'
+                backgroundClip: 'padding-box'
               }}
             >
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 9 }}>{t(titleKey)}</div>
@@ -636,7 +667,7 @@ function CaseStudy() {
     <section id="case-studies" style={{ background: PAPER, padding: '116px 0 104px', scrollMarginTop: 96 }}>
       <div className="landing-section-container" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 40px' }}>
         <div className="landing-blueprint-head" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 44, alignItems: 'end', marginBottom: 38 }}>
-          <h2 style={{ fontSize: 58, lineHeight: 1.04, letterSpacing: 0, fontWeight: 680, margin: 0, color: INK }}>
+          <h2 style={{ fontSize: 58, lineHeight: 1.04, letterSpacing: 0, fontWeight: 700, margin: 0, color: INK }}>
             {t('landing.caseStudy.titleLine1')}
             <br />
             {t('landing.caseStudy.titleLine2')}
@@ -734,7 +765,7 @@ function CtaFooter() {
         <div className="landing-footer-advanced" style={{ display: 'grid', gridTemplateColumns: '1fr 0.78fr', gap: 60, alignItems: 'start', paddingBottom: 78 }}>
           <div>
             <Eyebrow dark>{t('landing.cta.eyebrow')}</Eyebrow>
-            <h2 style={{ fontSize: 60, lineHeight: 1.02, letterSpacing: 0, fontWeight: 680, margin: '0 0 24px' }}>
+            <h2 style={{ fontSize: 60, lineHeight: 1.02, letterSpacing: 0, fontWeight: 700, margin: '0 0 24px' }}>
               {t('landing.cta.titleLine1')}{' '}
               <em style={{ fontFamily: '"Source Serif 4", "Source Serif Pro", Newsreader, Georgia, serif', fontStyle: 'italic', fontWeight: 400 }}>
                 {t('landing.cta.titleEmphasis1')}
@@ -760,7 +791,7 @@ function CtaFooter() {
         <div className="landing-footer-links" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr', gap: 32, padding: '32px 0' }}>
           <div>
             <LogoMark dark />
-            <p style={{ maxWidth: 280, fontSize: 12.5, lineHeight: 1.7, color: 'rgba(255,255,255,0.50)', margin: '18px 0 0' }}>
+            <p style={{ maxWidth: 280, fontSize: 12.5, lineHeight: 1.7, color: 'rgba(255,255,255,0.62)', margin: '18px 0 0' }}>
               {t('landing.footer.description')}
             </p>
           </div>
@@ -768,7 +799,7 @@ function CtaFooter() {
             <div key={title}>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.84)', fontWeight: 700, marginBottom: 14 }}>{title}</div>
               {items.map(([it, href]) => (
-                <a key={it} href={href} style={{ display: 'block', fontSize: 12.5, color: 'rgba(255,255,255,0.46)', textDecoration: 'none', padding: '5px 0' }}>
+                <a key={it} href={href} style={{ display: 'block', fontSize: 12.5, color: 'rgba(255,255,255,0.58)', textDecoration: 'none', padding: '5px 0' }}>
                   {it}
                 </a>
               ))}
@@ -792,7 +823,7 @@ export default function Landing() {
         background: PAPER,
         color: INK,
         minHeight: '100vh',
-        fontFamily: 'Inter, "PingFang SC", system-ui, sans-serif'
+        fontFamily: UI_FONT
       }}
     >
       <NavD />
