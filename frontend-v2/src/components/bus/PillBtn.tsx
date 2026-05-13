@@ -6,9 +6,9 @@ type Variant = 'accent' | 'light' | 'ghost'
 type Size = 'sm' | 'md' | 'lg'
 
 const variant: Record<Variant, string> = {
-  accent: 'bg-orange-display text-white hover:bg-orange-hover border-transparent',
-  light: 'bg-ink-1 text-bg-0 hover:bg-black border-transparent',
-  ghost: 'bg-transparent text-ink-1 border-line-3 hover:bg-bg-3'
+  accent: 'bg-accent text-white hover:bg-accent-hover border-transparent',
+  light: 'bg-bg-surface text-ink-1 hover:bg-bg-subtle border-line-3',
+  ghost: 'bg-transparent text-ink-1 border-line-3 hover:bg-bg-subtle'
 }
 
 const sizeClass: Record<Size, string> = {
@@ -37,6 +37,7 @@ export const PillBtn = forwardRef<HTMLButtonElement, PillButtonProps>(function P
       disabled={disabled || loading}
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all border tracking-tight',
+        'focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_var(--focus-ring)]',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         variant[v],
         sizeClass[size],
@@ -61,6 +62,7 @@ export function PillLink({
     <a
       className={cn(
         'inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all border tracking-tight no-underline',
+        'focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_var(--focus-ring)]',
         variant[v],
         sizeClass[size],
         className

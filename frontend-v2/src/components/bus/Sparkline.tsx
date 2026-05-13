@@ -4,7 +4,7 @@ interface Props {
   height?: number
 }
 
-export function Sparkline({ data, color = '#ff5722', height = 28 }: Props) {
+export function Sparkline({ data, color = 'var(--accent)', height = 28 }: Props) {
   if (!data.length) return null
   const w = 100
   const max = Math.max(...data)

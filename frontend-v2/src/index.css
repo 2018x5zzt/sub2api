@@ -320,14 +320,14 @@ select {
     font-size: 11px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--text-3);
+    color: var(--ink-3);
   }
   .eyebrow::before {
     content: '';
     display: inline-block;
     width: 8px;
     height: 8px;
-    background: var(--orange);
+    background: var(--accent);
     margin-right: 10px;
   }
 

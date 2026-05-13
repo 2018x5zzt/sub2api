@@ -10,15 +10,15 @@ interface Props {
  * top/bottom rules, and corner crosshair markers. Lives inside a relatively
  * positioned section so it never crosses content and respects section overflow.
  */
-export function SectionFrame({ showTop = true, showBottom = true, halfWidth = 660 }: Props) {
+export function SectionFrame({ showTop = true, showBottom = true, halfWidth = 600 }: Props) {
   const leftX = `max(20px, calc(50% - ${halfWidth}px))`
   const rightX = `max(20px, calc(50% - ${halfWidth}px))`
   const Cross = ({ pos }: { pos: 'tl' | 'tr' | 'bl' | 'br' }) => (
     <div
       className="absolute z-[6] pointer-events-none"
       style={{
-        width: 9,
-        height: 9,
+        width: 10,
+        height: 10,
         transform: 'translate(-50%, -50%)',
         ...(pos === 'tl' && { top: 0, left: leftX }),
         ...(pos === 'tr' && { top: 0, right: rightX }),
@@ -28,11 +28,11 @@ export function SectionFrame({ showTop = true, showBottom = true, halfWidth = 66
     >
       <div
         className="absolute"
-        style={{ top: 4, left: 0, right: 0, height: 1, background: 'var(--text-1)' }}
+        style={{ top: 4.5, left: 0, right: 0, height: 1, background: 'var(--ink-1)' }}
       />
       <div
         className="absolute"
-        style={{ left: 4, top: 0, bottom: 0, width: 1, background: 'var(--text-1)' }}
+        style={{ left: 4.5, top: 0, bottom: 0, width: 1, background: 'var(--ink-1)' }}
       />
     </div>
   )
