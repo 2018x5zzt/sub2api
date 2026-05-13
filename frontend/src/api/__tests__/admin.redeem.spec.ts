@@ -47,4 +47,19 @@ describe('admin redeem api', () => {
       source_type: 'commercial',
     })
   })
+
+  it('does not fallback to group_id when subscription productId is missing', async () => {
+    await redeemAPI.generate(3, 'subscription', 1, {
+      validityDays: 15,
+      sourceType: 'commercial',
+    })
+
+    expect(post).toHaveBeenCalledWith('/admin/redeem-codes/generate', {
+      count: 3,
+      type: 'subscription',
+      value: 1,
+      source_type: 'commercial',
+      validity_days: 15,
+    })
+  })
 })
