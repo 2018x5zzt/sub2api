@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { LocaleSwitcher } from '@/components/layout/LocaleSwitcher'
+import { useAuthStore } from '@/stores/auth'
+import { resolveDocLink } from '@/lib/docs'
 
 const ORANGE = '#ff5722'
 const GREEN = '#22c55e'
@@ -126,6 +128,7 @@ function PillBtn({ children, primary, dark }: { children: ReactNode; primary?: b
 
 function NavD() {
   const { t } = useTranslation()
+  const docLink = resolveDocLink(useAuthStore((s) => s.publicSettings?.doc_url))
   const navItems = [
     ['#solutions', t('landing.nav.solutions')],
     ['#enterprise', t('landing.nav.enterprise')],
@@ -200,7 +203,9 @@ function NavD() {
         >
           <a
             className="landing-doc-link"
-            href="/docs"
+            href={docLink.href}
+            target={docLink.target}
+            rel={docLink.rel}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -330,6 +335,7 @@ function ModelLaunchpad() {
 
 function HeroD() {
   const { t } = useTranslation()
+  const docLink = resolveDocLink(useAuthStore((s) => s.publicSettings?.doc_url))
 
   return (
     <section
@@ -397,7 +403,7 @@ function HeroD() {
             <Link to="/register" style={{ textDecoration: 'none' }}>
               <PillBtn primary>{t('landing.hero.primaryCta')}</PillBtn>
             </Link>
-            <a href="/docs" style={{ textDecoration: 'none' }}>
+            <a href={docLink.href} target={docLink.target} rel={docLink.rel} style={{ textDecoration: 'none' }}>
               <PillBtn>{t('landing.hero.secondaryCta')}</PillBtn>
             </a>
           </div>
@@ -753,6 +759,7 @@ function CaseStudy() {
 
 function CtaFooter() {
   const { t } = useTranslation()
+  const docLink = resolveDocLink(useAuthStore((s) => s.publicSettings?.doc_url))
   const footerGroups = [
     [
       t('landing.footer.product'),
@@ -775,10 +782,10 @@ function CtaFooter() {
     [
       t('landing.footer.resources'),
       [
-        [t('landing.footer.documentation'), '/docs'],
-        [t('landing.footer.changelog'), '/docs'],
-        [t('landing.footer.guides'), '/docs'],
-        [t('landing.footer.helpCenter'), '/docs']
+        [t('landing.footer.documentation'), docLink.href],
+        [t('landing.footer.changelog'), docLink.href],
+        [t('landing.footer.guides'), docLink.href],
+        [t('landing.footer.helpCenter'), docLink.href]
       ]
     ],
     [
@@ -831,11 +838,20 @@ function CtaFooter() {
           {footerGroups.map(([title, items]) => (
             <div key={title}>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.84)', fontWeight: 700, marginBottom: 14 }}>{title}</div>
-              {items.map(([it, href]) => (
-                <a key={it} href={href} style={{ display: 'block', fontSize: 12.5, color: 'rgba(255,255,255,0.58)', textDecoration: 'none', padding: '5px 0' }}>
+              {items.map(([it, href]) => {
+                const isDocsLink = href === docLink.href && docLink.external
+                return (
+                <a
+                  key={it}
+                  href={href}
+                  target={isDocsLink ? docLink.target : undefined}
+                  rel={isDocsLink ? docLink.rel : undefined}
+                  style={{ display: 'block', fontSize: 12.5, color: 'rgba(255,255,255,0.58)', textDecoration: 'none', padding: '5px 0' }}
+                >
                   {it}
                 </a>
-              ))}
+                )
+              })}
             </div>
           ))}
         </div>

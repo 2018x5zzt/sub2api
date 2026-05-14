@@ -18,6 +18,22 @@ import { toast } from '@/components/ui/Toast'
 import { cn } from '@/lib/cn'
 import type { ActiveSubscriptionProduct, Group, User, UserSubscription } from '@/types'
 
+interface SubscriptionPageData {
+  subscriptions: UserSubscription[]
+  products: ActiveSubscriptionProduct[]
+  profile: User | null
+  groups: Group[]
+  subscriptionsFailed: boolean
+  productsFailed: boolean
+  profileFailed: boolean
+  groupsFailed: boolean
+}
+
+function isAuthFailure(error: unknown) {
+  const maybe = error as { status?: number; response?: { status?: number } } | null
+  return maybe?.status === 401 || maybe?.response?.status === 401
+}
+
 function money(value: unknown, precision = 2) {
   const n = Number(value || 0)
   return `$${(Number.isFinite(n) ? n : 0).toFixed(precision)}`
@@ -316,20 +332,30 @@ export default function SubscriptionsPage() {
   const [fallbackLimit, setFallbackLimit] = useState(0)
   const [fallbackGroupId, setFallbackGroupId] = useState<number | null>(null)
 
-  const query = useQuery({
+  const query = useQuery<SubscriptionPageData>({
     queryKey: ['user-subscriptions-page'],
     queryFn: async () => {
-      const [subscriptions, products, profile, groups] = await Promise.all([
+      const [subscriptionsResult, productsResult, profileResult, groupsResult] = await Promise.allSettled([
         subscriptionsAPI.getActiveSubscriptions(),
         subscriptionProductsAPI.getActive(),
         refreshUser(),
         modelsAPI.getUserGroups()
       ])
+
+      const authFailure = [subscriptionsResult, productsResult, profileResult, groupsResult].find(
+        (result) => result.status === 'rejected' && isAuthFailure(result.reason)
+      )
+      if (authFailure?.status === 'rejected') throw authFailure.reason
+
       return {
-        subscriptions,
-        products,
-        profile,
-        groups
+        subscriptions: subscriptionsResult.status === 'fulfilled' ? subscriptionsResult.value : [],
+        products: productsResult.status === 'fulfilled' ? productsResult.value : [],
+        profile: profileResult.status === 'fulfilled' ? profileResult.value : null,
+        groups: groupsResult.status === 'fulfilled' ? groupsResult.value : [],
+        subscriptionsFailed: subscriptionsResult.status === 'rejected',
+        productsFailed: productsResult.status === 'rejected',
+        profileFailed: profileResult.status === 'rejected',
+        groupsFailed: groupsResult.status === 'rejected'
       }
     }
   })
@@ -338,6 +364,9 @@ export default function SubscriptionsPage() {
   const subscriptions = query.data?.subscriptions ?? []
   const products = query.data?.products ?? []
   const groups = query.data?.groups ?? []
+  const subscriptionDataFailed = Boolean(query.data?.subscriptionsFailed || query.data?.productsFailed)
+  const allSubscriptionDataFailed = Boolean(query.data?.subscriptionsFailed && query.data?.productsFailed)
+  const auxiliaryDataFailed = Boolean(query.data?.profileFailed || query.data?.groupsFailed)
 
   useEffect(() => {
     if (!profile) return
@@ -374,10 +403,14 @@ export default function SubscriptionsPage() {
     () => subscriptions.filter((subscription) => !productGroupIds.has(subscription.group_id)),
     [productGroupIds, subscriptions]
   )
+  const hasActiveSubscriptions = products.length > 0 || visibleSubscriptions.length > 0
 
   const saveMutation = useMutation({
     mutationFn: () => {
       const groupSelectable = fallbackGroupOptions.some((option) => option.value === fallbackGroupId)
+      if (fallbackEnabled && query.data?.groupsFailed) {
+        throw new Error('余额兜底分组尚未加载成功，请刷新后再保存')
+      }
       if (fallbackEnabled && !fallbackGroupId) {
         throw new Error('请选择余额兜底分组')
       }
@@ -512,7 +545,7 @@ export default function SubscriptionsPage() {
             </div>
           </Card>
 
-          {(products.length > 0 || visibleSubscriptions.length > 0) && (
+          {hasActiveSubscriptions && (
             <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-line-2 bg-bg-1 p-4 sm:flex-row sm:items-center">
               <div className="flex items-start gap-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-soft text-orange">
@@ -530,7 +563,35 @@ export default function SubscriptionsPage() {
             </div>
           )}
 
-          {products.length === 0 && visibleSubscriptions.length === 0 ? (
+          {query.isError && (
+            <Card className="flex flex-col gap-3 p-5 text-sm text-signal-err sm:flex-row sm:items-center sm:justify-between">
+              <span>{t('userSubscriptions.failedToLoad')}</span>
+              <Button type="button" size="sm" variant="ghost" onClick={() => query.refetch()}>
+                {t('common.retry')}
+              </Button>
+            </Card>
+          )}
+
+          {!query.isError && subscriptionDataFailed && (
+            <Card className="flex flex-col gap-3 p-5 text-sm text-signal-warn sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                {allSubscriptionDataFailed
+                  ? '订阅数据加载失败，暂时无法判断当前用户是否有有效订阅。'
+                  : '部分订阅数据加载失败，当前只显示已成功返回的订阅数据。'}
+              </span>
+              <Button type="button" size="sm" variant="ghost" onClick={() => query.refetch()}>
+                {t('common.retry')}
+              </Button>
+            </Card>
+          )}
+
+          {!query.isError && auxiliaryDataFailed && !subscriptionDataFailed && (
+            <Card className="p-4 text-sm text-signal-warn">
+              订阅已加载，部分账户或分组设置同步失败；余额兜底设置可能需要刷新后再修改。
+            </Card>
+          )}
+
+          {!query.isError && !allSubscriptionDataFailed && !hasActiveSubscriptions ? (
             <Card className="p-12 text-center">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-bg-2 text-ink-3">
                 <BadgeCheck className="h-6 w-6" />
@@ -538,7 +599,9 @@ export default function SubscriptionsPage() {
               <div className="text-base font-semibold text-ink-1">{t('userSubscriptions.noActiveSubscriptions')}</div>
               <p className="mt-1 text-sm text-ink-3">{t('userSubscriptions.noActiveSubscriptionsDesc')}</p>
             </Card>
-          ) : (
+          ) : null}
+
+          {!query.isError && !allSubscriptionDataFailed && hasActiveSubscriptions ? (
             <div className="grid gap-5 lg:grid-cols-2">
               {products.map((product) => (
                 <ProductCard key={`product-${product.subscription_id}`} product={product} />
@@ -547,13 +610,7 @@ export default function SubscriptionsPage() {
                 <LegacySubscriptionCard key={subscription.id} subscription={subscription} />
               ))}
             </div>
-          )}
-
-          {query.isError && (
-            <Card className="p-4 text-sm text-signal-err">
-              {t('userSubscriptions.failedToLoad')}
-            </Card>
-          )}
+          ) : null}
         </div>
       )}
     </>

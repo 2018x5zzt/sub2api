@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table'
 import { toast } from '@/components/ui/Toast'
 import { useAuthStore } from '@/stores/auth'
+import { resolveDocLink } from '@/lib/docs'
 
 type DateRangeKey = 'today' | '7d' | '30d' | 'custom'
 
@@ -263,7 +264,7 @@ export default function KeyUsagePage() {
 
   const siteName = publicSettings?.site_name || 'XlabAPI'
   const siteLogo = publicSettings?.site_logo || '/logo.png'
-  const docUrl = publicSettings?.doc_url || '/docs'
+  const docLink = resolveDocLink(publicSettings?.doc_url)
 
   const queryKey = async (nextRange = range) => {
     const key = apiKey.trim()
@@ -494,7 +495,7 @@ export default function KeyUsagePage() {
           </Link>
           <div className="flex items-center gap-2">
             <LocaleSwitcher compact />
-            <a href={docUrl} target="_blank" rel="noreferrer" className="btn btn-ghost btn-icon" title={t('home.viewDocs') as string}>
+            <a href={docLink.href} target={docLink.target} rel={docLink.rel} className="btn btn-ghost btn-icon" title={t('home.viewDocs') as string}>
               <BookOpen className="h-4 w-4" />
             </a>
           </div>

@@ -3,12 +3,14 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '@/stores/auth'
 import { LocaleSwitcher } from './LocaleSwitcher'
+import { resolveDocLink } from '@/lib/docs'
 
 export function AuthLayout({ children, title, subtitle }: { children: ReactNode; title?: string; subtitle?: string }) {
   const { t } = useTranslation()
   const publicSettings = useAuthStore((s) => s.publicSettings)
   const siteName = publicSettings?.site_name || 'XlabAPI'
   const siteLogo = publicSettings?.site_logo || '/logo.png'
+  const docLink = resolveDocLink(publicSettings?.doc_url)
 
   return (
     <div className="min-h-screen flex flex-col bg-bg-0">
@@ -21,7 +23,7 @@ export function AuthLayout({ children, title, subtitle }: { children: ReactNode;
             <span className="font-medium text-ink-1">{siteName}</span>
           </Link>
           <div className="flex items-center gap-3">
-            <a href="/docs" className="text-sm text-ink-2 hover:text-ink-1">
+            <a href={docLink.href} target={docLink.target} rel={docLink.rel} className="text-sm text-ink-2 hover:text-ink-1">
               {t('nav.docs')}
             </a>
             <LocaleSwitcher compact />
