@@ -99,31 +99,6 @@ function customNavItems(items: CustomMenuItem[], visibility: CustomMenuItem['vis
     }))
 }
 
-function normalizeUrl(input: string): string {
-  const trimmed = input.trim()
-  if (!trimmed) return ''
-  if (trimmed.startsWith('/')) return trimmed.replace(/\/+$/, '')
-  try {
-    const parsed = new URL(trimmed)
-    return `${parsed.origin}${parsed.pathname.replace(/\/+$/, '')}`
-  } catch {
-    return trimmed.replace(/\/+$/, '')
-  }
-}
-
-function isDuplicateImageStudioCustomItem(item: CustomMenuItem): boolean {
-  const normalizedLabel = item.label.trim().toLowerCase()
-  const normalizedUrl = normalizeUrl(item.url).toLowerCase()
-  const isImageStudioLabel = normalizedLabel === '图片创作' || normalizedLabel === 'image studio'
-  const duplicateUrls = new Set([
-    '/image-studio',
-    'https://ai.mikuapi.org/login',
-    'https://ai.mikuapi.org/auth/xlab/callback',
-    'https://iframe.mikuapi.org'
-  ])
-  return isImageStudioLabel || duplicateUrls.has(normalizedUrl)
-}
-
 function visibleNavItems(items: NavItem[], settings: PublicSettings | null, runMode: 'standard' | 'simple') {
   return items.filter((item) => {
     if (runMode === 'simple' && item.hideInSimpleMode) return false
@@ -148,10 +123,7 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
   const siteLogo = publicSettings?.site_logo || '/logo.png'
 
   const [mobileOpen, setMobileOpen] = useState(false)
-  const userCustomNav = customNavItems(
-    (publicSettings?.custom_menu_items ?? []).filter((item) => !isDuplicateImageStudioCustomItem(item)),
-    'user'
-  )
+  const userCustomNav = customNavItems(publicSettings?.custom_menu_items ?? [], 'user')
   const items = publicSettings?.backend_mode_enabled ? [] : visibleNavItems([...userNav, ...userCustomNav], publicSettings, runMode)
   const showAdminItems = isAdmin || admin
   const adminItems = visibleNavItems(adminNav, publicSettings, runMode)
