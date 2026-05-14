@@ -577,22 +577,13 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 				return nil, usage, acc, ev.err
 			}
 
-<<<<<<< HEAD
 			if isOpenAICompatDoneSentinelLine(ev.line) {
 				return nil, usage, acc, nil
 			}
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 			payload, ok := extractOpenAISSEDataLine(ev.line)
 			if !ok || payload == "" {
 				continue
 			}
-<<<<<<< HEAD
-=======
-			if strings.TrimSpace(payload) == "[DONE]" {
-				return nil, usage, acc, nil
-			}
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 
 			var event apicompat.ResponsesStreamEvent
 			if err := json.Unmarshal([]byte(payload), &event); err != nil {
@@ -646,10 +637,7 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 	var firstTokenMs *int
 	firstChunk := true
 	clientDisconnected := false
-<<<<<<< HEAD
 	streamStarted := false
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 
 	scanner := bufio.NewScanner(resp.Body)
 	maxLineSize := defaultMaxLineSize
@@ -714,7 +702,6 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 
 		// 仅按兼容转换器支持的终止事件提取 usage，避免无意扩大事件语义。
 		isTerminalEvent := isOpenAICompatResponsesTerminalEvent(event.Type)
-<<<<<<< HEAD
 		if isTerminalEvent && event.Response != nil {
 			if id := strings.TrimSpace(event.Response.ID); id != "" {
 				responseID = id
@@ -722,22 +709,15 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 			if event.Response.Usage != nil {
 				usage = copyOpenAIUsageFromResponsesUsage(event.Response.Usage)
 			}
-=======
-		if isTerminalEvent && event.Response != nil && event.Response.Usage != nil {
-			usage = copyOpenAIUsageFromResponsesUsage(event.Response.Usage)
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 		}
 
 		// Convert to Anthropic events
 		events := apicompat.ResponsesEventToAnthropicEvents(&event, state)
-<<<<<<< HEAD
 		if len(events) > 0 && firstChunk {
 			firstChunk = false
 			ms := int(time.Since(startTime).Milliseconds())
 			firstTokenMs = &ms
 		}
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 		if !clientDisconnected {
 			for _, evt := range events {
 				sse, err := apicompat.ResponsesAnthropicEventToSSE(evt)
@@ -748,10 +728,7 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 					)
 					continue
 				}
-<<<<<<< HEAD
 				ensureStreamStarted()
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 				if _, err := fmt.Fprint(c.Writer, sse); err != nil {
 					clientDisconnected = true
 					logger.L().Info("openai messages stream: client disconnected, continuing to drain upstream for billing",
@@ -769,22 +746,16 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 
 	// finalizeStream sends any remaining Anthropic events and returns the result.
 	finalizeStream := func() (*OpenAIForwardResult, error) {
-<<<<<<< HEAD
 		if !streamStarted {
 			return nil, newEmptySuccessStreamFailoverError(c, account, resp, false, "Upstream returned empty response")
 		}
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 		if finalEvents := apicompat.FinalizeResponsesAnthropicStream(state); len(finalEvents) > 0 && !clientDisconnected {
 			for _, evt := range finalEvents {
 				sse, err := apicompat.ResponsesAnthropicEventToSSE(evt)
 				if err != nil {
 					continue
 				}
-<<<<<<< HEAD
 				ensureStreamStarted()
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 				if _, err := fmt.Fprint(c.Writer, sse); err != nil {
 					clientDisconnected = true
 					logger.L().Info("openai messages stream: client disconnected during final flush",
@@ -810,12 +781,9 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 		}
 	}
 	missingTerminalErr := func() (*OpenAIForwardResult, error) {
-<<<<<<< HEAD
 		if !streamStarted {
 			return nil, newEmptySuccessStreamFailoverError(c, account, resp, false, "Upstream stream ended before a terminal event")
 		}
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 		return resultWithUsage(), fmt.Errorf("stream usage incomplete: missing terminal event")
 	}
 
@@ -829,22 +797,13 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 	if streamInterval <= 0 && keepaliveInterval <= 0 {
 		for scanner.Scan() {
 			line := scanner.Text()
-<<<<<<< HEAD
 			if isOpenAICompatDoneSentinelLine(line) {
 				return missingTerminalErr()
 			}
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 			payload, ok := extractOpenAISSEDataLine(line)
 			if !ok {
 				continue
 			}
-<<<<<<< HEAD
-=======
-			if strings.TrimSpace(payload) == "[DONE]" {
-				return missingTerminalErr()
-			}
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 			if processDataLine(payload) {
 				return finalizeStream()
 			}
@@ -911,22 +870,13 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 			}
 			lastDataAt = time.Now()
 			line := ev.line
-<<<<<<< HEAD
 			if isOpenAICompatDoneSentinelLine(line) {
 				return missingTerminalErr()
 			}
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 			payload, ok := extractOpenAISSEDataLine(line)
 			if !ok {
 				continue
 			}
-<<<<<<< HEAD
-=======
-			if strings.TrimSpace(payload) == "[DONE]" {
-				return missingTerminalErr()
-			}
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 			if processDataLine(payload) {
 				return finalizeStream()
 			}
@@ -950,12 +900,9 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 			if clientDisconnected {
 				continue
 			}
-<<<<<<< HEAD
 			if !streamStarted {
 				continue
 			}
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 			if time.Since(lastDataAt) < keepaliveInterval {
 				continue
 			}

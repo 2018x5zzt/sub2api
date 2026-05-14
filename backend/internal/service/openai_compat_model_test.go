@@ -4,10 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
-<<<<<<< HEAD
 	"fmt"
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1390,13 +1387,9 @@ func TestForwardAsAnthropic_TerminalUsageWithoutUpstreamCloseReturns(t *testing.
 
 	upstreamBody := []byte(`data: {"type":"response.completed","response":{"id":"resp_1","object":"response","model":"gpt-5.4","status":"completed","output":[{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":15,"output_tokens":6,"total_tokens":21,"input_tokens_details":{"cached_tokens":5}}}}` + "\n\n")
 	upstreamStream := newOpenAICompatBlockingReadCloser(upstreamBody)
-<<<<<<< HEAD
 	defer func() {
 		require.NoError(t, upstreamStream.Close())
 	}()
-=======
-	defer upstreamStream.Close()
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 	upstream := &httpUpstreamRecorder{resp: &http.Response{
 		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid_terminal_no_close"}},
@@ -1449,13 +1442,9 @@ func TestForwardAsAnthropic_BufferedTerminalWithoutUpstreamCloseReturns(t *testi
 
 	upstreamBody := []byte(`data: {"type":"response.completed","response":{"id":"resp_1","object":"response","model":"gpt-5.4","status":"completed","output":[{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":15,"output_tokens":6,"total_tokens":21,"input_tokens_details":{"cached_tokens":5}}}}` + "\n\n")
 	upstreamStream := newOpenAICompatBlockingReadCloser(upstreamBody)
-<<<<<<< HEAD
 	defer func() {
 		require.NoError(t, upstreamStream.Close())
 	}()
-=======
-	defer upstreamStream.Close()
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 	upstream := &httpUpstreamRecorder{resp: &http.Response{
 		StatusCode: http.StatusOK,
 		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid_buffered_terminal_no_close"}},
@@ -1529,7 +1518,6 @@ func TestForwardAsAnthropic_DoneSentinelWithoutTerminalReturnsError(t *testing.T
 
 	result, err := svc.ForwardAsAnthropic(context.Background(), c, account, body, "", "gpt-5.1")
 	require.Error(t, err)
-<<<<<<< HEAD
 	var failoverErr *UpstreamFailoverError
 	require.ErrorAs(t, err, &failoverErr)
 	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
@@ -1572,12 +1560,6 @@ func TestForwardAsAnthropic_EmptyUpstreamReturnsFailoverWithoutWriting(t *testin
 	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
 	require.False(t, c.Writer.Written(), "must not commit an empty HTTP 200 before failover")
 	require.Nil(t, result)
-=======
-	require.Contains(t, err.Error(), "missing terminal event")
-	require.NotNil(t, result)
-	require.Zero(t, result.Usage.InputTokens)
-	require.Zero(t, result.Usage.OutputTokens)
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 }
 
 func TestForwardAsAnthropic_UpstreamRequestIgnoresClientCancel(t *testing.T) {

@@ -419,11 +419,7 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 
 	var usage OpenAIUsage
 	var firstTokenMs *int
-<<<<<<< HEAD
 	streamStarted := false
-=======
-	firstChunk := true
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 	clientDisconnected := false
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -491,13 +487,10 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 		}
 
 		chunks := apicompat.ResponsesEventToChatChunks(&event, state)
-<<<<<<< HEAD
 		if len(chunks) > 0 && firstTokenMs == nil {
 			ms := int(time.Since(startTime).Milliseconds())
 			firstTokenMs = &ms
 		}
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 		if !clientDisconnected {
 			for _, chunk := range chunks {
 				sse, err := apicompat.ChatChunkToSSE(chunk)
@@ -508,10 +501,7 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 					)
 					continue
 				}
-<<<<<<< HEAD
 				ensureStreamStarted()
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 				if _, err := fmt.Fprint(c.Writer, sse); err != nil {
 					clientDisconnected = true
 					logger.L().Info("openai chat_completions stream: client disconnected, continuing to drain upstream for billing",
@@ -528,12 +518,9 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 	}
 
 	finalizeStream := func() (*OpenAIForwardResult, error) {
-<<<<<<< HEAD
 		if !streamStarted {
 			return nil, newEmptySuccessStreamFailoverError(c, account, resp, false, "Upstream returned empty response")
 		}
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 		if finalChunks := apicompat.FinalizeResponsesChatStream(state); len(finalChunks) > 0 && !clientDisconnected {
 			for _, chunk := range finalChunks {
 				sse, err := apicompat.ChatChunkToSSE(chunk)
@@ -573,12 +560,9 @@ func (s *OpenAIGatewayService) handleChatStreamingResponse(
 		}
 	}
 	missingTerminalErr := func() (*OpenAIForwardResult, error) {
-<<<<<<< HEAD
 		if !streamStarted {
 			return nil, newEmptySuccessStreamFailoverError(c, account, resp, false, "Upstream stream ended before a terminal event")
 		}
-=======
->>>>>>> 72d5ee4c (fix: drain OpenAI compat streams for usage)
 		return resultWithUsage(), fmt.Errorf("stream usage incomplete: missing terminal event")
 	}
 
