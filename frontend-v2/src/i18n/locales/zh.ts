@@ -608,6 +608,19 @@ export default {
       gatewayTitle: 'Sub2API 网关矩阵',
       fromRoutes: '来自路由扫描',
       controlTitle: '控制台接口',
+      flowTitle: '从一个请求，到可计费的模型响应',
+      flowDescription: 'Sub2API 在入口层完成鉴权、分组策略、账号调度和用量归集，让模型接入不再散落在各个系统里。',
+      routeTitle: '已接入模型接口',
+      outputTitle: '生产稳定性',
+      outputDetail: '故障切换、限流保护与用量追踪同时生效',
+      flow: {
+        input: '统一入口',
+        inputDetail: 'OpenAI 兼容请求进入同一网关。',
+        policy: '策略调度',
+        policyDetail: '按分组、模型倍率、RPM/TPM 和账号状态选择上游。',
+        output: '归集响应',
+        outputDetail: '返回结果并记录 Token、费用、错误和重试。'
+      },
       controls: {
         keys: 'API Key',
         usage: '用量看板',
@@ -624,7 +637,9 @@ export default {
       titleLine1: '更聪明地运营，',
       titleLine2: '更快速地扩展',
       consoleTitle: '调度与运维控制台',
-      consoleSubtitle: '分组、账号、订阅与运维接口共同支撑生产调度',
+      consoleSubtitle: '把入口接入、分组策略、用量计费和运维治理拆成清晰层级，支撑团队持续扩展。',
+      blueprintEyebrow: '生产路径',
+      blueprintTitle: '把接入、调度、计费和运维拆成可配置的层',
       systemActive: '能力启用',
       deploy: '部署',
       strategy: '策略',
@@ -661,6 +676,16 @@ export default {
         opsMonitor: '管理员运维监控',
         retryTrace: '错误重试与追踪',
         available: '已接入'
+      },
+      flow: {
+        ingress: '统一入口',
+        ingressDetail: '兼容 Claude、OpenAI、Gemini 与 Antigravity 的请求入口。',
+        policy: '策略层',
+        policyDetail: '用分组、账号池、倍率和 RPM/TPM 控制每一次调度。',
+        metering: '用量归集',
+        meteringDetail: '把 Token、图片、缓存与余额流转归集到用户和 Key。',
+        governance: '运维治理',
+        governanceDetail: '通过错误追踪、系统日志、备份和告警保持可控。'
       },
       stats: {
         gatewayFamilies: '兼容网关族\nClaude/OpenAI/Gemini/Antigravity',

@@ -425,8 +425,8 @@ select {
 
 .landing-nav-menu,
 .landing-nav-actions,
-.landing-endpoint-deck,
-.landing-ops-console {
+.landing-model-launchpad,
+.landing-enterprise-stack {
   -webkit-font-smoothing: antialiased;
   font-synthesis-weight: none;
   text-rendering: geometricPrecision;
@@ -581,17 +581,21 @@ a:hover .landing-pill {
   .landing-blueprint-grid,
   .landing-case-cards,
   .landing-console-strip,
-  .landing-deck-body,
+  .landing-endpoint-ribbon,
+  .landing-flow-steps,
+  .landing-model-board,
+  .landing-quick-start-grid,
   .landing-module-grid,
   .landing-security-items {
     grid-template-columns: 1fr !important;
   }
 
-  .landing-endpoint-deck {
+  .landing-model-launchpad {
     border-radius: 18px !important;
   }
 
-  .landing-topology-grid {
+  .landing-ops-flow-row,
+  .landing-route-row {
     grid-template-columns: 1fr !important;
   }
 }

@@ -33,6 +33,12 @@ export interface User {
   concurrency: number // Allowed concurrent requests
   status: 'active' | 'disabled' // Account status
   allowed_groups: number[] | null // Allowed group IDs (null = all non-exclusive groups)
+  balance_notify_enabled?: boolean
+  balance_notify_threshold?: number | null
+  subscription_balance_fallback_enabled?: boolean
+  subscription_balance_fallback_limit_usd?: number
+  subscription_balance_fallback_used_usd?: number
+  subscription_balance_fallback_group_id?: number | null
   subscriptions?: UserSubscription[] // User's active subscriptions
   created_at: string
   updated_at: string
@@ -1305,6 +1311,10 @@ export interface UpdateUserRequest {
   concurrency?: number
   status?: 'active' | 'disabled'
   allowed_groups?: number[] | null
+  subscription_balance_fallback_enabled?: boolean
+  subscription_balance_fallback_limit_usd?: number
+  subscription_balance_fallback_used_usd?: number
+  subscription_balance_fallback_group_id?: number | null
   // 用户专属分组倍率配置 (group_id -> rate_multiplier | null)
   // null 表示删除该分组的专属倍率
   group_rates?: Record<number, number | null>
@@ -1333,6 +1343,43 @@ export interface UserSubscription {
   expires_at: string | null
   user?: User
   group?: Group
+}
+
+export interface SubscriptionProductGroup {
+  group_id: number
+  group_name: string
+  group_platform?: string
+  balance_fallback_group_id?: number | null
+  balance_fallback_group_name?: string | null
+  debit_multiplier: number
+  status: string
+  sort_order: number
+}
+
+export interface ActiveSubscriptionProduct {
+  product_id: number
+  subscription_id: number
+  code: string
+  name: string
+  description: string
+  status: 'active' | 'expired' | 'revoked' | string
+  expires_at: string | null
+  daily_usage_usd: number
+  weekly_usage_usd: number
+  monthly_usage_usd: number
+  daily_limit_usd: number
+  weekly_limit_usd: number
+  monthly_limit_usd: number
+  daily_carryover_in_usd: number
+  daily_carryover_remaining_usd: number
+  groups: SubscriptionProductGroup[]
+}
+
+export interface SubscriptionProductSummary {
+  active_count: number
+  total_monthly_usage_usd: number
+  total_monthly_limit_usd: number
+  products: ActiveSubscriptionProduct[]
 }
 
 export interface SubscriptionProgress {

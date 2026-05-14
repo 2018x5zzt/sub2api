@@ -608,6 +608,19 @@ export default {
       gatewayTitle: 'Sub2API gateway matrix',
       fromRoutes: 'Route scan',
       controlTitle: 'Console interfaces',
+      flowTitle: 'From one request to a billable model response',
+      flowDescription: 'Sub2API handles auth, group policy, account scheduling, and usage attribution at the gateway layer.',
+      routeTitle: 'Connected model interfaces',
+      outputTitle: 'Production stability',
+      outputDetail: 'Failover, rate protection, and usage tracking stay active together',
+      flow: {
+        input: 'Unified ingress',
+        inputDetail: 'OpenAI-compatible traffic enters one gateway.',
+        policy: 'Policy routing',
+        policyDetail: 'Choose upstreams by group, model multiplier, RPM/TPM, and account health.',
+        output: 'Metered response',
+        outputDetail: 'Return results while recording tokens, cost, errors, and retries.'
+      },
       controls: {
         keys: 'API keys',
         usage: 'Usage dashboard',
@@ -624,7 +637,9 @@ export default {
       titleLine1: 'Operate Smarter,',
       titleLine2: 'Scale Faster',
       consoleTitle: 'Scheduling and Ops Console',
-      consoleSubtitle: 'Groups, accounts, subscriptions, and ops APIs support production routing',
+      consoleSubtitle: 'Separate ingress, group policy, usage billing, and operations into clear layers that scale with the team.',
+      blueprintEyebrow: 'Production path',
+      blueprintTitle: 'Configure ingress, routing, billing, and operations as layers',
       systemActive: 'Enabled',
       deploy: 'Deploy',
       strategy: 'Strategy',
@@ -661,6 +676,16 @@ export default {
         opsMonitor: 'Admin ops monitor',
         retryTrace: 'Error retry and trace',
         available: 'wired'
+      },
+      flow: {
+        ingress: 'Unified ingress',
+        ingressDetail: 'Route Claude, OpenAI, Gemini, and Antigravity through one entry.',
+        policy: 'Policy layer',
+        policyDetail: 'Use groups, account pools, multipliers, and RPM/TPM for each dispatch.',
+        metering: 'Usage metering',
+        meteringDetail: 'Attribute tokens, images, cache, and balances to users and keys.',
+        governance: 'Ops governance',
+        governanceDetail: 'Keep errors, system logs, backups, and alerts under control.'
       },
       stats: {
         gatewayFamilies: 'Gateway families\nClaude/OpenAI/Gemini/Antigravity',

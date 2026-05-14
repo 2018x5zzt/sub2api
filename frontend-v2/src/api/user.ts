@@ -1,12 +1,19 @@
 import { apiClient } from './client'
 import type { User, ChangePasswordRequest } from '@/types'
 
+export interface UpdateProfilePayload {
+  username?: string
+  subscription_balance_fallback_enabled?: boolean
+  subscription_balance_fallback_limit_usd?: number
+  subscription_balance_fallback_group_id?: number | null
+}
+
 export async function getProfile() {
   const { data } = await apiClient.get<User>('/user/profile')
   return data
 }
 
-export async function updateProfile(payload: { username?: string }) {
+export async function updateProfile(payload: UpdateProfilePayload) {
   const { data } = await apiClient.put<User>('/user', payload)
   return data
 }
