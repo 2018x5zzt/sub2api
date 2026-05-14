@@ -1177,7 +1177,7 @@ LIMIT 1`, []any{input.UserID, input.ProductID},
 		if base.Before(now) {
 			base = now
 		}
-		newExpiresAt := base.AddDate(0, 0, validityDays)
+		newExpiresAt := service.CalculateNaturalDayExpiry(base, validityDays)
 		newNotes := appendSubscriptionNotes(existingNotes.String, input.Notes)
 		if _, err := exec.ExecContext(ctx, `
 UPDATE user_product_subscriptions
@@ -1210,7 +1210,7 @@ LIMIT 1`, []any{input.ProductID}, &productExists); err != nil {
 	}
 
 	now := time.Now()
-	expiresAt := now.AddDate(0, 0, validityDays)
+	expiresAt := service.CalculateNaturalDayExpiry(now, validityDays)
 	var createdID int64
 	err = scanSingleRow(ctx, exec, `
 INSERT INTO user_product_subscriptions (
