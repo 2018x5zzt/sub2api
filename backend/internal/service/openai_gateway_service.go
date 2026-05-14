@@ -3465,8 +3465,9 @@ func (s *OpenAIGatewayService) newOpenAIStreamFailoverError(
 		},
 	})
 	return &UpstreamFailoverError{
-		StatusCode:   http.StatusServiceUnavailable,
-		ResponseBody: body,
+		StatusCode:             http.StatusServiceUnavailable,
+		ResponseBody:           body,
+		RetryableOnSameAccount: account != nil && account.IsPoolMode(),
 	}
 }
 

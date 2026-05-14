@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/csv"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -42,6 +44,11 @@ type GenerateRedeemCodesRequest struct {
 	ValidityDays int     `json:"validity_days"` // 订阅类型使用，正数增加/负数退款扣减
 }
 
+type generateRedeemCodesRequestAlias struct {
+	ProductIDLegacyCamelCase *int64 `json:"productId"`
+	ProductIDLegacyTypo      *int64 `json:"productionid"`
+}
+
 // CreateAndRedeemCodeRequest represents creating a fixed code and redeeming it for a target user.
 // Type 为 omitempty 而非 required 是为了向后兼容旧版调用方（不传 type 时默认 balance）。
 type CreateAndRedeemCodeRequest struct {
@@ -54,6 +61,29 @@ type CreateAndRedeemCodeRequest struct {
 	ProductID    *int64  `json:"product_id"`    // subscription 产品订阅类型使用
 	ValidityDays int     `json:"validity_days"` // subscription 类型：正数增加，负数退款扣减
 	Notes        string  `json:"notes"`
+}
+
+type createAndRedeemCodeRequestAlias struct {
+	ProductIDLegacyCamelCase *int64 `json:"productId"`
+	ProductIDLegacyTypo      *int64 `json:"productionid"`
+}
+
+func bindJSONWithAlias[T any, A any](c *gin.Context, req *T, alias *A, applyAlias func(*T, *A)) error {
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(body, req); err != nil {
+		return err
+	}
+	if alias != nil && len(body) > 0 {
+		if err := json.Unmarshal(body, alias); err != nil {
+			return err
+		}
+		applyAlias(req, alias)
+	}
+	c.Request.Body = io.NopCloser(bytes.NewReader(body))
+	return c.ShouldBindJSON(req)
 }
 
 // List handles listing all redeem codes with pagination
@@ -106,7 +136,19 @@ func (h *RedeemHandler) GetByID(c *gin.Context) {
 // POST /api/v1/admin/redeem-codes/generate
 func (h *RedeemHandler) Generate(c *gin.Context) {
 	var req GenerateRedeemCodesRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var alias generateRedeemCodesRequestAlias
+	if err := bindJSONWithAlias(c, &req, &alias, func(req *GenerateRedeemCodesRequest, alias *generateRedeemCodesRequestAlias) {
+		if req.ProductID != nil {
+			return
+		}
+		if alias.ProductIDLegacyCamelCase != nil {
+			req.ProductID = alias.ProductIDLegacyCamelCase
+			return
+		}
+		if alias.ProductIDLegacyTypo != nil {
+			req.ProductID = alias.ProductIDLegacyTypo
+		}
+	}); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}
@@ -142,7 +184,19 @@ func (h *RedeemHandler) CreateAndRedeem(c *gin.Context) {
 	}
 
 	var req CreateAndRedeemCodeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var alias createAndRedeemCodeRequestAlias
+	if err := bindJSONWithAlias(c, &req, &alias, func(req *CreateAndRedeemCodeRequest, alias *createAndRedeemCodeRequestAlias) {
+		if req.ProductID != nil {
+			return
+		}
+		if alias.ProductIDLegacyCamelCase != nil {
+			req.ProductID = alias.ProductIDLegacyCamelCase
+			return
+		}
+		if alias.ProductIDLegacyTypo != nil {
+			req.ProductID = alias.ProductIDLegacyTypo
+		}
+	}); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
 	}

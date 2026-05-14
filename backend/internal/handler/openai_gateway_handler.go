@@ -33,18 +33,9 @@ type OpenAIGatewayHandler struct {
 	usageRecordWorkerPool   *service.UsageRecordWorkerPool
 	errorPassthroughService *service.ErrorPassthroughService
 	concurrencyHelper       *ConcurrencyHelper
+	imageJobStore           *openAIImageJobStore
 	maxAccountSwitches      int
 	cfg                     *config.Config
-}
-
-func resolveOpenAIForwardDefaultMappedModel(apiKey *service.APIKey, fallbackModel string) string {
-	if fallbackModel = strings.TrimSpace(fallbackModel); fallbackModel != "" {
-		return fallbackModel
-	}
-	if apiKey == nil || apiKey.Group == nil {
-		return ""
-	}
-	return strings.TrimSpace(apiKey.Group.DefaultMappedModel)
 }
 
 func resolveOpenAIMessagesDispatchMappedModel(apiKey *service.APIKey, requestedModel string) string {
@@ -79,6 +70,7 @@ func NewOpenAIGatewayHandler(
 		usageRecordWorkerPool:   usageRecordWorkerPool,
 		errorPassthroughService: errorPassthroughService,
 		concurrencyHelper:       NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
+		imageJobStore:           newOpenAIImageJobStore(openAIImageJobStoreOptions{}),
 		maxAccountSwitches:      maxAccountSwitches,
 		cfg:                     cfg,
 	}

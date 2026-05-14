@@ -1436,12 +1436,75 @@ func TestOpenAIStreamingOutputThenResponseFailedReturnsFailoverWithoutWriting200
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "upstream response failed")
 	require.Contains(t, err.Error(), "upstream failed after partial output")
+	var failoverErr *UpstreamFailoverError
+	require.False(t, errors.As(err, &failoverErr))
 	require.True(t, c.Writer.Written())
-
 	body := rec.Body.String()
 	require.Contains(t, body, "response.output_text.delta")
-	require.Contains(t, body, "event: response.failed")
+	require.Contains(t, body, "hello")
+	require.Contains(t, body, "response.failed")
+	require.Contains(t, body, "upstream failed after partial output")
 	require.Contains(t, body, "data: [DONE]")
+}
+
+func TestOpenAIStreamingFirstOutputFlushesBeforeTerminal(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			StreamDataIntervalTimeout: 0,
+			StreamKeepaliveInterval:   0,
+			MaxLineSize:               defaultMaxLineSize,
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	pr, pw := io.Pipe()
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       pr,
+		Header:     http.Header{"X-Request-Id": []string{"rid-first-output-flush"}},
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "model", "model")
+		done <- err
+	}()
+	defer func() {
+		_ = pw.Close()
+		_ = pr.Close()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+		}
+	}()
+
+	_, err := pw.Write([]byte("event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\"}}\n\n"))
+	require.NoError(t, err)
+	_, err = pw.Write([]byte("event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"delta\":\"hello\"}\n\n"))
+	require.NoError(t, err)
+
+	deadline := time.After(300 * time.Millisecond)
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	flushed := false
+	for !flushed {
+		select {
+		case <-deadline:
+			t.Fatalf("first output was not flushed before terminal event; body=%q", rec.Body.String())
+		case <-ticker.C:
+			flushed = strings.Contains(rec.Body.String(), "hello")
+		}
+	}
+
+	_, err = pw.Write([]byte("event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":2}}}\n\n"))
+	require.NoError(t, err)
+	require.NoError(t, pw.Close())
+	require.NoError(t, <-done)
 }
 
 func TestOpenAIStreamingPreambleOnlyMissingTerminalReturnsFailover(t *testing.T) {
@@ -1628,19 +1691,17 @@ func TestOpenAIStreamingMissingTerminalEventReturnsIncompleteError(t *testing.T)
 
 	go func() {
 		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello\"}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\"},\"output_index\":0}\n\n"))
 	}()
 
 	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "model", "model")
 	_ = pr.Close()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "missing terminal event")
-
-	body := rec.Body.String()
-	require.Contains(t, body, "response.output_text.delta")
-	require.Contains(t, body, "event: response.failed")
-	require.Contains(t, body, "upstream_stream_incomplete")
-	require.Contains(t, body, "data: [DONE]")
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
+	require.False(t, c.Writer.Written())
+	require.Empty(t, rec.Body.String())
 }
 
 func TestOpenAIStreamingMissingTerminalEventAfterOutputWritesFailureEvent(t *testing.T) {
@@ -1682,6 +1743,49 @@ func TestOpenAIStreamingMissingTerminalEventAfterOutputWritesFailureEvent(t *tes
 	require.Contains(t, body, "data: [DONE]")
 }
 
+func TestOpenAIStreamingMissingTerminalEventBeforeOutputPoolModeRetryable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			StreamDataIntervalTimeout: 0,
+			StreamKeepaliveInterval:   0,
+			MaxLineSize:               defaultMaxLineSize,
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: cfg}
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
+
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Body: io.NopCloser(strings.NewReader(
+			"data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\"},\"output_index\":0}\n\n",
+		)),
+		Header: http.Header{"X-Request-Id": []string{"rid-pool-incomplete"}},
+	}
+	account := &Account{
+		ID:       2490,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Name:     "Backend",
+		Credentials: map[string]any{
+			"pool_mode":             true,
+			"pool_mode_retry_count": 3,
+		},
+	}
+
+	_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, account, time.Now(), "model", "model")
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
+	require.True(t, failoverErr.RetryableOnSameAccount)
+	require.False(t, c.Writer.Written())
+	require.Empty(t, rec.Body.String())
+}
+
 func TestOpenAIStreamingPassthroughMissingTerminalEventReturnsIncompleteError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{
@@ -1704,14 +1808,17 @@ func TestOpenAIStreamingPassthroughMissingTerminalEventReturnsIncompleteError(t 
 
 	go func() {
 		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello\"}\n\n"))
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"message\"},\"output_index\":0}\n\n"))
 	}()
 
 	_, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now(), "", "")
 	_ = pr.Close()
-	if err == nil || !strings.Contains(err.Error(), "missing terminal event") {
-		t.Fatalf("expected missing terminal event error, got %v", err)
-	}
+	require.Error(t, err)
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
+	require.False(t, c.Writer.Written())
+	require.Empty(t, rec.Body.String())
 }
 
 func TestOpenAIStreamingPassthroughStartedStreamReadErrorWritesFailureEvent(t *testing.T) {
@@ -1744,6 +1851,7 @@ func TestOpenAIStreamingPassthroughStartedStreamReadErrorWritesFailureEvent(t *t
 
 	body := rec.Body.String()
 	require.Contains(t, body, "response.output_text.delta")
+	require.Contains(t, body, "hello")
 	require.Contains(t, body, "event: response.failed")
 	require.Contains(t, body, "upstream_stream_error")
 	require.Contains(t, body, "data: [DONE]")
@@ -1774,6 +1882,7 @@ func TestOpenAIStreamingPassthroughStartedMissingTerminalWritesFailureEvent(t *t
 
 	body := rec.Body.String()
 	require.Contains(t, body, "response.output_text.delta")
+	require.Contains(t, body, "hello")
 	require.Contains(t, body, "event: response.failed")
 	require.Contains(t, body, "upstream_stream_incomplete")
 	require.Contains(t, body, "data: [DONE]")
