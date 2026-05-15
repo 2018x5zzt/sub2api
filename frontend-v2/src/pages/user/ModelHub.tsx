@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { Check, Copy, RefreshCw, Search } from 'lucide-react'
+import { AlertCircle, Boxes, Check, Copy, Layers, RefreshCw, Search, SearchX } from 'lucide-react'
 import { PageHeader } from '@/components/layout/ConsoleLayout'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -45,6 +45,18 @@ function formatMoney(value: number): string {
   if (Math.abs(value) >= 1) return `$${value.toFixed(2)}`
   if (value === 0) return '$0'
   return `$${value.toFixed(4)}`
+}
+
+function formatCount(value: number): string {
+  return value.toLocaleString('zh-CN')
+}
+
+function formatModelCount(value: number): string {
+  return `${formatCount(value)} 个模型`
+}
+
+function formatGroupCount(value: number): string {
+  return `${formatCount(value)} 个分组`
 }
 
 function formatPerMillion(price: number | null | undefined, rate: number): string | null {
@@ -217,10 +229,21 @@ export default function ModelHubPage() {
     copyText(catalog.models.map((model) => model.id).join('\n'), `group:${catalog.group.id}`)
   }
 
+  function refreshCatalogs() {
+    channelsQuery.refetch()
+    ratesQuery.refetch()
+  }
+
+  function clearFilters() {
+    setSearch('')
+    setPlatform(ALL)
+    setActiveGroupId(ALL)
+  }
+
   const Stat = ({ label, value }: { label: string; value: number }) => (
     <div className="rounded-xl border border-line-1 bg-bg-1 p-4">
       <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-3">{label}</div>
-      <div className="mt-2 font-display text-2xl text-ink-1">{value}</div>
+      <div className="mt-2 font-display text-2xl text-ink-1">{formatCount(value)}</div>
     </div>
   )
 
@@ -234,10 +257,7 @@ export default function ModelHubPage() {
             <Button
               type="button"
               variant="ghost"
-              onClick={() => {
-                channelsQuery.refetch()
-                ratesQuery.refetch()
-              }}
+              onClick={refreshCatalogs}
               disabled={loading || channelsQuery.isFetching}
             >
               <RefreshCw className={cn('h-3.5 w-3.5', (loading || channelsQuery.isFetching) && 'animate-spin')} />
@@ -300,11 +320,7 @@ export default function ModelHubPage() {
                   <button
                     type="button"
                     className="text-xs font-medium text-orange hover:text-orange-hover"
-                    onClick={() => {
-                      setSearch('')
-                      setPlatform(ALL)
-                      setActiveGroupId(ALL)
-                    }}
+                    onClick={clearFilters}
                   >
                     {t('modelHub.clearFilters')}
                   </button>
@@ -322,10 +338,10 @@ export default function ModelHubPage() {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-semibold">{t('modelHub.allGroups')}</span>
-                    <span className="font-mono text-xs">{catalogs.length}</span>
+                    <span className="font-mono text-xs">{formatCount(catalogs.length)}</span>
                   </div>
                   <div className={cn('mt-1 text-xs', activeGroupId === ALL ? 'text-bg-0/70' : 'text-ink-3')}>
-                    {t('modelHub.modelCount', { count: visibleModelIds.length })}
+                    {formatModelCount(visibleModelIds.length)}
                   </div>
                 </button>
 
@@ -341,7 +357,7 @@ export default function ModelHubPage() {
                   >
                     <div className="flex items-center justify-between gap-3">
                       <span className="truncate text-sm font-semibold text-ink-1">{catalog.group.name}</span>
-                      <span className="font-mono text-xs text-ink-3">{catalog.models.length}</span>
+                      <span className="font-mono text-xs text-ink-3">{formatCount(catalog.models.length)}</span>
                     </div>
                     <div className="mt-1 truncate text-xs text-ink-3">{platformLabel(catalog.group.platform, t)}</div>
                   </button>
@@ -352,6 +368,36 @@ export default function ModelHubPage() {
         </Card>
 
         <section className="space-y-4">
+          <Card className="overflow-hidden">
+            <div className="grid gap-5 p-5 xl:grid-cols-[1fr,360px] xl:items-center">
+              <div className="flex items-start gap-4">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-orange-soft text-orange">
+                  <Layers className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <div className="text-xs text-ink-3">模型索引</div>
+                  <h2 className="mt-2 text-2xl font-semibold text-ink-1">当前可见 {formatModelCount(visibleModelIds.length)}</h2>
+                  <p className="mt-1 text-sm text-ink-3">
+                    来自 {formatGroupCount(filteredCatalogs.length)}，覆盖 {formatCount(platformOptions.length)} 个平台；模型广场会按可用渠道、分组倍率和您的账号权限聚合展示。
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: '全部分组', value: catalogs.length },
+                  { label: '去重模型', value: allModelIds.length },
+                  { label: '筛选结果', value: visibleModelIds.length }
+                ].map((item) => (
+                  <div key={item.label} className="rounded-xl border border-line-1 bg-bg-2 px-3 py-3">
+                    <div className="text-xs text-ink-3">{item.label}</div>
+                    <div className="mt-2 font-display text-xl text-ink-1">{formatCount(item.value)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+
           {loading ? (
             Array.from({ length: 3 }).map((_, index) => (
               <Card key={index} className="p-5 space-y-4">
@@ -360,14 +406,45 @@ export default function ModelHubPage() {
               </Card>
             ))
           ) : channelsQuery.isError ? (
-            <Card className="p-6">
-              <div className="text-sm font-semibold text-ink-1">{t('modelHub.loadFailedTitle')}</div>
-              <p className="mt-1 text-sm text-ink-3">{t('modelHub.loadFailedDescription')}</p>
+            <Card className="p-8">
+              <div className="mx-auto flex max-w-xl flex-col items-center text-center">
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-signal-err">
+                  <AlertCircle className="h-5 w-5" />
+                </span>
+                <div className="mt-4 text-base font-semibold text-ink-1">{t('modelHub.loadFailedTitle')}</div>
+                <p className="mt-1 text-sm text-ink-3">{t('modelHub.loadFailedDescription')}</p>
+                <Button type="button" variant="ghost" className="mt-5" onClick={refreshCatalogs} disabled={channelsQuery.isFetching}>
+                  <RefreshCw className={cn('h-3.5 w-3.5', channelsQuery.isFetching && 'animate-spin')} />
+                  {t('common.refresh')}
+                </Button>
+              </div>
             </Card>
           ) : filteredCatalogs.length === 0 ? (
-            <Card className="p-12 text-center">
-              <div className="text-base font-semibold text-ink-1">{t('modelHub.emptyTitle')}</div>
-              <p className="mt-1 text-sm text-ink-3">{t('modelHub.emptyDescription')}</p>
+            <Card className="p-8">
+              <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
+                <span className="grid h-14 w-14 place-items-center rounded-2xl bg-bg-2 text-ink-3">
+                  {hasFilters ? <SearchX className="h-6 w-6" /> : <Boxes className="h-6 w-6" />}
+                </span>
+                <div className="mt-4 text-lg font-semibold text-ink-1">
+                  {hasFilters ? t('modelHub.emptyTitle') : '还没有可展示的模型'}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-ink-3">
+                  {hasFilters
+                    ? t('modelHub.emptyDescription')
+                    : '当前没有从可用渠道聚合到模型。请确认管理员环境已启用可用渠道，并且渠道、分组与模型价格配置已经发布。'}
+                </p>
+                <div className="mt-5 flex flex-wrap justify-center gap-2">
+                  {hasFilters && (
+                    <Button type="button" variant="ghost" onClick={clearFilters}>
+                      {t('modelHub.clearFilters')}
+                    </Button>
+                  )}
+                  <Button type="button" variant="accent" onClick={refreshCatalogs} disabled={channelsQuery.isFetching}>
+                    <RefreshCw className={cn('h-3.5 w-3.5', channelsQuery.isFetching && 'animate-spin')} />
+                    {t('common.refresh')}
+                  </Button>
+                </div>
+              </div>
             </Card>
           ) : (
             filteredCatalogs.map((catalog) => (

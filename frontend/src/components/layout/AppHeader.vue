@@ -28,11 +28,10 @@
 
         <!-- Docs Link -->
         <a
-          v-if="docUrl"
-          :href="docUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
+          :href="docLink.href"
+          :target="docLink.target"
+          :rel="docLink.rel"
+          class="flex h-10 items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50 hover:text-primary-600 dark:border-dark-700 dark:bg-dark-900 dark:text-dark-300 dark:hover:border-primary-800 dark:hover:bg-primary-900/20 dark:hover:text-primary-300"
         >
           <Icon name="book" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
@@ -226,6 +225,7 @@ import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMi
 import ProductSubscriptionMini from '@/components/common/ProductSubscriptionMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { resolveDocLink } from '@/utils/docs'
 
 const router = useRouter()
 const route = useRoute()
@@ -239,7 +239,7 @@ const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
-const docUrl = computed(() => appStore.docUrl)
+const docLink = computed(() => resolveDocLink(appStore.cachedPublicSettings?.doc_url || appStore.docUrl))
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 
 // 只在标准模式的管理员下显示新手引导按钮
