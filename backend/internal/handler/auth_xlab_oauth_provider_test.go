@@ -271,3 +271,24 @@ func TestXlabOAuthProviderCodeExpires(t *testing.T) {
 
 	require.Equal(t, http.StatusUnauthorized, recorder.Code)
 }
+
+func TestXlabOAuthProviderAuthorizationCodeStaysCompactWithLargeProfileFields(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	user := &service.User{
+		ID:           42,
+		Email:        "artist@example.com",
+		Username:     strings.Repeat("u", 512),
+		AvatarURL:    "https://cdn.example.com/avatar/" + strings.Repeat("a", 9000),
+		Role:         service.RoleUser,
+		Status:       service.StatusActive,
+		TokenVersion: 1,
+	}
+	handler := newXlabOAuthProviderTestHandler(user)
+
+	code, err := handler.issueXlabOAuthCode(user, "miku-client", "https://ai.mikuapi.org/auth/xlab/callback?layout=horizontal")
+	require.NoError(t, err)
+
+	// The authorization code is embedded in browser callback URLs. Keep it small
+	// so callback URLs stay below common proxy URI limits.
+	require.Less(t, len(code), 1024)
+}

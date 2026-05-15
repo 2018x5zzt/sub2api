@@ -264,10 +264,6 @@ func (h *AuthHandler) issueXlabOAuthTokenWithID(user *service.User, clientID, re
 		ClientID:    clientID,
 		RedirectURI: redirectURI,
 		Scope:       scope,
-		Email:       user.Email,
-		Username:    user.Username,
-		AvatarURL:   user.AvatarURL,
-		Role:        user.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   strconv.FormatInt(user.ID, 10),
 			ID:        tokenID,
@@ -277,6 +273,14 @@ func (h *AuthHandler) issueXlabOAuthTokenWithID(user *service.User, clientID, re
 			Audience:  []string{clientID},
 			Issuer:    "xlabapi",
 		},
+	}
+	// Keep authorization-code JWTs compact. They are returned in browser URLs,
+	// so embedding large profile fields can exceed common URI length limits.
+	if purpose == xlabOAuthProviderPurposeUserToken {
+		claims.Email = user.Email
+		claims.Username = user.Username
+		claims.AvatarURL = user.AvatarURL
+		claims.Role = user.Role
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(h.cfg.JWT.Secret))
 }
