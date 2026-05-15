@@ -880,15 +880,7 @@ func getNormalizedCodexModel(modelID string) string {
 }
 
 func normalizeKnownOpenAICompatModel(model string) string {
-	modelID := strings.TrimSpace(model)
-	if modelID == "" {
-		return ""
-	}
-	if strings.Contains(modelID, "/") {
-		parts := strings.Split(modelID, "/")
-		modelID = parts[len(parts)-1]
-	}
-	return getNormalizedCodexModel(modelID)
+	return normalizeKnownOpenAICodexModel(model)
 }
 
 func normalizeKnownOpenAICompatAlias(model string) string {
@@ -900,7 +892,7 @@ func normalizeKnownOpenAICompatAlias(model string) string {
 		parts := strings.Split(modelID, "/")
 		modelID = parts[len(parts)-1]
 	}
-	normalized := getNormalizedCodexModel(modelID)
+	normalized := normalizeKnownOpenAICodexModel(modelID)
 	if normalized == "" || strings.EqualFold(modelID, normalized) {
 		return ""
 	}

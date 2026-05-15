@@ -210,7 +210,7 @@ func TestAssignSubscriptionReuseWhenSemanticsMatch(t *testing.T) {
 		UserID:    1001,
 		GroupID:   1,
 		StartsAt:  start,
-		ExpiresAt: start.AddDate(0, 0, 30),
+		ExpiresAt: naturalDayEnd(start, 30),
 		Notes:     "init",
 	})
 
@@ -237,7 +237,7 @@ func TestAssignSubscriptionConflictWhenSemanticsMismatch(t *testing.T) {
 		UserID:    2001,
 		GroupID:   1,
 		StartsAt:  start,
-		ExpiresAt: start.AddDate(0, 0, 30),
+		ExpiresAt: naturalDayEnd(start, 30),
 		Notes:     "old-note",
 	})
 
@@ -265,7 +265,7 @@ func TestBulkAssignSubscriptionCreatedReusedAndConflict(t *testing.T) {
 		UserID:    1,
 		GroupID:   1,
 		StartsAt:  start,
-		ExpiresAt: start.AddDate(0, 0, 30),
+		ExpiresAt: naturalDayEnd(start, 30),
 		Notes:     "same-note",
 	})
 	// user 3: 语义冲突（有效期不一致），应 failed
@@ -274,7 +274,7 @@ func TestBulkAssignSubscriptionCreatedReusedAndConflict(t *testing.T) {
 		UserID:    3,
 		GroupID:   1,
 		StartsAt:  start,
-		ExpiresAt: start.AddDate(0, 0, 60),
+		ExpiresAt: naturalDayEnd(start, 60),
 		Notes:     "same-note",
 	})
 
@@ -332,7 +332,7 @@ func TestDetectAssignSemanticConflictCases(t *testing.T) {
 		UserID:    1,
 		GroupID:   1,
 		StartsAt:  start,
-		ExpiresAt: start.AddDate(0, 0, 30),
+		ExpiresAt: naturalDayEnd(start, 30),
 		Notes:     "same",
 	}
 
@@ -378,6 +378,11 @@ func TestAssignSubscriptionGroupTypeValidation(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Equal(t, infraerrors.Code(ErrGroupNotSubscriptionType), infraerrors.Code(err))
+}
+
+func naturalDayEnd(base time.Time, days int) time.Time {
+	target := base.AddDate(0, 0, days)
+	return time.Date(target.Year(), target.Month(), target.Day(), 23, 59, 59, 0, target.Location())
 }
 
 func strconvFormatInt(v int64) string {

@@ -201,3 +201,16 @@ func TestMigration146MarksUnusedBalanceRedeemCodesCommercial(t *testing.T) {
 	require.NotContains(t, sql, "type IN")
 	require.NotContains(t, sql, "status IN")
 }
+
+func TestMigration151AlignsActiveProductSubscriptionExpiryToDayEnd(t *testing.T) {
+	content, err := FS.ReadFile("151_align_active_product_subscription_expiry_to_day_end.sql")
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "UPDATE user_product_subscriptions")
+	require.Contains(t, sql, "date_trunc('day', ups.expires_at) + INTERVAL '23 hours 59 minutes 59 seconds'")
+	require.Contains(t, sql, "ups.status = 'active'")
+	require.Contains(t, sql, "u.status = 'active'")
+	require.Contains(t, sql, "ups.deleted_at IS NULL")
+	require.Contains(t, sql, "u.deleted_at IS NULL")
+}

@@ -42,7 +42,10 @@ func TestSubscriptionProductRepositoryAssignOrExtendProductSubscription(t *testi
 	require.Equal(t, productID, sub.ProductID)
 	require.Equal(t, service.SubscriptionStatusActive, sub.Status)
 	require.Contains(t, sub.Notes, "first grant")
-	require.WithinDuration(t, time.Now().AddDate(0, 0, 7), sub.ExpiresAt, 5*time.Second)
+	require.Equal(t, service.CalculateNaturalDayExpiry(sub.StartsAt, 7), sub.ExpiresAt)
+	require.Equal(t, 23, sub.ExpiresAt.Hour())
+	require.Equal(t, 59, sub.ExpiresAt.Minute())
+	require.Equal(t, 59, sub.ExpiresAt.Second())
 
 	extended, reused, err := repo.AssignOrExtendProductSubscription(ctx, &service.AssignProductSubscriptionInput{
 		UserID:       user.ID,
@@ -53,7 +56,10 @@ func TestSubscriptionProductRepositoryAssignOrExtendProductSubscription(t *testi
 	require.NoError(t, err)
 	require.True(t, reused)
 	require.Equal(t, sub.ID, extended.ID)
-	require.WithinDuration(t, sub.ExpiresAt.AddDate(0, 0, 3), extended.ExpiresAt, 2*time.Second)
+	require.Equal(t, service.CalculateNaturalDayExpiry(sub.ExpiresAt, 3), extended.ExpiresAt)
+	require.Equal(t, 23, extended.ExpiresAt.Hour())
+	require.Equal(t, 59, extended.ExpiresAt.Minute())
+	require.Equal(t, 59, extended.ExpiresAt.Second())
 	require.Contains(t, extended.Notes, "first grant")
 	require.Contains(t, extended.Notes, "second grant")
 }

@@ -332,3 +332,20 @@ func TestOpenAIGatewayService_Forward_TransientProcessingErrorTriggersFailover(t
 	require.Contains(t, string(failoverErr.ResponseBody), "An error occurred while processing your request")
 	require.False(t, c.Writer.Written(), "service 层应返回 failover 错误给上层换号，而不是直接向客户端写响应")
 }
+
+func TestOpenAIGatewayService_IsCodexImageGenerationBridgeEnabled(t *testing.T) {
+	t.Run("非 Codex 客户端禁用", func(t *testing.T) {
+		svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{CodexImageGenerationBridgeEnabled: true}}}
+		require.False(t, svc.isCodexImageGenerationBridgeEnabled(false))
+	})
+
+	t.Run("默认配置禁用", func(t *testing.T) {
+		svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{}}}
+		require.False(t, svc.isCodexImageGenerationBridgeEnabled(true))
+	})
+
+	t.Run("显式开启时启用", func(t *testing.T) {
+		svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{CodexImageGenerationBridgeEnabled: true}}}
+		require.True(t, svc.isCodexImageGenerationBridgeEnabled(true))
+	})
+}

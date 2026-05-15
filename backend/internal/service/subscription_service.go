@@ -199,10 +199,10 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 
 		if existingSub.ExpiresAt.After(now) {
 			// 未过期：从当前过期时间累加
-			newExpiresAt = existingSub.ExpiresAt.AddDate(0, 0, validityDays)
+			newExpiresAt = CalculateNaturalDayExpiry(existingSub.ExpiresAt, validityDays)
 		} else {
 			// 已过期：从当前时间开始计算
-			newExpiresAt = now.AddDate(0, 0, validityDays)
+			newExpiresAt = CalculateNaturalDayExpiry(now, validityDays)
 		}
 
 		// 确保不超过最大过期时间
@@ -296,7 +296,7 @@ func (s *SubscriptionService) createSubscription(ctx context.Context, input *Ass
 	}
 
 	now := time.Now()
-	expiresAt := now.AddDate(0, 0, validityDays)
+	expiresAt := CalculateNaturalDayExpiry(now, validityDays)
 	if expiresAt.After(MaxExpiresAt) {
 		expiresAt = MaxExpiresAt
 	}
@@ -435,7 +435,7 @@ func detectAssignSemanticConflict(existing *UserSubscription, input *AssignSubsc
 
 	normalizedDays := normalizeAssignValidityDays(input.ValidityDays)
 	if !existing.StartsAt.IsZero() {
-		expectedExpiresAt := existing.StartsAt.AddDate(0, 0, normalizedDays)
+		expectedExpiresAt := CalculateNaturalDayExpiry(existing.StartsAt, normalizedDays)
 		if expectedExpiresAt.After(MaxExpiresAt) {
 			expectedExpiresAt = MaxExpiresAt
 		}
@@ -516,10 +516,14 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 	var newExpiresAt time.Time
 	if isExpired {
 		// 已过期：从当前时间开始增加天数
-		newExpiresAt = now.AddDate(0, 0, days)
+		if days > 0 {
+			newExpiresAt = CalculateNaturalDayExpiry(now, days)
+		} else {
+			newExpiresAt = now.AddDate(0, 0, days)
+		}
 	} else {
 		// 未过期：从原过期时间增加/减少天数
-		newExpiresAt = sub.ExpiresAt.AddDate(0, 0, days)
+		newExpiresAt = CalculateNaturalDayExpiry(sub.ExpiresAt, days)
 	}
 
 	if newExpiresAt.After(MaxExpiresAt) {
@@ -559,6 +563,11 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 // GetByID 根据ID获取订阅
 func (s *SubscriptionService) GetByID(ctx context.Context, id int64) (*UserSubscription, error) {
 	return s.userSubRepo.GetByID(ctx, id)
+}
+
+func CalculateNaturalDayExpiry(base time.Time, days int) time.Time {
+	target := base.AddDate(0, 0, days)
+	return time.Date(target.Year(), target.Month(), target.Day(), 23, 59, 59, 0, target.Location())
 }
 
 // GetActiveSubscription 获取用户对特定分组的有效订阅

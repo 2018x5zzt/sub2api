@@ -117,21 +117,6 @@ function navLabel(item: NavItem, t: (key: string) => string) {
   return item.label ?? (item.labelKey ? t(item.labelKey) : '')
 }
 
-function resolveLegacyConsoleURL(pathname: string): string {
-  if (typeof window === 'undefined') return '/legacy'
-  const path = pathname.startsWith('/') ? pathname : '/dashboard'
-  const currentPort = window.location.port
-  const host = window.location.hostname
-  const protocol = window.location.protocol || 'http:'
-  const mappedPortByCurrent: Record<string, string> = {
-    '11454': '11456',
-    '8081': '8084'
-  }
-  const legacyPort = mappedPortByCurrent[currentPort]
-  if (!legacyPort) return `/legacy${path}`
-  return `${protocol}//${host}:${legacyPort}${path}`
-}
-
 function userNavSections(items: NavItem[]) {
   const core = new Set(['/dashboard', '/keys', '/models', '/usage', '/available-channels', '/monitor', '/profile'])
   const wallet = new Set(['/subscriptions', '/purchase', '/orders', '/redeem', '/affiliate'])
@@ -157,7 +142,6 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
   const publicSettings = useAuthStore((s) => s.publicSettings)
   const siteName = publicSettings?.site_name || 'XlabAPI'
   const siteLogo = publicSettings?.site_logo || '/logo.png'
-  const legacyHref = resolveLegacyConsoleURL(location.pathname)
   const docLink = resolveDocLink(publicSettings?.doc_url)
 
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -340,11 +324,6 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
         </main>
       </div>
 
-      <div className="fixed bottom-4 right-4 z-30 card shadow-elevated p-2 flex items-center gap-2">
-        <span className="hidden sm:inline text-xs text-ink-3 px-2">前端入口</span>
-        <button type="button" className="btn btn-primary btn-sm" aria-current="page">`n          新版入口`n        </button>
-        <a href={legacyHref} className="btn btn-ghost btn-sm" rel="noreferrer">`n          旧版入口`n        </a>
-      </div>
     </div>
   )
 }
