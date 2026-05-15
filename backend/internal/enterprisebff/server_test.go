@@ -437,9 +437,29 @@ func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 type visibleGroupSeed struct {
-	ID       int64
-	Name     string
-	Platform string
+	ID                              int64
+	Name                            string
+	Description                     string
+	Platform                        string
+	RateMultiplier                  float64
+	PricingMode                     string
+	DefaultBudgetMultiplier         *float64
+	IsExclusive                     bool
+	Status                          string
+	SubscriptionType                string
+	DailyLimitUSD                   *float64
+	WeeklyLimitUSD                  *float64
+	MonthlyLimitUSD                 *float64
+	ImagePrice1K                    *float64
+	ImagePrice2K                    *float64
+	ImagePrice4K                    *float64
+	ClaudeCodeOnly                  bool
+	AllowMessagesDispatch           bool
+	FallbackGroupID                 *int64
+	FallbackGroupIDOnInvalidRequest *int64
+	RequireOAuthOnly                bool
+	RequirePrivacySet               bool
+	RPMLimit                        int
 }
 
 type fakeEnterpriseStore struct {
@@ -473,9 +493,29 @@ func (s *fakeEnterpriseStore) ListVisibleGroups(_ context.Context, userID int64)
 	out := make([]EnterpriseVisibleGroup, 0, len(seeds))
 	for _, seed := range seeds {
 		out = append(out, EnterpriseVisibleGroup{
-			ID:       seed.ID,
-			Name:     seed.Name,
-			Platform: seed.Platform,
+			ID:                              seed.ID,
+			Name:                            seed.Name,
+			Description:                     seed.Description,
+			Platform:                        seed.Platform,
+			RateMultiplier:                  seed.RateMultiplier,
+			PricingMode:                     seed.PricingMode,
+			DefaultBudgetMultiplier:         seed.DefaultBudgetMultiplier,
+			IsExclusive:                     seed.IsExclusive,
+			Status:                          seed.Status,
+			SubscriptionType:                seed.SubscriptionType,
+			DailyLimitUSD:                   seed.DailyLimitUSD,
+			WeeklyLimitUSD:                  seed.WeeklyLimitUSD,
+			MonthlyLimitUSD:                 seed.MonthlyLimitUSD,
+			ImagePrice1K:                    seed.ImagePrice1K,
+			ImagePrice2K:                    seed.ImagePrice2K,
+			ImagePrice4K:                    seed.ImagePrice4K,
+			ClaudeCodeOnly:                  seed.ClaudeCodeOnly,
+			AllowMessagesDispatch:           seed.AllowMessagesDispatch,
+			FallbackGroupID:                 seed.FallbackGroupID,
+			FallbackGroupIDOnInvalidRequest: seed.FallbackGroupIDOnInvalidRequest,
+			RequireOAuthOnly:                seed.RequireOAuthOnly,
+			RequirePrivacySet:               seed.RequirePrivacySet,
+			RPMLimit:                        seed.RPMLimit,
 		})
 	}
 	return out, nil

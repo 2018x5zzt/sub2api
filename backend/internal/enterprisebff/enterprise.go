@@ -23,9 +23,29 @@ type EnterpriseProfile struct {
 }
 
 type EnterpriseVisibleGroup struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	Platform string `json:"platform"`
+	ID                              int64    `json:"id"`
+	Name                            string   `json:"name"`
+	Description                     string   `json:"description,omitempty"`
+	Platform                        string   `json:"platform"`
+	RateMultiplier                  float64  `json:"rate_multiplier"`
+	PricingMode                     string   `json:"pricing_mode"`
+	DefaultBudgetMultiplier         *float64 `json:"default_budget_multiplier,omitempty"`
+	IsExclusive                     bool     `json:"is_exclusive"`
+	Status                          string   `json:"status"`
+	SubscriptionType                string   `json:"subscription_type"`
+	DailyLimitUSD                   *float64 `json:"daily_limit_usd"`
+	WeeklyLimitUSD                  *float64 `json:"weekly_limit_usd"`
+	MonthlyLimitUSD                 *float64 `json:"monthly_limit_usd"`
+	ImagePrice1K                    *float64 `json:"image_price_1k"`
+	ImagePrice2K                    *float64 `json:"image_price_2k"`
+	ImagePrice4K                    *float64 `json:"image_price_4k"`
+	ClaudeCodeOnly                  bool     `json:"claude_code_only"`
+	AllowMessagesDispatch           bool     `json:"allow_messages_dispatch"`
+	FallbackGroupID                 *int64   `json:"fallback_group_id"`
+	FallbackGroupIDOnInvalidRequest *int64   `json:"fallback_group_id_on_invalid_request"`
+	RequireOAuthOnly                bool     `json:"require_oauth_only"`
+	RequirePrivacySet               bool     `json:"require_privacy_set"`
+	RPMLimit                        int      `json:"rpm_limit"`
 }
 
 func (p *EnterpriseProfile) DisplayLabel() string {
@@ -157,13 +177,34 @@ func (s *entEnterpriseStore) ListVisibleGroups(ctx context.Context, userID int64
 
 	allGroups := make([]service.Group, 0, len(rows))
 	for _, row := range rows {
+		description := ""
+		if row.Description != nil {
+			description = *row.Description
+		}
 		allGroups = append(allGroups, service.Group{
-			ID:               row.ID,
-			Name:             row.Name,
-			Platform:         row.Platform,
-			Status:           row.Status,
-			IsExclusive:      row.IsExclusive,
-			SubscriptionType: row.SubscriptionType,
+			ID:                              row.ID,
+			Name:                            row.Name,
+			Description:                     description,
+			Platform:                        row.Platform,
+			RateMultiplier:                  row.RateMultiplier,
+			PricingMode:                     row.PricingMode,
+			DefaultBudgetMultiplier:         row.DefaultBudgetMultiplier,
+			Status:                          row.Status,
+			IsExclusive:                     row.IsExclusive,
+			SubscriptionType:                row.SubscriptionType,
+			DailyLimitUSD:                   row.DailyLimitUsd,
+			WeeklyLimitUSD:                  row.WeeklyLimitUsd,
+			MonthlyLimitUSD:                 row.MonthlyLimitUsd,
+			ImagePrice1K:                    row.ImagePrice1k,
+			ImagePrice2K:                    row.ImagePrice2k,
+			ImagePrice4K:                    row.ImagePrice4k,
+			ClaudeCodeOnly:                  row.ClaudeCodeOnly,
+			AllowMessagesDispatch:           row.AllowMessagesDispatch,
+			FallbackGroupID:                 row.FallbackGroupID,
+			FallbackGroupIDOnInvalidRequest: row.FallbackGroupIDOnInvalidRequest,
+			RequireOAuthOnly:                row.RequireOauthOnly,
+			RequirePrivacySet:               row.RequirePrivacySet,
+			RPMLimit:                        row.RpmLimit,
 		})
 	}
 	return selectEnterpriseVisibleGroups(
@@ -271,9 +312,29 @@ func selectEnterpriseVisibleGroups(
 		}
 
 		out = append(out, EnterpriseVisibleGroup{
-			ID:       candidate.ID,
-			Name:     candidate.Name,
-			Platform: candidate.Platform,
+			ID:                              candidate.ID,
+			Name:                            candidate.Name,
+			Description:                     candidate.Description,
+			Platform:                        candidate.Platform,
+			RateMultiplier:                  candidate.RateMultiplier,
+			PricingMode:                     candidate.PricingMode,
+			DefaultBudgetMultiplier:         candidate.DefaultBudgetMultiplier,
+			IsExclusive:                     candidate.IsExclusive,
+			Status:                          candidate.Status,
+			SubscriptionType:                candidate.SubscriptionType,
+			DailyLimitUSD:                   candidate.DailyLimitUSD,
+			WeeklyLimitUSD:                  candidate.WeeklyLimitUSD,
+			MonthlyLimitUSD:                 candidate.MonthlyLimitUSD,
+			ImagePrice1K:                    candidate.ImagePrice1K,
+			ImagePrice2K:                    candidate.ImagePrice2K,
+			ImagePrice4K:                    candidate.ImagePrice4K,
+			ClaudeCodeOnly:                  candidate.ClaudeCodeOnly,
+			AllowMessagesDispatch:           candidate.AllowMessagesDispatch,
+			FallbackGroupID:                 candidate.FallbackGroupID,
+			FallbackGroupIDOnInvalidRequest: candidate.FallbackGroupIDOnInvalidRequest,
+			RequireOAuthOnly:                candidate.RequireOAuthOnly,
+			RequirePrivacySet:               candidate.RequirePrivacySet,
+			RPMLimit:                        candidate.RPMLimit,
 		})
 	}
 	return out

@@ -218,7 +218,7 @@ func (s *Server) handleRoleAwareKeyCreate(c *gin.Context) {
 		s.renderAdminKeyCreate(c, user)
 		return
 	}
-	s.proxyValidatedKeyMutation(c, user, user.ID, "/keys", transformKeysEnvelope, true)
+	s.proxyValidatedKeyMutation(c, user, user.ID, "/keys", transformKeysEnvelope)
 }
 
 func (s *Server) handleRoleAwareKeyUpdate(c *gin.Context) {
@@ -230,7 +230,7 @@ func (s *Server) handleRoleAwareKeyUpdate(c *gin.Context) {
 		s.renderAdminKeyUpdate(c, user)
 		return
 	}
-	s.proxyValidatedKeyMutation(c, user, user.ID, buildPathf("/keys/%s", c.Param("id")), transformKeysEnvelope, false)
+	s.proxyValidatedKeyMutation(c, user, user.ID, buildPathf("/keys/%s", c.Param("id")), transformKeysEnvelope)
 }
 
 func (s *Server) handleRoleAwareKeyDelete(c *gin.Context) {

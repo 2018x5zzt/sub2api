@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Copy, Trash2, Pencil } from 'lucide-react'
@@ -11,9 +11,16 @@ import { Badge } from '@/components/ui/Badge'
 import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { keysAPI } from '@/api/keys'
+import { modelsAPI } from '@/api/models'
 import { toast } from '@/components/ui/Toast'
 import i18n from '@/i18n'
-import type { ApiKey } from '@/types'
+import type { ApiKey, CreateApiKeyRequest, Group, UpdateApiKeyRequest } from '@/types'
+
+interface KeyFormState {
+  name: string
+  groupId: number | null
+  budgetMultiplier: string
+}
 
 function maskKey(k: string) {
   if (!k) return ''
@@ -38,19 +45,66 @@ function statusTone(s: ApiKey['status']) {
   }
 }
 
+function findGroup(groups: Group[], groupId: number | null) {
+  if (groupId == null) return null
+  return groups.find((group) => group.id === groupId) || null
+}
+
+function defaultBudgetMultiplier(group: Group | null) {
+  return group?.default_budget_multiplier ?? 8
+}
+
+function isDynamicGroup(group: Group | null) {
+  return group?.pricing_mode === 'dynamic'
+}
+
+function parseBudgetMultiplier(raw: string): number | null {
+  const value = Number(raw)
+  if (!Number.isFinite(value)) return null
+  if (value < 3 || value > 50) return null
+  return Number(value.toFixed(2))
+}
+
+function toGroupText(group: Group | undefined, t: (key: string) => string) {
+  if (!group) return t('keys.noGroup')
+  return group.name
+}
+
+function selectClass() {
+  return 'input appearance-none cursor-pointer bg-bg-4'
+}
+
 export default function KeysPage() {
   const { t } = useTranslation()
   const qc = useQueryClient()
+
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [createOpen, setCreateOpen] = useState(false)
-  const [createName, setCreateName] = useState('')
-  const [creating, setCreating] = useState(false)
+
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingKey, setEditingKey] = useState<ApiKey | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [form, setForm] = useState<KeyFormState>({ name: '', groupId: null, budgetMultiplier: '' })
 
   const { data, isLoading } = useQuery({
     queryKey: ['user-keys', page, search],
     queryFn: () => keysAPI.listKeys(page, 20, search ? { search } : undefined)
   })
+
+  const { data: groups = [] } = useQuery({
+    queryKey: ['user-visible-groups-for-keys'],
+    queryFn: () => modelsAPI.getUserGroups()
+  })
+
+  const groupById = useMemo(() => {
+    const map = new Map<number, Group>()
+    for (const group of groups) {
+      map.set(group.id, group)
+    }
+    return map
+  }, [groups])
+
+  const selectedFormGroup = useMemo(() => findGroup(groups, form.groupId), [groups, form.groupId])
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => keysAPI.deleteKey(id),
@@ -61,24 +115,92 @@ export default function KeysPage() {
     onError: (e: { message?: string }) => toast.error(e?.message || (t('common.error') as string))
   })
 
-  async function onCreate() {
-    if (!createName.trim()) {
+  function closeForm() {
+    setFormOpen(false)
+    setEditingKey(null)
+    setSubmitting(false)
+    setForm({ name: '', groupId: null, budgetMultiplier: '' })
+  }
+
+  function openCreateForm() {
+    setEditingKey(null)
+    setForm({ name: '', groupId: null, budgetMultiplier: '' })
+    setFormOpen(true)
+  }
+
+  function openEditForm(key: ApiKey) {
+    const keyGroup = key.group_id != null ? groupById.get(key.group_id) ?? null : null
+    const nextBudget = isDynamicGroup(keyGroup)
+      ? String(key.budget_multiplier ?? defaultBudgetMultiplier(keyGroup ?? null))
+      : ''
+
+    setEditingKey(key)
+    setForm({
+      name: key.name,
+      groupId: key.group_id,
+      budgetMultiplier: nextBudget
+    })
+    setFormOpen(true)
+  }
+
+  function handleGroupChange(value: string) {
+    const groupId = value ? Number(value) : null
+    const nextGroup = findGroup(groups, groupId)
+    setForm((prev) => {
+      if (isDynamicGroup(nextGroup)) {
+        return {
+          ...prev,
+          groupId,
+          budgetMultiplier: String(defaultBudgetMultiplier(nextGroup))
+        }
+      }
+      return { ...prev, groupId, budgetMultiplier: '' }
+    })
+  }
+
+  async function onSubmit() {
+    if (!form.name.trim()) {
       toast.warning('Name is required')
       return
     }
-    setCreating(true)
+
+    if (form.groupId == null) {
+      toast.warning(t('keys.groupRequired') as string)
+      return
+    }
+
+    const dynamic = isDynamicGroup(selectedFormGroup)
+    const budget = parseBudgetMultiplier(form.budgetMultiplier)
+    if (dynamic && budget == null) {
+      toast.warning(t('keys.budgetMultiplierRequired') as string)
+      return
+    }
+
+    const payloadBase = {
+      name: form.name.trim(),
+      group_id: form.groupId
+    }
+
+    const payloadWithBudget = dynamic
+      ? { ...payloadBase, budget_multiplier: budget }
+      : payloadBase
+
+    setSubmitting(true)
     try {
-      const k = await keysAPI.createKey({ name: createName.trim() })
-      qc.invalidateQueries({ queryKey: ['user-keys'] })
-      toast.success(t('common.success') as string)
-      setCreateOpen(false)
-      setCreateName('')
-      // Show the newly-created key in a follow-up modal would be ideal — for v2 phase 1 we just toast it
-      setTimeout(() => copy(k.key), 200)
+      if (editingKey) {
+        await keysAPI.updateKey(editingKey.id, payloadWithBudget as UpdateApiKeyRequest)
+        toast.success(t('keys.keyUpdatedSuccess') as string)
+      } else {
+        const created = await keysAPI.createKey(payloadWithBudget as CreateApiKeyRequest)
+        toast.success(t('keys.keyCreatedSuccess') as string)
+        setTimeout(() => copy(created.key), 200)
+      }
+
+      await qc.invalidateQueries({ queryKey: ['user-keys'] })
+      closeForm()
     } catch (e) {
       toast.error((e as { message?: string })?.message || (t('common.error') as string))
-    } finally {
-      setCreating(false)
+      setSubmitting(false)
     }
   }
 
@@ -88,7 +210,7 @@ export default function KeysPage() {
         title={t('keys.title')}
         description={t('keys.description') as string}
         actions={
-          <Button onClick={() => setCreateOpen(true)}>
+          <Button onClick={openCreateForm}>
             <Plus className="h-4 w-4" />
             {t('keys.createKey')}
           </Button>
@@ -96,7 +218,7 @@ export default function KeysPage() {
       />
 
       <Card className="p-4">
-        <div className="flex flex-wrap gap-3 items-center mb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
           <Input
             name="search"
             placeholder={t('keys.searchPlaceholder') as string}
@@ -116,6 +238,7 @@ export default function KeysPage() {
               <TR>
                 <TH>{t('keys.nameLabel')}</TH>
                 <TH>{t('keys.apiKey')}</TH>
+                <TH>{t('keys.group')}</TH>
                 <TH>{t('keys.statusLabel')}</TH>
                 <TH>{t('keys.created')}</TH>
                 <TH className="text-right">{t('common.actions')}</TH>
@@ -128,17 +251,18 @@ export default function KeysPage() {
                   <TD>
                     <button
                       onClick={() => copy(k.key)}
-                      className="font-mono text-xs text-ink-2 hover:text-orange inline-flex items-center gap-1.5"
+                      className="inline-flex items-center gap-1.5 font-mono text-xs text-ink-2 hover:text-orange"
                       title={k.key}
                     >
                       {maskKey(k.key)}
                       <Copy className="h-3 w-3 opacity-60" />
                     </button>
                   </TD>
+                  <TD className="text-sm text-ink-2">{toGroupText(k.group || (k.group_id != null ? groupById.get(k.group_id) : undefined), t)}</TD>
                   <TD>
                     <Badge tone={statusTone(k.status)}>{k.status}</Badge>
                   </TD>
-                  <TD className="text-ink-2 text-xs">
+                  <TD className="text-xs text-ink-2">
                     {new Date(k.created_at).toLocaleDateString()}
                   </TD>
                   <TD className="text-right">
@@ -146,7 +270,7 @@ export default function KeysPage() {
                       <button
                         title={t('keys.editKey') as string}
                         className="btn btn-ghost btn-icon btn-sm"
-                        onClick={() => toast.info(t('v2Common.editDeferred') as string)}
+                        onClick={() => openEditForm(k)}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
@@ -167,7 +291,7 @@ export default function KeysPage() {
               ))}
               {(data?.items ?? []).length === 0 && (
                 <TR>
-                  <TD colSpan={5} className="text-center text-ink-3 py-8">
+                  <TD colSpan={6} className="py-8 text-center text-ink-3">
                     {t('common.noData')}
                   </TD>
                 </TR>
@@ -177,7 +301,7 @@ export default function KeysPage() {
         )}
 
         {data && data.pages > 1 && (
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-line-2 text-sm">
+          <div className="mt-4 flex items-center justify-between border-t border-line-2 pt-3 text-sm">
             <div className="text-ink-3">
               {t('common.total')}: {data.total}
             </div>
@@ -194,28 +318,67 @@ export default function KeysPage() {
       </Card>
 
       <Modal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title={t('keys.createKey')}
+        open={formOpen}
+        onClose={closeForm}
+        title={editingKey ? t('keys.editKey') : t('keys.createKey')}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setCreateOpen(false)}>
+            <Button variant="secondary" onClick={closeForm}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={onCreate} loading={creating}>
-              {t('common.create')}
+            <Button onClick={onSubmit} loading={submitting}>
+              {editingKey ? t('common.update') : t('common.create')}
             </Button>
           </>
         }
       >
-        <Input
-          name="name"
-          autoFocus
-          label={t('keys.nameLabel') as string}
-          placeholder={t('keys.namePlaceholder') as string}
-          value={createName}
-          onChange={(e) => setCreateName(e.target.value)}
-        />
+        <div className="space-y-4">
+          <Input
+            name="name"
+            autoFocus
+            label={t('keys.nameLabel') as string}
+            placeholder={t('keys.namePlaceholder') as string}
+            value={form.name}
+            onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+          />
+
+          <div>
+            <label htmlFor="key-group" className="input-label">
+              {t('keys.groupLabel')}
+            </label>
+            <select
+              id="key-group"
+              className={selectClass()}
+              value={form.groupId ?? ''}
+              onChange={(e) => handleGroupChange(e.target.value)}
+            >
+              <option value="">{t('keys.selectGroup')}</option>
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {isDynamicGroup(selectedFormGroup) && (
+            <Input
+              name="budget_multiplier"
+              label={t('keys.budgetMultiplierLabel') as string}
+              type="number"
+              step="0.1"
+              min={3}
+              max={50}
+              value={form.budgetMultiplier}
+              onChange={(e) => setForm((prev) => ({ ...prev, budgetMultiplier: e.target.value }))}
+              hint={t('keys.budgetMultiplierHint', {
+                min: 3,
+                max: 50,
+                default: defaultBudgetMultiplier(selectedFormGroup)
+              }) as string}
+            />
+          )}
+        </div>
       </Modal>
     </>
   )

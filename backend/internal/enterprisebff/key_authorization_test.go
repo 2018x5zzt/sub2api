@@ -67,7 +67,7 @@ func TestEnterpriseUserKeyCreateRejectsUnauthorizedGroupID(t *testing.T) {
 	require.False(t, upstreamCreateCalled)
 }
 
-func TestEnterpriseUserKeyUpdateRejectsGroupRebind(t *testing.T) {
+func TestEnterpriseUserKeyUpdateAllowsAuthorizedGroupRebind(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	var upstreamUpdateCalled bool
@@ -113,9 +113,8 @@ func TestEnterpriseUserKeyUpdateRejectsGroupRebind(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	server.Router().ServeHTTP(recorder, req)
 
-	require.Equal(t, http.StatusBadRequest, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "现有 Key 不支持修改绑定号池")
-	require.False(t, upstreamUpdateCalled)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.True(t, upstreamUpdateCalled)
 }
 
 func TestEnterpriseAdminKeyCreateRejectsCrossEnterpriseTargetUser(t *testing.T) {

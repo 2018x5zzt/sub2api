@@ -42,6 +42,16 @@ func (s *settingRepoStub) Delete(ctx context.Context, key string) error {
 }
 
 func TestSelectEnterpriseVisibleGroups_ReturnsOnlyConfiguredGroups(t *testing.T) {
+	defaultBudget := 12.0
+	dailyLimit := 10.0
+	weeklyLimit := 70.0
+	monthlyLimit := 300.0
+	image1K := 0.02
+	image2K := 0.04
+	image4K := 0.08
+	fallbackID := int64(9)
+	fallbackOnInvalidID := int64(10)
+
 	groups := []service.Group{
 		{
 			ID:               1,
@@ -52,12 +62,29 @@ func TestSelectEnterpriseVisibleGroups_ReturnsOnlyConfiguredGroups(t *testing.T)
 			SubscriptionType: service.SubscriptionTypeStandard,
 		},
 		{
-			ID:               2,
-			Name:             "exclusive-private",
-			Platform:         service.PlatformOpenAI,
-			Status:           service.StatusActive,
-			IsExclusive:      true,
-			SubscriptionType: service.SubscriptionTypeStandard,
+			ID:                              2,
+			Name:                            "exclusive-private",
+			Description:                     "enterprise only",
+			Platform:                        service.PlatformOpenAI,
+			RateMultiplier:                  1.8,
+			Status:                          service.StatusActive,
+			PricingMode:                     service.GroupPricingModeDynamic,
+			DefaultBudgetMultiplier:         &defaultBudget,
+			IsExclusive:                     true,
+			SubscriptionType:                service.SubscriptionTypeStandard,
+			DailyLimitUSD:                   &dailyLimit,
+			WeeklyLimitUSD:                  &weeklyLimit,
+			MonthlyLimitUSD:                 &monthlyLimit,
+			ImagePrice1K:                    &image1K,
+			ImagePrice2K:                    &image2K,
+			ImagePrice4K:                    &image4K,
+			ClaudeCodeOnly:                  true,
+			AllowMessagesDispatch:           true,
+			FallbackGroupID:                 &fallbackID,
+			FallbackGroupIDOnInvalidRequest: &fallbackOnInvalidID,
+			RequireOAuthOnly:                true,
+			RequirePrivacySet:               true,
+			RPMLimit:                        15,
 		},
 		{
 			ID:               3,
@@ -84,8 +111,38 @@ func TestSelectEnterpriseVisibleGroups_ReturnsOnlyConfiguredGroups(t *testing.T)
 	})
 
 	require.Equal(t, []EnterpriseVisibleGroup{
-		{ID: 2, Name: "exclusive-private", Platform: service.PlatformOpenAI},
-		{ID: 3, Name: "subscription-only", Platform: service.PlatformGemini},
+		{
+			ID:                              2,
+			Name:                            "exclusive-private",
+			Description:                     "enterprise only",
+			Platform:                        service.PlatformOpenAI,
+			RateMultiplier:                  1.8,
+			PricingMode:                     service.GroupPricingModeDynamic,
+			DefaultBudgetMultiplier:         &defaultBudget,
+			IsExclusive:                     true,
+			Status:                          service.StatusActive,
+			SubscriptionType:                service.SubscriptionTypeStandard,
+			DailyLimitUSD:                   &dailyLimit,
+			WeeklyLimitUSD:                  &weeklyLimit,
+			MonthlyLimitUSD:                 &monthlyLimit,
+			ImagePrice1K:                    &image1K,
+			ImagePrice2K:                    &image2K,
+			ImagePrice4K:                    &image4K,
+			ClaudeCodeOnly:                  true,
+			AllowMessagesDispatch:           true,
+			FallbackGroupID:                 &fallbackID,
+			FallbackGroupIDOnInvalidRequest: &fallbackOnInvalidID,
+			RequireOAuthOnly:                true,
+			RequirePrivacySet:               true,
+			RPMLimit:                        15,
+		},
+		{
+			ID:               3,
+			Name:             "subscription-only",
+			Platform:         service.PlatformGemini,
+			Status:           service.StatusActive,
+			SubscriptionType: service.SubscriptionTypeSubscription,
+		},
 	}, got)
 }
 
