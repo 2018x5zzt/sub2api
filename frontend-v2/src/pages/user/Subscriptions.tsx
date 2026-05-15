@@ -43,11 +43,6 @@ function hasLimit(limit: number | null | undefined) {
   return typeof limit === 'number' && limit > 0
 }
 
-function inferLimit(limit: number | null | undefined, dailyLimit: number | null | undefined, multiplier: number): number {
-  if (hasLimit(limit)) return Number(limit)
-  return hasLimit(dailyLimit) ? Number(dailyLimit) * multiplier : 0
-}
-
 function statusTone(status: string) {
   if (status === 'active') return 'success' as const
   if (status === 'expired') return 'warning' as const
@@ -176,10 +171,13 @@ function UsageLine({
 function ProductCard({ product }: { product: ActiveSubscriptionProduct }) {
   const { t } = useTranslation()
   const primaryPlatform = product.groups[0]?.group_platform
-  const dailyLimit = Number(product.daily_limit_usd || 0) + Number(product.daily_carryover_in_usd || 0)
-  const weeklyLimit = inferLimit(product.weekly_limit_usd, product.daily_limit_usd, 7)
-  const monthlyLimit = inferLimit(product.monthly_limit_usd, product.daily_limit_usd, 30)
-  const hasQuota = hasLimit(product.daily_limit_usd) || hasLimit(product.weekly_limit_usd) || hasLimit(product.monthly_limit_usd)
+  const dailyBaseLimit = Number(product.daily_limit_usd || 0)
+  const dailyCarryover = Number(product.daily_carryover_in_usd || 0)
+  const dailyLimit = dailyBaseLimit + dailyCarryover
+  const hasDailyQuota = dailyLimit > 0
+  const hasWeeklyQuota = hasLimit(product.weekly_limit_usd)
+  const hasMonthlyQuota = hasLimit(product.monthly_limit_usd)
+  const hasQuota = hasDailyQuota || hasWeeklyQuota || hasMonthlyQuota
 
   return (
     <Card className="overflow-hidden">
@@ -209,18 +207,16 @@ function ProductCard({ product }: { product: ActiveSubscriptionProduct }) {
 
         {hasQuota ? (
           <div className="space-y-3">
-            <UsageLine
-              label={t('userSubscriptions.daily') as string}
-              used={product.daily_usage_usd}
-              limit={dailyLimit}
-              hint={
-                Number(product.daily_carryover_in_usd || 0) > 0
-                  ? `结转 ${money(product.daily_carryover_in_usd)} + 今日 ${money(product.daily_limit_usd)} = 可用 ${money(dailyLimit)}`
-                  : undefined
-              }
-            />
-            <UsageLine label={t('userSubscriptions.weekly') as string} used={product.weekly_usage_usd} limit={weeklyLimit} />
-            <UsageLine label={t('userSubscriptions.monthly') as string} used={product.monthly_usage_usd} limit={monthlyLimit} />
+            {hasDailyQuota && (
+              <UsageLine
+                label={t('userSubscriptions.daily') as string}
+                used={product.daily_usage_usd}
+                limit={dailyLimit}
+                hint={dailyCarryover > 0 ? `结转 ${money(dailyCarryover)} + 今日 ${money(dailyBaseLimit)} = 可用 ${money(dailyLimit)}` : undefined}
+              />
+            )}
+            {hasWeeklyQuota && <UsageLine label={t('userSubscriptions.weekly') as string} used={product.weekly_usage_usd} limit={product.weekly_limit_usd} />}
+            {hasMonthlyQuota && <UsageLine label={t('userSubscriptions.monthly') as string} used={product.monthly_usage_usd} limit={product.monthly_limit_usd} />}
           </div>
         ) : (
           <div className="flex items-center gap-3 rounded-xl bg-bg-2 px-4 py-5">
