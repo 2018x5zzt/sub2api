@@ -105,6 +105,17 @@ func TestSettingService_GetFrameSrcOrigins_IncludesImageStudioOrigins(t *testing
 	require.True(t, slices.Contains(origins, "https://iframe.mikuapi.org"))
 }
 
+func TestSettingService_GetFrameSrcOrigins_IncludesImageStudioOriginsWithoutCustomMenu(t *testing.T) {
+	svc := NewSettingService(&settingPublicRepoStub{
+		values: map[string]string{},
+	}, &config.Config{})
+
+	origins, err := svc.GetFrameSrcOrigins(context.Background())
+	require.NoError(t, err)
+	require.True(t, slices.Contains(origins, "https://ai.mikuapi.org"))
+	require.True(t, slices.Contains(origins, "https://iframe.mikuapi.org"))
+}
+
 func TestSettingService_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *testing.T) {
 	svc := NewSettingService(&settingPublicRepoStub{
 		values: map[string]string{

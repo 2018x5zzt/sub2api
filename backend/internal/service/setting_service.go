@@ -880,6 +880,10 @@ func (s *SettingService) GetFrameSrcOrigins(ctx context.Context) ([]string, erro
 		addOrigin("https://iframe.mikuapi.org/")
 	}
 
+	// Built-in image studio page (/image-studio) always embeds these origins.
+	// Keep them in CSP frame-src allowlist regardless of custom menu settings.
+	addImageStudioOrigins()
+
 	// home content URL (when home_content is set to a URL for iframe embedding)
 	addOrigin(settings.HomeContent)
 
@@ -891,9 +895,6 @@ func (s *SettingService) GetFrameSrcOrigins(ctx context.Context) ([]string, erro
 	// all custom menu items (including admin-only, since CSP must allow all iframes)
 	for _, item := range parseCustomMenuItemURLs(settings.CustomMenuItems) {
 		addOrigin(item)
-		if strings.TrimSpace(item) == "/image-studio" {
-			addImageStudioOrigins()
-		}
 	}
 
 	return origins, nil
