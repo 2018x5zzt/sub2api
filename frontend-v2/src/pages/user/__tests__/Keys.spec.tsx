@@ -321,4 +321,31 @@ describe('KeysPage', () => {
     expect(typeof payload.expires_at).toBe('string')
     expect(String(payload.expires_at)).toContain('2030-01-02T')
   })
+
+  it('opens edit modal when ip restriction lists are null in API response', async () => {
+    const user = userEvent.setup()
+    listKeys.mockResolvedValueOnce({
+      items: [
+        {
+          ...keyItem,
+          id: 100,
+          name: 'null-ip key',
+          ip_whitelist: null,
+          ip_blacklist: null
+        }
+      ],
+      total: 1,
+      pages: 1
+    })
+
+    renderPage()
+
+    await screen.findByText('null-ip key')
+    await user.click(screen.getByRole('button', { name: /keys.editKey/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toBeTruthy()
+    const nameInput = within(dialog).getByLabelText('keys.nameLabel') as HTMLInputElement
+    expect(nameInput.value).toBe('null-ip key')
+  })
 })

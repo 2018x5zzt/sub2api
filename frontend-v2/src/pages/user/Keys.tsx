@@ -199,6 +199,8 @@ export default function KeysPage() {
 
   function openEditForm(key: ApiKey) {
     const keyGroup = key.group_id != null ? groupById.get(key.group_id) ?? null : null
+    const ipWhitelist = Array.isArray(key.ip_whitelist) ? key.ip_whitelist : []
+    const ipBlacklist = Array.isArray(key.ip_blacklist) ? key.ip_blacklist : []
     const nextBudget = isDynamicGroup(keyGroup)
       ? String(key.budget_multiplier ?? defaultBudgetMultiplier(keyGroup ?? null))
       : ''
@@ -211,9 +213,9 @@ export default function KeysPage() {
       status: key.status === 'active' ? 'active' : 'inactive',
       useCustomKey: false,
       customKey: '',
-      enableIpRestriction: key.ip_whitelist.length > 0 || key.ip_blacklist.length > 0,
-      ipWhitelist: key.ip_whitelist.join('\n'),
-      ipBlacklist: key.ip_blacklist.join('\n'),
+      enableIpRestriction: ipWhitelist.length > 0 || ipBlacklist.length > 0,
+      ipWhitelist: ipWhitelist.join('\n'),
+      ipBlacklist: ipBlacklist.join('\n'),
       quota: key.quota > 0 ? String(key.quota) : '',
       enableRateLimit: key.rate_limit_5h > 0 || key.rate_limit_1d > 0 || key.rate_limit_7d > 0,
       rateLimit5h: key.rate_limit_5h > 0 ? String(key.rate_limit_5h) : '',
