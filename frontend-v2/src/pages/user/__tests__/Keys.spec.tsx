@@ -243,11 +243,11 @@ describe('KeysPage', () => {
 
     await user.type(budgetInput, '18')
     await user.click(within(dialog).getByRole('button', { name: 'common.create' }))
-    expect(createKey).toHaveBeenCalledWith({
+    expect(createKey).toHaveBeenCalledWith(expect.objectContaining({
       name: 'new key',
       group_id: 20,
       budget_multiplier: 18
-    })
+    }))
   })
 
   it('updates existing key group and dynamic budget in edit modal', async () => {
@@ -269,10 +269,56 @@ describe('KeysPage', () => {
     await user.type(budgetInput, '14')
 
     await user.click(within(dialog).getByRole('button', { name: 'common.update' }))
-    expect(updateKey).toHaveBeenCalledWith(99, {
+    expect(updateKey).toHaveBeenCalledWith(99, expect.objectContaining({
       name: 'fixed key',
       group_id: 20,
       budget_multiplier: 14
-    })
+    }))
+  })
+
+  it('submits full edit payload fields when quota/rate-limit/expiration are enabled', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('fixed key')
+    await user.click(screen.getByRole('button', { name: /keys.editKey/i }))
+
+    const dialog = await screen.findByRole('dialog')
+
+    const enableRateLimit = within(dialog).getByLabelText('keys.rateLimitSection') as HTMLInputElement
+    if (!enableRateLimit.checked) {
+      await user.click(enableRateLimit)
+    }
+    await user.type(within(dialog).getByLabelText('keys.rateLimit5h'), '5')
+    await user.type(within(dialog).getByLabelText('keys.rateLimit1d'), '10')
+    await user.type(within(dialog).getByLabelText('keys.rateLimit7d'), '20')
+
+    const quotaInput = within(dialog).getByLabelText('keys.quotaAmount') as HTMLInputElement
+    await user.type(quotaInput, '30')
+
+    const enableExpiration = within(dialog).getByLabelText('keys.expiration') as HTMLInputElement
+    if (!enableExpiration.checked) {
+      await user.click(enableExpiration)
+    }
+    const expirationInput = within(dialog).getByLabelText('keys.expirationDate') as HTMLInputElement
+    await user.clear(expirationInput)
+    await user.type(expirationInput, '2030-01-02T03:04')
+
+    await user.click(within(dialog).getByRole('button', { name: 'common.update' }))
+
+    expect(updateKey).toHaveBeenCalledTimes(1)
+    const [id, payload] = updateKey.mock.calls[0] as [number, Record<string, unknown>]
+    expect(id).toBe(99)
+    expect(payload).toEqual(expect.objectContaining({
+      name: 'fixed key',
+      group_id: fixedGroup.id,
+      quota: 30,
+      rate_limit_5h: 5,
+      rate_limit_1d: 10,
+      rate_limit_7d: 20,
+      status: 'active'
+    }))
+    expect(typeof payload.expires_at).toBe('string')
+    expect(String(payload.expires_at)).toContain('2030-01-02T')
   })
 })

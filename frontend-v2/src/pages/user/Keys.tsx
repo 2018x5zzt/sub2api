@@ -20,6 +20,40 @@ interface KeyFormState {
   name: string
   groupId: number | null
   budgetMultiplier: string
+  status: 'active' | 'inactive'
+  useCustomKey: boolean
+  customKey: string
+  enableIpRestriction: boolean
+  ipWhitelist: string
+  ipBlacklist: string
+  quota: string
+  enableRateLimit: boolean
+  rateLimit5h: string
+  rateLimit1d: string
+  rateLimit7d: string
+  enableExpiration: boolean
+  expirationDate: string
+}
+
+function newFormState(): KeyFormState {
+  return {
+    name: '',
+    groupId: null,
+    budgetMultiplier: '',
+    status: 'active',
+    useCustomKey: false,
+    customKey: '',
+    enableIpRestriction: false,
+    ipWhitelist: '',
+    ipBlacklist: '',
+    quota: '',
+    enableRateLimit: false,
+    rateLimit5h: '',
+    rateLimit1d: '',
+    rateLimit7d: '',
+    enableExpiration: false,
+    expirationDate: ''
+  }
 }
 
 function maskKey(k: string) {
@@ -65,6 +99,41 @@ function parseBudgetMultiplier(raw: string): number | null {
   return Number(value.toFixed(2))
 }
 
+function parseNonNegativeNumber(raw: string): number | null {
+  const value = Number(raw)
+  if (!Number.isFinite(value)) return null
+  if (value < 0) return null
+  return Number(value.toFixed(4))
+}
+
+function parseLimitOrZero(raw: string): number | null {
+  if (!raw.trim()) return 0
+  return parseNonNegativeNumber(raw)
+}
+
+function parseIpList(raw: string): string[] {
+  return raw
+    .split('\n')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+}
+
+function toLocalDateTimeValue(iso: string | null): string {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+function toCreateExpiresInDays(localDateTime: string): number | null {
+  const target = new Date(localDateTime)
+  if (Number.isNaN(target.getTime())) return null
+  const now = new Date()
+  const diffDays = Math.ceil((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  return diffDays > 0 ? diffDays : 1
+}
+
 function toGroupText(group: Group | undefined, t: (key: string) => string) {
   if (!group) return t('keys.noGroup')
   return group.name
@@ -84,7 +153,7 @@ export default function KeysPage() {
   const [formOpen, setFormOpen] = useState(false)
   const [editingKey, setEditingKey] = useState<ApiKey | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [form, setForm] = useState<KeyFormState>({ name: '', groupId: null, budgetMultiplier: '' })
+  const [form, setForm] = useState<KeyFormState>(newFormState())
 
   const { data, isLoading } = useQuery({
     queryKey: ['user-keys', page, search],
@@ -119,12 +188,12 @@ export default function KeysPage() {
     setFormOpen(false)
     setEditingKey(null)
     setSubmitting(false)
-    setForm({ name: '', groupId: null, budgetMultiplier: '' })
+    setForm(newFormState())
   }
 
   function openCreateForm() {
     setEditingKey(null)
-    setForm({ name: '', groupId: null, budgetMultiplier: '' })
+    setForm(newFormState())
     setFormOpen(true)
   }
 
@@ -138,7 +207,20 @@ export default function KeysPage() {
     setForm({
       name: key.name,
       groupId: key.group_id,
-      budgetMultiplier: nextBudget
+      budgetMultiplier: nextBudget,
+      status: key.status === 'active' ? 'active' : 'inactive',
+      useCustomKey: false,
+      customKey: '',
+      enableIpRestriction: key.ip_whitelist.length > 0 || key.ip_blacklist.length > 0,
+      ipWhitelist: key.ip_whitelist.join('\n'),
+      ipBlacklist: key.ip_blacklist.join('\n'),
+      quota: key.quota > 0 ? String(key.quota) : '',
+      enableRateLimit: key.rate_limit_5h > 0 || key.rate_limit_1d > 0 || key.rate_limit_7d > 0,
+      rateLimit5h: key.rate_limit_5h > 0 ? String(key.rate_limit_5h) : '',
+      rateLimit1d: key.rate_limit_1d > 0 ? String(key.rate_limit_1d) : '',
+      rateLimit7d: key.rate_limit_7d > 0 ? String(key.rate_limit_7d) : '',
+      enableExpiration: key.expires_at != null,
+      expirationDate: toLocalDateTimeValue(key.expires_at)
     })
     setFormOpen(true)
   }
@@ -158,8 +240,69 @@ export default function KeysPage() {
     })
   }
 
+  function validateCustomKey(raw: string): string | null {
+    if (!raw.trim()) return t('keys.customKeyRequired') as string
+    if (raw.length < 16) return t('keys.customKeyTooShort') as string
+    if (!/^[a-zA-Z0-9_-]+$/.test(raw)) return t('keys.customKeyInvalidChars') as string
+    return null
+  }
+
+  async function handleResetQuota() {
+    if (!editingKey) return
+    const ok = confirm(
+      t('keys.resetQuotaConfirmMessage', {
+        name: editingKey.name,
+        used: (editingKey.quota_used ?? 0).toFixed(4)
+      }) as string
+    )
+    if (!ok) return
+
+    try {
+      await keysAPI.updateKey(editingKey.id, { reset_quota: true })
+      toast.success(t('keys.quotaResetSuccess') as string)
+      setEditingKey((prev) => (prev ? { ...prev, quota_used: 0 } : prev))
+      await qc.invalidateQueries({ queryKey: ['user-keys'] })
+    } catch (e) {
+      toast.error((e as { message?: string })?.message || (t('keys.failedToResetQuota') as string))
+    }
+  }
+
+  async function handleResetRateLimitUsage() {
+    if (!editingKey) return
+    const ok = confirm(
+      t('keys.resetRateLimitConfirmMessage', {
+        name: editingKey.name
+      }) as string
+    )
+    if (!ok) return
+
+    try {
+      await keysAPI.updateKey(editingKey.id, { reset_rate_limit_usage: true })
+      toast.success(t('keys.rateLimitResetSuccess') as string)
+      setEditingKey((prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          usage_5h: 0,
+          usage_1d: 0,
+          usage_7d: 0,
+          window_5h_start: null,
+          window_1d_start: null,
+          window_7d_start: null,
+          reset_5h_at: null,
+          reset_1d_at: null,
+          reset_7d_at: null
+        }
+      })
+      await qc.invalidateQueries({ queryKey: ['user-keys'] })
+    } catch (e) {
+      toast.error((e as { message?: string })?.message || (t('keys.failedToResetRateLimit') as string))
+    }
+  }
+
   async function onSubmit() {
-    if (!form.name.trim()) {
+    const name = form.name.trim()
+    if (!name) {
       toast.warning('Name is required')
       return
     }
@@ -176,22 +319,85 @@ export default function KeysPage() {
       return
     }
 
-    const payloadBase = {
-      name: form.name.trim(),
-      group_id: form.groupId
+    if (!editingKey && form.useCustomKey) {
+      const customKeyError = validateCustomKey(form.customKey.trim())
+      if (customKeyError) {
+        toast.warning(customKeyError)
+        return
+      }
     }
 
-    const payloadWithBudget = dynamic
-      ? { ...payloadBase, budget_multiplier: budget }
-      : payloadBase
+    const ipWhitelist = form.enableIpRestriction ? parseIpList(form.ipWhitelist) : []
+    const ipBlacklist = form.enableIpRestriction ? parseIpList(form.ipBlacklist) : []
+
+    const quota = parseLimitOrZero(form.quota)
+    if (quota == null) {
+      toast.warning(t('keys.quotaAmountHint') as string)
+      return
+    }
+
+    const rateLimit5h = form.enableRateLimit ? parseLimitOrZero(form.rateLimit5h) : 0
+    const rateLimit1d = form.enableRateLimit ? parseLimitOrZero(form.rateLimit1d) : 0
+    const rateLimit7d = form.enableRateLimit ? parseLimitOrZero(form.rateLimit7d) : 0
+    if (rateLimit5h == null || rateLimit1d == null || rateLimit7d == null) {
+      toast.warning(t('keys.rateLimitHint') as string)
+      return
+    }
+
+    let editExpiresAt = ''
+    let createExpiresInDays: number | undefined
+    if (form.enableExpiration) {
+      if (!form.expirationDate) {
+        toast.warning(t('keys.expirationDate') as string)
+        return
+      }
+      if (editingKey) {
+        const expiresAt = new Date(form.expirationDate)
+        if (Number.isNaN(expiresAt.getTime())) {
+          toast.warning(t('keys.expirationDate') as string)
+          return
+        }
+        editExpiresAt = expiresAt.toISOString()
+      } else {
+        const expiresInDays = toCreateExpiresInDays(form.expirationDate)
+        if (expiresInDays == null) {
+          toast.warning(t('keys.expirationDate') as string)
+          return
+        }
+        createExpiresInDays = expiresInDays
+      }
+    }
+
+    const payloadBase = {
+      name,
+      group_id: form.groupId,
+      ip_whitelist: ipWhitelist,
+      ip_blacklist: ipBlacklist,
+      quota,
+      rate_limit_5h: rateLimit5h,
+      rate_limit_1d: rateLimit1d,
+      rate_limit_7d: rateLimit7d
+    }
 
     setSubmitting(true)
     try {
       if (editingKey) {
-        await keysAPI.updateKey(editingKey.id, payloadWithBudget as UpdateApiKeyRequest)
+        const payload: UpdateApiKeyRequest = {
+          ...payloadBase,
+          status: form.status,
+          expires_at: editExpiresAt
+        }
+        if (dynamic) payload.budget_multiplier = budget
+        await keysAPI.updateKey(editingKey.id, payload)
         toast.success(t('keys.keyUpdatedSuccess') as string)
       } else {
-        const created = await keysAPI.createKey(payloadWithBudget as CreateApiKeyRequest)
+        const payload: CreateApiKeyRequest = {
+          ...payloadBase
+        }
+        if (dynamic) payload.budget_multiplier = budget
+        if (form.useCustomKey) payload.custom_key = form.customKey.trim()
+        if (createExpiresInDays != null) payload.expires_in_days = createExpiresInDays
+        const created = await keysAPI.createKey(payload)
         toast.success(t('keys.keyCreatedSuccess') as string)
         setTimeout(() => copy(created.key), 200)
       }
@@ -378,6 +584,234 @@ export default function KeysPage() {
               }) as string}
             />
           )}
+
+          {!editingKey && (
+            <div className="rounded-xl border border-line-2 bg-bg-2 p-3">
+              <div className="flex items-center justify-between">
+                <label htmlFor="use-custom-key" className="input-label mb-0">
+                  {t('keys.customKeyLabel')}
+                </label>
+                <input
+                  id="use-custom-key"
+                  type="checkbox"
+                  checked={form.useCustomKey}
+                  onChange={(e) => setForm((prev) => ({ ...prev, useCustomKey: e.target.checked }))}
+                />
+              </div>
+              {form.useCustomKey && (
+                <Input
+                  name="custom_key"
+                  label={t('keys.customKeyLabel') as string}
+                  value={form.customKey}
+                  onChange={(e) => setForm((prev) => ({ ...prev, customKey: e.target.value }))}
+                  hint={t('keys.customKeyHint') as string}
+                />
+              )}
+            </div>
+          )}
+
+          {editingKey && (
+            <div>
+              <label htmlFor="key-status" className="input-label">
+                {t('keys.statusLabel')}
+              </label>
+              <select
+                id="key-status"
+                className={selectClass()}
+                value={form.status}
+                onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))}
+              >
+                <option value="active">{t('common.active')}</option>
+                <option value="inactive">{t('common.inactive')}</option>
+              </select>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-line-2 bg-bg-2 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <label htmlFor="enable-ip-restriction" className="input-label mb-0">
+                {t('keys.ipRestriction')}
+              </label>
+              <input
+                id="enable-ip-restriction"
+                type="checkbox"
+                checked={form.enableIpRestriction}
+                onChange={(e) => setForm((prev) => ({ ...prev, enableIpRestriction: e.target.checked }))}
+              />
+            </div>
+            {form.enableIpRestriction && (
+              <div className="space-y-3">
+                <div>
+                  <label htmlFor="ip-whitelist" className="input-label">
+                    {t('keys.ipWhitelist')}
+                  </label>
+                  <textarea
+                    id="ip-whitelist"
+                    className="input min-h-20"
+                    value={form.ipWhitelist}
+                    onChange={(e) => setForm((prev) => ({ ...prev, ipWhitelist: e.target.value }))}
+                    placeholder={t('keys.ipWhitelistPlaceholder') as string}
+                  />
+                  <p className="mt-1 text-xs text-ink-3">{t('keys.ipWhitelistHint')}</p>
+                </div>
+                <div>
+                  <label htmlFor="ip-blacklist" className="input-label">
+                    {t('keys.ipBlacklist')}
+                  </label>
+                  <textarea
+                    id="ip-blacklist"
+                    className="input min-h-20"
+                    value={form.ipBlacklist}
+                    onChange={(e) => setForm((prev) => ({ ...prev, ipBlacklist: e.target.value }))}
+                    placeholder={t('keys.ipBlacklistPlaceholder') as string}
+                  />
+                  <p className="mt-1 text-xs text-ink-3">{t('keys.ipBlacklistHint')}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-line-2 bg-bg-2 p-3">
+            <Input
+              name="quota"
+              label={t('keys.quotaAmount') as string}
+              type="number"
+              min={0}
+              step="0.01"
+              value={form.quota}
+              onChange={(e) => setForm((prev) => ({ ...prev, quota: e.target.value }))}
+              placeholder={t('keys.quotaAmountPlaceholder') as string}
+              hint={t('keys.quotaAmountHint') as string}
+            />
+
+            {editingKey && editingKey.quota > 0 && (
+              <div className="flex items-center justify-between rounded-lg border border-line-2 bg-bg-1 px-3 py-2">
+                <span className="text-sm text-ink-2">
+                  {t('keys.quotaUsed')}: ${(editingKey.quota_used ?? 0).toFixed(4)} / ${editingKey.quota.toFixed(2)}
+                </span>
+                <Button variant="secondary" size="sm" onClick={handleResetQuota}>
+                  {t('keys.reset')}
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-line-2 bg-bg-2 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <label htmlFor="enable-rate-limit" className="input-label mb-0">
+                {t('keys.rateLimitSection')}
+              </label>
+              <input
+                id="enable-rate-limit"
+                type="checkbox"
+                checked={form.enableRateLimit}
+                onChange={(e) => setForm((prev) => ({ ...prev, enableRateLimit: e.target.checked }))}
+              />
+            </div>
+
+            {form.enableRateLimit && (
+              <div className="space-y-3">
+                <Input
+                  name="rate_limit_5h"
+                  label={t('keys.rateLimit5h') as string}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.rateLimit5h}
+                  onChange={(e) => setForm((prev) => ({ ...prev, rateLimit5h: e.target.value }))}
+                />
+                <Input
+                  name="rate_limit_1d"
+                  label={t('keys.rateLimit1d') as string}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.rateLimit1d}
+                  onChange={(e) => setForm((prev) => ({ ...prev, rateLimit1d: e.target.value }))}
+                />
+                <Input
+                  name="rate_limit_7d"
+                  label={t('keys.rateLimit7d') as string}
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.rateLimit7d}
+                  onChange={(e) => setForm((prev) => ({ ...prev, rateLimit7d: e.target.value }))}
+                  hint={t('keys.rateLimitHint') as string}
+                />
+              </div>
+            )}
+
+            {editingKey && (editingKey.rate_limit_5h > 0 || editingKey.rate_limit_1d > 0 || editingKey.rate_limit_7d > 0) && (
+              <div className="rounded-lg border border-line-2 bg-bg-1 p-3 text-sm text-ink-2 space-y-1">
+                <div>
+                  5h: ${(editingKey.usage_5h ?? 0).toFixed(4)} / ${editingKey.rate_limit_5h.toFixed(2)}
+                </div>
+                <div>
+                  1d: ${(editingKey.usage_1d ?? 0).toFixed(4)} / ${editingKey.rate_limit_1d.toFixed(2)}
+                </div>
+                <div>
+                  7d: ${(editingKey.usage_7d ?? 0).toFixed(4)} / ${editingKey.rate_limit_7d.toFixed(2)}
+                </div>
+                <div className="pt-1">
+                  <Button variant="secondary" size="sm" onClick={handleResetRateLimitUsage}>
+                    {t('keys.resetRateLimitUsage')}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-line-2 bg-bg-2 p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <label htmlFor="enable-expiration" className="input-label mb-0">
+                {t('keys.expiration')}
+              </label>
+              <input
+                id="enable-expiration"
+                type="checkbox"
+                checked={form.enableExpiration}
+                onChange={(e) => setForm((prev) => ({ ...prev, enableExpiration: e.target.checked }))}
+              />
+            </div>
+
+            {form.enableExpiration && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {[7, 30, 90].map((days) => (
+                    <Button
+                      key={days}
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        const target = new Date()
+                        target.setDate(target.getDate() + days)
+                        setForm((prev) => ({
+                          ...prev,
+                          expirationDate: toLocalDateTimeValue(target.toISOString())
+                        }))
+                      }}
+                    >
+                      {editingKey ? t('keys.extendDays', { days }) : t('keys.expiresInDays', { days })}
+                    </Button>
+                  ))}
+                </div>
+                <Input
+                  name="expiration_date"
+                  label={t('keys.expirationDate') as string}
+                  type="datetime-local"
+                  value={form.expirationDate}
+                  onChange={(e) => setForm((prev) => ({ ...prev, expirationDate: e.target.value }))}
+                  hint={t('keys.expirationDateHint') as string}
+                />
+                {editingKey?.expires_at && (
+                  <p className="text-xs text-ink-3">
+                    {t('keys.currentExpiration')}: {new Date(editingKey.expires_at).toLocaleString()}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </Modal>
     </>
