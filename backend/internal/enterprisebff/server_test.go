@@ -36,7 +36,7 @@ func TestProxyPreservesTraceHeadersAndTransformsUsage(t *testing.T) {
 		ListenAddr:     "127.0.0.1:0",
 		CoreBaseURL:    baseURL,
 		RequestTimeout: 0,
-	}, nil, newFakeEnterpriseStore(), newNoopGroupHealthSnapshotRepo())
+	}, NewAdminKeyStore(nil, nil, nil, nil), newFakeEnterpriseStore(), newNoopGroupHealthSnapshotRepo())
 	server.httpClient = &http.Client{Transport: transport}
 
 	req := httptest.NewRequest(http.MethodGet, "/admin/usage", nil)
@@ -70,7 +70,7 @@ func TestTraceMiddlewareGeneratesRequestID(t *testing.T) {
 		ListenAddr:     "127.0.0.1:0",
 		CoreBaseURL:    baseURL,
 		RequestTimeout: 0,
-	}, nil, newFakeEnterpriseStore(), newNoopGroupHealthSnapshotRepo())
+	}, NewAdminKeyStore(nil, nil, nil, nil), newFakeEnterpriseStore(), newNoopGroupHealthSnapshotRepo())
 	server.httpClient = &http.Client{Transport: transport}
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBufferString(`{"email":"a@example.com","password":"pw"}`))
@@ -104,7 +104,7 @@ func TestEnterpriseLoginRejectsCompanyMismatch(t *testing.T) {
 		ListenAddr:     "127.0.0.1:0",
 		CoreBaseURL:    baseURL,
 		RequestTimeout: 0,
-	}, nil, store, newNoopGroupHealthSnapshotRepo())
+	}, NewAdminKeyStore(nil, nil, nil, nil), store, newNoopGroupHealthSnapshotRepo())
 	server.httpClient = &http.Client{Transport: transport}
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewBufferString(`{"company_name":"otherco","email":"owner@example.com","password":"pw"}`))
@@ -142,7 +142,7 @@ func TestAuthMeIncludesEnterpriseMetadata(t *testing.T) {
 		ListenAddr:     "127.0.0.1:0",
 		CoreBaseURL:    baseURL,
 		RequestTimeout: 0,
-	}, nil, store, newNoopGroupHealthSnapshotRepo())
+	}, NewAdminKeyStore(nil, nil, nil, nil), store, newNoopGroupHealthSnapshotRepo())
 	server.httpClient = &http.Client{Transport: transport}
 
 	req := httptest.NewRequest(http.MethodGet, "/auth/me", nil)
@@ -195,7 +195,7 @@ func TestPublicSettingsUseEnterpriseBrandingForAuthenticatedUser(t *testing.T) {
 		ListenAddr:     "127.0.0.1:0",
 		CoreBaseURL:    baseURL,
 		RequestTimeout: 0,
-	}, nil, store, newNoopGroupHealthSnapshotRepo())
+	}, NewAdminKeyStore(nil, nil, nil, nil), store, newNoopGroupHealthSnapshotRepo())
 	server.httpClient = &http.Client{Transport: transport}
 
 	req := httptest.NewRequest(http.MethodGet, "/settings/public", nil)
@@ -425,7 +425,7 @@ func newProxyAssertionServer(t *testing.T, expectedMethod, expectedPath string) 
 		ListenAddr:     "127.0.0.1:0",
 		CoreBaseURL:    baseURL,
 		RequestTimeout: 0,
-	}, nil, newFakeEnterpriseStore(), newNoopGroupHealthSnapshotRepo())
+	}, NewAdminKeyStore(nil, nil, nil, nil), newFakeEnterpriseStore(), newNoopGroupHealthSnapshotRepo())
 	server.httpClient = &http.Client{Transport: transport}
 	return server, seen
 }

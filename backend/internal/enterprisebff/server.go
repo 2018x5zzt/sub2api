@@ -547,7 +547,7 @@ func Run(ctx context.Context) error {
 
 	server := New(
 		cfg,
-		NewAdminKeyStore(dbResources.Client, dbResources.SQLDB, sharedCfg),
+		NewAdminKeyStore(dbResources.Client, dbResources.SQLDB, repository.ProvideRedis(sharedCfg), sharedCfg),
 		newEntEnterpriseStore(dbResources.Client, repository.NewSettingRepository(dbResources.Client), cfg),
 		nil,
 	)

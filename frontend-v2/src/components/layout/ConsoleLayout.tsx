@@ -69,6 +69,7 @@ const adminNav: NavItem[] = [
   { to: '/admin/dashboard', labelKey: 'nav.dashboard', Icon: LayoutDashboard },
   { to: '/admin/ops', labelKey: 'nav.ops', Icon: Activity },
   { to: '/admin/users', labelKey: 'nav.users', Icon: UserCircle },
+  { to: '/admin/keys', labelKey: 'nav.apiKeys', Icon: KeyRound },
   { to: '/admin/groups', labelKey: 'nav.groups', Icon: Boxes },
   { to: '/admin/channels/pricing', labelKey: 'nav.channelPricing', Icon: LineChart },
   { to: '/admin/channels/monitor', labelKey: 'nav.channelMonitor', Icon: RadioTower },
@@ -274,7 +275,7 @@ export function ConsoleLayout({ admin, children }: { admin?: boolean; children?:
             )}
           >
             <LogOut className="h-4 w-4" />
-            {!collapsed && <span>收起</span>}
+            {!collapsed && <span>{t('common.logout')}</span>}
           </button>
           <button
             type="button"

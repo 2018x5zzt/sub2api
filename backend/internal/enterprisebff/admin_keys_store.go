@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	repo "github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/redis/go-redis/v9"
 )
 
 type AdminKeyListFilters struct {
@@ -37,13 +38,19 @@ type adminKeyStore struct {
 	apiKeyService *service.APIKeyService
 }
 
-func NewAdminKeyStore(client *dbent.Client, sqlDB *sql.DB, cfg *coreconfig.Config) AdminKeyStore {
+func NewAdminKeyStore(client *dbent.Client, sqlDB *sql.DB, redisClient *redis.Client, cfg *coreconfig.Config) AdminKeyStore {
 	apiKeyRepo := repo.NewAPIKeyRepository(client, sqlDB)
 	userRepo := repo.NewUserRepository(client, sqlDB)
 	groupRepo := repo.NewGroupRepository(client, sqlDB)
 	userSubRepo := repo.NewUserSubscriptionRepository(client)
 	userGroupRateRepo := repo.NewUserGroupRateRepository(sqlDB)
-	apiKeyService := service.NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, userGroupRateRepo, nil, cfg)
+	var apiKeyCache service.APIKeyCache
+	if redisClient != nil {
+		apiKeyCache = repo.NewAPIKeyCache(redisClient)
+	}
+	apiKeyService := service.NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, userGroupRateRepo, apiKeyCache, cfg)
+	// Keep L1 auth cache coherent across replicas when keys are edited through enterprise-bff.
+	apiKeyService.StartAuthCacheInvalidationSubscriber(context.Background())
 
 	return &adminKeyStore{
 		client:        client,

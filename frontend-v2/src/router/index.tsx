@@ -33,6 +33,7 @@ import CustomPage from '@/pages/user/CustomPage'
 import XlabOAuthConsentPage from '@/pages/auth/XlabOAuthConsent'
 import AdminDashboard from '@/pages/admin/Dashboard'
 import AdminUsersPage from '@/pages/admin/Users'
+import AdminKeysPage from '@/pages/admin/Keys'
 import AdminGroupsPage from '@/pages/admin/Groups'
 import AdminAccountsPage from '@/pages/admin/Accounts'
 import AdminUsagePage from '@/pages/admin/Usage'
@@ -111,6 +112,7 @@ const router = createBrowserRouter([
       { path: '/admin', element: <Navigate to="/admin/dashboard" replace /> },
       { path: '/admin/dashboard', element: <AdminDashboard /> },
       { path: '/admin/users', element: <AdminUsersPage /> },
+      { path: '/admin/keys', element: <AdminKeysPage /> },
       { path: '/admin/groups', element: <AdminGroupsPage /> },
       { path: '/admin/accounts', element: <AdminAccountsPage /> },
       { path: '/admin/usage', element: <AdminUsagePage /> },
