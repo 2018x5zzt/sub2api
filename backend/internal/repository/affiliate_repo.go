@@ -205,7 +205,7 @@ WHERE ua.inviter_id = $1
           WHERE rc.used_by = ua.user_id
             AND rc.status = 'used'
             AND rc.used_at IS NOT NULL
-            AND rc.source_type = 'commercial'
+            AND rc.source_type IN ('commercial', 'system_grant')
             AND rc.type IN ('balance', 'subscription')
             AND (rc.value > 0 OR rc.group_id IS NOT NULL OR rc.validity_days > 0)
       )
@@ -515,11 +515,10 @@ func (r *affiliateRepository) ListAffiliateRebateRecords(ctx context.Context, fi
 	})
 	baseJoin := `
 FROM user_affiliate_ledger ual
-JOIN payment_orders po ON po.id = ual.source_order_id
+LEFT JOIN payment_orders po ON po.id = ual.source_order_id
 JOIN users invitee ON invitee.id = ual.source_user_id
 JOIN users inviter ON inviter.id = ual.user_id
-WHERE ual.action = 'accrue'
-  AND ual.source_order_id IS NOT NULL`
+WHERE ual.action = 'accrue'`
 	if where != "" {
 		where = strings.Replace(where, "WHERE ", " AND ", 1)
 	}
@@ -530,31 +529,31 @@ WHERE ual.action = 'accrue'
 	}
 
 	orderBy := buildAffiliateRecordOrderBy(filter, map[string]string{
-		"order":         "po.id",
+		"order":         "COALESCE(po.id, ual.source_order_id)",
 		"inviter":       "inviter.email",
 		"invitee":       "invitee.email",
-		"order_amount":  "po.amount",
-		"pay_amount":    "po.pay_amount",
+		"order_amount":  "COALESCE(po.amount, 0)",
+		"pay_amount":    "COALESCE(po.pay_amount, 0)",
 		"rebate_amount": "ual.amount",
-		"payment_type":  "po.payment_type",
-		"order_status":  "po.status",
+		"payment_type":  "COALESCE(po.payment_type, '')",
+		"order_status":  "COALESCE(po.status, '')",
 		"created_at":    "ual.created_at",
 	}, "ual.created_at")
 	args = append(args, filter.PageSize, (filter.Page-1)*filter.PageSize)
 	rows, err := client.QueryContext(ctx, `
-SELECT po.id,
-       po.out_trade_no,
+SELECT COALESCE(po.id, ual.source_order_id),
+       COALESCE(po.out_trade_no, ''),
        ual.user_id,
        COALESCE(inviter.email, ''),
        COALESCE(inviter.username, ''),
        ual.source_user_id,
        COALESCE(invitee.email, ''),
        COALESCE(invitee.username, ''),
-       po.amount::double precision,
-       po.pay_amount::double precision,
+       COALESCE(po.amount, 0)::double precision,
+       COALESCE(po.pay_amount, 0)::double precision,
        ual.amount::double precision,
-       po.payment_type,
-       po.status,
+       COALESCE(po.payment_type, ''),
+       COALESCE(po.status, ''),
        ual.created_at
 `+baseJoin+where+`
 `+orderBy+`

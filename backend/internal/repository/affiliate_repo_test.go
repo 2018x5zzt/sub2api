@@ -38,13 +38,13 @@ func TestCountEffectiveInviteesIncludesCommercialAndSubscriptionRedeems(t *testi
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestCountEffectiveInviteesRequiresCommercialRedeems(t *testing.T) {
+func TestCountEffectiveInviteesAllowsSystemGrantRedeemsForPaymentFulfillment(t *testing.T) {
 	source, err := os.ReadFile("affiliate_repo.go")
 	require.NoError(t, err)
 	content := strings.Join(strings.Fields(string(source)), " ")
 
-	require.Contains(t, content, "rc.source_type = 'commercial' AND rc.type IN ('balance', 'subscription')")
-	require.NotContains(t, content, "(rc.type = 'subscription')")
+	require.Contains(t, content, "rc.source_type IN ('commercial', 'system_grant')")
+	require.Contains(t, content, "rc.type IN ('balance', 'subscription')")
 }
 
 func TestAffiliateUserOverviewSQLIncludesMaturedFrozenQuota(t *testing.T) {
@@ -59,9 +59,10 @@ func TestAffiliateRecordQueriesUseLedgerAuditFields(t *testing.T) {
 	require.NoError(t, err)
 	content := string(source)
 
-	require.Contains(t, content, "JOIN payment_orders po ON po.id = ual.source_order_id")
+	require.Contains(t, content, "LEFT JOIN payment_orders po ON po.id = ual.source_order_id")
 	require.Contains(t, content, "ual.amount::double precision")
 	require.Contains(t, content, "ual.balance_after::double precision")
+	require.NotContains(t, content, "AND ual.source_order_id IS NOT NULL")
 	require.NotContains(t, content, "parseAffiliateRebateAmount")
 	require.NotContains(t, content, `"current_balance": "u.balance"`)
 }
