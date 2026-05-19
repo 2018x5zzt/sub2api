@@ -2431,6 +2431,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		bodyModified = true
 		disablePatch()
 	}
+	if normalizeLegacyOpenAIResponsesTextInputTypesInRequestBodyMap(reqBody) {
+		bodyModified = true
+		disablePatch()
+	}
 
 	// Apply OpenAI fast policy (参照 Claude BetaPolicy 的 fast-mode 过滤)：
 	// 针对 body 的 service_tier 字段（"priority" 即 fast，"flex"），按策略
@@ -6343,6 +6347,64 @@ func sanitizeEmptyBase64InputImagesInOpenAIRequestBodyMap(reqBody map[string]any
 	}
 	reqBody["input"] = normalizedInput
 	return true
+}
+
+func normalizeLegacyOpenAIResponsesTextInputTypesInRequestBodyMap(reqBody map[string]any) bool {
+	if reqBody == nil {
+		return false
+	}
+	input, ok := reqBody["input"]
+	if !ok {
+		return false
+	}
+	normalizedInput, changed := normalizeLegacyOpenAIResponsesTextInputTypesInInput(input)
+	if !changed {
+		return false
+	}
+	reqBody["input"] = normalizedInput
+	return true
+}
+
+func normalizeLegacyOpenAIResponsesTextInputTypesInInput(input any) (any, bool) {
+	items, ok := input.([]any)
+	if !ok {
+		return input, false
+	}
+	changed := false
+	for i, rawItem := range items {
+		item, ok := rawItem.(map[string]any)
+		if !ok {
+			continue
+		}
+		itemType, _ := item["type"].(string)
+		if strings.TrimSpace(itemType) == "text" {
+			item["type"] = "input_text"
+			changed = true
+		}
+		content, ok := item["content"]
+		if !ok {
+			continue
+		}
+		parts, ok := content.([]any)
+		if !ok {
+			continue
+		}
+		for j, rawPart := range parts {
+			part, ok := rawPart.(map[string]any)
+			if !ok {
+				continue
+			}
+			partType, _ := part["type"].(string)
+			if strings.TrimSpace(partType) == "text" {
+				part["type"] = "input_text"
+				parts[j] = part
+				changed = true
+			}
+		}
+		item["content"] = parts
+		items[i] = item
+	}
+	return items, changed
 }
 
 func sanitizeEmptyBase64InputImagesInOpenAIInput(input any) (any, bool) {

@@ -198,3 +198,42 @@ func TestSanitizeEmptyBase64InputImagesInOpenAIBody(t *testing.T) {
 		]
 	}`, string(body))
 }
+
+func TestNormalizeLegacyOpenAIResponsesTextInputTypesInRequestBodyMap(t *testing.T) {
+	var reqBody map[string]any
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"model":"gpt-5.4-medium",
+		"input":[
+			{"type":"text","text":"top-level text"},
+			{"type":"input_text","text":"already normalized"},
+			{
+				"type":"message",
+				"role":"user",
+				"content":[
+					{"type":"text","text":"legacy content text"},
+					{"type":"input_text","text":"new content text"}
+				]
+			}
+		]
+	}`), &reqBody))
+
+	require.True(t, normalizeLegacyOpenAIResponsesTextInputTypesInRequestBodyMap(reqBody))
+
+	normalized, err := json.Marshal(reqBody)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		"model":"gpt-5.4-medium",
+		"input":[
+			{"type":"input_text","text":"top-level text"},
+			{"type":"input_text","text":"already normalized"},
+			{
+				"type":"message",
+				"role":"user",
+				"content":[
+					{"type":"input_text","text":"legacy content text"},
+					{"type":"input_text","text":"new content text"}
+				]
+			}
+		]
+	}`, string(normalized))
+}
