@@ -4,13 +4,14 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import KeysPage from '../Keys'
 
-const { listKeys, createKey, updateKey, deleteKey, getUserGroups, getUserGroupRates } = vi.hoisted(() => ({
+const { listKeys, createKey, updateKey, deleteKey, getUserGroups, getUserGroupRates, getDashboardApiKeysUsage } = vi.hoisted(() => ({
   listKeys: vi.fn(),
   createKey: vi.fn(),
   updateKey: vi.fn(),
   deleteKey: vi.fn(),
   getUserGroups: vi.fn(),
-  getUserGroupRates: vi.fn()
+  getUserGroupRates: vi.fn(),
+  getDashboardApiKeysUsage: vi.fn()
 }))
 
 vi.mock('@/api/keys', () => ({
@@ -19,6 +20,10 @@ vi.mock('@/api/keys', () => ({
 
 vi.mock('@/api/models', () => ({
   modelsAPI: { getUserGroups, getUserGroupRates }
+}))
+
+vi.mock('@/api/usage', () => ({
+  usageAPI: { getDashboardApiKeysUsage }
 }))
 
 vi.mock('react-i18next', () => ({
@@ -210,6 +215,19 @@ describe('KeysPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     listKeys.mockResolvedValue({ items: [keyItem], total: 1, pages: 1 })
+    getDashboardApiKeysUsage.mockResolvedValue({
+      stats: {
+        [keyItem.id]: {
+          api_key_id: keyItem.id,
+          today_actual_cost: 0,
+          total_actual_cost: 0,
+          today_requests: 0,
+          today_tokens: 0,
+          total_requests: 0,
+          total_tokens: 0
+        }
+      }
+    })
     createKey.mockResolvedValue({ key: 'sk-new' })
     updateKey.mockResolvedValue({})
     deleteKey.mockResolvedValue(undefined)
@@ -248,6 +266,31 @@ describe('KeysPage', () => {
       group_id: 20,
       budget_multiplier: 18
     }))
+  })
+
+  it('loads and renders per-key usage stats', async () => {
+    getDashboardApiKeysUsage.mockResolvedValueOnce({
+      stats: {
+        [keyItem.id]: {
+          api_key_id: keyItem.id,
+          today_actual_cost: 1.2345,
+          total_actual_cost: 9.8765,
+          today_requests: 3,
+          today_tokens: 300,
+          total_requests: 12,
+          total_tokens: 4567
+        }
+      }
+    })
+
+    renderPage()
+
+    await screen.findByText('fixed key')
+    expect(getDashboardApiKeysUsage).toHaveBeenCalledWith([keyItem.id], expect.anything())
+    expect(await screen.findByText('$1.2345')).toBeTruthy()
+    expect(await screen.findByText('$9.8765')).toBeTruthy()
+    expect(await screen.findByText(/300 Tok · 3 Req/)).toBeTruthy()
+    expect(await screen.findByText(/4,567 Tok · 12 Req/)).toBeTruthy()
   })
 
   it('updates existing key group and dynamic budget in edit modal', async () => {

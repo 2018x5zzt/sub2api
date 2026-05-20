@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Copy, Trash2, Pencil } from 'lucide-react'
@@ -12,9 +12,11 @@ import { Table, THead, TBody, TR, TH, TD } from '@/components/ui/Table'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { keysAPI } from '@/api/keys'
 import { modelsAPI } from '@/api/models'
+import { usageAPI } from '@/api/usage'
 import { toast } from '@/components/ui/Toast'
 import i18n from '@/i18n'
 import type { ApiKey, CreateApiKeyRequest, Group, UpdateApiKeyRequest } from '@/types'
+import type { BatchApiKeyUsageStats } from '@/api/usage'
 
 interface KeyFormState {
   name: string
@@ -143,6 +145,16 @@ function selectClass() {
   return 'input appearance-none cursor-pointer bg-bg-4'
 }
 
+function formatUsd(value: number | null | undefined) {
+  const safe = Number.isFinite(value) ? Number(value) : 0
+  return `$${safe.toFixed(4)}`
+}
+
+function formatInt(value: number | null | undefined) {
+  const safe = Number.isFinite(value) ? Number(value) : 0
+  return Math.trunc(safe).toLocaleString()
+}
+
 export default function KeysPage() {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -154,6 +166,7 @@ export default function KeysPage() {
   const [editingKey, setEditingKey] = useState<ApiKey | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState<KeyFormState>(newFormState())
+  const [usageStats, setUsageStats] = useState<Record<string, BatchApiKeyUsageStats>>({})
 
   const { data, isLoading } = useQuery({
     queryKey: ['user-keys', page, search],
@@ -183,6 +196,30 @@ export default function KeysPage() {
     },
     onError: (e: { message?: string }) => toast.error(e?.message || (t('common.error') as string))
   })
+
+  useEffect(() => {
+    const items = data?.items ?? []
+    if (items.length === 0) {
+      setUsageStats({})
+      return
+    }
+
+    const controller = new AbortController()
+    const ids = items.map((item) => item.id)
+
+    usageAPI
+      .getDashboardApiKeysUsage(ids, { signal: controller.signal })
+      .then((resp) => {
+        setUsageStats(resp.stats || {})
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setUsageStats({})
+        }
+      })
+
+    return () => controller.abort()
+  }, [data?.items])
 
   function closeForm() {
     setFormOpen(false)
@@ -447,6 +484,7 @@ export default function KeysPage() {
                 <TH>{t('keys.nameLabel')}</TH>
                 <TH>{t('keys.apiKey')}</TH>
                 <TH>{t('keys.group')}</TH>
+                <TH>{t('keys.usage')}</TH>
                 <TH>{t('keys.statusLabel')}</TH>
                 <TH>{t('keys.created')}</TH>
                 <TH className="text-right">{t('common.actions')}</TH>
@@ -467,6 +505,20 @@ export default function KeysPage() {
                     </button>
                   </TD>
                   <TD className="text-sm text-ink-2">{toGroupText(k.group || (k.group_id != null ? groupById.get(k.group_id) : undefined), t)}</TD>
+                  <TD className="text-xs text-ink-2">
+                    <div className="space-y-1">
+                      <div>
+                        <span className="text-ink-3">{t('keys.today')}: </span>
+                        <span className="font-medium text-ink-1">{formatUsd(usageStats[k.id]?.today_actual_cost)}</span>
+                        <span className="text-ink-3"> · {formatInt(usageStats[k.id]?.today_tokens)} Tok · {formatInt(usageStats[k.id]?.today_requests)} Req</span>
+                      </div>
+                      <div>
+                        <span className="text-ink-3">{t('keys.total')}: </span>
+                        <span className="font-medium text-ink-1">{formatUsd(usageStats[k.id]?.total_actual_cost)}</span>
+                        <span className="text-ink-3"> · {formatInt(usageStats[k.id]?.total_tokens)} Tok · {formatInt(usageStats[k.id]?.total_requests)} Req</span>
+                      </div>
+                    </div>
+                  </TD>
                   <TD>
                     <Badge tone={statusTone(k.status)}>{k.status}</Badge>
                   </TD>
@@ -499,7 +551,7 @@ export default function KeysPage() {
               ))}
               {(data?.items ?? []).length === 0 && (
                 <TR>
-                  <TD colSpan={6} className="py-8 text-center text-ink-3">
+                  <TD colSpan={7} className="py-8 text-center text-ink-3">
                     {t('common.noData')}
                   </TD>
                 </TR>

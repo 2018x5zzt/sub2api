@@ -42,6 +42,20 @@ export interface TrendResponse {
   granularity: string
 }
 
+export interface BatchApiKeyUsageStats {
+  api_key_id: number
+  today_actual_cost: number
+  total_actual_cost: number
+  today_requests: number
+  today_tokens: number
+  total_requests: number
+  total_tokens: number
+}
+
+export interface BatchApiKeysUsageResponse {
+  stats: Record<string, BatchApiKeyUsageStats>
+}
+
 export async function getUserTrend(params: { start_date?: string; end_date?: string; granularity?: 'day' | 'hour' } = {}) {
   const { data } = await apiClient.get<TrendResponse>('/usage/dashboard/trend', { params })
   return data
@@ -52,4 +66,13 @@ export async function getUserModelStats(params: { start_date?: string; end_date?
   return data
 }
 
-export const usageAPI = { getUserDashboard, listUsage, getUserTrend, getUserModelStats }
+export async function getDashboardApiKeysUsage(apiKeyIds: number[], options?: { signal?: AbortSignal }) {
+  const { data } = await apiClient.post<BatchApiKeysUsageResponse>(
+    '/usage/dashboard/api-keys-usage',
+    { api_key_ids: apiKeyIds },
+    { signal: options?.signal }
+  )
+  return data
+}
+
+export const usageAPI = { getUserDashboard, listUsage, getUserTrend, getUserModelStats, getDashboardApiKeysUsage }
