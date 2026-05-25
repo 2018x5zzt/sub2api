@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Mail, Lock, Gift } from 'lucide-react'
 import { AuthLayout } from '@/components/layout/AuthLayout'
@@ -7,12 +7,14 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { useAuthStore } from '@/stores/auth'
 import { toast } from '@/components/ui/Toast'
+import { loadAffiliateReferralCode, resolveAffiliateReferralCode } from '@/utils/affiliateReferral'
 
 const REGISTER_DATA_KEY = 'register_data'
 
 export default function RegisterPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const register = useAuthStore((s) => s.register)
   const publicSettings = useAuthStore((s) => s.publicSettings)
   const siteName = publicSettings?.site_name || 'Xlabapi'
@@ -28,9 +30,18 @@ export default function RegisterPage() {
   const promoEnabled = publicSettings?.promo_code_enabled
   const invitationEnabled = publicSettings?.invitation_code_enabled
 
+  function resolveAffCode(): string {
+    return resolveAffiliateReferralCode(
+      searchParams.get('aff'),
+      searchParams.get('aff_code'),
+      loadAffiliateReferralCode()
+    )
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError(null)
+    const affCode = resolveAffCode()
 
     // When email verification is required, stash the form payload and route to
     // the verification page (matches the legacy two-page flow).
@@ -41,7 +52,8 @@ export default function RegisterPage() {
           email,
           password,
           promo_code: promoEnabled && promoCode ? promoCode : undefined,
-          invitation_code: invitationEnabled && invitationCode ? invitationCode : undefined
+          invitation_code: invitationEnabled && invitationCode ? invitationCode : undefined,
+          ...(affCode ? { aff_code: affCode } : {})
         })
       )
       navigate('/email-verify')
@@ -54,7 +66,8 @@ export default function RegisterPage() {
         email,
         password,
         promo_code: promoEnabled && promoCode ? promoCode : undefined,
-        invitation_code: invitationEnabled && invitationCode ? invitationCode : undefined
+        invitation_code: invitationEnabled && invitationCode ? invitationCode : undefined,
+        ...(affCode ? { aff_code: affCode } : {})
       })
       toast.success(t('auth.accountCreatedSuccess', { siteName }) as string)
       navigate('/dashboard', { replace: true })

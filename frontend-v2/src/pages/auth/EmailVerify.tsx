@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { useAuthStore } from '@/stores/auth'
 import { authAPI } from '@/api/auth'
 import { toast } from '@/components/ui/Toast'
+import { loadAffiliateReferralCode } from '@/utils/affiliateReferral'
 
 interface RegisterData {
   email: string
@@ -14,6 +15,7 @@ interface RegisterData {
   turnstile_token?: string
   promo_code?: string
   invitation_code?: string
+  aff_code?: string
 }
 
 const REGISTER_DATA_KEY = 'register_data'
@@ -119,13 +121,15 @@ export default function EmailVerifyPage() {
     setSubmitting(true)
     setError(null)
     try {
+      const affCode = data.aff_code?.trim() || loadAffiliateReferralCode()
       await register({
         email: data.email,
         password: data.password,
         verify_code: code.trim(),
         turnstile_token: data.turnstile_token,
         promo_code: data.promo_code,
-        invitation_code: data.invitation_code
+        invitation_code: data.invitation_code,
+        ...(affCode ? { aff_code: affCode } : {})
       })
       sessionStorage.removeItem(REGISTER_DATA_KEY)
       toast.success(t('auth.accountCreatedSuccess', { siteName }) as string)

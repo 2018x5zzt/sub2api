@@ -69,6 +69,7 @@ export interface RegisterRequest {
   turnstile_token?: string
   promo_code?: string
   invitation_code?: string
+  aff_code?: string
 }
 
 export interface SendVerifyCodeRequest {

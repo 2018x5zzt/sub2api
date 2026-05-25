@@ -1,6 +1,8 @@
 package migrations
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -200,6 +202,24 @@ func TestMigration146MarksUnusedBalanceRedeemCodesCommercial(t *testing.T) {
 	require.Contains(t, sql, "status = 'unused'")
 	require.NotContains(t, sql, "type IN")
 	require.NotContains(t, sql, "status IN")
+}
+
+func TestCompensationPlan20260525UsesConservativeWindowedBackfill(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "docs", "superpowers", "plans", "2026-05-25-affiliate-missing-inviter-compensation.sql"))
+	require.NoError(t, err)
+
+	sql := string(content)
+	require.Contains(t, sql, "affiliate_bind_backfill_20260525")
+	require.Contains(t, sql, "affiliate_rebate_backfill_20260525")
+	require.Contains(t, sql, "u.created_at >= p.affected_from")
+	require.Contains(t, sql, "u.created_at <= p.affected_to")
+	require.Contains(t, sql, "ua.inviter_id IS NULL")
+	require.Contains(t, sql, "u.invited_by_user_id IS NOT NULL")
+	require.Contains(t, sql, "NOT EXISTS (")
+	require.Contains(t, sql, "user_affiliate_ledger")
+	require.Contains(t, sql, "source_order_id = po.id")
+	require.Contains(t, sql, "ON CONFLICT (order_id) DO NOTHING")
+	require.Contains(t, sql, "manual_affiliate_backfill_20260525")
 }
 
 func TestMigration151AlignsActiveProductSubscriptionExpiryToDayEnd(t *testing.T) {
