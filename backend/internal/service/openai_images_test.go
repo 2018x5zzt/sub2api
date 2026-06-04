@@ -1002,3 +1002,138 @@ func TestOpenAIGatewayServiceForwardImages_OAuthStreamingHandlesOutputItemDoneFa
 	require.JSONEq(t, `{"images":1}`, gjson.Get(completed.Data, "usage").Raw)
 	require.NotContains(t, rec.Body.String(), "event: error")
 }
+
+func TestOpenAIGatewayServiceForwardImages_OAuthMissingImageOutputSetsOpsContext_NonStreaming(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := []byte(`{"model":"gpt-image-2","prompt":"draw a cat","response_format":"b64_json"}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = req
+	c.Set("api_key", &APIKey{ID: 100})
+
+	svc := &OpenAIGatewayService{
+		cfg: &config.Config{
+			Gateway: config.GatewayConfig{
+				LogUpstreamErrorBody:         true,
+				LogUpstreamErrorBodyMaxBytes: 1024,
+			},
+		},
+	}
+	parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+	require.NoError(t, err)
+
+	upstreamSSE := "data: {\"type\":\"response.completed\",\"response\":{\"created_at\":1710000010,\"tool_usage\":{\"image_gen\":{\"images\":1}},\"output\":[]}}\n\n" +
+		"data: [DONE]\n\n"
+	upstream := &httpUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+			Body:       io.NopCloser(strings.NewReader(upstreamSSE)),
+		},
+	}
+	svc.httpUpstream = upstream
+
+	account := &Account{
+		ID:       101,
+		Name:     "openai-oauth",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"access_token": "token-123",
+		},
+	}
+
+	result, err := svc.ForwardImages(context.Background(), c, account, body, parsed, "")
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Contains(t, err.Error(), openAIImagesMissingOutputErrorMessage)
+
+	detailRaw, ok := c.Get(OpsUpstreamErrorDetailKey)
+	require.True(t, ok)
+	detail, ok := detailRaw.(string)
+	require.True(t, ok)
+	require.Contains(t, detail, "\"response.completed\"")
+
+	eventsRaw, ok := c.Get(OpsUpstreamErrorsKey)
+	require.True(t, ok)
+	events, ok := eventsRaw.([]*OpsUpstreamErrorEvent)
+	require.True(t, ok)
+	require.NotEmpty(t, events)
+	last := events[len(events)-1]
+	require.Equal(t, "http_error", last.Kind)
+	require.Equal(t, http.StatusBadGateway, last.UpstreamStatusCode)
+	require.Contains(t, last.UpstreamResponseBody, "\"response.completed\"")
+}
+
+func TestOpenAIGatewayServiceForwardImages_OAuthMissingImageOutputSetsOpsContext_Streaming(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := []byte(`{"model":"gpt-image-2","prompt":"draw a cat","stream":true,"response_format":"b64_json"}`)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = req
+	c.Set("api_key", &APIKey{ID: 100})
+
+	svc := &OpenAIGatewayService{
+		cfg: &config.Config{
+			Gateway: config.GatewayConfig{
+				LogUpstreamErrorBody:         true,
+				LogUpstreamErrorBodyMaxBytes: 1024,
+			},
+		},
+	}
+	parsed, err := svc.ParseOpenAIImagesRequest(c, body)
+	require.NoError(t, err)
+
+	upstreamCompleted := "{\"type\":\"response.completed\",\"response\":{\"created_at\":1710000011,\"tool_usage\":{\"image_gen\":{\"images\":1}},\"output\":[]}}"
+	upstream := &httpUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+			Body: io.NopCloser(strings.NewReader(
+				"data: " + upstreamCompleted + "\n\n" +
+					"data: [DONE]\n\n",
+			)),
+		},
+	}
+	svc.httpUpstream = upstream
+
+	account := &Account{
+		ID:       102,
+		Name:     "openai-oauth",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"access_token": "token-123",
+		},
+	}
+
+	result, err := svc.ForwardImages(context.Background(), c, account, body, parsed, "")
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Contains(t, err.Error(), openAIImagesMissingOutputErrorMessage)
+	require.Contains(t, rec.Body.String(), "event: error")
+	require.Contains(t, rec.Body.String(), openAIImagesMissingOutputErrorMessage)
+
+	detailRaw, ok := c.Get(OpsUpstreamErrorDetailKey)
+	require.True(t, ok)
+	detail, ok := detailRaw.(string)
+	require.True(t, ok)
+	require.Contains(t, detail, "\"response.completed\"")
+	require.NotContains(t, detail, "data: ")
+
+	eventsRaw, ok := c.Get(OpsUpstreamErrorsKey)
+	require.True(t, ok)
+	events, ok := eventsRaw.([]*OpsUpstreamErrorEvent)
+	require.True(t, ok)
+	require.NotEmpty(t, events)
+	last := events[len(events)-1]
+	require.Equal(t, "http_error", last.Kind)
+	require.Equal(t, http.StatusBadGateway, last.UpstreamStatusCode)
+	require.Contains(t, last.UpstreamResponseBody, "\"response.completed\"")
+}

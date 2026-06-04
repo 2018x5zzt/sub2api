@@ -315,6 +315,27 @@ type StreamTimeoutSettings struct {
 	ThresholdWindowMinutes int `json:"threshold_window_minutes"`
 }
 
+// OpenAICompactHeartbeatKeepaliveSettings controls keepalive behavior for
+// OpenAI /responses/compact streaming responses.
+type OpenAICompactHeartbeatKeepaliveSettings struct {
+	// Enabled turns compact heartbeat keepalive on/off.
+	Enabled bool `json:"enabled"`
+	// StartAfterSeconds is the idle threshold before first heartbeat.
+	StartAfterSeconds int `json:"start_after_seconds"`
+	// IntervalSeconds is the heartbeat interval after the first one.
+	IntervalSeconds int `json:"interval_seconds"`
+}
+
+// DefaultOpenAICompactHeartbeatKeepaliveSettings returns default compact
+// heartbeat settings.
+func DefaultOpenAICompactHeartbeatKeepaliveSettings() *OpenAICompactHeartbeatKeepaliveSettings {
+	return &OpenAICompactHeartbeatKeepaliveSettings{
+		Enabled:           false,
+		StartAfterSeconds: 85,
+		IntervalSeconds:   25,
+	}
+}
+
 // StreamTimeoutAction 流超时处理方式常量
 const (
 	StreamTimeoutActionTempUnsched = "temp_unsched" // 临时不可调度

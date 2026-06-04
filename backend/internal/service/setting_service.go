@@ -3199,6 +3199,40 @@ func (s *SettingService) GetStreamTimeoutSettings(ctx context.Context) (*StreamT
 	return &settings, nil
 }
 
+// GetOpenAICompactHeartbeatKeepaliveSettings returns runtime settings for
+// OpenAI /responses/compact heartbeat keepalive.
+func (s *SettingService) GetOpenAICompactHeartbeatKeepaliveSettings(ctx context.Context) (*OpenAICompactHeartbeatKeepaliveSettings, error) {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyOpenAICompactHeartbeatKeepaliveSettings)
+	if err != nil {
+		if errors.Is(err, ErrSettingNotFound) {
+			return DefaultOpenAICompactHeartbeatKeepaliveSettings(), nil
+		}
+		return nil, fmt.Errorf("get openai compact heartbeat keepalive settings: %w", err)
+	}
+	if strings.TrimSpace(value) == "" {
+		return DefaultOpenAICompactHeartbeatKeepaliveSettings(), nil
+	}
+
+	var settings OpenAICompactHeartbeatKeepaliveSettings
+	if err := json.Unmarshal([]byte(value), &settings); err != nil {
+		return DefaultOpenAICompactHeartbeatKeepaliveSettings(), nil
+	}
+
+	if settings.StartAfterSeconds < 30 {
+		settings.StartAfterSeconds = 30
+	}
+	if settings.StartAfterSeconds > 300 {
+		settings.StartAfterSeconds = 300
+	}
+	if settings.IntervalSeconds < 5 {
+		settings.IntervalSeconds = 5
+	}
+	if settings.IntervalSeconds > 120 {
+		settings.IntervalSeconds = 120
+	}
+	return &settings, nil
+}
+
 // IsUngroupedKeySchedulingAllowed 查询是否允许未分组 Key 调度
 func (s *SettingService) IsUngroupedKeySchedulingAllowed(ctx context.Context) bool {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyAllowUngroupedKeyScheduling)
@@ -3492,4 +3526,24 @@ func (s *SettingService) SetStreamTimeoutSettings(ctx context.Context, settings 
 	}
 
 	return s.settingRepo.Set(ctx, SettingKeyStreamTimeoutSettings, string(data))
+}
+
+// SetOpenAICompactHeartbeatKeepaliveSettings updates runtime settings for
+// OpenAI /responses/compact heartbeat keepalive.
+func (s *SettingService) SetOpenAICompactHeartbeatKeepaliveSettings(ctx context.Context, settings *OpenAICompactHeartbeatKeepaliveSettings) error {
+	if settings == nil {
+		return fmt.Errorf("settings cannot be nil")
+	}
+	if settings.StartAfterSeconds < 30 || settings.StartAfterSeconds > 300 {
+		return fmt.Errorf("start_after_seconds must be between 30-300")
+	}
+	if settings.IntervalSeconds < 5 || settings.IntervalSeconds > 120 {
+		return fmt.Errorf("interval_seconds must be between 5-120")
+	}
+
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("marshal openai compact heartbeat keepalive settings: %w", err)
+	}
+	return s.settingRepo.Set(ctx, SettingKeyOpenAICompactHeartbeatKeepaliveSettings, string(data))
 }

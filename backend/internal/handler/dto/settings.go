@@ -274,6 +274,14 @@ type StreamTimeoutSettings struct {
 	ThresholdWindowMinutes int    `json:"threshold_window_minutes"`
 }
 
+// OpenAICompactHeartbeatKeepaliveSettings controls keepalive behavior for
+// OpenAI /responses/compact streaming responses.
+type OpenAICompactHeartbeatKeepaliveSettings struct {
+	Enabled           bool `json:"enabled"`
+	StartAfterSeconds int  `json:"start_after_seconds"`
+	IntervalSeconds   int  `json:"interval_seconds"`
+}
+
 // RectifierSettings 请求整流器配置 DTO
 type RectifierSettings struct {
 	Enabled                  bool     `json:"enabled"`

@@ -2492,6 +2492,21 @@ func (h *SettingHandler) GetStreamTimeoutSettings(c *gin.Context) {
 	})
 }
 
+// GetOpenAICompactHeartbeatKeepaliveSettings 获取 OpenAI compact 心跳保活配置
+// GET /api/v1/admin/settings/openai-compact-heartbeat-keepalive
+func (h *SettingHandler) GetOpenAICompactHeartbeatKeepaliveSettings(c *gin.Context) {
+	settings, err := h.settingService.GetOpenAICompactHeartbeatKeepaliveSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.OpenAICompactHeartbeatKeepaliveSettings{
+		Enabled:           settings.Enabled,
+		StartAfterSeconds: settings.StartAfterSeconds,
+		IntervalSeconds:   settings.IntervalSeconds,
+	})
+}
+
 // GetRectifierSettings 获取请求整流器配置
 // GET /api/v1/admin/settings/rectifier
 func (h *SettingHandler) GetRectifierSettings(c *gin.Context) {
@@ -2649,6 +2664,13 @@ type UpdateStreamTimeoutSettingsRequest struct {
 	ThresholdWindowMinutes int    `json:"threshold_window_minutes"`
 }
 
+// UpdateOpenAICompactHeartbeatKeepaliveSettingsRequest 更新 OpenAI compact 心跳保活配置请求
+type UpdateOpenAICompactHeartbeatKeepaliveSettingsRequest struct {
+	Enabled           bool `json:"enabled"`
+	StartAfterSeconds int  `json:"start_after_seconds"`
+	IntervalSeconds   int  `json:"interval_seconds"`
+}
+
 // UpdateStreamTimeoutSettings 更新流超时处理配置
 // PUT /api/v1/admin/settings/stream-timeout
 func (h *SettingHandler) UpdateStreamTimeoutSettings(c *gin.Context) {
@@ -2684,6 +2706,37 @@ func (h *SettingHandler) UpdateStreamTimeoutSettings(c *gin.Context) {
 		TempUnschedMinutes:     updatedSettings.TempUnschedMinutes,
 		ThresholdCount:         updatedSettings.ThresholdCount,
 		ThresholdWindowMinutes: updatedSettings.ThresholdWindowMinutes,
+	})
+}
+
+// UpdateOpenAICompactHeartbeatKeepaliveSettings 更新 OpenAI compact 心跳保活配置
+// PUT /api/v1/admin/settings/openai-compact-heartbeat-keepalive
+func (h *SettingHandler) UpdateOpenAICompactHeartbeatKeepaliveSettings(c *gin.Context) {
+	var req UpdateOpenAICompactHeartbeatKeepaliveSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	settings := &service.OpenAICompactHeartbeatKeepaliveSettings{
+		Enabled:           req.Enabled,
+		StartAfterSeconds: req.StartAfterSeconds,
+		IntervalSeconds:   req.IntervalSeconds,
+	}
+	if err := h.settingService.SetOpenAICompactHeartbeatKeepaliveSettings(c.Request.Context(), settings); err != nil {
+		response.BadRequest(c, err.Error())
+		return
+	}
+
+	updatedSettings, err := h.settingService.GetOpenAICompactHeartbeatKeepaliveSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.OpenAICompactHeartbeatKeepaliveSettings{
+		Enabled:           updatedSettings.Enabled,
+		StartAfterSeconds: updatedSettings.StartAfterSeconds,
+		IntervalSeconds:   updatedSettings.IntervalSeconds,
 	})
 }
 

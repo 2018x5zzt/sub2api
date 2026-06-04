@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -1584,6 +1585,55 @@ func TestOpenAIStreamingPreambleKeepaliveUsesDownstreamIdle(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "response.completed")
 }
 
+func TestOpenAIStreamingCompactHeartbeatWritesJSONEmptyString(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		cfg := &config.Config{
+			Gateway: config.GatewayConfig{
+				StreamDataIntervalTimeout: 0,
+				StreamKeepaliveInterval:   0,
+				MaxLineSize:               defaultMaxLineSize,
+			},
+		}
+		repo := &compactKeepaliveRepoStub{values: map[string]string{
+			SettingKeyOpenAICompactHeartbeatKeepaliveSettings: `{"enabled":true,"start_after_seconds":30,"interval_seconds":5}`,
+		}}
+		svc := &OpenAIGatewayService{
+			cfg:            cfg,
+			settingService: NewSettingService(repo, &config.Config{}),
+		}
+
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses/compact", nil)
+
+		pr, pw := io.Pipe()
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       pr,
+			Header:     http.Header{},
+		}
+
+		done := make(chan error, 1)
+		go func() {
+			_, err := svc.handleStreamingResponse(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "model", "model")
+			done <- err
+		}()
+
+		synctest.Wait()
+		time.Sleep(31 * time.Second)
+		synctest.Wait()
+
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n"))
+		_ = pw.Close()
+
+		require.NoError(t, <-done)
+		body := rec.Body.String()
+		require.Contains(t, body, "\"\"\n")
+		require.Contains(t, body, "response.completed")
+	})
+}
+
 func TestOpenAIStreamingPolicyResponseFailedBeforeOutputPassesThrough(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{
@@ -1886,6 +1936,53 @@ func TestOpenAIStreamingPassthroughStartedMissingTerminalWritesFailureEvent(t *t
 	require.Contains(t, body, "event: response.failed")
 	require.Contains(t, body, "upstream_stream_incomplete")
 	require.Contains(t, body, "data: [DONE]")
+}
+
+func TestOpenAIStreamingPassthroughCompactHeartbeatWritesJSONEmptyString(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		gin.SetMode(gin.TestMode)
+		cfg := &config.Config{
+			Gateway: config.GatewayConfig{
+				MaxLineSize: defaultMaxLineSize,
+			},
+		}
+		repo := &compactKeepaliveRepoStub{values: map[string]string{
+			SettingKeyOpenAICompactHeartbeatKeepaliveSettings: `{"enabled":true,"start_after_seconds":30,"interval_seconds":5}`,
+		}}
+		svc := &OpenAIGatewayService{
+			cfg:            cfg,
+			settingService: NewSettingService(repo, &config.Config{}),
+		}
+
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses/compact", nil)
+
+		pr, pw := io.Pipe()
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       pr,
+			Header:     http.Header{},
+		}
+
+		done := make(chan error, 1)
+		go func() {
+			_, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1, Platform: PlatformOpenAI, Name: "acc"}, time.Now(), "", "")
+			done <- err
+		}()
+
+		synctest.Wait()
+		time.Sleep(31 * time.Second)
+		synctest.Wait()
+
+		_, _ = pw.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":1,\"output_tokens\":1}}}\n\n"))
+		_ = pw.Close()
+
+		require.NoError(t, <-done)
+		body := rec.Body.String()
+		require.Contains(t, body, "\"\"\n")
+		require.Contains(t, body, "response.completed")
+	})
 }
 
 func TestOpenAIStreamingPassthroughResponseFailedBeforeOutputReturnsFailover(t *testing.T) {
@@ -2313,6 +2410,47 @@ func TestOpenAIResponsesRequestPathSuffix(t *testing.T) {
 			require.Equal(t, tt.want, openAIResponsesRequestPathSuffix(c))
 		})
 	}
+}
+
+func TestOpenAICompactHeartbeatKeepalivePlan_DisabledOrNonCompactReturnsZero(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	makeCtx := func(path string) *gin.Context {
+		rec := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(rec)
+		c.Request = httptest.NewRequest(http.MethodPost, path, nil)
+		return c
+	}
+
+	repo := &compactKeepaliveRepoStub{values: map[string]string{
+		SettingKeyOpenAICompactHeartbeatKeepaliveSettings: `{"enabled":false,"start_after_seconds":85,"interval_seconds":25}`,
+	}}
+	svc := &OpenAIGatewayService{settingService: NewSettingService(repo, &config.Config{})}
+
+	start, interval := svc.openAICompactHeartbeatKeepalivePlan(makeCtx("/v1/responses/compact"))
+	require.Equal(t, time.Duration(0), start)
+	require.Equal(t, time.Duration(0), interval)
+
+	repo.values[SettingKeyOpenAICompactHeartbeatKeepaliveSettings] = `{"enabled":true,"start_after_seconds":85,"interval_seconds":25}`
+	start, interval = svc.openAICompactHeartbeatKeepalivePlan(makeCtx("/v1/responses"))
+	require.Equal(t, time.Duration(0), start)
+	require.Equal(t, time.Duration(0), interval)
+}
+
+func TestOpenAICompactHeartbeatKeepalivePlan_EnabledCompactReturnsConfiguredDurations(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses/compact", nil)
+
+	repo := &compactKeepaliveRepoStub{values: map[string]string{
+		SettingKeyOpenAICompactHeartbeatKeepaliveSettings: `{"enabled":true,"start_after_seconds":85,"interval_seconds":25}`,
+	}}
+	svc := &OpenAIGatewayService{settingService: NewSettingService(repo, &config.Config{})}
+
+	start, interval := svc.openAICompactHeartbeatKeepalivePlan(c)
+	require.Equal(t, 85*time.Second, start)
+	require.Equal(t, 25*time.Second, interval)
 }
 
 func TestNormalizeOpenAICompactRequestBodyPreservesCurrentCodexPayloadFields(t *testing.T) {

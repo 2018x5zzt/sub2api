@@ -483,6 +483,29 @@ func openAIImagesStreamPrefix(parsed *OpenAIImagesRequest) string {
 	return "image_generation"
 }
 
+const openAIImagesMissingOutputErrorMessage = "upstream did not return image output"
+
+func (s *OpenAIGatewayService) logOpenAIImagesMissingOutput(c *gin.Context, upstreamBody []byte) error {
+	upstreamMsg := sanitizeUpstreamErrorMessage(openAIImagesMissingOutputErrorMessage)
+	upstreamDetail := ""
+	if len(upstreamBody) > 0 && s != nil && s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+		maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+		if maxBytes <= 0 {
+			maxBytes = 2048
+		}
+		upstreamDetail = truncateString(string(upstreamBody), maxBytes)
+	}
+	setOpsUpstreamError(c, http.StatusBadGateway, upstreamMsg, upstreamDetail)
+	appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+		UpstreamStatusCode:   http.StatusBadGateway,
+		Kind:                 "http_error",
+		Message:              upstreamMsg,
+		Detail:               upstreamDetail,
+		UpstreamResponseBody: upstreamDetail,
+	})
+	return fmt.Errorf(openAIImagesMissingOutputErrorMessage)
+}
+
 func buildOpenAIImagesStreamErrorBody(message string) []byte {
 	body := []byte(`{"type":"error","error":{"type":"upstream_error","message":""}}`)
 	if strings.TrimSpace(message) == "" {
@@ -531,7 +554,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthNonStreamingResponse(
 		return OpenAIUsage{}, 0, err
 	}
 	if len(results) == 0 {
-		return OpenAIUsage{}, 0, fmt.Errorf("upstream did not return image output")
+		return OpenAIUsage{}, 0, s.logOpenAIImagesMissingOutput(c, body)
 	}
 	if strings.TrimSpace(firstMeta.Model) == "" {
 		firstMeta.Model = strings.TrimSpace(fallbackModel)
@@ -659,7 +682,7 @@ func (s *OpenAIGatewayService) handleOpenAIImagesOAuthStreamingResponse(
 							appendOpenAIResponsesImageResultDedup(&finalResults, finalSeen, "", img)
 						}
 						if len(finalResults) == 0 {
-							err = fmt.Errorf("upstream did not return image output")
+							err = s.logOpenAIImagesMissingOutput(c, dataBytes)
 							_ = s.writeOpenAIImagesStreamEvent(c, flusher, "error", buildOpenAIImagesStreamErrorBody(err.Error()))
 							return OpenAIUsage{}, imageCount, firstTokenMs, err
 						}

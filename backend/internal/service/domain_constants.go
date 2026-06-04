@@ -303,6 +303,10 @@ const (
 	// SettingKeyStreamTimeoutSettings stores JSON config for stream timeout handling.
 	SettingKeyStreamTimeoutSettings = "stream_timeout_settings"
 
+	// SettingKeyOpenAICompactHeartbeatKeepaliveSettings stores JSON config for
+	// OpenAI /responses/compact heartbeat keepalive behavior.
+	SettingKeyOpenAICompactHeartbeatKeepaliveSettings = "openai_compact_heartbeat_keepalive_settings"
+
 	// =========================
 	// Request Rectifier (请求整流器)
 	// =========================

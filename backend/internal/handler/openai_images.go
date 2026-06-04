@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
@@ -15,6 +16,13 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+)
+
+const (
+	openAIImageForwardBodyLogMaxBytes    = 16 * 1024
+	openAIImageMissingOutputErrorMessage = "upstream did not return image output"
+	openAIImageForwardReqBodyFieldName   = "upstream_request_body"
+	openAIImageForwardRespBodyFieldName  = "upstream_response_body"
 )
 
 // Images handles OpenAI Images API requests.
@@ -239,6 +247,14 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 				zap.Bool("fallback_error_response_written", wroteFallback),
 				zap.Error(err),
 			}
+			if isOpenAIImageMissingOutputError(err) {
+				if reqBody := extractOpenAIImageUpstreamRequestBodyForLog(c); reqBody != "" {
+					fields = append(fields, zap.String(openAIImageForwardReqBodyFieldName, reqBody))
+				}
+				if respBody := extractOpenAIImageUpstreamResponseBodyForLog(c, err); respBody != "" {
+					fields = append(fields, zap.String(openAIImageForwardRespBodyFieldName, respBody))
+				}
+			}
 			if shouldLogOpenAIForwardFailureAsWarn(c, wroteFallback) {
 				reqLog.Warn("openai.images.forward_failed", fields...)
 				return
@@ -300,4 +316,78 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 
 func isMultipartImagesContentType(contentType string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "multipart/form-data")
+}
+
+func isOpenAIImageMissingOutputError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), strings.ToLower(openAIImageMissingOutputErrorMessage))
+}
+
+func truncateOpenAIImageForwardLogBody(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if len(s) <= openAIImageForwardBodyLogMaxBytes {
+		return s
+	}
+	cut := s[:openAIImageForwardBodyLogMaxBytes]
+	for len(cut) > 0 && !utf8.ValidString(cut) {
+		cut = cut[:len(cut)-1]
+	}
+	return strings.TrimSpace(cut)
+}
+
+func extractOpenAIImageUpstreamRequestBodyForLog(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	raw, ok := c.Get(service.OpsUpstreamRequestBodyKey)
+	if !ok {
+		return ""
+	}
+	switch v := raw.(type) {
+	case string:
+		return truncateOpenAIImageForwardLogBody(v)
+	case []byte:
+		return truncateOpenAIImageForwardLogBody(string(v))
+	default:
+		return ""
+	}
+}
+
+func extractOpenAIImageUpstreamResponseBodyForLog(c *gin.Context, err error) string {
+	if c != nil {
+		if raw, ok := c.Get(service.OpsUpstreamErrorDetailKey); ok {
+			if detail, ok := raw.(string); ok {
+				if trimmed := truncateOpenAIImageForwardLogBody(detail); trimmed != "" {
+					return trimmed
+				}
+			}
+		}
+		if raw, ok := c.Get(service.OpsUpstreamErrorsKey); ok {
+			if events, ok := raw.([]*service.OpsUpstreamErrorEvent); ok {
+				for i := len(events) - 1; i >= 0; i-- {
+					ev := events[i]
+					if ev == nil {
+						continue
+					}
+					if trimmed := truncateOpenAIImageForwardLogBody(ev.UpstreamResponseBody); trimmed != "" {
+						return trimmed
+					}
+					if trimmed := truncateOpenAIImageForwardLogBody(ev.Detail); trimmed != "" {
+						return trimmed
+					}
+				}
+			}
+		}
+	}
+
+	var failoverErr *service.UpstreamFailoverError
+	if errors.As(err, &failoverErr) && len(failoverErr.ResponseBody) > 0 {
+		return truncateOpenAIImageForwardLogBody(string(failoverErr.ResponseBody))
+	}
+	return ""
 }
