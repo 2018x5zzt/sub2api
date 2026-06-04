@@ -108,14 +108,51 @@ vi.mock('@/i18n', () => ({
   }
 }))
 
+const publicSettings = vi.hoisted(() => ({
+  current: {
+    registration_enabled: true,
+    email_verify_enabled: false,
+    registration_email_suffix_whitelist: [],
+    promo_code_enabled: false,
+    password_reset_enabled: true,
+    invitation_code_enabled: false,
+    turnstile_enabled: false,
+    turnstile_site_key: '',
+    site_name: 'XlabAPI',
+    site_logo: '',
+    site_subtitle: '',
+    api_base_url: 'https://api.example.com',
+    contact_info: '',
+    doc_url: '',
+    home_content: '',
+    hide_ccs_import_button: false,
+    payment_enabled: false,
+    channel_monitor_enabled: false,
+    available_channels_enabled: false,
+    affiliate_enabled: false,
+    purchase_subscription_enabled: false,
+    purchase_subscription_url: '',
+    custom_menu_items: [],
+    linuxdo_oauth_enabled: false,
+    sora_client_enabled: false,
+    backend_mode_enabled: false,
+    version: ''
+  },
+  loadPublicSettings: vi.fn()
+}))
+
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({
-    user: { email: 'user@example.com', balance: 0 },
-    runMode: 'standard',
-    publicSettings: null,
-    isAdmin: () => false,
-    logout: vi.fn()
-  })
+  useAuthStore: (selector?: any) => {
+    const state = {
+      user: { email: 'user@example.com', balance: 0 },
+      runMode: 'standard',
+      publicSettings: publicSettings.current,
+      loadPublicSettings: publicSettings.loadPublicSettings,
+      isAdmin: () => false,
+      logout: vi.fn()
+    }
+    return typeof selector === 'function' ? selector(state) : state
+  }
 }))
 
 vi.mock('react-router-dom', async () => {
@@ -213,6 +250,14 @@ function renderPage() {
 
 describe('KeysPage', () => {
   beforeEach(() => {
+    vi.restoreAllMocks()
+    vi.clearAllMocks()
+    publicSettings.current.hide_ccs_import_button = false
+    publicSettings.current.api_base_url = 'https://api.example.com'
+    publicSettings.current.site_name = 'XlabAPI'
+    publicSettings.loadPublicSettings.mockResolvedValue(undefined)
+    vi.spyOn(window, 'open').mockImplementation(() => null)
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false)
     vi.clearAllMocks()
     listKeys.mockResolvedValue({ items: [keyItem], total: 1, pages: 1 })
     getDashboardApiKeysUsage.mockResolvedValue({
@@ -390,5 +435,84 @@ describe('KeysPage', () => {
     expect(dialog).toBeTruthy()
     const nameInput = within(dialog).getByLabelText('keys.nameLabel') as HTMLInputElement
     expect(nameInput.value).toBe('null-ip key')
+  })
+
+  it('renders use key and CC-Switch row actions', async () => {
+    renderPage()
+
+    await screen.findByText('fixed key')
+    expect(screen.getByRole('button', { name: 'keys.useKey' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'keys.importToCcSwitch' })).toBeTruthy()
+  })
+
+  it('hides CC-Switch import action when public setting disables it', async () => {
+    publicSettings.current.hide_ccs_import_button = true
+    renderPage()
+
+    await screen.findByText('fixed key')
+    expect(screen.getByRole('button', { name: 'keys.useKey' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'keys.importToCcSwitch' })).toBeNull()
+  })
+
+  it('imports an OpenAI key to CC-Switch with the legacy deeplink payload', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('fixed key')
+    await user.click(screen.getByRole('button', { name: 'keys.importToCcSwitch' }))
+
+    expect(window.open).toHaveBeenCalledTimes(1)
+    const [url, target] = (window.open as any).mock.calls[0] as [string, string]
+    expect(target).toBe('_self')
+    expect(url.startsWith('ccswitch://v1/import?')).toBe(true)
+    const params = new URLSearchParams(url.replace('ccswitch://v1/import?', ''))
+    expect(params.get('app')).toBe('codex')
+    expect(params.get('name')).toBe('XlabAPI')
+    expect(params.get('homepage')).toBe('https://api.example.com')
+    expect(params.get('endpoint')).toBe('https://api.example.com')
+    expect(params.get('apiKey')).toBe('sk-test-key')
+    expect(params.get('usageEnabled')).toBe('true')
+  })
+
+  it('asks for Antigravity CC-Switch client type before importing', async () => {
+    const user = userEvent.setup()
+    const antigravityGroup = { ...fixedGroup, id: 30, name: 'AG Pool', platform: 'antigravity' }
+    listKeys.mockResolvedValueOnce({
+      items: [{ ...keyItem, id: 101, name: 'ag key', key: 'sk-ag-key', group_id: 30, group: antigravityGroup }],
+      total: 1,
+      pages: 1
+    })
+    getUserGroups.mockResolvedValueOnce([fixedGroup, dynamicGroup, antigravityGroup])
+
+    renderPage()
+
+    await screen.findByText('ag key')
+    await user.click(screen.getByRole('button', { name: 'keys.importToCcSwitch' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('keys.ccsClientSelect.title')).toBeTruthy()
+    await user.click(within(dialog).getByRole('button', { name: /keys\.ccsClientSelect\.geminiCli/i }))
+
+    const [url] = (window.open as any).mock.calls[0] as [string]
+    const params = new URLSearchParams(url.replace('ccswitch://v1/import?', ''))
+    expect(params.get('app')).toBe('gemini')
+    expect(params.get('endpoint')).toBe('https://api.example.com/antigravity')
+    expect(params.get('apiKey')).toBe('sk-ag-key')
+  })
+
+  it('opens use key modal with OpenAI Codex configuration', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('fixed key')
+    await user.click(screen.getByRole('button', { name: 'keys.useKey' }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('keys.useKeyModal.title')).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: 'keys.useKeyModal.cliTabs.codexCli' })).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: 'keys.useKeyModal.cliTabs.codexCliWs' })).toBeTruthy()
+    expect(within(dialog).getByRole('button', { name: 'keys.useKeyModal.cliTabs.opencode' })).toBeTruthy()
+    expect(within(dialog).getByText('~/.codex/config.toml')).toBeTruthy()
+    expect(within(dialog).getByText(/base_url = "https:\/\/api\.example\.com"/)).toBeTruthy()
   })
 })
