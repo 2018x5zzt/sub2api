@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Copy, Trash2, Pencil } from 'lucide-react'
+import { Plus, Copy, Trash2, Pencil, KeyRound, Download } from 'lucide-react'
 import { PageHeader } from '@/components/layout/ConsoleLayout'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -15,6 +15,10 @@ import { modelsAPI } from '@/api/models'
 import { usageAPI } from '@/api/usage'
 import { toast } from '@/components/ui/Toast'
 import i18n from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
+import { CcsClientSelectModal } from './CcsClientSelectModal'
+import { UseKeyModal } from './UseKeyModal'
+import { buildCcsImportUrl, type CcsClientType } from './ccswitch'
 import type { ApiKey, CreateApiKeyRequest, Group, UpdateApiKeyRequest } from '@/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 
@@ -158,6 +162,8 @@ function formatInt(value: number | null | undefined) {
 export default function KeysPage() {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const publicSettings = useAuthStore((s) => s.publicSettings)
+  const loadPublicSettings = useAuthStore((s) => s.loadPublicSettings)
 
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -167,6 +173,8 @@ export default function KeysPage() {
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState<KeyFormState>(newFormState())
   const [usageStats, setUsageStats] = useState<Record<string, BatchApiKeyUsageStats>>({})
+  const [useKeyTarget, setUseKeyTarget] = useState<ApiKey | null>(null)
+  const [pendingCcsKey, setPendingCcsKey] = useState<ApiKey | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['user-keys', page, search],
@@ -220,6 +228,12 @@ export default function KeysPage() {
 
     return () => controller.abort()
   }, [data?.items])
+
+  useEffect(() => {
+    if (!publicSettings) {
+      loadPublicSettings().catch(() => {})
+    }
+  }, [loadPublicSettings, publicSettings])
 
   function closeForm() {
     setFormOpen(false)
@@ -337,6 +351,44 @@ export default function KeysPage() {
     } catch (e) {
       toast.error((e as { message?: string })?.message || (t('keys.failedToResetRateLimit') as string))
     }
+  }
+
+  function apiBaseUrl() {
+    return (publicSettings?.api_base_url || window.location.origin).replace(/\/+$/, '')
+  }
+
+  function executeCcsImport(row: ApiKey, clientType?: CcsClientType) {
+    const deeplink = buildCcsImportUrl({
+      apiKey: row.key,
+      platform: row.group?.platform || 'anthropic',
+      clientType,
+      baseUrl: publicSettings?.api_base_url || window.location.origin,
+      siteName: publicSettings?.site_name || 'sub2api'
+    })
+
+    try {
+      window.open(deeplink, '_self')
+      window.setTimeout(() => {
+        if (document.hasFocus()) {
+          toast.error(t('keys.ccSwitchNotInstalled') as string)
+        }
+      }, 100)
+    } catch {
+      toast.error(t('keys.ccSwitchNotInstalled') as string)
+    }
+  }
+
+  function importToCcswitch(row: ApiKey) {
+    if (row.group?.platform === 'antigravity') {
+      setPendingCcsKey(row)
+      return
+    }
+    executeCcsImport(row, row.group?.platform === 'gemini' ? 'gemini' : 'claude')
+  }
+
+  function handleCcsClientSelect(clientType: CcsClientType) {
+    if (pendingCcsKey) executeCcsImport(pendingCcsKey, clientType)
+    setPendingCcsKey(null)
   }
 
   async function onSubmit() {
@@ -526,7 +578,25 @@ export default function KeysPage() {
                     {new Date(k.created_at).toLocaleDateString()}
                   </TD>
                   <TD className="text-right">
-                    <div className="inline-flex gap-1">
+                    <div className="inline-flex flex-wrap justify-end gap-1">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => setUseKeyTarget(k)}
+                      >
+                        <KeyRound className="h-3.5 w-3.5" />
+                        {t('keys.useKey')}
+                      </button>
+                      {!publicSettings?.hide_ccs_import_button && (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => importToCcswitch(k)}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          {t('keys.importToCcSwitch')}
+                        </button>
+                      )}
                       <button
                         title={t('keys.editKey') as string}
                         className="btn btn-ghost btn-icon btn-sm"
@@ -576,6 +646,21 @@ export default function KeysPage() {
           </div>
         )}
       </Card>
+
+      <UseKeyModal
+        open={!!useKeyTarget}
+        apiKey={useKeyTarget?.key || ''}
+        baseUrl={apiBaseUrl()}
+        platform={useKeyTarget?.group?.platform || null}
+        allowMessagesDispatch={useKeyTarget?.group?.allow_messages_dispatch}
+        onClose={() => setUseKeyTarget(null)}
+      />
+
+      <CcsClientSelectModal
+        open={!!pendingCcsKey}
+        onClose={() => setPendingCcsKey(null)}
+        onSelect={handleCcsClientSelect}
+      />
 
       <Modal
         open={formOpen}
