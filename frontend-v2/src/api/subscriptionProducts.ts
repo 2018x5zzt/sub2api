@@ -1,20 +1,8 @@
-import { apiClient } from './client'
-import type { ActiveSubscriptionProduct, SubscriptionProductSummary } from '@/types'
+import { xlabSubscriptionProductsAPI } from './xlab/subscriptionProducts'
 
-export async function getActive(): Promise<ActiveSubscriptionProduct[]> {
-  const { data } = await apiClient.get<ActiveSubscriptionProduct[]>('/subscription-products/active')
-  return data
-}
-
-export async function getSummary(): Promise<SubscriptionProductSummary> {
-  const { data } = await apiClient.get<SubscriptionProductSummary>('/subscription-products/summary')
-  return data
-}
-
-export async function getProgress(): Promise<SubscriptionProductSummary> {
-  const { data } = await apiClient.get<SubscriptionProductSummary>('/subscription-products/progress')
-  return data
-}
+export const getActive = xlabSubscriptionProductsAPI.getActive
+export const getSummary = xlabSubscriptionProductsAPI.getSummary
+export const getProgress = xlabSubscriptionProductsAPI.getProgress
 
 export const subscriptionProductsAPI = {
   getActive,
