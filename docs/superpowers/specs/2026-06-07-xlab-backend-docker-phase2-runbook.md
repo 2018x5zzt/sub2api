@@ -36,3 +36,51 @@ VITE_XLAB_API_BASE_URL=/api/v1 bash ./deploy.sh
 ```bash
 ssh root@152.53.39.161 "docker stop xlab-backend"
 ```
+
+## Phase 3A product subscription read mirror
+
+Rollback mode keeps xlab-backend proxying core:
+
+```bash
+cd /root/sub2api-src
+XLAB_SUBSCRIPTION_READ_SOURCE=core \
+XLAB_SUBSCRIPTION_SYNC_ENABLED=false \
+./deploy-xlab-backend.sh
+```
+
+Sync-only rollout requires DSNs to be exported first:
+
+```bash
+export XLAB_DATABASE_URL="$XLAB_DATABASE_URL"
+export CORE_DATABASE_URL="$CORE_DATABASE_URL"
+test -n "$XLAB_DATABASE_URL"
+test -n "$CORE_DATABASE_URL"
+
+cd /root/sub2api-src
+XLAB_SUBSCRIPTION_SYNC_ENABLED=true \
+XLAB_SUBSCRIPTION_READ_SOURCE=core \
+./deploy-xlab-backend.sh
+```
+
+Hybrid read rollout keeps fallback enabled:
+
+```bash
+export XLAB_DATABASE_URL="$XLAB_DATABASE_URL"
+export CORE_DATABASE_URL="$CORE_DATABASE_URL"
+test -n "$XLAB_DATABASE_URL"
+test -n "$CORE_DATABASE_URL"
+
+cd /root/sub2api-src
+XLAB_SUBSCRIPTION_SYNC_ENABLED=true \
+XLAB_SUBSCRIPTION_READ_SOURCE=hybrid \
+./deploy-xlab-backend.sh
+```
+
+Runtime rollback:
+
+```bash
+cd /root/sub2api-src
+XLAB_SUBSCRIPTION_READ_SOURCE=core \
+XLAB_SUBSCRIPTION_SYNC_ENABLED=false \
+./deploy-xlab-backend.sh
+```

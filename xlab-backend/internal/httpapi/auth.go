@@ -5,14 +5,18 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/2018x5zzt/xlab-backend/internal/core"
 )
 
 type contextKey string
 
 const tokenContextKey contextKey = "token"
+const userContextKey contextKey = "user"
 
 type API struct {
-	core CoreClient
+	core              CoreClient
+	subscriptionReads SubscriptionReadService
 }
 
 func (a *API) auth(next http.Handler) http.Handler {
@@ -22,11 +26,14 @@ func (a *API) auth(next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "Authorization header is required")
 			return
 		}
-		if _, err := a.core.CurrentUser(r.Context(), token); err != nil {
+		user, err := a.core.CurrentUser(r.Context(), token)
+		if err != nil {
 			writeError(w, http.StatusUnauthorized, "INVALID_TOKEN", "Invalid token")
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), tokenContextKey, token)))
+		ctx := context.WithValue(r.Context(), tokenContextKey, token)
+		ctx = context.WithValue(ctx, userContextKey, user)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -40,6 +47,11 @@ func bearerToken(header string) string {
 
 func tokenFromContext(ctx context.Context) string {
 	value, _ := ctx.Value(tokenContextKey).(string)
+	return value
+}
+
+func userFromContext(ctx context.Context) *core.User {
+	value, _ := ctx.Value(userContextKey).(*core.User)
 	return value
 }
 
