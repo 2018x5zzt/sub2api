@@ -11,6 +11,8 @@ docs/claude-relay-service/
 *.so
 *.dylib
 backend/bin/
+xlab-backend/bin/*
+!xlab-backend/bin/.gitkeep
 backend/server
 backend/sub2api
 backend/main
