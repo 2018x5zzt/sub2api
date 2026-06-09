@@ -96,7 +96,6 @@ func TestNormalizeResponsesBodyServiceTier(t *testing.T) {
 	require.Empty(t, tier)
 	require.False(t, gjson.GetBytes(body, "service_tier").Exists())
 }
-
 func TestHandleChatStreamingResponse_EmptyUpstreamDoesNotWriteEmpty200(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)
