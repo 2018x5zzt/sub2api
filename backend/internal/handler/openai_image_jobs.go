@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,9 +21,12 @@ import (
 
 const (
 	openAIImageJobDefaultConcurrency = 2
-	openAIImageJobDefaultTimeout     = 10 * time.Minute
+	openAIImageJobDefaultTimeout     = 20 * time.Minute
 	openAIImageJobDefaultTTL         = 24 * time.Hour
+	openAIImageJobDefaultMaxAttempts = 3
 )
+
+var openAIImageJobDefaultRetryBackoff = []time.Duration{10 * time.Second, 30 * time.Second}
 
 type openAIImageJobStatus string
 
@@ -73,9 +77,11 @@ func (r openAIImageJobResult) clone() openAIImageJobResult {
 type openAIImageJobRunner func(context.Context, openAIImageJobRequest) openAIImageJobResult
 
 type openAIImageJobStoreOptions struct {
-	Concurrency int
-	Timeout     time.Duration
-	TTL         time.Duration
+	Concurrency  int
+	Timeout      time.Duration
+	TTL          time.Duration
+	MaxAttempts  int
+	RetryBackoff []time.Duration
 }
 
 type openAIImageJobSnapshot struct {
@@ -102,12 +108,14 @@ type openAIImageJob struct {
 }
 
 type openAIImageJobStore struct {
-	mu      sync.RWMutex
-	jobs    map[string]*openAIImageJob
-	sem     chan struct{}
-	timeout time.Duration
-	ttl     time.Duration
-	now     func() time.Time
+	mu           sync.RWMutex
+	jobs         map[string]*openAIImageJob
+	sem          chan struct{}
+	timeout      time.Duration
+	ttl          time.Duration
+	maxAttempts  int
+	retryBackoff []time.Duration
+	now          func() time.Time
 }
 
 func newOpenAIImageJobStore(options openAIImageJobStoreOptions) *openAIImageJobStore {
@@ -123,12 +131,22 @@ func newOpenAIImageJobStore(options openAIImageJobStoreOptions) *openAIImageJobS
 	if ttl <= 0 {
 		ttl = openAIImageJobDefaultTTL
 	}
+	maxAttempts := options.MaxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = openAIImageJobDefaultMaxAttempts
+	}
+	retryBackoff := append([]time.Duration(nil), options.RetryBackoff...)
+	if len(retryBackoff) == 0 {
+		retryBackoff = append([]time.Duration(nil), openAIImageJobDefaultRetryBackoff...)
+	}
 	return &openAIImageJobStore{
-		jobs:    make(map[string]*openAIImageJob),
-		sem:     make(chan struct{}, concurrency),
-		timeout: timeout,
-		ttl:     ttl,
-		now:     time.Now,
+		jobs:         make(map[string]*openAIImageJob),
+		sem:          make(chan struct{}, concurrency),
+		timeout:      timeout,
+		ttl:          ttl,
+		maxAttempts:  maxAttempts,
+		retryBackoff: retryBackoff,
+		now:          time.Now,
 	}
 }
 
@@ -181,27 +199,7 @@ func (s *openAIImageJobStore) run(id string, req openAIImageJobRequest, runner o
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
 
-	var result openAIImageJobResult
-	func() {
-		defer func() {
-			if recovered := recover(); recovered != nil {
-				result = openAIImageJobResult{
-					StatusCode: http.StatusInternalServerError,
-					Headers:    http.Header{"Content-Type": []string{"application/json"}},
-					Body:       openAIImageJobErrorBody("api_error", "Image job failed"),
-				}
-			}
-		}()
-		if runner == nil {
-			result = openAIImageJobResult{
-				StatusCode: http.StatusInternalServerError,
-				Headers:    http.Header{"Content-Type": []string{"application/json"}},
-				Body:       openAIImageJobErrorBody("api_error", "Image job runner is not configured"),
-			}
-			return
-		}
-		result = runner(ctx, req.clone())
-	}()
+	result := s.runWithRetry(ctx, req, runner)
 
 	if result.StatusCode == 0 {
 		status := http.StatusInternalServerError
@@ -220,6 +218,77 @@ func (s *openAIImageJobStore) run(id string, req openAIImageJobRequest, runner o
 		result.Body = openAIImageJobErrorBody("api_error", http.StatusText(result.StatusCode))
 	}
 	s.complete(id, result.clone())
+}
+
+func (s *openAIImageJobStore) runWithRetry(ctx context.Context, req openAIImageJobRequest, runner openAIImageJobRunner) openAIImageJobResult {
+	if runner == nil {
+		return openAIImageJobResult{
+			StatusCode: http.StatusInternalServerError,
+			Headers:    http.Header{"Content-Type": []string{"application/json"}},
+			Body:       openAIImageJobErrorBody("api_error", "Image job runner is not configured"),
+		}
+	}
+
+	maxAttempts := s.maxAttempts
+	if maxAttempts <= 0 {
+		maxAttempts = 1
+	}
+	var result openAIImageJobResult
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if ctx.Err() != nil {
+			return openAIImageJobResult{}
+		}
+		result = runOpenAIImageJobAttempt(ctx, req, runner)
+		if !isOpenAIImageJobRetryableStatus(result.StatusCode) || attempt >= maxAttempts {
+			break
+		}
+		if !s.waitBeforeOpenAIImageJobRetry(ctx, attempt) {
+			return openAIImageJobResult{}
+		}
+	}
+	if maxAttempts > 1 && isOpenAIImageJobRetryableStatus(result.StatusCode) {
+		result.Headers = http.Header{"Content-Type": []string{"application/json"}}
+		result.Body = openAIImageJobAttemptsExhaustedBody(result.StatusCode, maxAttempts)
+	}
+	return result
+}
+
+func runOpenAIImageJobAttempt(ctx context.Context, req openAIImageJobRequest, runner openAIImageJobRunner) (result openAIImageJobResult) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			result = openAIImageJobResult{
+				StatusCode: http.StatusInternalServerError,
+				Headers:    http.Header{"Content-Type": []string{"application/json"}},
+				Body:       openAIImageJobErrorBody("api_error", "Image job failed"),
+			}
+		}
+	}()
+	return runner(ctx, req.clone())
+}
+
+func (s *openAIImageJobStore) waitBeforeOpenAIImageJobRetry(ctx context.Context, attempt int) bool {
+	backoff := time.Duration(0)
+	if attempt > 0 && attempt <= len(s.retryBackoff) {
+		backoff = s.retryBackoff[attempt-1]
+	}
+	if backoff <= 0 {
+		return ctx.Err() == nil
+	}
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(backoff):
+		return true
+	}
+}
+
+func isOpenAIImageJobRetryableStatus(status int) bool {
+	switch status {
+	case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout, 524:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *openAIImageJobStore) setRunning(id string) {
@@ -285,6 +354,21 @@ func openAIImageJobErrorBody(code string, message string) []byte {
 	})
 	if err != nil {
 		return []byte(`{"error":{"type":"api_error","message":"Image job failed"}}`)
+	}
+	return body
+}
+
+func openAIImageJobAttemptsExhaustedBody(status int, attempts int) []byte {
+	body, err := json.Marshal(map[string]any{
+		"error": map[string]any{
+			"type":        "upstream_error",
+			"message":     fmt.Sprintf("Image job failed after %d attempts", attempts),
+			"last_status": status,
+			"attempts":    attempts,
+		},
+	})
+	if err != nil {
+		return openAIImageJobErrorBody("upstream_error", "Image job failed after retries")
 	}
 	return body
 }

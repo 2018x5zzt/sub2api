@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ func TestOpenAIImageJobStoreSuccessIsVisibleOnlyToOwner(t *testing.T) {
 		Concurrency: 1,
 		Timeout:     time.Second,
 		TTL:         time.Hour,
+		MaxAttempts: 1,
 	})
 	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
 	started := make(chan struct{})
@@ -61,6 +63,7 @@ func TestOpenAIImageJobStoreFailureIsNotSuccessful(t *testing.T) {
 		Concurrency: 1,
 		Timeout:     time.Second,
 		TTL:         time.Hour,
+		MaxAttempts: 1,
 	})
 	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
 
@@ -82,6 +85,143 @@ func TestOpenAIImageJobStoreFailureIsNotSuccessful(t *testing.T) {
 	require.Equal(t, openAIImageJobStatusFailed, got.Status)
 	require.Equal(t, http.StatusBadGateway, got.StatusCode)
 	require.JSONEq(t, `{"error":{"type":"api_error","message":"upstream timeout"}}`, string(got.Body))
+}
+
+func TestOpenAIImageJobStoreRetriesRetryableFailureUntilSuccess(t *testing.T) {
+	store := newOpenAIImageJobStore(openAIImageJobStoreOptions{
+		Concurrency:  1,
+		Timeout:      time.Second,
+		TTL:          time.Hour,
+		MaxAttempts:  3,
+		RetryBackoff: []time.Duration{0, 0},
+	})
+	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
+	var attempts atomic.Int32
+
+	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+		attempt := attempts.Add(1)
+		if attempt == 1 {
+			return openAIImageJobResult{
+				StatusCode: http.StatusBadGateway,
+				Headers:    http.Header{"Content-Type": []string{"application/json"}},
+				Body:       []byte(`{"error":{"type":"upstream_error","message":"temporary"}}`),
+			}
+		}
+		return openAIImageJobResult{
+			StatusCode: http.StatusOK,
+			Headers:    http.Header{"Content-Type": []string{"application/json"}},
+			Body:       []byte(`{"data":[{"url":"https://example.test/retry.png"}]}`),
+		}
+	})
+
+	require.Eventually(t, func() bool {
+		got, ok := store.get(job.ID, owner)
+		return ok && got.Status == openAIImageJobStatusSucceeded
+	}, time.Second, 10*time.Millisecond)
+
+	got, ok := store.get(job.ID, owner)
+	require.True(t, ok)
+	require.Equal(t, openAIImageJobStatusSucceeded, got.Status)
+	require.Equal(t, http.StatusOK, got.StatusCode)
+	require.Equal(t, int32(2), attempts.Load())
+	require.JSONEq(t, `{"data":[{"url":"https://example.test/retry.png"}]}`, string(got.Body))
+}
+
+func TestOpenAIImageJobStoreFailsAfterRetryableAttemptsExhausted(t *testing.T) {
+	store := newOpenAIImageJobStore(openAIImageJobStoreOptions{
+		Concurrency:  1,
+		Timeout:      time.Second,
+		TTL:          time.Hour,
+		MaxAttempts:  3,
+		RetryBackoff: []time.Duration{0, 0},
+	})
+	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
+	var attempts atomic.Int32
+
+	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+		attempts.Add(1)
+		return openAIImageJobResult{
+			StatusCode: http.StatusBadGateway,
+			Headers:    http.Header{"Content-Type": []string{"application/json"}},
+			Body:       []byte(`{"error":{"type":"upstream_error","message":"temporary"}}`),
+		}
+	})
+
+	require.Eventually(t, func() bool {
+		got, ok := store.get(job.ID, owner)
+		return ok && got.Status == openAIImageJobStatusFailed
+	}, time.Second, 10*time.Millisecond)
+
+	got, ok := store.get(job.ID, owner)
+	require.True(t, ok)
+	require.Equal(t, openAIImageJobStatusFailed, got.Status)
+	require.Equal(t, http.StatusBadGateway, got.StatusCode)
+	require.Equal(t, int32(3), attempts.Load())
+	require.JSONEq(t, `{"error":{"type":"upstream_error","message":"Image job failed after 3 attempts","last_status":502,"attempts":3}}`, string(got.Body))
+}
+
+func TestOpenAIImageJobStoreDoesNotRetryPermanentClientError(t *testing.T) {
+	store := newOpenAIImageJobStore(openAIImageJobStoreOptions{
+		Concurrency:  1,
+		Timeout:      time.Second,
+		TTL:          time.Hour,
+		MaxAttempts:  3,
+		RetryBackoff: []time.Duration{0, 0},
+	})
+	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
+	var attempts atomic.Int32
+
+	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+		attempts.Add(1)
+		return openAIImageJobResult{
+			StatusCode: http.StatusBadRequest,
+			Headers:    http.Header{"Content-Type": []string{"application/json"}},
+			Body:       []byte(`{"error":{"type":"invalid_request_error","message":"bad prompt"}}`),
+		}
+	})
+
+	require.Eventually(t, func() bool {
+		got, ok := store.get(job.ID, owner)
+		return ok && got.Status == openAIImageJobStatusFailed
+	}, time.Second, 10*time.Millisecond)
+
+	got, ok := store.get(job.ID, owner)
+	require.True(t, ok)
+	require.Equal(t, http.StatusBadRequest, got.StatusCode)
+	require.Equal(t, int32(1), attempts.Load())
+	require.JSONEq(t, `{"error":{"type":"invalid_request_error","message":"bad prompt"}}`, string(got.Body))
+}
+
+func TestOpenAIImageJobStoreStopsRetryingWhenContextTimesOut(t *testing.T) {
+	store := newOpenAIImageJobStore(openAIImageJobStoreOptions{
+		Concurrency:  1,
+		Timeout:      20 * time.Millisecond,
+		TTL:          time.Hour,
+		MaxAttempts:  3,
+		RetryBackoff: []time.Duration{time.Second, time.Second},
+	})
+	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
+	var attempts atomic.Int32
+
+	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+		attempts.Add(1)
+		return openAIImageJobResult{
+			StatusCode: http.StatusBadGateway,
+			Headers:    http.Header{"Content-Type": []string{"application/json"}},
+			Body:       []byte(`{"error":{"type":"upstream_error","message":"temporary"}}`),
+		}
+	})
+
+	require.Eventually(t, func() bool {
+		got, ok := store.get(job.ID, owner)
+		return ok && got.Status == openAIImageJobStatusFailed
+	}, time.Second, 10*time.Millisecond)
+
+	got, ok := store.get(job.ID, owner)
+	require.True(t, ok)
+	require.Equal(t, http.StatusGatewayTimeout, got.StatusCode)
+	require.Equal(t, int32(1), attempts.Load())
+	require.JSONEq(t, `{"error":{"type":"api_error","message":"Image job timed out"}}`, string(got.Body))
 }
 
 func TestOpenAIGatewayHandlerImageJobStatusReturnsSucceededResponse(t *testing.T) {
