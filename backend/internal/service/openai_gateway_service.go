@@ -5892,7 +5892,6 @@ func isUsagePricingUnavailableError(err error) bool {
 	return strings.Contains(msg, "no pricing available") || strings.Contains(msg, "pricing not found")
 }
 
-
 func (s *OpenAIGatewayService) calculateOpenAIRecordUsageTokenCost(
 	ctx context.Context,
 	apiKey *APIKey,
