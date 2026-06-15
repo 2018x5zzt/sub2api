@@ -3451,6 +3451,3156 @@
                 </div>
                 <Toggle v-model="form.rewrite_message_cache_control" />
               </div>
+
+              <!-- Antigravity UA 版本 -->
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{
+                    t(
+                      "admin.settings.gatewayForwarding.antigravityUserAgentVersion",
+                    )
+                  }}
+                </label>
+                <input
+                  v-model="form.antigravity_user_agent_version"
+                  type="text"
+                  class="input max-w-xs font-mono text-sm"
+                  :placeholder="
+                    t(
+                      'admin.settings.gatewayForwarding.antigravityUserAgentVersionPlaceholder',
+                    )
+                  "
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{
+                    t(
+                      "admin.settings.gatewayForwarding.antigravityUserAgentVersionHint",
+                    )
+                  }}
+                </p>
+              </div>
+            </div>
+          </div>
+          <!-- Web Search Emulation -->
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.webSearchEmulation.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.webSearchEmulation.description") }}
+              </p>
+            </div>
+            <div class="space-y-5 p-6">
+              <!-- Global Toggle -->
+              <div class="flex items-center justify-between">
+                <div>
+                  <label
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.webSearchEmulation.enabled") }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.webSearchEmulation.enabledHint") }}
+                  </p>
+                </div>
+                <Toggle v-model="webSearchConfig.enabled" />
+              </div>
+
+              <!-- Providers -->
+              <div v-if="webSearchConfig.enabled" class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <label
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.webSearchEmulation.providers") }}
+                  </label>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="addWebSearchProvider"
+                  >
+                    {{ t("admin.settings.webSearchEmulation.addProvider") }}
+                  </button>
+                </div>
+
+                <div
+                  v-if="webSearchConfig.providers.length === 0"
+                  class="rounded-lg border border-dashed border-gray-300 p-4 text-center text-sm text-gray-400 dark:border-dark-600"
+                >
+                  {{ t("admin.settings.webSearchEmulation.noProviders") }}
+                </div>
+
+                <div
+                  v-for="(provider, pIdx) in webSearchConfig.providers"
+                  :key="pIdx"
+                  class="rounded-lg border border-gray-200 dark:border-dark-600"
+                >
+                  <!-- Collapsible header -->
+                  <div
+                    class="flex cursor-pointer items-center justify-between px-4 py-3"
+                    @click="toggleProviderExpand(pIdx)"
+                  >
+                    <div class="flex items-center gap-3">
+                      <svg
+                        class="h-4 w-4 text-gray-400 transition-transform"
+                        :class="{ 'rotate-90': expandedProviders[pIdx] }"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M9 5l7 7-7 7"
+                        />
+                      </svg>
+                      <Select
+                        v-model="provider.type"
+                        :options="[
+                          { value: 'brave', label: 'Brave Search' },
+                          { value: 'tavily', label: 'Tavily' },
+                        ]"
+                        class="w-36"
+                        @click.stop
+                      />
+                      <!-- Quota summary (always visible) -->
+                      <span class="text-xs text-gray-400">
+                        {{ provider.quota_used ?? 0 }} /
+                        {{
+                          provider.quota_limit != null &&
+                          provider.quota_limit > 0
+                            ? provider.quota_limit
+                            : "∞"
+                        }}
+                      </span>
+                      <span
+                        v-if="
+                          !expandedProviders[pIdx] &&
+                          provider.api_key_configured
+                        "
+                        class="text-xs text-green-500"
+                      >
+                        {{
+                          t(
+                            "admin.settings.webSearchEmulation.apiKeyConfigured",
+                          )
+                        }}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      class="text-red-500 hover:text-red-700 text-xs"
+                      @click.stop="removeWebSearchProvider(pIdx)"
+                    >
+                      {{
+                        t("admin.settings.webSearchEmulation.removeProvider")
+                      }}
+                    </button>
+                  </div>
+
+                  <!-- Expanded content -->
+                  <div
+                    v-if="expandedProviders[pIdx]"
+                    class="space-y-3 border-t border-gray-100 px-4 pb-4 pt-3 dark:border-dark-700"
+                  >
+                    <!-- API Key with inline show/copy -->
+                    <div>
+                      <label class="text-xs text-gray-500">{{
+                        t("admin.settings.webSearchEmulation.apiKey")
+                      }}</label>
+                      <div class="relative">
+                        <input
+                          v-model="provider.api_key"
+                          :type="apiKeyVisible[pIdx] ? 'text' : 'password'"
+                          class="input w-full text-sm"
+                          :class="
+                            provider.api_key || provider.api_key_configured
+                              ? 'pr-16'
+                              : ''
+                          "
+                          :placeholder="
+                            provider.api_key_configured
+                              ? '••••••••'
+                              : t(
+                                  'admin.settings.webSearchEmulation.apiKeyPlaceholder',
+                                )
+                          "
+                        />
+                        <div
+                          v-if="provider.api_key || provider.api_key_configured"
+                          class="absolute inset-y-0 right-0 flex items-center pr-1.5"
+                        >
+                          <button
+                            type="button"
+                            class="rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            :title="
+                              apiKeyVisible[pIdx]
+                                ? t(
+                                    'admin.settings.webSearchEmulation.hideApiKey',
+                                  )
+                                : t(
+                                    'admin.settings.webSearchEmulation.showApiKey',
+                                  )
+                            "
+                            @click="apiKeyVisible[pIdx] = !apiKeyVisible[pIdx]"
+                          >
+                            <svg
+                              v-if="!apiKeyVisible[pIdx]"
+                              class="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                              />
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                              />
+                            </svg>
+                            <svg
+                              v-else
+                              class="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21"
+                              />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                            :class="{
+                              'opacity-30 cursor-not-allowed':
+                                !provider.api_key,
+                            }"
+                            :title="
+                              t('admin.settings.webSearchEmulation.copyApiKey')
+                            "
+                            :disabled="!provider.api_key"
+                            @click="copyApiKey(pIdx)"
+                          >
+                            <svg
+                              class="h-4 w-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Quota + Subscription in compact row -->
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <label class="text-xs text-gray-500">{{
+                          t("admin.settings.webSearchEmulation.quotaLimit")
+                        }}</label>
+                        <input
+                          v-model="provider.quota_limit"
+                          type="number"
+                          min="1"
+                          class="input text-sm"
+                          :placeholder="'∞'"
+                        />
+                        <p class="mt-0.5 text-xs text-gray-400">
+                          {{
+                            t(
+                              "admin.settings.webSearchEmulation.quotaLimitHint",
+                            )
+                          }}
+                        </p>
+                      </div>
+                      <div>
+                        <label class="text-xs text-gray-500">{{
+                          t("admin.settings.webSearchEmulation.subscribedAt")
+                        }}</label>
+                        <input
+                          :value="formatSubscribedAt(provider.subscribed_at)"
+                          type="date"
+                          class="input text-sm"
+                          @input="
+                            provider.subscribed_at = parseSubscribedAt(
+                              ($event.target as HTMLInputElement).value,
+                            )
+                          "
+                        />
+                        <p class="mt-0.5 text-xs text-gray-400">
+                          {{
+                            t(
+                              "admin.settings.webSearchEmulation.subscribedAtHint",
+                            )
+                          }}
+                        </p>
+                      </div>
+                    </div>
+
+                    <!-- Usage display -->
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs text-gray-500"
+                        >{{
+                          t("admin.settings.webSearchEmulation.quotaUsage")
+                        }}:</span
+                      >
+                      <div
+                        v-if="
+                          provider.quota_limit != null &&
+                          provider.quota_limit > 0
+                        "
+                        class="flex-1 rounded-full bg-gray-200 dark:bg-dark-600"
+                        style="height: 6px"
+                      >
+                        <div
+                          class="h-full rounded-full transition-all"
+                          :class="
+                            quotaPercentage(provider) > 90
+                              ? 'bg-red-500'
+                              : quotaPercentage(provider) > 70
+                                ? 'bg-yellow-500'
+                                : 'bg-green-500'
+                          "
+                          :style="{
+                            width:
+                              Math.min(quotaPercentage(provider), 100) + '%',
+                          }"
+                        />
+                      </div>
+                      <div v-else class="flex-1" />
+                      <span class="text-xs text-gray-500"
+                        >{{ provider.quota_used ?? 0 }} /
+                        {{
+                          provider.quota_limit != null &&
+                          provider.quota_limit > 0
+                            ? provider.quota_limit
+                            : "∞"
+                        }}</span
+                      >
+                      <button
+                        v-if="(provider.quota_used ?? 0) > 0"
+                        type="button"
+                        class="text-xs text-primary-600 hover:text-primary-700"
+                        @click="resetWebSearchUsage(pIdx)"
+                      >
+                        {{ t("admin.settings.webSearchEmulation.resetUsage") }}
+                      </button>
+                    </div>
+
+                    <!-- Proxy + Test on same row -->
+                    <div class="flex items-end gap-3">
+                      <div class="flex-1">
+                        <label class="text-xs text-gray-500">{{
+                          t("admin.settings.webSearchEmulation.proxy")
+                        }}</label>
+                        <ProxySelector
+                          v-model="provider.proxy_id"
+                          :proxies="webSearchProxies"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        class="btn btn-secondary btn-sm whitespace-nowrap"
+                        @click="openTestDialog()"
+                      >
+                        {{ t("admin.settings.webSearchEmulation.test") }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Web Search Test Dialog -->
+          <div
+            v-if="wsTestDialogOpen"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            @click.self="wsTestDialogOpen = false"
+          >
+            <div
+              class="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-dark-800"
+            >
+              <h3
+                class="mb-4 text-lg font-semibold text-gray-900 dark:text-white"
+              >
+                {{ t("admin.settings.webSearchEmulation.testResultTitle") }}
+              </h3>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="wsTestQuery"
+                  type="text"
+                  class="input flex-1 text-sm"
+                  :placeholder="
+                    t('admin.settings.webSearchEmulation.testDefaultQuery')
+                  "
+                  @keyup.enter="testWebSearchProvider()"
+                />
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  :disabled="wsTestLoading"
+                  @click="testWebSearchProvider()"
+                >
+                  {{
+                    wsTestLoading
+                      ? t("admin.settings.webSearchEmulation.testing")
+                      : t("admin.settings.webSearchEmulation.test")
+                  }}
+                </button>
+              </div>
+              <!-- Test results -->
+              <div
+                v-if="wsTestResult"
+                class="mt-4 max-h-80 overflow-y-auto rounded-lg bg-gray-50 p-4 dark:bg-dark-700"
+              >
+                <p
+                  class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{
+                    t("admin.settings.webSearchEmulation.testResultProvider")
+                  }}: {{ wsTestResult.provider }}
+                </p>
+                <div
+                  v-if="wsTestResult.results.length === 0"
+                  class="text-sm text-gray-400"
+                >
+                  {{ t("admin.settings.webSearchEmulation.testNoResults") }}
+                </div>
+                <div
+                  v-for="(r, rIdx) in wsTestResult.results"
+                  :key="rIdx"
+                  class="mt-2 border-t border-gray-200 pt-2 first:mt-0 first:border-0 first:pt-0 dark:border-dark-600"
+                >
+                  <a
+                    :href="r.url"
+                    target="_blank"
+                    class="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                    >{{ r.title }}</a
+                  >
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ r.snippet }}
+                  </p>
+                </div>
+              </div>
+              <div class="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  @click="wsTestDialogOpen = false"
+                >
+                  {{ t("common.close") }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /Tab: Gateway — Claude Code, Scheduling -->
+
+        <!-- Tab: General -->
+        <div v-show="activeTab === 'general'" class="space-y-6">
+          <!-- Site Settings -->
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.site.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.site.description") }}
+              </p>
+            </div>
+            <div class="space-y-6 p-6">
+              <!-- Backend Mode -->
+              <div
+                class="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20"
+              >
+                <div>
+                  <h3 class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ t("admin.settings.site.backendMode") }}
+                  </h3>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.backendModeDescription") }}
+                  </p>
+	                </div>
+	                <Toggle v-model="form.backend_mode_enabled" />
+	              </div>
+
+	              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.site.siteName") }}
+                  </label>
+                  <input
+                    v-model="form.site_name"
+                    type="text"
+                    class="input"
+                    :placeholder="t('admin.settings.site.siteNamePlaceholder')"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.siteNameHint") }}
+                  </p>
+                </div>
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.site.siteSubtitle") }}
+                  </label>
+                  <input
+                    v-model="form.site_subtitle"
+                    type="text"
+                    class="input"
+                    :placeholder="
+                      t('admin.settings.site.siteSubtitlePlaceholder')
+                    "
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.siteSubtitleHint") }}
+                  </p>
+                </div>
+              </div>
+
+              <!-- API Base URL -->
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.site.apiBaseUrl") }}
+                </label>
+                <input
+                  v-model="form.api_base_url"
+                  type="text"
+                  class="input font-mono text-sm"
+                  :placeholder="t('admin.settings.site.apiBaseUrlPlaceholder')"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.site.apiBaseUrlHint") }}
+                </p>
+              </div>
+
+              <!-- Global Table Preferences -->
+              <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                <h3 class="text-sm font-medium text-gray-900 dark:text-white">
+                  {{ t("admin.settings.site.tablePreferencesTitle") }}
+                </h3>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.site.tablePreferencesDescription") }}
+                </p>
+                <div class="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
+                  <div>
+                    <label
+                      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      {{ t("admin.settings.site.tableDefaultPageSize") }}
+                    </label>
+                    <input
+                      v-model.number="form.table_default_page_size"
+                      type="number"
+                      min="5"
+                      max="1000"
+                      step="1"
+                      class="input w-40"
+                    />
+                    <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.site.tableDefaultPageSizeHint") }}
+                    </p>
+                  </div>
+                  <div>
+                    <label
+                      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      {{ t("admin.settings.site.tablePageSizeOptions") }}
+                    </label>
+                    <input
+                      v-model="tablePageSizeOptionsInput"
+                      type="text"
+                      class="input font-mono text-sm"
+                      :placeholder="
+                        t('admin.settings.site.tablePageSizeOptionsPlaceholder')
+                      "
+                    />
+                    <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t("admin.settings.site.tablePageSizeOptionsHint") }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Custom Endpoints -->
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.site.customEndpoints.title") }}
+                </label>
+                <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.site.customEndpoints.description") }}
+                </p>
+
+                <div class="space-y-3">
+                  <div
+                    v-for="(ep, index) in form.custom_endpoints"
+                    :key="index"
+                    class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+                  >
+                    <div class="mb-3 flex items-center justify-between">
+                      <span
+                        class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        {{
+                          t("admin.settings.site.customEndpoints.itemLabel", {
+                            n: index + 1,
+                          })
+                        }}
+                      </span>
+                      <button
+                        type="button"
+                        class="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                        @click="removeEndpoint(index)"
+                      >
+                        <svg
+                          class="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label
+                          class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                        >
+                          {{ t("admin.settings.site.customEndpoints.name") }}
+                        </label>
+                        <input
+                          v-model="ep.name"
+                          type="text"
+                          class="input text-sm"
+                          :placeholder="
+                            t(
+                              'admin.settings.site.customEndpoints.namePlaceholder',
+                            )
+                          "
+                        />
+                      </div>
+                      <div>
+                        <label
+                          class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                        >
+                          {{
+                            t("admin.settings.site.customEndpoints.endpointUrl")
+                          }}
+                        </label>
+                        <input
+                          v-model="ep.endpoint"
+                          type="url"
+                          class="input font-mono text-sm"
+                          :placeholder="
+                            t(
+                              'admin.settings.site.customEndpoints.endpointUrlPlaceholder',
+                            )
+                          "
+                        />
+                      </div>
+                      <div class="sm:col-span-2">
+                        <label
+                          class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                        >
+                          {{
+                            t(
+                              "admin.settings.site.customEndpoints.descriptionLabel",
+                            )
+                          }}
+                        </label>
+                        <input
+                          v-model="ep.description"
+                          type="text"
+                          class="input text-sm"
+                          :placeholder="
+                            t(
+                              'admin.settings.site.customEndpoints.descriptionPlaceholder',
+                            )
+                          "
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  class="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 px-4 py-2.5 text-sm text-gray-500 transition-colors hover:border-primary-400 hover:text-primary-600 dark:border-dark-600 dark:text-gray-400 dark:hover:border-primary-500 dark:hover:text-primary-400"
+                  @click="addEndpoint"
+                >
+                  <svg
+                    class="h-4 w-4"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  {{ t("admin.settings.site.customEndpoints.add") }}
+                </button>
+              </div>
+
+              <!-- Contact Info -->
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.site.contactInfo") }}
+                </label>
+                <input
+                  v-model="form.contact_info"
+                  type="text"
+                  class="input"
+                  :placeholder="t('admin.settings.site.contactInfoPlaceholder')"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.site.contactInfoHint") }}
+                </p>
+              </div>
+
+              <!-- Doc URL -->
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.site.docUrl") }}
+                </label>
+                <input
+                  v-model="form.doc_url"
+                  type="url"
+                  class="input font-mono text-sm"
+                  :placeholder="t('admin.settings.site.docUrlPlaceholder')"
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.site.docUrlHint") }}
+                </p>
+              </div>
+
+              <!-- Site Logo Upload -->
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.site.siteLogo") }}
+                </label>
+                <ImageUpload
+                  v-model="form.site_logo"
+                  mode="image"
+                  :upload-label="t('admin.settings.site.uploadImage')"
+                  :remove-label="t('admin.settings.site.remove')"
+                  :hint="t('admin.settings.site.logoHint')"
+                  :max-size="300 * 1024"
+                />
+              </div>
+
+              <!-- Home Content -->
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.site.homeContent") }}
+                </label>
+                <textarea
+                  v-model="form.home_content"
+                  rows="6"
+                  class="input font-mono text-sm"
+                  :placeholder="t('admin.settings.site.homeContentPlaceholder')"
+                ></textarea>
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.site.homeContentHint") }}
+                </p>
+                <!-- iframe CSP Warning -->
+                <p class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                  {{ t("admin.settings.site.homeContentIframeWarning") }}
+                </p>
+              </div>
+
+              <!-- Hide CCS Import Button -->
+              <div
+                class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
+              >
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">{{
+                    t("admin.settings.site.hideCcsImportButton")
+                  }}</label>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.site.hideCcsImportButtonHint") }}
+                  </p>
+                </div>
+                <Toggle v-model="form.hide_ccs_import_button" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Custom Menu Items -->
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.customMenu.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.customMenu.description") }}
+              </p>
+            </div>
+            <div class="space-y-4 p-6">
+              <!-- Existing menu items -->
+              <div
+                v-for="(item, index) in form.custom_menu_items"
+                :key="item.id || index"
+                class="rounded-lg border border-gray-200 p-4 dark:border-dark-600"
+              >
+                <div class="mb-3 flex items-center justify-between">
+                  <span
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{
+                      t("admin.settings.customMenu.itemLabel", { n: index + 1 })
+                    }}
+                  </span>
+                  <div class="flex items-center gap-2">
+                    <!-- Move up -->
+                    <button
+                      v-if="index > 0"
+                      type="button"
+                      class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700"
+                      :title="t('admin.settings.customMenu.moveUp')"
+                      @click="moveMenuItem(index, -1)"
+                    >
+                      <svg
+                        class="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M5 15l7-7 7 7"
+                        />
+                      </svg>
+                    </button>
+                    <!-- Move down -->
+                    <button
+                      v-if="index < form.custom_menu_items.length - 1"
+                      type="button"
+                      class="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700"
+                      :title="t('admin.settings.customMenu.moveDown')"
+                      @click="moveMenuItem(index, 1)"
+                    >
+                      <svg
+                        class="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </button>
+                    <!-- Delete -->
+                    <button
+                      type="button"
+                      class="rounded p-1 text-red-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
+                      :title="t('admin.settings.customMenu.remove')"
+                      @click="removeMenuItem(index)"
+                    >
+                      <svg
+                        class="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <!-- Label -->
+                  <div>
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.customMenu.name") }}
+                    </label>
+                    <input
+                      v-model="item.label"
+                      type="text"
+                      class="input text-sm"
+                      :placeholder="
+                        t('admin.settings.customMenu.namePlaceholder')
+                      "
+                    />
+                  </div>
+
+                  <!-- Visibility -->
+                  <div>
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.customMenu.visibility") }}
+                    </label>
+                    <select v-model="item.visibility" class="input text-sm">
+                      <option value="user">
+                        {{ t("admin.settings.customMenu.visibilityUser") }}
+                      </option>
+                      <option value="admin">
+                        {{ t("admin.settings.customMenu.visibilityAdmin") }}
+                      </option>
+                    </select>
+                  </div>
+
+                  <!-- URL (full width) -->
+                  <div class="sm:col-span-2">
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.customMenu.url") }}
+                    </label>
+                    <input
+                      v-model="item.url"
+                      type="url"
+                      class="input font-mono text-sm"
+                      :placeholder="
+                        t('admin.settings.customMenu.urlPlaceholder')
+                      "
+                    />
+                  </div>
+
+                  <!-- SVG Icon (full width) -->
+                  <div class="sm:col-span-2">
+                    <label
+                      class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                    >
+                      {{ t("admin.settings.customMenu.iconSvg") }}
+                    </label>
+                    <ImageUpload
+                      :model-value="item.icon_svg"
+                      mode="svg"
+                      size="sm"
+                      :upload-label="t('admin.settings.customMenu.uploadSvg')"
+                      :remove-label="t('admin.settings.customMenu.removeSvg')"
+                      @update:model-value="(v: string) => (item.icon_svg = v)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Add button -->
+              <button
+                type="button"
+                class="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-3 text-sm text-gray-500 transition-colors hover:border-primary-400 hover:text-primary-600 dark:border-dark-600 dark:text-gray-400 dark:hover:border-primary-500 dark:hover:text-primary-400"
+                @click="addMenuItem"
+              >
+                <svg
+                  class="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
+                {{ t("admin.settings.customMenu.add") }}
+              </button>
+            </div>
+          </div>
+	        </div>
+	        <!-- /Tab: General -->
+
+	        <!-- Tab: Login Agreement -->
+	        <div v-show="activeTab === 'agreement'" class="space-y-6">
+	          <div class="card">
+	            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+	              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+	                <div>
+	                  <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+	                    {{ localText("登录条款确认", "Login agreement") }}
+	                  </h2>
+	                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+	                    {{
+	                      localText(
+	                        "控制登录页是否要求用户先阅读并同意服务条款、隐私政策或其他 Markdown 文档。",
+	                        "Control whether the login page requires users to accept Markdown policy documents first.",
+	                      )
+	                    }}
+	                  </p>
+	                </div>
+	                <div class="flex items-center gap-3">
+	                  <span class="text-sm text-gray-600 dark:text-gray-300">
+	                    {{ form.login_agreement_enabled ? localText("已启用", "Enabled") : localText("未启用", "Disabled") }}
+	                  </span>
+	                  <Toggle v-model="form.login_agreement_enabled" />
+	                </div>
+	              </div>
+	            </div>
+
+	            <div class="space-y-6 p-6">
+	              <div class="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+	                <div>
+	                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+	                    {{ localText("展示形式", "Display mode") }}
+	                  </label>
+	                  <div class="grid grid-cols-2 gap-2 rounded-lg bg-gray-100 p-1 dark:bg-dark-700">
+                    <button
+                      type="button"
+                      class="inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition"
+                      :class="
+                        form.login_agreement_mode === 'modal'
+                          ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-800 dark:text-primary-300'
+                          : 'text-gray-600 hover:text-gray-900 dark:text-dark-300 dark:hover:text-white'
+                      "
+                      @click="form.login_agreement_mode = 'modal'"
+                    >
+                      <Icon name="shield" size="sm" />
+                      {{ localText("弹窗", "Modal") }}
+                    </button>
+                    <button
+                      type="button"
+                      class="inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition"
+                      :class="
+                        form.login_agreement_mode === 'checkbox'
+                          ? 'bg-white text-primary-700 shadow-sm dark:bg-dark-800 dark:text-primary-300'
+                          : 'text-gray-600 hover:text-gray-900 dark:text-dark-300 dark:hover:text-white'
+                      "
+                      @click="form.login_agreement_mode = 'checkbox'"
+                    >
+                      <Icon name="checkCircle" size="sm" />
+                      {{ localText("复选框", "Checkbox") }}
+                    </button>
+                  </div>
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{
+                      form.login_agreement_mode === "checkbox"
+                        ? localText("复选框会显示在登录按钮下方，未勾选前所有登录入口禁用。", "The checkbox appears below the login button and gates all login actions.")
+                        : localText("弹窗会在登录页打开，用户拒绝后所有登录入口保持禁用。", "The modal opens on the login page and gates all login actions until accepted.")
+                    }}
+                  </p>
+                </div>
+
+                <div>
+                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {{ localText("条款更新日期", "Updated date") }}
+                  </label>
+                  <input
+                    v-model="form.login_agreement_updated_at"
+                    type="date"
+                    class="input"
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ localText("日期或文档内容变化后，用户需要重新同意。", "Changing the date or content requires fresh consent.") }}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white">
+                      {{ localText("协议文档", "Agreement documents") }}
+                    </h3>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {{
+                        localText(
+                          "文档名称可自定义，内容按 Markdown 保存。可参考：服务条款、使用政策、支持的国家和地区、服务特定条款。",
+                          "Document titles are customizable and content is saved as Markdown.",
+                        )
+                      }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-sm inline-flex items-center gap-1.5"
+                    @click="addLoginAgreementDocument"
+                  >
+                    <Icon name="plus" size="sm" />
+                    {{ localText("添加文档", "Add document") }}
+                  </button>
+                </div>
+
+                <div class="mt-4 space-y-3">
+                  <div
+                    v-for="(doc, index) in form.login_agreement_documents"
+                    :key="doc.id || index"
+                    class="rounded-lg border border-gray-200 bg-white p-4 dark:border-dark-700 dark:bg-dark-800/60"
+                  >
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                      <div class="flex min-w-0 items-center gap-3">
+                        <span class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-700 dark:bg-dark-700 dark:text-dark-200">
+                          <Icon
+                            :name="
+                              index === 1
+                                ? 'shield'
+                                : index === 2
+                                  ? 'globe'
+                                  : index === 3
+                                    ? 'cog'
+                                    : 'document'
+                            "
+                            size="sm"
+                          />
+                        </span>
+                        <div class="min-w-0">
+                          <p class="truncate text-sm font-semibold text-gray-900 dark:text-white">
+                            {{ doc.title || localText("未命名文档", "Untitled document") }}
+                          </p>
+                          <p class="truncate text-xs text-gray-500 dark:text-gray-400">
+                            {{ loginAgreementRoutePath(doc, index) }}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        class="rounded-md p-2 text-red-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-red-900/20"
+                        :disabled="
+                          form.login_agreement_enabled &&
+                          form.login_agreement_documents.length <= 1
+                        "
+                        @click="removeLoginAgreementDocument(index)"
+                      >
+                        <Icon name="trash" size="sm" />
+                      </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      <div>
+                        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          {{ localText("文档名称", "Document title") }}
+                        </label>
+                        <input
+                          v-model="doc.title"
+                          type="text"
+                          class="input text-sm"
+                          :placeholder="localText('例如：服务条款', 'Example: Terms of Service')"
+                        />
+                      </div>
+                      <div>
+                        <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                          {{ localText("路由标识", "Route slug") }}
+                        </label>
+                        <div class="flex overflow-hidden rounded-lg border border-gray-300 bg-white focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500 dark:border-dark-600 dark:bg-dark-900">
+                          <span class="inline-flex flex-shrink-0 items-center border-r border-gray-200 bg-gray-50 px-3 text-sm text-gray-500 dark:border-dark-700 dark:bg-dark-800 dark:text-dark-400">
+                            /legal/
+                          </span>
+                          <input
+                            v-model="doc.id"
+                            type="text"
+                            class="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-sm text-gray-900 outline-none placeholder:text-gray-400 focus:ring-0 dark:text-white dark:placeholder:text-dark-500"
+                            placeholder="usage-policy"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div class="mt-3">
+                      <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
+                        {{ localText("Markdown 内容", "Markdown content") }}
+                      </label>
+                        <textarea
+                          v-model="doc.content_md"
+                          rows="8"
+                          class="input font-mono text-sm"
+                          :placeholder="localText('在这里填写正式 Markdown 内容。', 'Write the final Markdown content here.')"
+                        ></textarea>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /Tab: Login Agreement -->
+
+	        <!-- Tab: Features (功能开关) -->
+        <div v-show="activeTab === 'features'" class="space-y-6">
+
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.features.channelMonitor.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.features.channelMonitor.description') }}
+            </p>
+            <p class="mt-1.5 text-xs">
+              <router-link
+                to="/admin/channels/monitor"
+                class="inline-flex items-center gap-1 text-primary-600 hover:underline dark:text-primary-400"
+              >
+                {{ t('admin.settings.features.channelMonitor.configureLink') }}
+                <span aria-hidden="true">→</span>
+              </router-link>
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.channelMonitor.enabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.channelMonitor.enabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.channel_monitor_enabled" />
+            </div>
+
+            <div v-if="form.channel_monitor_enabled">
+              <label class="input-label">
+                {{ t('admin.settings.features.channelMonitor.defaultInterval') }}
+                <span class="text-red-500">*</span>
+              </label>
+              <input
+                v-model.number="form.channel_monitor_default_interval_seconds"
+                type="number"
+                min="15"
+                max="3600"
+                class="input"
+              />
+              <p class="mt-1 text-xs text-gray-400">
+                {{ t('admin.settings.features.channelMonitor.defaultIntervalHint') }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.features.availableChannels.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.features.availableChannels.description') }}
+            </p>
+            <p class="mt-1.5 text-xs">
+              <router-link
+                to="/admin/channels/pricing"
+                class="inline-flex items-center gap-1 text-primary-600 hover:underline dark:text-primary-400"
+              >
+                {{ t('admin.settings.features.availableChannels.configureLink') }}
+                <span aria-hidden="true">→</span>
+              </router-link>
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.availableChannels.enabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.availableChannels.enabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.available_channels_enabled" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.features.riskControl.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.features.riskControl.description') }}
+            </p>
+            <p class="mt-1.5 text-xs">
+              <router-link
+                to="/admin/risk-control"
+                class="inline-flex items-center gap-1 text-primary-600 hover:underline dark:text-primary-400"
+              >
+                {{ t('admin.settings.features.riskControl.configureLink') }}
+                <span aria-hidden="true">→</span>
+              </router-link>
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.riskControl.enabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.riskControl.enabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.risk_control_enabled" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Affiliate (邀请返利) feature card -->
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.features.affiliate.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.features.affiliate.description') }}
+            </p>
+          </div>
+          <div class="space-y-5 p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.features.affiliate.enabled') }}
+                </label>
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.features.affiliate.enabledHint') }}
+                </p>
+              </div>
+              <Toggle v-model="form.affiliate_enabled" />
+            </div>
+
+            <div v-if="form.affiliate_enabled" class="space-y-6">
+              <div>
+                <label class="input-label">
+                  {{ t('admin.settings.features.affiliate.rebateRate') }}
+                </label>
+                <div class="relative">
+                  <input
+                    v-model.number="form.affiliate_rebate_rate"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    class="input pr-8"
+                    placeholder="20"
+                  />
+                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                </div>
+                <p class="mt-1 text-xs text-gray-400">
+                  {{ t('admin.settings.features.affiliate.rebateRateHint') }}
+                </p>
+              </div>
+
+              <div>
+                <label class="input-label">
+                  {{ t('admin.settings.features.affiliate.freezeHours') }}
+                </label>
+                <input
+                  v-model.number="form.affiliate_rebate_freeze_hours"
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="720"
+                  class="input"
+                />
+                <p class="mt-1 text-xs text-gray-400">
+                  {{ t('admin.settings.features.affiliate.freezeHoursDesc') }}
+                </p>
+              </div>
+
+              <div>
+                <label class="input-label">
+                  {{ t('admin.settings.features.affiliate.durationDays') }}
+                </label>
+                <input
+                  v-model.number="form.affiliate_rebate_duration_days"
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="3650"
+                  class="input"
+                />
+                <p class="mt-1 text-xs text-gray-400">
+                  {{ t('admin.settings.features.affiliate.durationDaysDesc') }}
+                </p>
+              </div>
+
+              <div>
+                <label class="input-label">
+                  {{ t('admin.settings.features.affiliate.perInviteeCap') }}
+                </label>
+                <input
+                  v-model.number="form.affiliate_rebate_per_invitee_cap"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="input"
+                />
+                <p class="mt-1 text-xs text-gray-400">
+                  {{ t('admin.settings.features.affiliate.perInviteeCapDesc') }}
+                </p>
+              </div>
+
+              <!-- 专属用户管理 -->
+              <div class="border-t border-gray-100 pt-6 dark:border-dark-700">
+                <div class="mb-3 flex items-center justify-between">
+                  <div>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                      {{ t('admin.settings.features.affiliate.customUsers.title') }}
+                    </h3>
+                    <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {{ t('admin.settings.features.affiliate.customUsers.description') }}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-sm"
+                    @click="openAffiliateModal(null)"
+                  >
+                    + {{ t('admin.settings.features.affiliate.customUsers.addButton') }}
+                  </button>
+                </div>
+
+                <div class="mb-3 flex items-center gap-2">
+                  <input
+                    v-model="affiliateState.search"
+                    type="text"
+                    class="input flex-1"
+                    :placeholder="t('admin.settings.features.affiliate.customUsers.searchPlaceholder')"
+                    @input="onAffiliateSearchInput"
+                  />
+                  <button
+                    v-if="affiliateState.selected.length > 0"
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="openAffiliateBatchModal"
+                  >
+                    {{ t('admin.settings.features.affiliate.customUsers.batchButton', { count: affiliateState.selected.length }) }}
+                  </button>
+                </div>
+
+                <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-700">
+                  <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-700">
+                    <thead class="bg-gray-50 dark:bg-dark-800">
+                      <tr>
+                        <th class="px-3 py-2 text-left">
+                          <input
+                            type="checkbox"
+                            :checked="affiliateState.entries.length > 0 && affiliateState.selected.length === affiliateState.entries.length"
+                            @change="toggleAffiliateSelectAll"
+                          />
+                        </th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.email') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.username') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.code') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.rate') }}</th>
+                        <th class="px-3 py-2 text-left text-xs font-medium uppercase text-gray-500">{{ t('admin.settings.features.affiliate.customUsers.col.actions') }}</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 bg-white dark:divide-dark-700 dark:bg-dark-900">
+                      <tr v-if="affiliateState.loading">
+                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">
+                          {{ t('common.loading') }}
+                        </td>
+                      </tr>
+                      <tr v-else-if="affiliateState.entries.length === 0">
+                        <td colspan="6" class="px-3 py-6 text-center text-sm text-gray-500">
+                          {{ t('admin.settings.features.affiliate.customUsers.empty') }}
+                        </td>
+                      </tr>
+                      <tr v-for="entry in affiliateState.entries" :key="entry.user_id">
+                        <td class="px-3 py-2">
+                          <input
+                            type="checkbox"
+                            :checked="affiliateState.selected.includes(entry.user_id)"
+                            @change="toggleAffiliateSelect(entry.user_id)"
+                          />
+                        </td>
+                        <td class="px-3 py-2 text-sm text-gray-900 dark:text-white">{{ entry.email }}</td>
+                        <td class="px-3 py-2 text-sm text-gray-600 dark:text-gray-300">{{ entry.username }}</td>
+                        <td class="px-3 py-2 text-sm font-mono">
+                          {{ entry.aff_code }}
+                          <span
+                            v-if="entry.aff_code_custom"
+                            class="ml-1 inline-block rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-medium text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                          >{{ t('admin.settings.features.affiliate.customUsers.customBadge') }}</span>
+                        </td>
+                        <td class="px-3 py-2 text-sm">
+                          <span v-if="entry.aff_rebate_rate_percent != null">{{ entry.aff_rebate_rate_percent }}%</span>
+                          <span v-else class="text-gray-400">{{ t('admin.settings.features.affiliate.customUsers.useGlobal') }}</span>
+                        </td>
+                        <td class="px-3 py-2 text-sm">
+                          <div class="flex items-center gap-2">
+                            <button type="button" class="text-primary-600 hover:underline" @click="openAffiliateModal(entry)">
+                              {{ t('common.edit') }}
+                            </button>
+                            <button
+                              type="button"
+                              class="text-red-600 hover:underline"
+                              @click="askResetAffiliateUser(entry)"
+                            >
+                              {{ t('common.delete') }}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div v-if="affiliateState.total > affiliateState.pageSize" class="mt-3 flex items-center justify-between text-sm">
+                  <span class="text-gray-500">
+                    {{ t('admin.settings.features.affiliate.customUsers.totalLabel', { total: affiliateState.total }) }}
+                  </span>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      :disabled="affiliateState.page <= 1"
+                      @click="changeAffiliatePage(affiliateState.page - 1)"
+                    >
+                      {{ t('pagination.previous') }}
+                    </button>
+                    <span class="text-gray-500">{{ affiliateState.page }} / {{ Math.max(1, Math.ceil(affiliateState.total / affiliateState.pageSize)) }}</span>
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-sm"
+                      :disabled="affiliateState.page >= Math.ceil(affiliateState.total / affiliateState.pageSize)"
+                      @click="changeAffiliatePage(affiliateState.page + 1)"
+                    >
+                      {{ t('pagination.next') }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Affiliate add/edit modal -->
+        <div
+          v-if="affiliateModal.open"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          @click.self="closeAffiliateModal"
+        >
+          <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-dark-900">
+            <h3 class="mb-4 text-lg font-semibold">
+              {{ affiliateModal.mode === 'add' ? t('admin.settings.features.affiliate.modal.addTitle') : t('admin.settings.features.affiliate.modal.editTitle') }}
+            </h3>
+            <div class="space-y-4">
+              <div v-if="affiliateModal.mode === 'add'">
+                <label class="input-label">{{ t('admin.settings.features.affiliate.modal.userLabel') }}</label>
+                <!-- Chip showing the picked user; clicking it re-opens the search -->
+                <div
+                  v-if="affiliateModal.selectedUser"
+                  class="flex items-center justify-between rounded-md border border-primary-200 bg-primary-50 px-3 py-2 dark:border-primary-700/50 dark:bg-primary-900/20"
+                >
+                  <div class="text-sm">
+                    <span class="font-medium text-gray-900 dark:text-white">{{ affiliateModal.selectedUser.email }}</span>
+                    <span class="ml-1 text-xs text-gray-500">({{ affiliateModal.selectedUser.username }})</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="text-lg leading-none text-gray-400 hover:text-red-600"
+                    :title="t('admin.settings.features.affiliate.modal.changeUser')"
+                    @click="clearSelectedAffiliateUser"
+                  >
+                    ×
+                  </button>
+                </div>
+                <!-- Search input + result dropdown — hidden once a selection is made -->
+                <template v-else>
+                  <input
+                    v-model="affiliateModal.userQuery"
+                    type="text"
+                    class="input"
+                    :placeholder="t('admin.settings.features.affiliate.modal.userPlaceholder')"
+                    @input="onAffiliateUserSearchInput"
+                  />
+                  <div
+                    v-if="affiliateModal.userResults.length > 0"
+                    class="mt-1 max-h-40 overflow-y-auto rounded border border-gray-200 dark:border-dark-700"
+                  >
+                    <button
+                      v-for="u in affiliateModal.userResults"
+                      :key="u.id"
+                      type="button"
+                      class="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-dark-800"
+                      @click="selectAffiliateUser(u)"
+                    >
+                      {{ u.email }} <span class="text-xs text-gray-500">({{ u.username }})</span>
+                    </button>
+                  </div>
+                </template>
+              </div>
+              <div v-else>
+                <label class="input-label">{{ t('admin.settings.features.affiliate.modal.userLabel') }}</label>
+                <input
+                  type="text"
+                  class="input"
+                  :value="affiliateModal.editingEntry ? affiliateModal.editingEntry.email : ''"
+                  disabled
+                />
+              </div>
+
+              <div>
+                <label class="input-label">{{ t('admin.settings.features.affiliate.modal.codeLabel') }}</label>
+                <input
+                  v-model="affiliateModal.code"
+                  type="text"
+                  class="input font-mono"
+                  :placeholder="t('admin.settings.features.affiliate.modal.codePlaceholder')"
+                  maxlength="32"
+                />
+                <p class="mt-1 text-xs text-gray-400">
+                  {{ t('admin.settings.features.affiliate.modal.codeHint') }}
+                </p>
+              </div>
+
+              <div>
+                <label class="input-label">{{ t('admin.settings.features.affiliate.modal.rateLabel') }}</label>
+                <div class="relative">
+                  <input
+                    v-model="affiliateModal.rate"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    class="input pr-8"
+                    :placeholder="t('admin.settings.features.affiliate.modal.ratePlaceholder')"
+                  />
+                  <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+                </div>
+                <p class="mt-1 text-xs text-gray-400">
+                  {{ t('admin.settings.features.affiliate.modal.rateHint') }}
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-6 flex items-center justify-between gap-3">
+              <p
+                v-if="!affiliateModalCanSubmit"
+                class="text-xs text-gray-500 dark:text-gray-400"
+              >
+                {{ t('admin.settings.features.affiliate.modal.errorEmpty') }}
+              </p>
+              <span v-else></span>
+              <div class="flex gap-2">
+                <button type="button" class="btn btn-secondary" @click="closeAffiliateModal">
+                  {{ t('common.cancel') }}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  :disabled="affiliateModal.saving || !affiliateModalCanSubmit"
+                  @click="submitAffiliateModal"
+                >
+                  {{ affiliateModal.saving ? t('common.saving') : t('common.save') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Affiliate batch rate modal -->
+        <div
+          v-if="affiliateBatchModal.open"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          @click.self="affiliateBatchModal.open = false"
+        >
+          <div class="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-dark-900">
+            <h3 class="mb-4 text-lg font-semibold">
+              {{ t('admin.settings.features.affiliate.batchModal.title', { count: affiliateState.selected.length }) }}
+            </h3>
+            <p class="mb-4 text-sm text-gray-500">
+              {{ t('admin.settings.features.affiliate.batchModal.hint') }}
+            </p>
+            <div class="relative">
+              <input
+                v-model="affiliateBatchModal.rate"
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                class="input pr-8"
+                :placeholder="t('admin.settings.features.affiliate.batchModal.placeholder')"
+              />
+              <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">%</span>
+            </div>
+            <p class="mt-2 text-xs text-gray-400">
+              {{ t('admin.settings.features.affiliate.batchModal.clearHint') }}
+            </p>
+            <div class="mt-6 flex justify-end gap-2">
+              <button type="button" class="btn btn-secondary" @click="affiliateBatchModal.open = false">
+                {{ t('common.cancel') }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary"
+                :disabled="affiliateBatchModal.saving"
+                @click="submitAffiliateBatchModal"
+              >
+                {{ affiliateBatchModal.saving ? t('common.saving') : t('common.save') }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        </div><!-- /Tab: Features -->
+
+        <!-- Tab: Email -->
+        <!-- Tab: Payment -->
+        <div v-show="activeTab === 'payment'" class="space-y-6">
+          <!-- Payment System Settings -->
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.payment.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.payment.description") }}
+                <a
+                  :href="paymentGuideHref"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="ml-2 inline-flex items-center text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                >
+                  <svg
+                    class="mr-0.5 h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                  {{ t("admin.settings.payment.configGuide") }}
+                </a>
+              </p>
+            </div>
+            <div class="space-y-4 p-6">
+              <!-- Enable toggle -->
+              <div class="flex items-center justify-between">
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">{{
+                    t("admin.settings.payment.enabled")
+                  }}</label>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.payment.enabledHint") }}
+                  </p>
+                </div>
+                <Toggle v-model="form.payment_enabled" />
+              </div>
+              <template v-if="form.payment_enabled">
+                <!-- Row 1: Product name -->
+                <div class="grid grid-cols-3 gap-3">
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.productNamePrefix")
+                    }}</label
+                    ><input
+                      v-model="form.payment_product_name_prefix"
+                      type="text"
+                      class="input"
+                      placeholder="Sub2API"
+                    />
+                  </div>
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.productNameSuffix")
+                    }}</label
+                    ><input
+                      v-model="form.payment_product_name_suffix"
+                      type="text"
+                      class="input"
+                      placeholder="CNY"
+                    />
+                  </div>
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.preview")
+                    }}</label>
+                    <div
+                      class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300"
+                    >
+                      {{
+                        (form.payment_product_name_prefix || "Sub2API") +
+                        " 100 " +
+                        (form.payment_product_name_suffix || "CNY")
+                      }}
+                    </div>
+                  </div>
+                </div>
+                <!-- Row 2: Balance toggle + amounts -->
+                <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.minAmount")
+                    }}</label
+                    ><input
+                      :value="form.payment_min_amount || ''"
+                      @input="
+                        form.payment_min_amount =
+                          parseFloat(
+                            ($event.target as HTMLInputElement).value,
+                          ) || 0
+                      "
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      class="input"
+                      :placeholder="t('admin.settings.payment.noLimit')"
+                    />
+                  </div>
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.maxAmount")
+                    }}</label
+                    ><input
+                      :value="form.payment_max_amount || ''"
+                      @input="
+                        form.payment_max_amount =
+                          parseFloat(
+                            ($event.target as HTMLInputElement).value,
+                          ) || 0
+                      "
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      class="input"
+                      :placeholder="t('admin.settings.payment.noLimit')"
+                    />
+                  </div>
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.dailyLimit")
+                    }}</label
+                    ><input
+                      :value="form.payment_daily_limit || ''"
+                      @input="
+                        form.payment_daily_limit =
+                          parseFloat(
+                            ($event.target as HTMLInputElement).value,
+                          ) || 0
+                      "
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      class="input"
+                      :placeholder="t('admin.settings.payment.noLimit')"
+                    />
+                  </div>
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.balanceRechargeMultiplier")
+                    }}</label>
+                    <input
+                      :value="form.payment_balance_recharge_multiplier || ''"
+                      @input="
+                        form.payment_balance_recharge_multiplier =
+                          parseFloat(
+                            ($event.target as HTMLInputElement).value,
+                          ) || 1
+                      "
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      class="input"
+                    />
+                    <p class="mt-0.5 text-xs text-gray-400">
+                      {{
+                        t(
+                          "admin.settings.payment.balanceRechargeMultiplierHint",
+                        )
+                      }}
+                    </p>
+                    <p
+                      class="mt-1 text-xs font-medium text-primary-600 dark:text-primary-400"
+                    >
+                      {{
+                        t("admin.settings.payment.balanceRechargePreview", {
+                          usd: (
+                            Number(form.payment_balance_recharge_multiplier) ||
+                            1
+                          ).toFixed(2),
+                        })
+                      }}
+                    </p>
+                  </div>
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.rechargeFeeRate")
+                    }}</label>
+                    <div class="relative">
+                      <input
+                        :value="form.payment_recharge_fee_rate ?? ''"
+                        @input="
+                          form.payment_recharge_fee_rate = Math.min(
+                            100,
+                            Math.max(
+                              0,
+                              Math.round(
+                                parseFloat(
+                                  ($event.target as HTMLInputElement).value ||
+                                    '0',
+                                ) * 100,
+                              ) / 100,
+                            ),
+                          )
+                        "
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        class="input pr-8"
+                      />
+                      <span
+                        class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400"
+                        >%</span
+                      >
+                    </div>
+                    <p class="mt-0.5 text-xs text-gray-400">
+                      {{ t("admin.settings.payment.rechargeFeeRateHint") }}
+                    </p>
+                    <p
+                      v-if="(Number(form.payment_recharge_fee_rate) || 0) > 0"
+                      class="mt-1 text-xs font-medium text-primary-600 dark:text-primary-400"
+                    >
+                      {{
+                        t("admin.settings.payment.rechargeFeePreview", {
+                          fee: (
+                            Number(form.payment_recharge_fee_rate) || 0
+                          ).toFixed(2),
+                        })
+                      }}
+                    </p>
+                  </div>
+                  <div>
+                    <label class="input-label"
+                      >{{ t("admin.settings.payment.orderTimeout") }}
+                      <span class="text-red-500">*</span></label
+                    ><input
+                      v-model.number="form.payment_order_timeout_minutes"
+                      type="number"
+                      min="1"
+                      class="input"
+                      required
+                    />
+                    <p class="mt-0.5 text-xs text-gray-400">
+                      {{ t("admin.settings.payment.orderTimeoutHint") }}
+                    </p>
+                  </div>
+                </div>
+                <!-- Row 3: Pending orders + load balance + cancel rate limit (all in one row) -->
+                <div class="flex flex-wrap items-end gap-4">
+                  <div class="w-28">
+                    <label class="input-label">{{
+                      t("admin.settings.payment.maxPendingOrders")
+                    }}</label
+                    ><input
+                      v-model.number="form.payment_max_pending_orders"
+                      type="number"
+                      min="1"
+                      class="input"
+                    />
+                  </div>
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.loadBalanceStrategy")
+                    }}</label>
+                    <Select
+                      v-model="form.payment_load_balance_strategy"
+                      :options="loadBalanceOptions"
+                      class="w-40"
+                    />
+                  </div>
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.cancelRateLimit")
+                    }}</label>
+                    <div class="flex items-center gap-2">
+                      <button
+                        type="button"
+                        :class="[
+                          'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+                          form.payment_cancel_rate_limit_enabled
+                            ? 'bg-primary-500'
+                            : 'bg-gray-300 dark:bg-dark-600',
+                        ]"
+                        @click="
+                          form.payment_cancel_rate_limit_enabled =
+                            !form.payment_cancel_rate_limit_enabled
+                        "
+                      >
+                        <span
+                          :class="[
+                            'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                            form.payment_cancel_rate_limit_enabled
+                              ? 'translate-x-5'
+                              : 'translate-x-0',
+                          ]"
+                        />
+                      </button>
+                      <Select
+                        v-model="form.payment_cancel_rate_limit_window_mode"
+                        :options="cancelRateLimitModeOptions"
+                        class="w-24"
+                        :disabled="!form.payment_cancel_rate_limit_enabled"
+                      />
+                      <span
+                        :class="[
+                          'text-sm whitespace-nowrap',
+                          form.payment_cancel_rate_limit_enabled
+                            ? 'text-gray-700 dark:text-gray-300'
+                            : 'text-gray-400 dark:text-gray-600',
+                        ]"
+                        >{{
+                          t("admin.settings.payment.cancelRateLimitEvery")
+                        }}</span
+                      >
+                      <input
+                        v-model.number="form.payment_cancel_rate_limit_window"
+                        type="number"
+                        min="1"
+                        required
+                        class="input w-14 text-center"
+                        :disabled="!form.payment_cancel_rate_limit_enabled"
+                      />
+                      <Select
+                        v-model="form.payment_cancel_rate_limit_unit"
+                        :options="cancelRateLimitUnitOptions"
+                        class="w-28"
+                        :disabled="!form.payment_cancel_rate_limit_enabled"
+                      />
+                      <span
+                        :class="[
+                          'text-sm whitespace-nowrap',
+                          form.payment_cancel_rate_limit_enabled
+                            ? 'text-gray-700 dark:text-gray-300'
+                            : 'text-gray-400 dark:text-gray-600',
+                        ]"
+                        >{{
+                          t("admin.settings.payment.cancelRateLimitAllowMax")
+                        }}</span
+                      >
+                      <input
+                        v-model.number="form.payment_cancel_rate_limit_max"
+                        type="number"
+                        min="1"
+                        required
+                        class="input w-14 text-center"
+                        :disabled="!form.payment_cancel_rate_limit_enabled"
+                      />
+                      <span
+                        :class="[
+                          'text-sm whitespace-nowrap',
+                          form.payment_cancel_rate_limit_enabled
+                            ? 'text-gray-700 dark:text-gray-300'
+                            : 'text-gray-400 dark:text-gray-600',
+                        ]"
+                        >{{
+                          t("admin.settings.payment.cancelRateLimitTimes")
+                        }}</span
+                      >
+                    </div>
+                  </div>
+                </div>
+                <!-- Row 4: Enabled payment types (provider badges like sub2apipay) -->
+                <div>
+                  <label class="input-label">{{
+                    t("admin.settings.payment.enabledPaymentTypes")
+                  }}</label>
+                  <div class="mt-1.5 flex flex-wrap gap-2">
+                    <button
+                      v-for="pt in allPaymentTypes"
+                      :key="pt.value"
+                      type="button"
+                      @click="togglePaymentType(pt.value)"
+                      :class="[
+                        'rounded-lg border px-3 py-1.5 text-sm font-medium transition-all',
+                        isPaymentTypeEnabled(pt.value)
+                          ? 'border-primary-500 bg-primary-500 text-white shadow-sm'
+                          : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:border-dark-500',
+                      ]"
+                    >
+                      {{ pt.label }}
+                    </button>
+                  </div>
+                  <p class="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                    {{ t("admin.settings.payment.enabledPaymentTypesHint") }}
+                    <a
+                      :href="paymentMethodsHref"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="ml-1 text-primary-500 hover:text-primary-600 dark:text-primary-400 dark:hover:text-primary-300"
+                    >
+                      {{ t("admin.settings.payment.findProvider") }}
+                      <svg
+                        class="mb-0.5 ml-0.5 inline h-3 w-3"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                        />
+                      </svg>
+                    </a>
+                  </p>
+                </div>
+                <!-- Row 5: Help image + text -->
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.helpImage")
+                    }}</label>
+                    <ImageUpload
+                      v-model="form.payment_help_image_url"
+                      :upload-label="t('admin.settings.site.uploadImage')"
+                      :remove-label="t('admin.settings.site.remove')"
+                      :placeholder="
+                        t('admin.settings.payment.helpImagePlaceholder')
+                      "
+                    />
+                  </div>
+                  <div>
+                    <label class="input-label">{{
+                      t("admin.settings.payment.helpText")
+                    }}</label>
+                    <textarea
+                      v-model="form.payment_help_text"
+                      rows="3"
+                      class="input"
+                      :placeholder="
+                        t('admin.settings.payment.helpTextPlaceholder')
+                      "
+                    ></textarea>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Provider Management -->
+          <PaymentProviderList
+            v-if="form.payment_enabled"
+            :providers="providers"
+            :loading="providersLoading"
+            :can-create="hasAnyPaymentTypeEnabled"
+            :enabled-payment-types="form.payment_enabled_types"
+            :all-payment-types="allPaymentTypes"
+            :redirect-label="t('admin.settings.payment.easypayRedirect')"
+            @refresh="loadProviders"
+            @create="openCreateProvider"
+            @edit="openEditProvider"
+            @delete="confirmDeleteProvider"
+            @toggle-field="handleToggleField"
+            @toggle-type="handleToggleType"
+            @reorder="handleReorderProviders"
+          />
+        </div>
+
+        <div v-show="activeTab === 'email'" class="space-y-6">
+          <!-- Email disabled hint - show when email_verify_enabled is off -->
+          <div v-if="!form.email_verify_enabled" class="card">
+            <div class="p-6">
+              <div class="flex items-start gap-3">
+                <Icon
+                  name="mail"
+                  size="md"
+                  class="mt-0.5 flex-shrink-0 text-gray-400 dark:text-gray-500"
+                />
+                <div>
+                  <h3 class="font-medium text-gray-900 dark:text-white">
+                    {{ t("admin.settings.emailTabDisabledTitle") }}
+                  </h3>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.emailTabDisabledHint") }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SMTP Settings - Only show when email verification is enabled -->
+          <div v-if="form.email_verify_enabled" class="card">
+            <div
+              class="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                  {{ t("admin.settings.smtp.title") }}
+                </h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.smtp.description") }}
+                </p>
+              </div>
+              <button
+                type="button"
+                @click="testSmtpConnection"
+                :disabled="testingSmtp || loadFailed"
+                class="btn btn-secondary btn-sm"
+              >
+                <svg
+                  v-if="testingSmtp"
+                  class="h-4 w-4 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                {{
+                  testingSmtp
+                    ? t("admin.settings.smtp.testing")
+                    : t("admin.settings.smtp.testConnection")
+                }}
+              </button>
+            </div>
+            <div class="space-y-6 p-6">
+              <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.smtp.host") }}
+                  </label>
+                  <input
+                    v-model="form.smtp_host"
+                    type="text"
+                    class="input"
+                    :placeholder="t('admin.settings.smtp.hostPlaceholder')"
+                  />
+                </div>
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.smtp.port") }}
+                  </label>
+                  <input
+                    v-model.number="form.smtp_port"
+                    type="number"
+                    min="1"
+                    max="65535"
+                    class="input"
+                    :placeholder="t('admin.settings.smtp.portPlaceholder')"
+                  />
+                </div>
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.smtp.username") }}
+                  </label>
+                  <input
+                    v-model="form.smtp_username"
+                    type="text"
+                    class="input"
+                    :placeholder="t('admin.settings.smtp.usernamePlaceholder')"
+                  />
+                </div>
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.smtp.password") }}
+                  </label>
+                  <input
+                    v-model="form.smtp_password"
+                    type="password"
+                    class="input"
+                    autocomplete="new-password"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    @keydown="smtpPasswordManuallyEdited = true"
+                    @paste="smtpPasswordManuallyEdited = true"
+                    :placeholder="
+                      form.smtp_password_configured
+                        ? t('admin.settings.smtp.passwordConfiguredPlaceholder')
+                        : t('admin.settings.smtp.passwordPlaceholder')
+                    "
+                  />
+                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{
+                      form.smtp_password_configured
+                        ? t("admin.settings.smtp.passwordConfiguredHint")
+                        : t("admin.settings.smtp.passwordHint")
+                    }}
+                  </p>
+                </div>
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.smtp.fromEmail") }}
+                  </label>
+                  <input
+                    v-model="form.smtp_from_email"
+                    type="email"
+                    class="input"
+                    :placeholder="t('admin.settings.smtp.fromEmailPlaceholder')"
+                  />
+                </div>
+                <div>
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.smtp.fromName") }}
+                  </label>
+                  <input
+                    v-model="form.smtp_from_name"
+                    type="text"
+                    class="input"
+                    :placeholder="t('admin.settings.smtp.fromNamePlaceholder')"
+                  />
+                </div>
+              </div>
+
+              <!-- Use TLS Toggle -->
+              <div
+                class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
+              >
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">{{
+                    t("admin.settings.smtp.useTls")
+                  }}</label>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.smtp.useTlsHint") }}
+                  </p>
+                </div>
+                <Toggle v-model="form.smtp_use_tls" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Send Test Email - Only show when email verification is enabled -->
+          <div v-if="form.email_verify_enabled" class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                {{ t("admin.settings.testEmail.title") }}
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.testEmail.description") }}
+              </p>
+            </div>
+            <div class="p-6">
+              <div class="flex items-end gap-4">
+                <div class="flex-1">
+                  <label
+                    class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.testEmail.recipientEmail") }}
+                  </label>
+                  <input
+                    v-model="testEmailAddress"
+                    type="email"
+                    class="input"
+                    :placeholder="
+                      t('admin.settings.testEmail.recipientEmailPlaceholder')
+                    "
+                  />
+                </div>
+                <button
+                  type="button"
+                  @click="sendTestEmail"
+                  :disabled="
+                    sendingTestEmail || !testEmailAddress || loadFailed
+                  "
+                  class="btn btn-secondary"
+                >
+                  <svg
+                    v-if="sendingTestEmail"
+                    class="h-4 w-4 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="4"
+                    ></circle>
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  {{
+                    sendingTestEmail
+                      ? t("admin.settings.testEmail.sending")
+                      : t("admin.settings.testEmail.sendTestEmail")
+                  }}
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- Balance Low Notification -->
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h3 class="text-base font-medium text-gray-900 dark:text-white">
+                {{ t("admin.settings.balanceNotify.title") }}
+              </h3>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.balanceNotify.description") }}
+              </p>
+            </div>
+            <div class="px-6 py-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <label
+                  class="mb-0 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >{{ t("admin.settings.balanceNotify.enabled") }}</label
+                >
+                <Toggle v-model="form.balance_low_notify_enabled" />
+              </div>
+              <div v-if="form.balance_low_notify_enabled">
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >{{ t("admin.settings.balanceNotify.threshold") }}</label
+                >
+                <div class="relative">
+                  <span
+                    class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                    >$</span
+                  >
+                  <input
+                    v-model.number="form.balance_low_notify_threshold"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    class="input pl-7"
+                  />
+                </div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.balanceNotify.thresholdHint") }}
+                </p>
+              </div>
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >{{ t("admin.settings.balanceNotify.rechargeUrl") }}</label
+                >
+                <input
+                  v-model="form.balance_low_notify_recharge_url"
+                  type="url"
+                  class="input"
+                  :placeholder="currentOrigin"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.balanceNotify.rechargeUrlHint") }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Account Quota Notification -->
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h3 class="text-base font-medium text-gray-900 dark:text-white">
+                {{ t("admin.settings.quotaNotify.title") }}
+              </h3>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {{ t("admin.settings.quotaNotify.description") }}
+              </p>
+            </div>
+            <div class="px-6 py-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <label
+                  class="mb-0 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >{{ t("admin.settings.quotaNotify.enabled") }}</label
+                >
+                <Toggle v-model="form.account_quota_notify_enabled" />
+              </div>
+              <div v-if="form.account_quota_notify_enabled">
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >{{ t("admin.settings.quotaNotify.emails") }}</label
+                >
+                <div class="space-y-2">
+                  <div
+                    v-for="(entry, index) in form.account_quota_notify_emails ||
+                    []"
+                    :key="index"
+                    class="flex items-center gap-2"
+                  >
+                    <label
+                      class="relative inline-flex items-center cursor-pointer shrink-0"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="!entry.disabled"
+                        @change="entry.disabled = !entry.disabled"
+                        class="sr-only peer"
+                      />
+                      <div
+                        class="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:after:border-gray-500 peer-checked:bg-primary-600"
+                      ></div>
+                    </label>
+                    <input
+                      v-model="entry.email"
+                      type="email"
+                      class="input flex-1"
+                      :placeholder="
+                        t('admin.settings.quotaNotify.emailPlaceholder')
+                      "
+                    />
+                    <button
+                      @click="form.account_quota_notify_emails.splice(index, 1)"
+                      class="btn btn-secondary px-2"
+                      type="button"
+                    >
+                      <Icon name="x" size="xs" class="h-4 w-4" />
+                    </button>
+                  </div>
+                  <button
+                    @click="addQuotaNotifyEmail"
+                    class="btn btn-secondary btn-sm"
+                    type="button"
+                  >
+                    + {{ t("admin.settings.quotaNotify.addEmail") }}
+                  </button>
+                </div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.quotaNotify.emailsHint") }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /Tab: Email -->
+
+        <!-- Tab: Backup -->
+        <div v-show="activeTab === 'backup'">
+          <BackupSettings />
+        </div>
+
+        <!-- Save Button -->
+        <div v-show="activeTab !== 'backup'" class="flex justify-end">
+          <button
+            type="submit"
+            :disabled="saving || loadFailed"
+            class="btn btn-primary"
+          >
+            <svg
+              v-if="saving"
+              class="h-4 w-4 animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            {{
+              saving
+                ? t("admin.settings.saving")
+                : t("admin.settings.saveSettings")
+            }}
+          </button>
+        </div>
+      </form>
+
+      <!-- Provider dialogs placed outside the settings form to prevent form submission bubbling -->
+      <PaymentProviderDialog
+        ref="providerDialogRef"
+        :show="showProviderDialog"
+        :saving="providerSaving"
+        :editing="editingProvider"
+        :all-key-options="providerKeyOptions"
+        :enabled-key-options="enabledProviderKeyOptions"
+        :all-payment-types="allPaymentTypes"
+        :redirect-label="t('admin.settings.payment.easypayRedirect')"
+        @close="showProviderDialog = false"
+        @save="handleSaveProvider"
+      />
+      <ConfirmDialog
+        :show="showDeleteProviderDialog"
+        :title="t('admin.settings.payment.deleteProvider')"
+        :message="t('admin.settings.payment.deleteProviderConfirm')"
+        :confirm-text="t('common.delete')"
+        danger
+        @confirm="handleDeleteProvider"
+        @cancel="showDeleteProviderDialog = false"
+      />
+      <ConfirmDialog
+        :show="affiliateConfirmDialog.show"
+        :title="affiliateConfirmDialog.title"
+        :message="affiliateConfirmDialog.message"
+        :confirm-text="affiliateConfirmDialog.confirmText"
+        danger
+        @confirm="handleAffiliateConfirm"
+        @cancel="cancelAffiliateConfirm"
+      />
+    </div>
+  </AppLayout>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { adminAPI } from "@/api";
+import {
+  appendAuthSourceDefaultsToUpdateRequest,
+  buildAuthSourceDefaultsState,
+  defaultWeChatConnectScopesForMode,
+  deriveWeChatConnectStoredMode,
+  normalizeDefaultSubscriptionSettings,
+  resolveWeChatConnectModeCapabilities,
+} from "@/api/admin/settings";
+import type {
+  AuthSourceDefaultsState,
+  AuthSourceType,
+  SystemSettings,
+  UpdateSettingsRequest,
+  DefaultSubscriptionSetting,
+  OpenAIFastPolicyRule,
+  WeChatConnectMode,
+  WebSearchEmulationConfig,
+  WebSearchProviderConfig,
+  WebSearchTestResult,
+} from "@/api/admin/settings";
+import type {
+  AdminGroup,
+  LoginAgreementDocument,
+  NotifyEmailEntry,
+  Proxy,
+} from "@/types";
+import type { ProviderInstance } from "@/types/payment";
+import AppLayout from "@/components/layout/AppLayout.vue";
+import Icon from "@/components/icons/Icon.vue";
+import Select from "@/components/common/Select.vue";
+import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
+import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
+import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
+import GroupBadge from "@/components/common/GroupBadge.vue";
+import GroupOptionItem from "@/components/common/GroupOptionItem.vue";
+import Toggle from "@/components/common/Toggle.vue";
+import ProxySelector from "@/components/common/ProxySelector.vue";
+import ImageUpload from "@/components/common/ImageUpload.vue";
+import BackupSettings from "@/views/admin/BackupView.vue";
+import { useClipboard } from "@/composables/useClipboard";
+import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSimpleUser } from "@/api/admin/affiliates";
+import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
+import { useAppStore } from "@/stores";
+import { useAdminSettingsStore } from "@/stores/adminSettings";
+import { normalizeVisibleMethod } from "@/components/payment/paymentFlow";
+import {
+  isRegistrationEmailSuffixDomainValid,
+  normalizeRegistrationEmailSuffixDomain,
+  normalizeRegistrationEmailSuffixDomains,
+  parseRegistrationEmailSuffixWhitelistInput,
+} from "@/utils/registrationEmailPolicy";
+
+const { t, locale } = useI18n();
+const appStore = useAppStore();
+const adminSettingsStore = useAdminSettingsStore();
+const isZhLocale = computed(() => locale.value.startsWith("zh"));
+
+function localText(zh: string, en: string): string {
+  return isZhLocale.value ? zh : en;
+}
+
+const paymentGuideHref = computed(() =>
+  locale.value.startsWith("zh")
+    ? "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md"
+    : "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT.md",
+);
+
+const paymentMethodsHref = computed(() =>
+  locale.value.startsWith("zh")
+    ? "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md#支持的支付方式"
+    : "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT.md#supported-payment-methods",
+);
+
+type SettingsTab =
+  | "general"
+  | "agreement"
+  | "features"
+  | "security"
+  | "users"
+  | "gateway"
+  | "payment"
+  | "email"
+  | "backup";
+const activeTab = ref<SettingsTab>("general");
+const settingsTabs = [
+  { key: "general" as SettingsTab, icon: "home" as const },
+  { key: "agreement" as SettingsTab, icon: "document" as const },
+  { key: "features" as SettingsTab, icon: "bolt" as const },
+  { key: "security" as SettingsTab, icon: "shield" as const },
+  { key: "users" as SettingsTab, icon: "user" as const },
+  { key: "gateway" as SettingsTab, icon: "server" as const },
+  { key: "payment" as SettingsTab, icon: "creditCard" as const },
+  { key: "email" as SettingsTab, icon: "mail" as const },
+  { key: "backup" as SettingsTab, icon: "database" as const },
+];
+
+const settingsTabKeyboardActions = {
+  ArrowLeft: -1,
+  ArrowUp: -1,
+  ArrowRight: 1,
+  ArrowDown: 1,
+  Home: "first",
+  End: "last",
+} as const;
+
+function selectSettingsTab(tab: SettingsTab): void {
+  activeTab.value = tab;
+}
+
+function focusSettingsTab(tab: SettingsTab): void {
+  window.requestAnimationFrame(() => {
+    document.getElementById(`settings-tab-${tab}`)?.focus();
+  });
+}
+
+function handleSettingsTabKeydown(event: KeyboardEvent, tab: SettingsTab): void {
+  const action =
+    settingsTabKeyboardActions[
+      event.key as keyof typeof settingsTabKeyboardActions
+    ];
+  if (action === undefined) {
+    return;
+  }
+
+  event.preventDefault();
+  const currentIndex = settingsTabs.findIndex((item) => item.key === tab);
+  let nextIndex = currentIndex < 0 ? 0 : currentIndex;
+
+  if (action === "first") {
+    nextIndex = 0;
+  } else if (action === "last") {
+    nextIndex = settingsTabs.length - 1;
+  } else {
+    nextIndex =
+      (nextIndex + action + settingsTabs.length) % settingsTabs.length;
+  }
+
+  const nextTab = settingsTabs[nextIndex]?.key;
+  if (!nextTab) {
+    return;
+  }
+
+  selectSettingsTab(nextTab);
+  focusSettingsTab(nextTab);
+}
+
+const { copyToClipboard } = useClipboard();
+
+const loading = ref(true);
+const loadFailed = ref(false);
+const saving = ref(false);
+const testingSmtp = ref(false);
+const sendingTestEmail = ref(false);
+const smtpPasswordManuallyEdited = ref(false);
+const testEmailAddress = ref("");
+const registrationEmailSuffixWhitelistTags = ref<string[]>([]);
+const registrationEmailSuffixWhitelistDraft = ref("");
+const tablePageSizeOptionsInput = ref("10, 20, 50, 100");
+
+// Admin API Key 状态
+const adminApiKeyLoading = ref(true);
+const adminApiKeyExists = ref(false);
+const adminApiKeyMasked = ref("");
+const adminApiKeyOperating = ref(false);
+const newAdminApiKey = ref("");
+const subscriptionGroups = ref<AdminGroup[]>([]);
+
+// Overload Cooldown (529) 状态
+const overloadCooldownLoading = ref(true);
+const overloadCooldownSaving = ref(false);
+const overloadCooldownForm = reactive({
+  enabled: true,
+  cooldown_minutes: 10,
+});
+
+// Rate Limit Cooldown (429) 状态
+const rateLimit429CooldownLoading = ref(true);
+const rateLimit429CooldownSaving = ref(false);
+const rateLimit429CooldownForm = reactive({
+  enabled: true,
+  cooldown_seconds: 5,
+});
+
+// Stream Timeout 状态
+const streamTimeoutLoading = ref(true);
+const streamTimeoutSaving = ref(false);
+const streamTimeoutForm = reactive({
+  enabled: true,
+  action: "temp_unsched" as "temp_unsched" | "error" | "none",
+  temp_unsched_minutes: 5,
+  threshold_count: 3,
+  threshold_window_minutes: 10,
+});
+
+// Rectifier 状态
+const rectifierLoading = ref(true);
+const rectifierSaving = ref(false);
+const rectifierForm = reactive({
+  enabled: true,
+  thinking_signature_enabled: true,
+  thinking_budget_enabled: true,
+  apikey_signature_enabled: false,
+  apikey_signature_patterns: [] as string[],
+});
+
+// Beta Policy 状态
+const betaPolicyLoading = ref(true);
+const betaPolicySaving = ref(false);
+const betaPolicyForm = reactive({
+  rules: [] as Array<{
+    beta_token: string;
+    action: "pass" | "filter" | "block";
+    scope: "all" | "oauth" | "apikey" | "bedrock";
+    error_message?: string;
+    model_whitelist?: string[];
+    fallback_action?: "pass" | "filter" | "block";
+    fallback_error_message?: string;
+  }>,
+});
+
+// OpenAI Fast/Flex Policy 状态
+const openaiFastPolicyForm = reactive({
+  rules: [] as OpenAIFastPolicyRule[],
+});
+// 标记 openai_fast_policy_settings 是否已成功从后端加载，
+// 避免后端 GET 出错或字段缺失时，保存把默认规则覆盖成空数组。
+const openaiFastPolicyLoaded = ref(false);
+
+const tablePageSizeMin = 5;
+const tablePageSizeMax = 1000;
+const tablePageSizeDefault = 20;
+
+function defaultLoginAgreementDocuments(): LoginAgreementDocument[] {
+  return [
+    {
+      id: "terms",
+      title: "服务条款",
+      content_md: "",
+    },
+    {
+      id: "usage-policy",
+      title: "使用政策",
+      content_md: "",
+    },
+    {
+      id: "supported-regions",
+      title: "支持的国家和地区",
+      content_md: "",
+    },
+    {
+      id: "service-specific-terms",
+      title: "服务特定条款",
+      content_md: "",
+    },
+  ];
+}
+
+function normalizeLoginAgreementDocumentId(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/[-_]{2,}/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "");
+}
+
+function loginAgreementRoutePath(
+  doc: LoginAgreementDocument,
+  index: number,
+): string {
+  const id =
+    normalizeLoginAgreementDocumentId(doc.id || doc.title) || `doc-${index + 1}`;
+  return `/legal/${id}`;
+}
+
+interface DefaultSubscriptionGroupOption {
+  value: number;
+  label: string;
+  description: string | null;
+  platform: AdminGroup["platform"];
+  subscriptionType: AdminGroup["subscription_type"];
+  rate: number;
+  [key: string]: unknown;
+}
+
+type SettingsForm = Omit<
+  SystemSettings,
+  | "wechat_connect_open_enabled"
+  | "wechat_connect_mp_enabled"
+  | "wechat_connect_mobile_enabled"
+> & {
+  smtp_password: string;
+  turnstile_secret_key: string;
+  linuxdo_connect_client_secret: string;
+  wechat_connect_app_secret: string;
+  wechat_connect_open_app_secret: string;
+  wechat_connect_mp_app_secret: string;
+  wechat_connect_mobile_app_secret: string;
+  wechat_connect_open_enabled: boolean;
+  wechat_connect_mp_enabled: boolean;
+  wechat_connect_mobile_enabled: boolean;
+  oidc_connect_client_secret: string;
+  github_oauth_client_secret: string;
+  google_oauth_client_secret: string;
+  force_email_on_third_party_signup: boolean;
+  openai_advanced_scheduler_enabled: boolean;
+};
+
+const form = reactive<SettingsForm>({
+  registration_enabled: true,
+  email_verify_enabled: false,
+  registration_email_suffix_whitelist: [],
+  promo_code_enabled: true,
+  invitation_code_enabled: false,
+  password_reset_enabled: false,
+  totp_enabled: false,
+  totp_encryption_key_configured: false,
+  login_agreement_enabled: false,
+  login_agreement_mode: "modal",
+  login_agreement_updated_at: "2026-03-31",
+  login_agreement_documents: defaultLoginAgreementDocuments(),
+  default_balance: 0,
+  affiliate_rebate_rate: 20,
+  affiliate_rebate_freeze_hours: 0,
+  affiliate_rebate_duration_days: 0,
+  affiliate_rebate_per_invitee_cap: 0,
+  default_concurrency: 1,
+  default_subscriptions: [],
+  force_email_on_third_party_signup: false,
+  default_user_rpm_limit: 0,
+  site_name: "Sub2API",
+  site_logo: "",
+  site_subtitle: "Subscription to API Conversion Platform",
+  api_base_url: "",
+  contact_info: "",
+  doc_url: "",
+  home_content: "",
+  backend_mode_enabled: false,
+  hide_ccs_import_button: false,
+  payment_enabled: false,
+  risk_control_enabled: false,
+  payment_min_amount: 1,
+  payment_max_amount: 10000,
+  payment_daily_limit: 50000,
+  payment_max_pending_orders: 3,
+  payment_order_timeout_minutes: 30,
+  payment_balance_disabled: false,
+  payment_balance_recharge_multiplier: 1,
+  payment_recharge_fee_rate: 0,
+  payment_enabled_types: [],
+  payment_help_image_url: "",
+  payment_help_text: "",
+  payment_product_name_prefix: "",
+  payment_product_name_suffix: "",
+  payment_load_balance_strategy: "round-robin",
+  payment_cancel_rate_limit_enabled: false,
+  payment_cancel_rate_limit_max: 10,
+  payment_cancel_rate_limit_window: 1,
+  payment_cancel_rate_limit_unit: "day",
+  payment_cancel_rate_limit_window_mode: "rolling",
+  table_default_page_size: tablePageSizeDefault,
+  table_page_size_options: [10, 20, 50, 100],
+  custom_menu_items: [] as Array<{
+    id: string;
+    label: string;
+    icon_svg: string;
+    url: string;
+    visibility: "user" | "admin";
+    sort_order: number;
+  }>,
+  custom_endpoints: [] as Array<{
+    name: string;
+    endpoint: string;
+    description: string;
+  }>,
+  frontend_url: "",
+  smtp_host: "",
+  smtp_port: 587,
+  smtp_username: "",
+  smtp_password: "",
+  smtp_password_configured: false,
+  smtp_from_email: "",
+  smtp_from_name: "",
+  smtp_use_tls: true,
+  // Cloudflare Turnstile
+  turnstile_enabled: false,
+  turnstile_site_key: "",
+  turnstile_secret_key: "",
+  turnstile_secret_key_configured: false,
+  // LinuxDo Connect OAuth 登录
+  linuxdo_connect_enabled: false,
+  linuxdo_connect_client_id: "",
+  linuxdo_connect_client_secret: "",
+  linuxdo_connect_client_secret_configured: false,
+  linuxdo_connect_redirect_url: "",
+  wechat_connect_enabled: false,
+  wechat_connect_app_id: "",
+  wechat_connect_app_secret: "",
+  wechat_connect_app_secret_configured: false,
+  wechat_connect_open_app_id: "",
+  wechat_connect_open_app_secret: "",
+  wechat_connect_open_app_secret_configured: false,
+  wechat_connect_mp_app_id: "",
+  wechat_connect_mp_app_secret: "",
+  wechat_connect_mp_app_secret_configured: false,
+  wechat_connect_mobile_app_id: "",
+  wechat_connect_mobile_app_secret: "",
+  wechat_connect_mobile_app_secret_configured: false,
+  wechat_connect_open_enabled: false,
+  wechat_connect_mp_enabled: false,
+  wechat_connect_mobile_enabled: false,
+  wechat_connect_mode: "open",
+  wechat_connect_scopes: "snsapi_login",
+  wechat_connect_redirect_url: "",
+  wechat_connect_frontend_redirect_url: "/auth/wechat/callback",
+  // Generic OIDC OAuth 登录
+  oidc_connect_enabled: false,
+  oidc_connect_provider_name: "OIDC",
+  oidc_connect_client_id: "",
+  oidc_connect_client_secret: "",
+  oidc_connect_client_secret_configured: false,
+  oidc_connect_issuer_url: "",
+  oidc_connect_discovery_url: "",
+  oidc_connect_authorize_url: "",
+  oidc_connect_token_url: "",
+  oidc_connect_userinfo_url: "",
+  oidc_connect_jwks_url: "",
+  oidc_connect_scopes: "openid email profile",
+  oidc_connect_redirect_url: "",
+  oidc_connect_frontend_redirect_url: "/auth/oidc/callback",
+  oidc_connect_token_auth_method: "client_secret_post",
+  oidc_connect_use_pkce: false,
+  oidc_connect_validate_id_token: false,
+  oidc_connect_allowed_signing_algs: "RS256,ES256,PS256",
+  oidc_connect_clock_skew_seconds: 120,
+  oidc_connect_require_email_verified: false,
+  oidc_connect_userinfo_email_path: "",
+  oidc_connect_userinfo_id_path: "",
+  oidc_connect_userinfo_username_path: "",
+  // GitHub / Google 邮箱快捷登录
+  github_oauth_enabled: false,
+  github_oauth_client_id: "",
+  github_oauth_client_secret: "",
+  github_oauth_client_secret_configured: false,
+  github_oauth_redirect_url: "",
+  github_oauth_frontend_redirect_url: "/auth/oauth/callback",
+  google_oauth_enabled: false,
+  google_oauth_client_id: "",
+  google_oauth_client_secret: "",
+  google_oauth_client_secret_configured: false,
+  google_oauth_redirect_url: "",
+  google_oauth_frontend_redirect_url: "/auth/oauth/callback",
+  // Model fallback
+  enable_model_fallback: false,
+  fallback_model_anthropic: "claude-3-5-sonnet-20241022",
+  fallback_model_openai: "gpt-4o",
+  fallback_model_gemini: "gemini-2.5-pro",
+  fallback_model_antigravity: "gemini-2.5-pro",
+  // Identity patch (Claude -> Gemini)
+  enable_identity_patch: true,
+  identity_patch_prompt: "",
+  // Ops monitoring (vNext)
+  ops_monitoring_enabled: true,
+  ops_realtime_monitoring_enabled: true,
+  ops_query_mode_default: "auto",
+  ops_metrics_interval_seconds: 60,
+  // Claude Code version check
+  min_claude_code_version: "",
+  max_claude_code_version: "",
+  // 分组隔离
+  allow_ungrouped_key_scheduling: false,
+  openai_advanced_scheduler_enabled: false,
+  // Gateway forwarding behavior
+  enable_fingerprint_unification: true,
+  enable_metadata_passthrough: false,
+  enable_cch_signing: false,
+  enable_anthropic_cache_ttl_1h_injection: false,
+  rewrite_message_cache_control: false,
   antigravity_user_agent_version: "",
   // Balance & quota notification
   balance_low_notify_enabled: false,

@@ -370,6 +370,259 @@ const baseSettingsResponse = {
   enable_cch_signing: false,
   enable_anthropic_cache_ttl_1h_injection: false,
   rewrite_message_cache_control: false,
+  antigravity_user_agent_version: "",
+  payment_enabled: true,
+  payment_min_amount: 1,
+  payment_max_amount: 10000,
+  payment_daily_limit: 50000,
+  payment_order_timeout_minutes: 30,
+  payment_max_pending_orders: 3,
+  payment_enabled_types: [],
+  payment_balance_disabled: false,
+  payment_balance_recharge_multiplier: 1,
+  payment_recharge_fee_rate: 0,
+  payment_load_balance_strategy: "round-robin",
+  payment_product_name_prefix: "",
+  payment_product_name_suffix: "",
+  payment_help_image_url: "",
+  payment_help_text: "",
+  payment_cancel_rate_limit_enabled: false,
+  payment_cancel_rate_limit_max: 10,
+  payment_cancel_rate_limit_window: 1,
+  payment_cancel_rate_limit_unit: "day",
+  payment_cancel_rate_limit_window_mode: "rolling",
+  payment_visible_method_alipay_source: "alipay_direct",
+  payment_visible_method_wxpay_source: "invalid-source",
+  payment_visible_method_alipay_enabled: true,
+  payment_visible_method_wxpay_enabled: true,
+  openai_advanced_scheduler_enabled: false,
+  balance_low_notify_enabled: false,
+  balance_low_notify_threshold: 0,
+  balance_low_notify_recharge_url: "",
+  account_quota_notify_enabled: false,
+  account_quota_notify_emails: [],
+};
+
+function mountView() {
+  return mount(SettingsView, {
+    global: {
+      stubs: {
+        AppLayout: AppLayoutStub,
+        Select: SelectStub,
+        Toggle: ToggleStub,
+        Icon: true,
+        ConfirmDialog: true,
+        PaymentProviderList: true,
+        PaymentProviderDialog: true,
+        GroupBadge: true,
+        GroupOptionItem: true,
+        ProxySelector: true,
+        ImageUpload: ImageUploadStub,
+        BackupSettings: true,
+      },
+    },
+  });
+}
+
+async function openPaymentTab(wrapper: ReturnType<typeof mountView>) {
+  const paymentTabButton = wrapper
+    .findAll("button")
+    .find((node) => node.text().includes("admin.settings.tabs.payment"));
+
+  expect(paymentTabButton).toBeDefined();
+  await paymentTabButton?.trigger("click");
+  await flushPromises();
+}
+
+async function openSecurityTab(wrapper: ReturnType<typeof mountView>) {
+  const securityTabButton = wrapper
+    .findAll("button")
+    .find((node) => node.text().includes("admin.settings.tabs.security"));
+
+  expect(securityTabButton).toBeDefined();
+  await securityTabButton?.trigger("click");
+  await flushPromises();
+}
+
+async function openUsersTab(wrapper: ReturnType<typeof mountView>) {
+  const usersTabButton = wrapper
+    .findAll("button")
+    .find((node) => node.text().includes("admin.settings.tabs.users"));
+
+  expect(usersTabButton).toBeDefined();
+  await usersTabButton?.trigger("click");
+  await flushPromises();
+}
+
+describe("admin SettingsView payment visible method controls", () => {
+  beforeEach(() => {
+    getSettings.mockReset();
+    updateSettings.mockReset();
+    getWebSearchEmulationConfig.mockReset();
+    updateWebSearchEmulationConfig.mockReset();
+    getAdminApiKey.mockReset();
+    getOverloadCooldownSettings.mockReset();
+    getRateLimit429CooldownSettings.mockReset();
+    updateRateLimit429CooldownSettings.mockReset();
+    getStreamTimeoutSettings.mockReset();
+    getRectifierSettings.mockReset();
+    getBetaPolicySettings.mockReset();
+    getGroups.mockReset();
+    listProxies.mockReset();
+    getProviders.mockReset();
+    updateProvider.mockReset();
+    createProvider.mockReset();
+    deleteProvider.mockReset();
+    fetchPublicSettings.mockReset();
+    adminSettingsFetch.mockReset();
+    showError.mockReset();
+    showSuccess.mockReset();
+    localeRef.value = "zh-CN";
+
+    getSettings.mockResolvedValue({ ...baseSettingsResponse });
+    updateSettings.mockImplementation(async (payload) => ({
+      ...baseSettingsResponse,
+      ...payload,
+    }));
+    getWebSearchEmulationConfig.mockResolvedValue({
+      enabled: false,
+      providers: [],
+    });
+    updateWebSearchEmulationConfig.mockResolvedValue({
+      enabled: false,
+      providers: [],
+    });
+    getAdminApiKey.mockResolvedValue({
+      exists: false,
+      masked_key: "",
+    });
+    getOverloadCooldownSettings.mockResolvedValue({
+      enabled: true,
+      cooldown_minutes: 10,
+    });
+    getRateLimit429CooldownSettings.mockResolvedValue({
+      enabled: true,
+      cooldown_seconds: 5,
+    });
+    updateRateLimit429CooldownSettings.mockImplementation(async (payload) => payload);
+    getStreamTimeoutSettings.mockResolvedValue({
+      enabled: true,
+      action: "temp_unsched",
+      temp_unsched_minutes: 5,
+      threshold_count: 3,
+      threshold_window_minutes: 10,
+    });
+    getRectifierSettings.mockResolvedValue({
+      enabled: true,
+      thinking_signature_enabled: true,
+      thinking_budget_enabled: true,
+      apikey_signature_enabled: false,
+      apikey_signature_patterns: [],
+    });
+    getBetaPolicySettings.mockResolvedValue({
+      rules: [],
+    });
+    getGroups.mockResolvedValue([]);
+    listProxies.mockResolvedValue({
+      items: [],
+    });
+    getProviders.mockResolvedValue({
+      data: [],
+    });
+    fetchPublicSettings.mockResolvedValue(undefined);
+    adminSettingsFetch.mockResolvedValue(undefined);
+  });
+
+  it("does not render legacy visible payment method controls", async () => {
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openPaymentTab(wrapper);
+
+    expect(wrapper.text()).not.toContain("可见方式");
+    expect(wrapper.text()).not.toContain("支付来源");
+  });
+
+  it("links payment guidance to README sections instead of removed payment docs", async () => {
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openPaymentTab(wrapper);
+
+    const paymentLinks = wrapper
+      .findAll("a")
+      .filter((node) =>
+        ["查看支付配置说明", "查看支持的支付方式"].includes(node.text()),
+      );
+
+    expect(paymentLinks).toHaveLength(2);
+    expect(paymentLinks[0]?.attributes("href")).toBe(
+      "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md",
+    );
+    expect(paymentLinks[1]?.attributes("href")).toBe(
+      "https://github.com/Wei-Shaw/sub2api/blob/main/docs/PAYMENT_CN.md#支持的支付方式",
+    );
+    for (const link of paymentLinks) {
+      expect(link.attributes("href")).toContain("docs/PAYMENT");
+    }
+  });
+
+  it("does not submit legacy visible payment method settings", async () => {
+    const wrapper = mountView();
+
+    await flushPromises();
+    await openPaymentTab(wrapper);
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    const payload = updateSettings.mock.calls[0]?.[0];
+    expect(payload).not.toHaveProperty("payment_visible_method_alipay_source");
+    expect(payload).not.toHaveProperty("payment_visible_method_wxpay_source");
+    expect(payload).not.toHaveProperty("payment_visible_method_alipay_enabled");
+    expect(payload).not.toHaveProperty("payment_visible_method_wxpay_enabled");
+  });
+
+  it("submits Anthropic cache TTL injection gateway setting", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      enable_anthropic_cache_ttl_1h_injection: true,
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enable_anthropic_cache_ttl_1h_injection: true,
+      }),
+    );
+  });
+
+  it("submits message cache_control rewrite gateway setting", async () => {
+    getSettings.mockResolvedValueOnce({
+      ...baseSettingsResponse,
+      rewrite_message_cache_control: true,
+    });
+
+    const wrapper = mountView();
+
+    await flushPromises();
+    await wrapper.find("form").trigger("submit.prevent");
+    await flushPromises();
+
+    expect(updateSettings).toHaveBeenCalledTimes(1);
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        rewrite_message_cache_control: true,
+      }),
+    );
+  });
+
   it("submits Antigravity user agent version gateway setting", async () => {
     getSettings.mockResolvedValueOnce({
       ...baseSettingsResponse,
