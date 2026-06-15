@@ -106,6 +106,7 @@ func apiKeyAuthWithSubscription(
 			clientIP := ip.GetTrustedClientIP(c)
 			allowed, _ := ip.CheckIPRestrictionWithCompiledRules(clientIP, apiKey.CompiledIPWhitelist, apiKey.CompiledIPBlacklist)
 			if !allowed {
+				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonIPRestriction)
 				AbortWithError(c, 403, "ACCESS_DENIED", "Access denied")
 				return
 			}

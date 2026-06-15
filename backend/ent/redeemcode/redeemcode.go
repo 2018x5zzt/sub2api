@@ -32,6 +32,8 @@ const (
 	FieldNotes = "notes"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
+	// FieldExpiresAt holds the string denoting the expires_at field in the database.
+	FieldExpiresAt = "expires_at"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
 	// FieldProductID holds the string denoting the product_id field in the database.
@@ -72,6 +74,7 @@ var Columns = []string{
 	FieldUsedAt,
 	FieldNotes,
 	FieldCreatedAt,
+	FieldExpiresAt,
 	FieldGroupID,
 	FieldProductID,
 	FieldValidityDays,
@@ -161,6 +164,11 @@ func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByExpiresAt orders the results by the expires_at field.
+func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExpiresAt, opts...).ToFunc()
 }
 
 // ByGroupID orders the results by the group_id field.
