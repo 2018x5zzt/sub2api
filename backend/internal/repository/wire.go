@@ -97,6 +97,7 @@ var ProviderSet = wire.NewSet(
 	NewChannelRepository,
 	NewChannelMonitorRepository,
 	NewChannelMonitorRequestTemplateRepository,
+	NewContentModerationRepository,
 	NewAffiliateRepository,
 	ProvideInviteUserRepository,
 	wire.Bind(new(service.InviteRewardRecordRepository), new(*inviteRewardRecordRepository)),
@@ -130,6 +131,7 @@ var ProviderSet = wire.NewSet(
 	NewRefreshTokenCache,
 	NewErrorPassthroughCache,
 	NewTLSFingerprintProfileCache,
+	NewContentModerationHashCache,
 
 	// Encryptors
 	NewAESEncryptor,

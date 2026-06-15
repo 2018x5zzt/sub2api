@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 10 // v10: auth snapshot includes allowed_groups for user-selected balance fallback authorization
+const apiKeyAuthSnapshotVersion = 11 // v11: auth snapshot includes API Key name and allowed_groups for balance fallback authorization
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -210,6 +210,7 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		APIKeyID:                  apiKey.ID,
 		UserID:                    apiKey.UserID,
 		GroupID:                   apiKey.GroupID,
+		Name:                      apiKey.Name,
 		SubscriptionProductFamily: apiKey.SubscriptionProductFamily,
 		BudgetMultiplier:          apiKey.BudgetMultiplier,
 		Status:                    apiKey.Status,
@@ -264,6 +265,9 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 			DailyLimitUSD:                   apiKey.Group.DailyLimitUSD,
 			WeeklyLimitUSD:                  apiKey.Group.WeeklyLimitUSD,
 			MonthlyLimitUSD:                 apiKey.Group.MonthlyLimitUSD,
+			AllowImageGeneration:            apiKey.Group.AllowImageGeneration,
+			ImageRateIndependent:            apiKey.Group.ImageRateIndependent,
+			ImageRateMultiplier:             apiKey.Group.ImageRateMultiplier,
 			ImagePrice1K:                    apiKey.Group.ImagePrice1K,
 			ImagePrice2K:                    apiKey.Group.ImagePrice2K,
 			ImagePrice4K:                    apiKey.Group.ImagePrice4K,
@@ -292,6 +296,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		ID:                        snapshot.APIKeyID,
 		UserID:                    snapshot.UserID,
 		GroupID:                   snapshot.GroupID,
+		Name:                      snapshot.Name,
 		SubscriptionProductFamily: snapshot.SubscriptionProductFamily,
 		BudgetMultiplier:          snapshot.BudgetMultiplier,
 		Key:                       key,
@@ -340,6 +345,9 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			DailyLimitUSD:                   snapshot.Group.DailyLimitUSD,
 			WeeklyLimitUSD:                  snapshot.Group.WeeklyLimitUSD,
 			MonthlyLimitUSD:                 snapshot.Group.MonthlyLimitUSD,
+			AllowImageGeneration:            snapshot.Group.AllowImageGeneration,
+			ImageRateIndependent:            snapshot.Group.ImageRateIndependent,
+			ImageRateMultiplier:             snapshot.Group.ImageRateMultiplier,
 			ImagePrice1K:                    snapshot.Group.ImagePrice1K,
 			ImagePrice2K:                    snapshot.Group.ImagePrice2K,
 			ImagePrice4K:                    snapshot.Group.ImagePrice4K,

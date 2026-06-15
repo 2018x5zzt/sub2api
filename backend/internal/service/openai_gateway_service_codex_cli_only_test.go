@@ -334,18 +334,16 @@ func TestOpenAIGatewayService_Forward_TransientProcessingErrorTriggersFailover(t
 }
 
 func TestOpenAIGatewayService_IsCodexImageGenerationBridgeEnabled(t *testing.T) {
-	t.Run("非 Codex 客户端禁用", func(t *testing.T) {
-		svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{CodexImageGenerationBridgeEnabled: true}}}
-		require.False(t, svc.isCodexImageGenerationBridgeEnabled(false))
-	})
+	account := &Account{ID: 1}
+	apiKey := &APIKey{Group: &Group{ID: 1, RateMultiplier: 1, ImageRateMultiplier: 1}}
 
 	t.Run("默认配置禁用", func(t *testing.T) {
 		svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{}}}
-		require.False(t, svc.isCodexImageGenerationBridgeEnabled(true))
+		require.False(t, svc.isCodexImageGenerationBridgeEnabled(context.Background(), account, apiKey))
 	})
 
 	t.Run("显式开启时启用", func(t *testing.T) {
 		svc := &OpenAIGatewayService{cfg: &config.Config{Gateway: config.GatewayConfig{CodexImageGenerationBridgeEnabled: true}}}
-		require.True(t, svc.isCodexImageGenerationBridgeEnabled(true))
+		require.True(t, svc.isCodexImageGenerationBridgeEnabled(context.Background(), account, apiKey))
 	})
 }

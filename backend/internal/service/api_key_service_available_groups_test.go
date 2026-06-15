@@ -75,6 +75,12 @@ func (r *apiKeyAvailableGroupsUserRepo) DeductBalance(context.Context, int64, fl
 func (r *apiKeyAvailableGroupsUserRepo) UpdateConcurrency(context.Context, int64, int) error {
 	return nil
 }
+func (r *apiKeyAvailableGroupsUserRepo) BatchAddConcurrency(context.Context, []int64, int) (int, error) {
+	return 0, nil
+}
+func (r *apiKeyAvailableGroupsUserRepo) BatchSetConcurrency(context.Context, []int64, int) (int, error) {
+	return 0, nil
+}
 func (r *apiKeyAvailableGroupsUserRepo) ExistsByEmail(context.Context, string) (bool, error) {
 	return false, nil
 }
