@@ -342,7 +342,7 @@
                     <div class="sub-bar-fill" :class="getProgressBarClass(subscription.daily_usage_usd, subscription.group.daily_limit_usd)" :style="{ width: getProgressWidth(subscription.daily_usage_usd, subscription.group.daily_limit_usd) }" />
                   </div>
                   <p v-if="subscription.daily_window_start" class="text-[11px] text-gray-400 dark:text-gray-500">
-                    {{ t('userSubscriptions.resetIn', { time: formatResetTime(subscription.daily_window_start, 24) }) }}
+                    {{ formatDailyUsageWindow(subscription) }}
                   </p>
                 </div>
 
