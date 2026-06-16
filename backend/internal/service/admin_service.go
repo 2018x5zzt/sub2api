@@ -561,6 +561,7 @@ type adminServiceImpl struct {
 	inviteBindingUserRepo        interface {
 		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
 	}
+	runtimeBlocker AccountRuntimeBlocker
 }
 
 type userGroupRateBatchReader interface {
@@ -591,6 +592,7 @@ func NewAdminService(
 	defaultSubAssigner DefaultSubscriptionAssigner,
 	userSubRepo UserSubscriptionRepository,
 	privacyClientFactory PrivacyClientFactory,
+	runtimeBlocker AccountRuntimeBlocker,
 ) AdminService {
 	var inviteBindingUserRepo interface {
 		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
@@ -625,6 +627,7 @@ func NewAdminService(
 		userSubRepo:                  userSubRepo,
 		privacyClientFactory:         privacyClientFactory,
 		inviteBindingUserRepo:        inviteBindingUserRepo,
+		runtimeBlocker:               runtimeBlocker,
 	}
 }
 
@@ -2918,6 +2921,9 @@ func (s *adminServiceImpl) ClearAccountError(ctx context.Context, id int64) (*Ac
 	}
 	if err := s.accountRepo.ClearTempUnschedulable(ctx, id); err != nil {
 		return nil, err
+	}
+	if s.runtimeBlocker != nil {
+		s.runtimeBlocker.ClearAccountSchedulingBlock(id)
 	}
 	return s.accountRepo.GetByID(ctx, id)
 }
