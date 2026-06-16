@@ -629,8 +629,6 @@ import type {
   RedeemCodeType,
   AdminSubscriptionProduct,
   Group,
-  GroupPlatform,
-  SubscriptionType,
   BatchUpdateRedeemCodeFields
 } from '@/types'
 import type { Column } from '@/components/common/types'
@@ -659,15 +657,6 @@ const generatedCodes = ref<RedeemCode[]>([])
 const subscriptionProducts = ref<AdminSubscriptionProduct[]>([])
 const subscriptionGroups = ref<Group[]>([])
 
-interface SubscriptionGroupOption {
-  value: number
-  label: string
-  description: string | null
-  platform: GroupPlatform
-  subscriptionType: SubscriptionType
-  rate: number
-}
-
 // 订阅产品选项
 const subscriptionProductOptions = computed(() => {
   return subscriptionProducts.value
@@ -681,7 +670,7 @@ const subscriptionProductOptions = computed(() => {
 })
 
 // 订阅类型分组选项（批量更新仍允许按 upstream 选择/清空 group_id）
-const subscriptionGroupOptions = computed<SubscriptionGroupOption[]>(() => {
+const subscriptionGroupOptions = computed(() => {
   return subscriptionGroups.value
     .filter((group) => group.subscription_type === 'subscription')
     .map((group) => ({
@@ -690,7 +679,7 @@ const subscriptionGroupOptions = computed<SubscriptionGroupOption[]>(() => {
       description: group.description || null,
       platform: group.platform,
       subscriptionType: group.subscription_type,
-      rate: group.rate
+      rate: group.rate_multiplier
     }))
 })
 
@@ -1198,8 +1187,6 @@ const confirmDeleteUnused = async () => {
   }
 }
 
-// 加载订阅产品
-const loadSubscriptionProducts = async () => {
 const handleBatchUpdate = async () => {
   const ids = Array.from(selectedCodeIds.value)
   if (ids.length === 0) {
