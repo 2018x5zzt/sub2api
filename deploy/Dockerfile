@@ -23,7 +23,8 @@ WORKDIR /app/frontend-v2
 COPY frontend-v2/package.json frontend-v2/package-lock.json ./
 RUN npm ci
 
-# Copy frontend source and build
+# Copy frontend-v2 source and legal docs used by the admin compliance gate.
+COPY docs/legal/ /app/docs/legal/
 COPY frontend-v2/ ./
 RUN npm run build
 
