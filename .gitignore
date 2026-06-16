@@ -137,6 +137,8 @@ docs/*
 !docs/PRODUCT_SUBSCRIPTIONS_CN.md
 !docs/superpowers/
 !docs/superpowers/**
+!docs/legal/
+!docs/legal/*.md
 .serena/
 .codex/
 .worktrees/
