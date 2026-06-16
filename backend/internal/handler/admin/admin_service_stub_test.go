@@ -662,5 +662,9 @@ func (s *stubAdminService) ExecuteInviteRecompute(ctx context.Context, input ser
 	return nil
 }
 
+func (s *stubAdminService) RevertAccountProxyFallback(ctx context.Context, id int64) error {
+	return nil
+}
+
 // Ensure stub implements interface.
 var _ service.AdminService = (*stubAdminService)(nil)
