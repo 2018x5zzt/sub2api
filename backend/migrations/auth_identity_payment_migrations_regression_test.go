@@ -233,7 +233,7 @@ func TestMigration151AlignsActiveProductSubscriptionExpiryToDayEnd(t *testing.T)
 	require.Contains(t, sql, "u.status = 'active'")
 	require.Contains(t, sql, "ups.deleted_at IS NULL")
 	require.Contains(t, sql, "u.deleted_at IS NULL")
-
+}
 
 func TestMigration135AllowsGitHubAndGoogleAuthProviders(t *testing.T) {
 	content, err := FS.ReadFile("135_allow_email_oauth_provider_types.sql")
