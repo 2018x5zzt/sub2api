@@ -2769,12 +2769,14 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
-	decodedForLegacyNormalize, decodeErr := ensureReqBody()
-	if decodeErr != nil {
-		return nil, decodeErr
-	}
-	if normalizeLegacyOpenAIResponsesTextInputTypesInRequestBodyMap(decodedForLegacyNormalize) {
-		markDecodedModified()
+	if openAIRequestBodyMayContainLegacyResponsesTextInput(body) {
+		decodedForLegacyNormalize, decodeErr := ensureReqBody()
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		if normalizeLegacyOpenAIResponsesTextInputTypesInRequestBodyMap(decodedForLegacyNormalize) {
+			markDecodedModified()
+		}
 	}
 
 	// Apply OpenAI fast policy (参照 Claude BetaPolicy 的 fast-mode 过滤)：
@@ -7496,6 +7498,14 @@ func normalizeLegacyOpenAIResponsesTextInputTypesInRequestBodyMap(reqBody map[st
 	}
 	reqBody["input"] = normalizedInput
 	return true
+}
+
+func openAIRequestBodyMayContainLegacyResponsesTextInput(body []byte) bool {
+	if len(body) == 0 {
+		return false
+	}
+	return bytes.Contains(body, []byte(`"type":"text"`)) ||
+		bytes.Contains(body, []byte(`"type": "text"`))
 }
 
 func normalizeLegacyOpenAIResponsesTextInputTypesInInput(input any) (any, bool) {

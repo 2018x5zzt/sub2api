@@ -152,7 +152,7 @@ func (b *billingEligibilityCacheStub) GetAPIKeyRateLimit(ctx context.Context, ke
 
 func TestBillingCacheServiceCheckBillingEligibilitySkipsAPIKeyRateLimitsForSubscriptions(t *testing.T) {
 	cache := &billingEligibilityCacheStub{}
-	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{})
+	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{}, nil)
 	t.Cleanup(svc.Stop)
 
 	limit := 45.0
@@ -162,6 +162,7 @@ func TestBillingCacheServiceCheckBillingEligibilitySkipsAPIKeyRateLimitsForSubsc
 		&APIKey{ID: 2, RateLimit1d: 45},
 		&Group{ID: 3, SubscriptionType: SubscriptionTypeSubscription, DailyLimitUSD: &limit},
 		&UserSubscription{ID: 4, Status: SubscriptionStatusActive, ExpiresAt: time.Now().Add(time.Hour)},
+		"anthropic",
 	)
 
 	require.NoError(t, err)

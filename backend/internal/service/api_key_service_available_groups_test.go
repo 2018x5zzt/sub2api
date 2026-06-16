@@ -22,6 +22,9 @@ func (r *apiKeyAvailableGroupsUserRepo) GetByID(context.Context, int64) (*User, 
 	out := *r.user
 	return &out, nil
 }
+func (r *apiKeyAvailableGroupsUserRepo) GetByIDIncludeDeleted(ctx context.Context, id int64) (*User, error) {
+	return r.GetByID(ctx, id)
+}
 func (r *apiKeyAvailableGroupsUserRepo) GetByEmail(context.Context, string) (*User, error) {
 	return &User{}, nil
 }
@@ -193,6 +196,9 @@ func (r *apiKeyProductBindRepo) GetByKeyForAuth(context.Context, string) (*APIKe
 }
 func (r *apiKeyProductBindRepo) Delete(context.Context, int64) error {
 	panic("unexpected Delete call")
+}
+func (r *apiKeyProductBindRepo) DeleteWithAudit(context.Context, int64) error {
+	panic("unexpected DeleteWithAudit call")
 }
 func (r *apiKeyProductBindRepo) ListByUserID(context.Context, int64, pagination.PaginationParams, APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error) {
 	panic("unexpected ListByUserID call")

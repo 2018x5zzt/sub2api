@@ -110,7 +110,7 @@ func TestHandleChatStreamingResponse_EmptyUpstreamDoesNotWriteEmpty200(t *testin
 	}
 
 	svc := &OpenAIGatewayService{}
-	_, err := svc.handleChatStreamingResponse(resp, c, &Account{ID: 42, Platform: PlatformOpenAI}, "gpt-5.5", "gpt-5.5", "gpt-5.5", false, time.Now(), 0)
+	_, err := svc.handleChatStreamingResponse(resp, c, &Account{ID: 42, Platform: PlatformOpenAI}, "gpt-5.5", "gpt-5.5", "gpt-5.5", time.Now(), 0)
 
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "stream usage incomplete")
@@ -286,7 +286,7 @@ func TestForwardAsChatCompletions_BufferedResponseFailedTriggersFailover(t *test
 	require.Nil(t, result)
 	var failoverErr *UpstreamFailoverError
 	require.ErrorAs(t, err, &failoverErr)
-	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
 	require.Contains(t, string(failoverErr.ResponseBody), "input exceeds the context window")
 	require.False(t, c.Writer.Written())
 }
@@ -331,7 +331,7 @@ func TestForwardAsChatCompletions_StreamResponseFailedTriggersFailoverBeforeFlus
 	require.Nil(t, result)
 	var failoverErr *UpstreamFailoverError
 	require.ErrorAs(t, err, &failoverErr)
-	require.Equal(t, http.StatusBadGateway, failoverErr.StatusCode)
+	require.Equal(t, http.StatusServiceUnavailable, failoverErr.StatusCode)
 	require.Contains(t, string(failoverErr.ResponseBody), "input exceeds the context window")
 	require.False(t, c.Writer.Written())
 }
