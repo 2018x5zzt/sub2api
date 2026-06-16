@@ -133,7 +133,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 	}
 
 	if productSettlement == nil {
-		if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+		if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription, service.QuotaPlatform(c.Request.Context(), apiKey)); err != nil {
 			reqLog.Info("openai.images.billing_eligibility_check_failed", zap.Error(err))
 			status, code, message, retryAfter := billingErrorDetails(err)
 			if retryAfter > 0 {
@@ -141,6 +141,7 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 			}
 			h.handleStreamingAwareError(c, status, code, message, streamStarted)
 			return
+
 		}
 	}
 
@@ -296,19 +297,19 @@ func (h *OpenAIGatewayHandler) Images(c *gin.Context) {
 					reqLog.Warn("openai.images.forward_failed", fields...)
 					return
 				}
-if isOpenAIImageMissingOutputError(err) {
-				if reqBody := extractOpenAIImageUpstreamRequestBodyForLog(c); reqBody != "" {
-					fields = append(fields, zap.String(openAIImageForwardReqBodyFieldName, reqBody))
+				if isOpenAIImageMissingOutputError(err) {
+					if reqBody := extractOpenAIImageUpstreamRequestBodyForLog(c); reqBody != "" {
+						fields = append(fields, zap.String(openAIImageForwardReqBodyFieldName, reqBody))
+					}
+					if respBody := extractOpenAIImageUpstreamResponseBodyForLog(c, err); respBody != "" {
+						fields = append(fields, zap.String(openAIImageForwardRespBodyFieldName, respBody))
+					}
 				}
-				if respBody := extractOpenAIImageUpstreamResponseBodyForLog(c, err); respBody != "" {
-					fields = append(fields, zap.String(openAIImageForwardRespBodyFieldName, respBody))
+				if shouldLogOpenAIForwardFailureAsWarn(c, wroteFallback) {
+					reqLog.Warn("openai.images.forward_failed", fields...)
+				} else {
+					reqLog.Error("openai.images.forward_failed", fields...)
 				}
-			}
-			if shouldLogOpenAIForwardFailureAsWarn(c, wroteFallback) {
-				reqLog.Warn("openai.images.forward_failed", fields...)
-			} else {
-				reqLog.Error("openai.images.forward_failed", fields...)
-			}
 				return
 			}
 		}

@@ -104,6 +104,8 @@ var ProviderSet = wire.NewSet(
 	wire.Bind(new(service.InviteRewardAdminRepository), new(*inviteRewardRecordRepository)),
 	wire.Bind(new(service.InviteRelationshipEventRepository), new(*inviteRelationshipEventRepository)),
 	wire.Bind(new(service.InviteRelationshipEventAdminRepository), new(*inviteRelationshipEventRepository)),
+	NewUserPlatformQuotaRepository,     // T14: user × platform quota
+	NewUserPlatformQuotaServiceAdapter, // T14: adapter → service.UserPlatformQuotaRepository
 
 	// Cache implementations
 	NewGatewayCache,
