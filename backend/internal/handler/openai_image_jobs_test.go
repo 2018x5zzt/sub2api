@@ -376,6 +376,9 @@ func TestOpenAIGatewayHandlerImageJobStatusReturnsSucceededResponse(t *testing.T
 	router.ServeHTTP(rec, req)
 
 	require.Equal(t, http.StatusOK, rec.Code)
+	require.Contains(t, rec.Header().Get("Cache-Control"), "no-store")
+	require.Equal(t, "no-cache", rec.Header().Get("Pragma"))
+	require.Equal(t, "0", rec.Header().Get("Expires"))
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
 	require.Equal(t, job.ID, payload["job_id"])

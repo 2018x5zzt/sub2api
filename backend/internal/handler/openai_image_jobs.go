@@ -476,6 +476,7 @@ func openAIImageJobAttemptsExhaustedBody(status int, attempts int) []byte {
 // ImageJobCreate submits a long-running OpenAI Images request and returns a
 // pollable job id. The worker reuses Images so billing stays success-only.
 func (h *OpenAIGatewayHandler) ImageJobCreate(c *gin.Context) {
+	setOpenAIImageJobNoStoreHeaders(c)
 	if h == nil {
 		return
 	}
@@ -549,6 +550,7 @@ func (h *OpenAIGatewayHandler) ImageJobCreate(c *gin.Context) {
 
 // ImageJobStatus returns the current state of an image job owned by the API key.
 func (h *OpenAIGatewayHandler) ImageJobStatus(c *gin.Context) {
+	setOpenAIImageJobNoStoreHeaders(c)
 	if h == nil {
 		return
 	}
@@ -570,6 +572,17 @@ func (h *OpenAIGatewayHandler) ImageJobStatus(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, openAIImageJobStatusPayload(job))
+}
+
+func setOpenAIImageJobNoStoreHeaders(c *gin.Context) {
+	if c == nil {
+		return
+	}
+	c.Header("Cache-Control", "no-store, no-cache, max-age=0, must-revalidate, private")
+	c.Header("Pragma", "no-cache")
+	c.Header("Expires", "0")
+	c.Header("Surrogate-Control", "no-store")
+	c.Header("X-Accel-Expires", "0")
 }
 
 func (h *OpenAIGatewayHandler) ensureImageJobStore() *openAIImageJobStore {
