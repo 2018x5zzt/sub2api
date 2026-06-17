@@ -391,6 +391,33 @@ gateway:
     # Max image requests waiting in this process when overflow_mode=wait, 0=unlimited
     # wait 模式当前进程允许排队等待的图片请求数，0=不限制
     max_waiting_requests: 100
+  # OpenAI Images async job persistence and local runner settings
+  # OpenAI Images 异步任务持久化与本地执行器配置
+  openai_image_jobs:
+    # Local job runner concurrency per API server process
+    # 每个 API Server 进程本地执行 image job 的并发数
+    concurrency: 2
+    # Per-job timeout in seconds
+    # 单个 image job 的总超时时间（秒）
+    timeout_seconds: 1200
+    # Redis retention time for job status/result in seconds
+    # job 状态/结果在 Redis 中保留的时间（秒）
+    ttl_seconds: 86400
+    # Max attempts for retryable upstream failures
+    # 上游可重试失败的最大尝试次数
+    max_attempts: 3
+    # Retry backoff sequence in seconds
+    # 重试等待时间序列（秒）
+    retry_backoff_seconds: [10, 30]
+    # Watchdog interval for marking stale queued/running jobs as timeout
+    # watchdog 扫描 stale queued/running job 并标记 timeout 的周期（秒）
+    watchdog_interval_seconds: 60
+    # Max active jobs inspected per watchdog cycle
+    # 每轮 watchdog 最多检查的 active job 数
+    watchdog_batch_size: 500
+    # Cross-instance leader lock TTL for watchdog cycles
+    # watchdog 跨实例 leader lock TTL（秒）
+    watchdog_lock_ttl_seconds: 30
   # SSE max line size in bytes (default: 40MB)
   # SSE 单行最大字节数（默认 40MB）
   max_line_size: 41943040

@@ -145,17 +145,21 @@ curl -sS 'https://YOUR_DOMAIN/v1/images/jobs/imgjob_5c1f5d7e-0f95-4f7a-b8b7-9d9f
 ## 7. 轮询建议
 
 - 建议轮询间隔：`2~3 秒`
-- 建议最大轮询时长：`10 分钟`（与服务端 job 执行超时默认值一致）
-- 客户端在 `status in [succeeded, failed]` 后停止轮询
+- 建议最大轮询时长：`20 分钟`（与服务端 job 执行超时默认值一致）
+- 客户端在 `status in [succeeded, failed, timeout]` 后停止轮询
 
-## 8. 实现约束（当前版本）
+## 8. 实现说明（当前版本）
 
-- Job 状态为进程内存存储：
-  - 服务重启后，历史 `job_id` 不可恢复
-  - 非持久化，不保证跨实例共享
+- Job 状态与结果存储在 Redis：
+  - `POST` 提交任务的实例仍负责本地执行该任务
+  - `GET` 轮询可命中任意 API Server 实例
+  - 服务重启后，Redis TTL 未过期的 `job_id` 仍可查询
+- Watchdog 会定期扫描 Redis 中 stale 的 `queued/running` 任务，并将其标记为 `timeout`（`http_status: 504`）
+- 当前版本不是 Redis 分布式执行队列：
+  - 如果执行实例进程崩溃，任务不会被其他实例接手重跑
+  - 崩溃遗留的 `queued/running` 任务会由 watchdog 终态化为 `timeout`
 - 默认参数：
   - 并发执行槽：`2`
-  - 单任务超时：`10m`
+  - 单任务超时：`20m`
   - Job 保留 TTL：`24h`
-
-如需跨实例与重启恢复，请后续升级为 Redis/DB 持久化任务存储。
+  - Watchdog 扫描周期：`60s`

@@ -108,6 +108,7 @@ func NewOpenAIGatewayHandler(
 	errorPassthroughService *service.ErrorPassthroughService,
 	contentModerationService *service.ContentModerationService,
 	opsService *service.OpsService,
+	imageJobPersistence service.OpenAIImageJobStore,
 	cfg *config.Config,
 ) *OpenAIGatewayHandler {
 	pingInterval := time.Duration(0)
@@ -127,7 +128,7 @@ func NewOpenAIGatewayHandler(
 		contentModerationService: contentModerationService,
 		opsService:               opsService,
 		concurrencyHelper:        NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
-		imageJobStore:            newOpenAIImageJobStore(openAIImageJobStoreOptions{}),
+		imageJobStore:            newOpenAIImageJobStoreWithPersistence(imageJobPersistence, buildOpenAIImageJobStoreOptions(cfg)),
 		imageLimiter:             &imageConcurrencyLimiter{},
 		maxAccountSwitches:       maxAccountSwitches,
 		cfg:                      cfg,

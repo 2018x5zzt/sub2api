@@ -689,6 +689,67 @@ type ImageConcurrencyConfig struct {
 	MaxWaitingRequests int `mapstructure:"max_waiting_requests"`
 }
 
+type OpenAIImageJobConfig struct {
+	// Concurrency: 当前进程本地执行 image job 的并发数。
+	Concurrency int `mapstructure:"concurrency"`
+	// TimeoutSeconds: 单个 image job 的总超时时间。
+	TimeoutSeconds int `mapstructure:"timeout_seconds"`
+	// TTLSeconds: job 状态和结果在 Redis 中保留的时间。
+	TTLSeconds int `mapstructure:"ttl_seconds"`
+	// MaxAttempts: 上游可重试错误的最大尝试次数。
+	MaxAttempts int `mapstructure:"max_attempts"`
+	// RetryBackoffSeconds: 每次重试前的等待时间序列。
+	RetryBackoffSeconds []int `mapstructure:"retry_backoff_seconds"`
+	// WatchdogIntervalSeconds: stale queued/running job 扫描周期。
+	WatchdogIntervalSeconds int `mapstructure:"watchdog_interval_seconds"`
+	// WatchdogBatchSize: 每次 watchdog 扫描最多处理的 active job 数。
+	WatchdogBatchSize int `mapstructure:"watchdog_batch_size"`
+	// WatchdogLockTTLSeconds: 跨实例 watchdog leader lock 的 TTL。
+	WatchdogLockTTLSeconds int `mapstructure:"watchdog_lock_ttl_seconds"`
+}
+
+func DefaultOpenAIImageJobConfig() OpenAIImageJobConfig {
+	return OpenAIImageJobConfig{
+		Concurrency:             2,
+		TimeoutSeconds:          20 * 60,
+		TTLSeconds:              24 * 60 * 60,
+		MaxAttempts:             3,
+		RetryBackoffSeconds:     []int{10, 30},
+		WatchdogIntervalSeconds: 60,
+		WatchdogBatchSize:       500,
+		WatchdogLockTTLSeconds:  30,
+	}
+}
+
+func (c OpenAIImageJobConfig) WithDefaults() OpenAIImageJobConfig {
+	defaults := DefaultOpenAIImageJobConfig()
+	if c.Concurrency <= 0 {
+		c.Concurrency = defaults.Concurrency
+	}
+	if c.TimeoutSeconds <= 0 {
+		c.TimeoutSeconds = defaults.TimeoutSeconds
+	}
+	if c.TTLSeconds <= 0 {
+		c.TTLSeconds = defaults.TTLSeconds
+	}
+	if c.MaxAttempts <= 0 {
+		c.MaxAttempts = defaults.MaxAttempts
+	}
+	if len(c.RetryBackoffSeconds) == 0 {
+		c.RetryBackoffSeconds = append([]int(nil), defaults.RetryBackoffSeconds...)
+	}
+	if c.WatchdogIntervalSeconds <= 0 {
+		c.WatchdogIntervalSeconds = defaults.WatchdogIntervalSeconds
+	}
+	if c.WatchdogBatchSize <= 0 {
+		c.WatchdogBatchSize = defaults.WatchdogBatchSize
+	}
+	if c.WatchdogLockTTLSeconds <= 0 {
+		c.WatchdogLockTTLSeconds = defaults.WatchdogLockTTLSeconds
+	}
+	return c
+}
+
 const (
 	ImageConcurrencyOverflowModeReject = "reject"
 	ImageConcurrencyOverflowModeWait   = "wait"
@@ -735,6 +796,8 @@ type GatewayConfig struct {
 	OpenAIHTTP2 GatewayOpenAIHTTP2Config `mapstructure:"openai_http2"`
 	// ImageConcurrency: 图片生成独立并发限制配置（默认关闭）
 	ImageConcurrency ImageConcurrencyConfig `mapstructure:"image_concurrency"`
+	// OpenAIImageJobs: OpenAI Images 异步 job 配置。
+	OpenAIImageJobs OpenAIImageJobConfig `mapstructure:"openai_image_jobs"`
 
 	// HTTP 上游连接池配置（性能优化：支持高并发场景调优）
 	// MaxIdleConns: 所有主机的最大空闲连接总数
@@ -1897,6 +1960,15 @@ func setDefaults() {
 	viper.SetDefault("gateway.image_concurrency.overflow_mode", ImageConcurrencyOverflowModeReject)
 	viper.SetDefault("gateway.image_concurrency.wait_timeout_seconds", 30)
 	viper.SetDefault("gateway.image_concurrency.max_waiting_requests", 100)
+	openAIImageJobDefaults := DefaultOpenAIImageJobConfig()
+	viper.SetDefault("gateway.openai_image_jobs.concurrency", openAIImageJobDefaults.Concurrency)
+	viper.SetDefault("gateway.openai_image_jobs.timeout_seconds", openAIImageJobDefaults.TimeoutSeconds)
+	viper.SetDefault("gateway.openai_image_jobs.ttl_seconds", openAIImageJobDefaults.TTLSeconds)
+	viper.SetDefault("gateway.openai_image_jobs.max_attempts", openAIImageJobDefaults.MaxAttempts)
+	viper.SetDefault("gateway.openai_image_jobs.retry_backoff_seconds", openAIImageJobDefaults.RetryBackoffSeconds)
+	viper.SetDefault("gateway.openai_image_jobs.watchdog_interval_seconds", openAIImageJobDefaults.WatchdogIntervalSeconds)
+	viper.SetDefault("gateway.openai_image_jobs.watchdog_batch_size", openAIImageJobDefaults.WatchdogBatchSize)
+	viper.SetDefault("gateway.openai_image_jobs.watchdog_lock_ttl_seconds", openAIImageJobDefaults.WatchdogLockTTLSeconds)
 	viper.SetDefault("gateway.antigravity_fallback_cooldown_minutes", 1)
 	viper.SetDefault("gateway.antigravity_extra_retries", 10)
 	viper.SetDefault("gateway.max_body_size", int64(256*1024*1024))
@@ -2487,6 +2559,32 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.ImageConcurrency.MaxWaitingRequests < 0 {
 		return fmt.Errorf("gateway.image_concurrency.max_waiting_requests must be non-negative")
+	}
+	if c.Gateway.OpenAIImageJobs.Concurrency <= 0 {
+		return fmt.Errorf("gateway.openai_image_jobs.concurrency must be positive")
+	}
+	if c.Gateway.OpenAIImageJobs.TimeoutSeconds <= 0 {
+		return fmt.Errorf("gateway.openai_image_jobs.timeout_seconds must be positive")
+	}
+	if c.Gateway.OpenAIImageJobs.TTLSeconds <= 0 {
+		return fmt.Errorf("gateway.openai_image_jobs.ttl_seconds must be positive")
+	}
+	if c.Gateway.OpenAIImageJobs.MaxAttempts <= 0 {
+		return fmt.Errorf("gateway.openai_image_jobs.max_attempts must be positive")
+	}
+	for _, backoff := range c.Gateway.OpenAIImageJobs.RetryBackoffSeconds {
+		if backoff < 0 {
+			return fmt.Errorf("gateway.openai_image_jobs.retry_backoff_seconds must contain non-negative values")
+		}
+	}
+	if c.Gateway.OpenAIImageJobs.WatchdogIntervalSeconds <= 0 {
+		return fmt.Errorf("gateway.openai_image_jobs.watchdog_interval_seconds must be positive")
+	}
+	if c.Gateway.OpenAIImageJobs.WatchdogBatchSize <= 0 {
+		return fmt.Errorf("gateway.openai_image_jobs.watchdog_batch_size must be positive")
+	}
+	if c.Gateway.OpenAIImageJobs.WatchdogLockTTLSeconds <= 0 {
+		return fmt.Errorf("gateway.openai_image_jobs.watchdog_lock_ttl_seconds must be positive")
 	}
 	if c.Gateway.MaxIdleConns <= 0 {
 		return fmt.Errorf("gateway.max_idle_conns must be positive")

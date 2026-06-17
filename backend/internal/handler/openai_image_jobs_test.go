@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -14,6 +15,49 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+type rejectingStartImageJobPersistence struct {
+	created chan struct{}
+	mu      sync.Mutex
+	jobs    map[string]*service.OpenAIImageJobRecord
+}
+
+func newRejectingStartImageJobPersistence() *rejectingStartImageJobPersistence {
+	return &rejectingStartImageJobPersistence{
+		created: make(chan struct{}),
+		jobs:    make(map[string]*service.OpenAIImageJobRecord),
+	}
+}
+
+func (p *rejectingStartImageJobPersistence) Create(_ context.Context, record *service.OpenAIImageJobRecord, _ time.Duration) error {
+	p.mu.Lock()
+	p.jobs[record.ID] = cloneOpenAIImageJobRecord(record)
+	p.mu.Unlock()
+	close(p.created)
+	return nil
+}
+
+func (p *rejectingStartImageJobPersistence) Get(_ context.Context, id string, owner service.OpenAIImageJobOwner) (*service.OpenAIImageJobRecord, bool, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	job, ok := p.jobs[id]
+	if !ok || job.Owner.UserID != owner.UserID || job.Owner.APIKeyID != owner.APIKeyID {
+		return nil, false, nil
+	}
+	return cloneOpenAIImageJobRecord(job), true, nil
+}
+
+func (p *rejectingStartImageJobPersistence) SetRunning(context.Context, string, time.Time, time.Duration) (bool, error) {
+	return false, nil
+}
+
+func (p *rejectingStartImageJobPersistence) Complete(context.Context, string, service.OpenAIImageJobStatus, int, map[string][]string, []byte, time.Time, time.Duration) error {
+	return nil
+}
+
+func (p *rejectingStartImageJobPersistence) MarkStaleTimeouts(context.Context, time.Time, time.Duration, int, time.Duration) (int64, error) {
+	return 0, nil
+}
 
 func TestOpenAIImageJobStoreSuccessIsVisibleOnlyToOwner(t *testing.T) {
 	store := newOpenAIImageJobStore(openAIImageJobStoreOptions{
@@ -25,7 +69,7 @@ func TestOpenAIImageJobStoreSuccessIsVisibleOnlyToOwner(t *testing.T) {
 	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
 	started := make(chan struct{})
 
-	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+	job, err := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
 		close(started)
 		return openAIImageJobResult{
 			StatusCode: http.StatusOK,
@@ -33,6 +77,7 @@ func TestOpenAIImageJobStoreSuccessIsVisibleOnlyToOwner(t *testing.T) {
 			Body:       []byte(`{"data":[{"url":"https://example.test/a.png"}]}`),
 		}
 	})
+	require.NoError(t, err)
 
 	require.NotEmpty(t, job.ID)
 	select {
@@ -58,6 +103,31 @@ func TestOpenAIImageJobStoreSuccessIsVisibleOnlyToOwner(t *testing.T) {
 	require.False(t, ok)
 }
 
+func TestOpenAIImageJobStoreSkipsRunnerWhenStartTransitionFails(t *testing.T) {
+	persistence := newRejectingStartImageJobPersistence()
+	store := newOpenAIImageJobStoreWithPersistence(persistence, openAIImageJobStoreOptions{
+		Concurrency: 1,
+		Timeout:     time.Second,
+		TTL:         time.Hour,
+		MaxAttempts: 1,
+	})
+	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
+	var ran atomic.Bool
+
+	_, err := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+		ran.Store(true)
+		return openAIImageJobResult{StatusCode: http.StatusOK, Body: []byte(`{"data":[]}`)}
+	})
+	require.NoError(t, err)
+
+	select {
+	case <-persistence.created:
+	case <-time.After(time.Second):
+		t.Fatal("job was not created")
+	}
+	require.Never(t, ran.Load, 100*time.Millisecond, 10*time.Millisecond)
+}
+
 func TestOpenAIImageJobStoreFailureIsNotSuccessful(t *testing.T) {
 	store := newOpenAIImageJobStore(openAIImageJobStoreOptions{
 		Concurrency: 1,
@@ -67,13 +137,14 @@ func TestOpenAIImageJobStoreFailureIsNotSuccessful(t *testing.T) {
 	})
 	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
 
-	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+	job, err := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
 		return openAIImageJobResult{
 			StatusCode: http.StatusBadGateway,
 			Headers:    http.Header{"Content-Type": []string{"application/json"}},
 			Body:       []byte(`{"error":{"type":"api_error","message":"upstream timeout"}}`),
 		}
 	})
+	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
 		got, ok := store.get(job.ID, owner)
@@ -98,7 +169,7 @@ func TestOpenAIImageJobStoreRetriesRetryableFailureUntilSuccess(t *testing.T) {
 	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
 	var attempts atomic.Int32
 
-	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+	job, err := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
 		attempt := attempts.Add(1)
 		if attempt == 1 {
 			return openAIImageJobResult{
@@ -113,6 +184,7 @@ func TestOpenAIImageJobStoreRetriesRetryableFailureUntilSuccess(t *testing.T) {
 			Body:       []byte(`{"data":[{"url":"https://example.test/retry.png"}]}`),
 		}
 	})
+	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
 		got, ok := store.get(job.ID, owner)
@@ -138,7 +210,7 @@ func TestOpenAIImageJobStoreFailsAfterRetryableAttemptsExhausted(t *testing.T) {
 	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
 	var attempts atomic.Int32
 
-	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+	job, err := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
 		attempts.Add(1)
 		return openAIImageJobResult{
 			StatusCode: http.StatusBadGateway,
@@ -146,6 +218,7 @@ func TestOpenAIImageJobStoreFailsAfterRetryableAttemptsExhausted(t *testing.T) {
 			Body:       []byte(`{"error":{"type":"upstream_error","message":"temporary"}}`),
 		}
 	})
+	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
 		got, ok := store.get(job.ID, owner)
@@ -171,7 +244,7 @@ func TestOpenAIImageJobStoreDoesNotRetryPermanentClientError(t *testing.T) {
 	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
 	var attempts atomic.Int32
 
-	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+	job, err := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
 		attempts.Add(1)
 		return openAIImageJobResult{
 			StatusCode: http.StatusBadRequest,
@@ -179,6 +252,7 @@ func TestOpenAIImageJobStoreDoesNotRetryPermanentClientError(t *testing.T) {
 			Body:       []byte(`{"error":{"type":"invalid_request_error","message":"bad prompt"}}`),
 		}
 	})
+	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
 		got, ok := store.get(job.ID, owner)
@@ -203,7 +277,7 @@ func TestOpenAIImageJobStoreStopsRetryingWhenContextTimesOut(t *testing.T) {
 	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
 	var attempts atomic.Int32
 
-	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+	job, err := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
 		attempts.Add(1)
 		return openAIImageJobResult{
 			StatusCode: http.StatusBadGateway,
@@ -211,6 +285,7 @@ func TestOpenAIImageJobStoreStopsRetryingWhenContextTimesOut(t *testing.T) {
 			Body:       []byte(`{"error":{"type":"upstream_error","message":"temporary"}}`),
 		}
 	})
+	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
 		got, ok := store.get(job.ID, owner)
@@ -237,7 +312,7 @@ func TestOpenAIImageJobStoreMarksTimeoutWhenRunnerDoesNotReturn(t *testing.T) {
 	release := make(chan struct{})
 	t.Cleanup(func() { close(release) })
 
-	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+	job, err := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
 		close(started)
 		<-release
 		return openAIImageJobResult{
@@ -246,6 +321,7 @@ func TestOpenAIImageJobStoreMarksTimeoutWhenRunnerDoesNotReturn(t *testing.T) {
 			Body:       []byte(`{"data":[{"url":"https://example.test/late.png"}]}`),
 		}
 	})
+	require.NoError(t, err)
 	select {
 	case <-started:
 	case <-time.After(time.Second):
@@ -274,13 +350,14 @@ func TestOpenAIGatewayHandlerImageJobStatusReturnsSucceededResponse(t *testing.T
 		TTL:         time.Hour,
 	})
 	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
-	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+	job, err := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
 		return openAIImageJobResult{
 			StatusCode: http.StatusOK,
 			Headers:    http.Header{"Content-Type": []string{"application/json"}},
 			Body:       []byte(`{"created":123,"data":[{"url":"https://example.test/a.png"}]}`),
 		}
 	})
+	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		got, ok := store.get(job.ID, owner)
 		return ok && got.Status == openAIImageJobStatusSucceeded
@@ -319,9 +396,10 @@ func TestOpenAIGatewayHandlerImageJobStatusHidesOtherOwnersJobs(t *testing.T) {
 		TTL:         time.Hour,
 	})
 	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
-	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+	job, err := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
 		return openAIImageJobResult{StatusCode: http.StatusOK, Body: []byte(`{"data":[]}`)}
 	})
+	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		got, ok := store.get(job.ID, owner)
 		return ok && got.Status == openAIImageJobStatusSucceeded

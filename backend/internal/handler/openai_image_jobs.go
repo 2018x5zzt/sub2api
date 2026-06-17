@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -28,20 +29,17 @@ const (
 
 var openAIImageJobDefaultRetryBackoff = []time.Duration{10 * time.Second, 30 * time.Second}
 
-type openAIImageJobStatus string
+type openAIImageJobStatus = service.OpenAIImageJobStatus
 
 const (
-	openAIImageJobStatusQueued    openAIImageJobStatus = "queued"
-	openAIImageJobStatusRunning   openAIImageJobStatus = "running"
-	openAIImageJobStatusSucceeded openAIImageJobStatus = "succeeded"
-	openAIImageJobStatusFailed    openAIImageJobStatus = "failed"
-	openAIImageJobStatusTimeout   openAIImageJobStatus = "timeout"
+	openAIImageJobStatusQueued    openAIImageJobStatus = service.OpenAIImageJobStatusQueued
+	openAIImageJobStatusRunning   openAIImageJobStatus = service.OpenAIImageJobStatusRunning
+	openAIImageJobStatusSucceeded openAIImageJobStatus = service.OpenAIImageJobStatusSucceeded
+	openAIImageJobStatusFailed    openAIImageJobStatus = service.OpenAIImageJobStatusFailed
+	openAIImageJobStatusTimeout   openAIImageJobStatus = service.OpenAIImageJobStatusTimeout
 )
 
-type openAIImageJobOwner struct {
-	UserID   int64
-	APIKeyID int64
-}
+type openAIImageJobOwner = service.OpenAIImageJobOwner
 
 type openAIImageJobRequest struct {
 	Endpoint    string
@@ -96,30 +94,21 @@ type openAIImageJobSnapshot struct {
 	CompletedAt time.Time
 }
 
-type openAIImageJob struct {
-	id          string
-	owner       openAIImageJobOwner
-	status      openAIImageJobStatus
-	statusCode  int
-	headers     http.Header
-	body        []byte
-	createdAt   time.Time
-	updatedAt   time.Time
-	completedAt time.Time
-}
-
 type openAIImageJobStore struct {
-	mu           sync.RWMutex
-	jobs         map[string]*openAIImageJob
 	sem          chan struct{}
 	timeout      time.Duration
 	ttl          time.Duration
 	maxAttempts  int
 	retryBackoff []time.Duration
 	now          func() time.Time
+	persistence  service.OpenAIImageJobStore
 }
 
 func newOpenAIImageJobStore(options openAIImageJobStoreOptions) *openAIImageJobStore {
+	return newOpenAIImageJobStoreWithPersistence(nil, options)
+}
+
+func newOpenAIImageJobStoreWithPersistence(persistence service.OpenAIImageJobStore, options openAIImageJobStoreOptions) *openAIImageJobStore {
 	concurrency := options.Concurrency
 	if concurrency <= 0 {
 		concurrency = openAIImageJobDefaultConcurrency
@@ -140,62 +129,76 @@ func newOpenAIImageJobStore(options openAIImageJobStoreOptions) *openAIImageJobS
 	if len(retryBackoff) == 0 {
 		retryBackoff = append([]time.Duration(nil), openAIImageJobDefaultRetryBackoff...)
 	}
+	if persistence == nil {
+		persistence = newInMemoryOpenAIImageJobPersistence()
+	}
 	return &openAIImageJobStore{
-		jobs:         make(map[string]*openAIImageJob),
 		sem:          make(chan struct{}, concurrency),
 		timeout:      timeout,
 		ttl:          ttl,
 		maxAttempts:  maxAttempts,
 		retryBackoff: retryBackoff,
 		now:          time.Now,
+		persistence:  persistence,
 	}
 }
 
-func (s *openAIImageJobStore) submit(owner openAIImageJobOwner, req openAIImageJobRequest, runner openAIImageJobRunner) *openAIImageJobSnapshot {
+func buildOpenAIImageJobStoreOptions(cfg *config.Config) openAIImageJobStoreOptions {
+	if cfg == nil {
+		return openAIImageJobStoreOptions{}
+	}
+	jobCfg := cfg.Gateway.OpenAIImageJobs.WithDefaults()
+	retryBackoff := make([]time.Duration, 0, len(jobCfg.RetryBackoffSeconds))
+	for _, seconds := range jobCfg.RetryBackoffSeconds {
+		retryBackoff = append(retryBackoff, time.Duration(seconds)*time.Second)
+	}
+	return openAIImageJobStoreOptions{
+		Concurrency:  jobCfg.Concurrency,
+		Timeout:      time.Duration(jobCfg.TimeoutSeconds) * time.Second,
+		TTL:          time.Duration(jobCfg.TTLSeconds) * time.Second,
+		MaxAttempts:  jobCfg.MaxAttempts,
+		RetryBackoff: retryBackoff,
+	}
+}
+
+func (s *openAIImageJobStore) submit(owner openAIImageJobOwner, req openAIImageJobRequest, runner openAIImageJobRunner) (*openAIImageJobSnapshot, error) {
 	if s == nil {
-		return nil
+		return nil, nil
 	}
 	now := s.now()
-	job := &openAIImageJob{
-		id:        "imgjob_" + uuid.NewString(),
-		owner:     owner,
-		status:    openAIImageJobStatusQueued,
-		createdAt: now,
-		updatedAt: now,
+	job := &service.OpenAIImageJobRecord{
+		ID:        "imgjob_" + uuid.NewString(),
+		Owner:     owner,
+		Status:    openAIImageJobStatusQueued,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := s.persistence.Create(context.Background(), job, s.ttl); err != nil {
+		return nil, err
 	}
 
-	s.mu.Lock()
-	s.cleanupExpiredLocked(now)
-	s.jobs[job.id] = job
-	snapshot := job.snapshotLocked()
-	s.mu.Unlock()
-
-	go s.run(job.id, req.clone(), runner)
-	return snapshot
+	go s.run(job.ID, req.clone(), runner)
+	return openAIImageJobSnapshotFromRecord(job), nil
 }
 
 func (s *openAIImageJobStore) get(id string, owner openAIImageJobOwner) (*openAIImageJobSnapshot, bool) {
-	if s == nil || id == "" {
+	if s == nil || s.persistence == nil || id == "" {
 		return nil, false
 	}
-	now := s.now()
-	s.mu.Lock()
-	s.cleanupExpiredLocked(now)
-	job, ok := s.jobs[id]
-	if !ok || job.owner.UserID != owner.UserID || job.owner.APIKeyID != owner.APIKeyID {
-		s.mu.Unlock()
+	job, ok, err := s.persistence.Get(context.Background(), id, owner)
+	if err != nil || !ok {
 		return nil, false
 	}
-	snapshot := job.snapshotLocked()
-	s.mu.Unlock()
-	return snapshot, true
+	return openAIImageJobSnapshotFromRecord(job), true
 }
 
 func (s *openAIImageJobStore) run(id string, req openAIImageJobRequest, runner openAIImageJobRunner) {
 	s.sem <- struct{}{}
 	defer func() { <-s.sem }()
 
-	s.setRunning(id)
+	if !s.setRunning(id) {
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
@@ -310,60 +313,136 @@ func isOpenAIImageJobRetryableStatus(status int) bool {
 	}
 }
 
-func (s *openAIImageJobStore) setRunning(id string) {
+func (s *openAIImageJobStore) setRunning(id string) bool {
 	now := s.now()
-	s.mu.Lock()
-	if job, ok := s.jobs[id]; ok {
-		job.status = openAIImageJobStatusRunning
-		job.updatedAt = now
+	if s == nil || s.persistence == nil {
+		return false
 	}
-	s.mu.Unlock()
+	ok, err := s.persistence.SetRunning(context.Background(), id, now, s.ttl)
+	return err == nil && ok
 }
 
 func (s *openAIImageJobStore) complete(id string, result openAIImageJobResult) {
 	now := s.now()
-	s.mu.Lock()
-	if job, ok := s.jobs[id]; ok {
-		job.status = openAIImageJobStatusFailed
-		if result.StatusCode >= 200 && result.StatusCode < 300 {
-			job.status = openAIImageJobStatusSucceeded
-		} else if result.StatusCode == http.StatusGatewayTimeout {
-			job.status = openAIImageJobStatusTimeout
-		}
-		job.statusCode = result.StatusCode
-		job.headers = result.Headers.Clone()
-		job.body = append([]byte(nil), result.Body...)
-		job.updatedAt = now
-		job.completedAt = now
-	}
-	s.mu.Unlock()
-}
-
-func (s *openAIImageJobStore) cleanupExpiredLocked(now time.Time) {
-	if s.ttl <= 0 {
+	if s == nil || s.persistence == nil {
 		return
 	}
-	for id, job := range s.jobs {
-		if now.Sub(job.updatedAt) > s.ttl {
-			delete(s.jobs, id)
-		}
+	status := openAIImageJobStatusFailed
+	if result.StatusCode >= 200 && result.StatusCode < 300 {
+		status = openAIImageJobStatusSucceeded
+	} else if result.StatusCode == http.StatusGatewayTimeout {
+		status = openAIImageJobStatusTimeout
 	}
+	_ = s.persistence.Complete(context.Background(), id, status, result.StatusCode, result.Headers, result.Body, now, s.ttl)
 }
 
-func (j *openAIImageJob) snapshotLocked() *openAIImageJobSnapshot {
+func openAIImageJobSnapshotFromRecord(j *service.OpenAIImageJobRecord) *openAIImageJobSnapshot {
 	if j == nil {
 		return nil
 	}
 	return &openAIImageJobSnapshot{
-		ID:          j.id,
-		Status:      j.status,
-		StatusCode:  j.statusCode,
-		Headers:     j.headers.Clone(),
-		Body:        append([]byte(nil), j.body...),
-		CreatedAt:   j.createdAt,
-		UpdatedAt:   j.updatedAt,
-		CompletedAt: j.completedAt,
+		ID:          j.ID,
+		Status:      j.Status,
+		StatusCode:  j.StatusCode,
+		Headers:     http.Header(j.Headers).Clone(),
+		Body:        append([]byte(nil), j.Body...),
+		CreatedAt:   j.CreatedAt,
+		UpdatedAt:   j.UpdatedAt,
+		CompletedAt: j.CompletedAt,
 	}
+}
+
+type inMemoryOpenAIImageJobPersistence struct {
+	mu   sync.RWMutex
+	jobs map[string]*service.OpenAIImageJobRecord
+}
+
+func newInMemoryOpenAIImageJobPersistence() *inMemoryOpenAIImageJobPersistence {
+	return &inMemoryOpenAIImageJobPersistence{jobs: make(map[string]*service.OpenAIImageJobRecord)}
+}
+
+func (s *inMemoryOpenAIImageJobPersistence) Create(_ context.Context, record *service.OpenAIImageJobRecord, _ time.Duration) error {
+	if s == nil || record == nil || record.ID == "" {
+		return nil
+	}
+	s.mu.Lock()
+	s.jobs[record.ID] = cloneOpenAIImageJobRecord(record)
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *inMemoryOpenAIImageJobPersistence) Get(_ context.Context, id string, owner service.OpenAIImageJobOwner) (*service.OpenAIImageJobRecord, bool, error) {
+	if s == nil || id == "" {
+		return nil, false, nil
+	}
+	s.mu.RLock()
+	job, ok := s.jobs[id]
+	if !ok || job.Owner.UserID != owner.UserID || job.Owner.APIKeyID != owner.APIKeyID {
+		s.mu.RUnlock()
+		return nil, false, nil
+	}
+	out := cloneOpenAIImageJobRecord(job)
+	s.mu.RUnlock()
+	return out, true, nil
+}
+
+func (s *inMemoryOpenAIImageJobPersistence) SetRunning(_ context.Context, id string, updatedAt time.Time, _ time.Duration) (bool, error) {
+	if s == nil || id == "" {
+		return false, nil
+	}
+	started := false
+	s.mu.Lock()
+	if job, ok := s.jobs[id]; ok && isOpenAIImageJobActiveStatus(job.Status) {
+		job.Status = openAIImageJobStatusRunning
+		job.UpdatedAt = updatedAt
+		started = true
+	}
+	s.mu.Unlock()
+	return started, nil
+}
+
+func (s *inMemoryOpenAIImageJobPersistence) Complete(
+	_ context.Context,
+	id string,
+	status service.OpenAIImageJobStatus,
+	statusCode int,
+	headers map[string][]string,
+	body []byte,
+	completedAt time.Time,
+	_ time.Duration,
+) error {
+	if s == nil || id == "" {
+		return nil
+	}
+	s.mu.Lock()
+	if job, ok := s.jobs[id]; ok && isOpenAIImageJobActiveStatus(job.Status) {
+		job.Status = status
+		job.StatusCode = statusCode
+		job.Headers = http.Header(headers).Clone()
+		job.Body = append([]byte(nil), body...)
+		job.UpdatedAt = completedAt
+		job.CompletedAt = completedAt
+	}
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *inMemoryOpenAIImageJobPersistence) MarkStaleTimeouts(_ context.Context, _ time.Time, _ time.Duration, _ int, _ time.Duration) (int64, error) {
+	return 0, nil
+}
+
+func cloneOpenAIImageJobRecord(in *service.OpenAIImageJobRecord) *service.OpenAIImageJobRecord {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.Headers = http.Header(in.Headers).Clone()
+	out.Body = append([]byte(nil), in.Body...)
+	return &out
+}
+
+func isOpenAIImageJobActiveStatus(status service.OpenAIImageJobStatus) bool {
+	return status == openAIImageJobStatusQueued || status == openAIImageJobStatusRunning
 }
 
 func openAIImageJobErrorBody(code string, message string) []byte {
@@ -447,9 +526,13 @@ func (h *OpenAIGatewayHandler) ImageJobCreate(c *gin.Context) {
 		Body:        append([]byte(nil), body...),
 	}
 	owner := openAIImageJobOwner{UserID: subject.UserID, APIKeyID: apiKey.ID}
-	job := store.submit(owner, jobReq, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+	job, err := store.submit(owner, jobReq, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
 		return h.runOpenAIImageJob(ctx, req, apiKey, subject, subscription, productSettlement)
 	})
+	if err != nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Image jobs are not available")
+		return
+	}
 	if job == nil {
 		h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Image jobs are not available")
 		return

@@ -381,6 +381,12 @@ func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Co
 	return svc
 }
 
+func ProvideOpenAIImageJobWatchdog(store OpenAIImageJobStore, lockCache LeaderLockCache, db *sql.DB, cfg *config.Config) *OpenAIImageJobWatchdog {
+	svc := NewOpenAIImageJobWatchdog(store, lockCache, db, cfg)
+	svc.Start()
+	return svc
+}
+
 // ProvideScheduledTestService creates ScheduledTestService.
 func ProvideScheduledTestService(
 	planRepo ScheduledTestPlanRepository,
@@ -656,6 +662,7 @@ var ProviderSet = wire.NewSet(
 	ProvideIdempotencyCoordinator,
 	ProvideSystemOperationLockService,
 	ProvideIdempotencyCleanupService,
+	ProvideOpenAIImageJobWatchdog,
 	ProvideScheduledTestService,
 	ProvideScheduledTestRunnerService,
 	NewGroupCapacityService,
