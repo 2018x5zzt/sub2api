@@ -9187,14 +9187,23 @@ func detachStreamUpstreamContext(ctx context.Context, stream bool) (context.Cont
 	if !stream {
 		return ctx, func() {}
 	}
-	return context.WithoutCancel(ctx), func() {}
+	return detachCancelPreserveDeadline(ctx)
 }
 
 func detachUpstreamContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	if ctx == nil {
 		return context.Background(), func() {}
 	}
-	return context.WithoutCancel(ctx), func() {}
+	return detachCancelPreserveDeadline(ctx)
+}
+
+func detachCancelPreserveDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
+	base := context.WithoutCancel(ctx)
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return base, func() {}
+	}
+	return context.WithDeadline(base, deadline)
 }
 
 // billingDeps 扣费逻辑依赖的服务（由各 gateway service 提供）

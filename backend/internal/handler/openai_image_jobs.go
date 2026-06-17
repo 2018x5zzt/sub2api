@@ -35,6 +35,7 @@ const (
 	openAIImageJobStatusRunning   openAIImageJobStatus = "running"
 	openAIImageJobStatusSucceeded openAIImageJobStatus = "succeeded"
 	openAIImageJobStatusFailed    openAIImageJobStatus = "failed"
+	openAIImageJobStatusTimeout   openAIImageJobStatus = "timeout"
 )
 
 type openAIImageJobOwner struct {
@@ -199,25 +200,43 @@ func (s *openAIImageJobStore) run(id string, req openAIImageJobRequest, runner o
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
 
-	result := s.runWithRetry(ctx, req, runner)
+	resultCh := make(chan openAIImageJobResult, 1)
+	go func() {
+		resultCh <- s.runWithRetry(ctx, req, runner)
+	}()
 
+	var result openAIImageJobResult
+	select {
+	case result = <-resultCh:
+	case <-ctx.Done():
+		result = openAIImageJobTimeoutResult()
+	}
 	if result.StatusCode == 0 {
-		status := http.StatusInternalServerError
-		message := "Image job failed"
-		if ctx.Err() != nil {
-			status = http.StatusGatewayTimeout
-			message = "Image job timed out"
-		}
-		result = openAIImageJobResult{
-			StatusCode: status,
-			Headers:    http.Header{"Content-Type": []string{"application/json"}},
-			Body:       openAIImageJobErrorBody("api_error", message),
-		}
+		result = openAIImageJobErrorResult(ctx.Err())
 	}
 	if len(result.Body) == 0 && result.StatusCode >= 400 {
 		result.Body = openAIImageJobErrorBody("api_error", http.StatusText(result.StatusCode))
 	}
 	s.complete(id, result.clone())
+}
+
+func openAIImageJobErrorResult(err error) openAIImageJobResult {
+	if err != nil {
+		return openAIImageJobTimeoutResult()
+	}
+	return openAIImageJobResult{
+		StatusCode: http.StatusInternalServerError,
+		Headers:    http.Header{"Content-Type": []string{"application/json"}},
+		Body:       openAIImageJobErrorBody("api_error", "Image job failed"),
+	}
+}
+
+func openAIImageJobTimeoutResult() openAIImageJobResult {
+	return openAIImageJobResult{
+		StatusCode: http.StatusGatewayTimeout,
+		Headers:    http.Header{"Content-Type": []string{"application/json"}},
+		Body:       openAIImageJobErrorBody("api_error", "Image job timed out"),
+	}
 }
 
 func (s *openAIImageJobStore) runWithRetry(ctx context.Context, req openAIImageJobRequest, runner openAIImageJobRunner) openAIImageJobResult {
@@ -308,6 +327,8 @@ func (s *openAIImageJobStore) complete(id string, result openAIImageJobResult) {
 		job.status = openAIImageJobStatusFailed
 		if result.StatusCode >= 200 && result.StatusCode < 300 {
 			job.status = openAIImageJobStatusSucceeded
+		} else if result.StatusCode == http.StatusGatewayTimeout {
+			job.status = openAIImageJobStatusTimeout
 		}
 		job.statusCode = result.StatusCode
 		job.headers = result.Headers.Clone()
@@ -569,7 +590,7 @@ func openAIImageJobStatusPayload(job *openAIImageJobSnapshot) gin.H {
 	switch job.Status {
 	case openAIImageJobStatusSucceeded:
 		payload["response"] = openAIImageJobJSONOrString(job.Body)
-	case openAIImageJobStatusFailed:
+	case openAIImageJobStatusFailed, openAIImageJobStatusTimeout:
 		payload["error"] = openAIImageJobErrorPayload(job.Body)
 	}
 	return payload

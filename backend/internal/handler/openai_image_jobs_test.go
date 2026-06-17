@@ -214,14 +214,56 @@ func TestOpenAIImageJobStoreStopsRetryingWhenContextTimesOut(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		got, ok := store.get(job.ID, owner)
-		return ok && got.Status == openAIImageJobStatusFailed
+		return ok && got.Status == openAIImageJobStatusTimeout
 	}, time.Second, 10*time.Millisecond)
 
 	got, ok := store.get(job.ID, owner)
 	require.True(t, ok)
+	require.Equal(t, openAIImageJobStatusTimeout, got.Status)
 	require.Equal(t, http.StatusGatewayTimeout, got.StatusCode)
 	require.Equal(t, int32(1), attempts.Load())
 	require.JSONEq(t, `{"error":{"type":"api_error","message":"Image job timed out"}}`, string(got.Body))
+}
+
+func TestOpenAIImageJobStoreMarksTimeoutWhenRunnerDoesNotReturn(t *testing.T) {
+	store := newOpenAIImageJobStore(openAIImageJobStoreOptions{
+		Concurrency: 1,
+		Timeout:     20 * time.Millisecond,
+		TTL:         time.Hour,
+		MaxAttempts: 1,
+	})
+	owner := openAIImageJobOwner{UserID: 42, APIKeyID: 7}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+
+	job := store.submit(owner, openAIImageJobRequest{Endpoint: EndpointImagesGenerations}, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
+		close(started)
+		<-release
+		return openAIImageJobResult{
+			StatusCode: http.StatusOK,
+			Headers:    http.Header{"Content-Type": []string{"application/json"}},
+			Body:       []byte(`{"data":[{"url":"https://example.test/late.png"}]}`),
+		}
+	})
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("job runner did not start")
+	}
+
+	require.Eventually(t, func() bool {
+		got, ok := store.get(job.ID, owner)
+		return ok && got.Status == openAIImageJobStatusTimeout
+	}, time.Second, 10*time.Millisecond)
+
+	got, ok := store.get(job.ID, owner)
+	require.True(t, ok)
+	require.Equal(t, openAIImageJobStatusTimeout, got.Status)
+	require.Equal(t, http.StatusGatewayTimeout, got.StatusCode)
+	require.JSONEq(t, `{"error":{"type":"api_error","message":"Image job timed out"}}`, string(got.Body))
+	require.False(t, got.CompletedAt.IsZero())
+	require.True(t, got.UpdatedAt.After(got.CreatedAt))
 }
 
 func TestOpenAIGatewayHandlerImageJobStatusReturnsSucceededResponse(t *testing.T) {
