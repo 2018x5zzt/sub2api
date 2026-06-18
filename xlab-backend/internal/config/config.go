@@ -15,6 +15,14 @@ const (
 	SubscriptionReadSourceXlab   SubscriptionReadSource = "xlab"
 )
 
+type PaymentReadSource string
+
+const (
+	PaymentReadSourceCore   PaymentReadSource = "core"
+	PaymentReadSourceHybrid PaymentReadSource = "hybrid"
+	PaymentReadSourceXlab   PaymentReadSource = "xlab"
+)
+
 type Config struct {
 	ServerAddr                 string
 	CoreAPIBaseURL             string
@@ -25,6 +33,10 @@ type Config struct {
 	SubscriptionSyncEnabled    bool
 	SubscriptionSyncInterval   time.Duration
 	SubscriptionSyncStaleAfter time.Duration
+	PaymentReadSource          PaymentReadSource
+	PaymentSyncEnabled         bool
+	PaymentSyncInterval        time.Duration
+	PaymentSyncStaleAfter      time.Duration
 }
 
 func Load() Config {
@@ -50,6 +62,10 @@ func Load() Config {
 		SubscriptionSyncEnabled:    boolEnv("XLAB_SUBSCRIPTION_SYNC_ENABLED", false),
 		SubscriptionSyncInterval:   time.Duration(positiveIntEnv("XLAB_SUBSCRIPTION_SYNC_INTERVAL_SECONDS", 300)) * time.Second,
 		SubscriptionSyncStaleAfter: time.Duration(positiveIntEnv("XLAB_SUBSCRIPTION_SYNC_STALE_SECONDS", 600)) * time.Second,
+		PaymentReadSource:          parsePaymentReadSource(os.Getenv("XLAB_PAYMENT_READ_SOURCE")),
+		PaymentSyncEnabled:         boolEnv("XLAB_PAYMENT_SYNC_ENABLED", false),
+		PaymentSyncInterval:        time.Duration(positiveIntEnv("XLAB_PAYMENT_SYNC_INTERVAL_SECONDS", 300)) * time.Second,
+		PaymentSyncStaleAfter:      time.Duration(positiveIntEnv("XLAB_PAYMENT_SYNC_STALE_SECONDS", 600)) * time.Second,
 	}
 }
 
@@ -61,6 +77,17 @@ func parseReadSource(raw string) SubscriptionReadSource {
 		return SubscriptionReadSourceXlab
 	default:
 		return SubscriptionReadSourceCore
+	}
+}
+
+func parsePaymentReadSource(raw string) PaymentReadSource {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case string(PaymentReadSourceHybrid):
+		return PaymentReadSourceHybrid
+	case string(PaymentReadSourceXlab):
+		return PaymentReadSourceXlab
+	default:
+		return PaymentReadSourceCore
 	}
 }
 

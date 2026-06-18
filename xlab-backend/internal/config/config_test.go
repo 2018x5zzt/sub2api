@@ -15,6 +15,10 @@ func TestLoadDefaults(t *testing.T) {
 	t.Setenv("XLAB_SUBSCRIPTION_SYNC_STALE_SECONDS", "")
 	t.Setenv("XLAB_SUBSCRIPTION_SYNC_INTERVAL_SECONDS", "")
 	t.Setenv("XLAB_SUBSCRIPTION_SYNC_ENABLED", "")
+	t.Setenv("XLAB_PAYMENT_READ_SOURCE", "")
+	t.Setenv("XLAB_PAYMENT_SYNC_STALE_SECONDS", "")
+	t.Setenv("XLAB_PAYMENT_SYNC_INTERVAL_SECONDS", "")
+	t.Setenv("XLAB_PAYMENT_SYNC_ENABLED", "")
 
 	cfg := Load()
 	if cfg.ServerAddr != ":8090" {
@@ -44,6 +48,18 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.SubscriptionSyncInterval != 5*time.Minute {
 		t.Fatalf("SubscriptionSyncInterval = %s", cfg.SubscriptionSyncInterval)
 	}
+	if cfg.PaymentReadSource != PaymentReadSourceCore {
+		t.Fatalf("PaymentReadSource = %q, want core", cfg.PaymentReadSource)
+	}
+	if cfg.PaymentSyncEnabled {
+		t.Fatal("PaymentSyncEnabled should default false")
+	}
+	if cfg.PaymentSyncStaleAfter != 10*time.Minute {
+		t.Fatalf("PaymentSyncStaleAfter = %s", cfg.PaymentSyncStaleAfter)
+	}
+	if cfg.PaymentSyncInterval != 5*time.Minute {
+		t.Fatalf("PaymentSyncInterval = %s", cfg.PaymentSyncInterval)
+	}
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -56,6 +72,10 @@ func TestLoadFromEnv(t *testing.T) {
 	t.Setenv("XLAB_SUBSCRIPTION_SYNC_STALE_SECONDS", "120")
 	t.Setenv("XLAB_SUBSCRIPTION_SYNC_INTERVAL_SECONDS", "30")
 	t.Setenv("XLAB_SUBSCRIPTION_SYNC_ENABLED", "true")
+	t.Setenv("XLAB_PAYMENT_READ_SOURCE", "xlab")
+	t.Setenv("XLAB_PAYMENT_SYNC_STALE_SECONDS", "45")
+	t.Setenv("XLAB_PAYMENT_SYNC_INTERVAL_SECONDS", "15")
+	t.Setenv("XLAB_PAYMENT_SYNC_ENABLED", "true")
 
 	cfg := Load()
 	if cfg.ServerAddr != ":19090" {
@@ -85,6 +105,18 @@ func TestLoadFromEnv(t *testing.T) {
 	if cfg.SubscriptionSyncInterval != 30*time.Second {
 		t.Fatalf("SubscriptionSyncInterval = %s", cfg.SubscriptionSyncInterval)
 	}
+	if cfg.PaymentReadSource != PaymentReadSourceXlab {
+		t.Fatalf("PaymentReadSource = %q", cfg.PaymentReadSource)
+	}
+	if !cfg.PaymentSyncEnabled {
+		t.Fatal("PaymentSyncEnabled should be true")
+	}
+	if cfg.PaymentSyncStaleAfter != 45*time.Second {
+		t.Fatalf("PaymentSyncStaleAfter = %s", cfg.PaymentSyncStaleAfter)
+	}
+	if cfg.PaymentSyncInterval != 15*time.Second {
+		t.Fatalf("PaymentSyncInterval = %s", cfg.PaymentSyncInterval)
+	}
 }
 
 func TestLoadRejectsUnknownSubscriptionReadSource(t *testing.T) {
@@ -93,5 +125,14 @@ func TestLoadRejectsUnknownSubscriptionReadSource(t *testing.T) {
 	cfg := Load()
 	if cfg.SubscriptionReadSource != SubscriptionReadSourceCore {
 		t.Fatalf("SubscriptionReadSource = %q, want core", cfg.SubscriptionReadSource)
+	}
+}
+
+func TestLoadRejectsUnknownPaymentReadSource(t *testing.T) {
+	t.Setenv("XLAB_PAYMENT_READ_SOURCE", "mirror")
+
+	cfg := Load()
+	if cfg.PaymentReadSource != PaymentReadSourceCore {
+		t.Fatalf("PaymentReadSource = %q, want core", cfg.PaymentReadSource)
 	}
 }

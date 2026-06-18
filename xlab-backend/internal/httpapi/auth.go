@@ -17,6 +17,7 @@ const userContextKey contextKey = "user"
 type API struct {
 	core              CoreClient
 	subscriptionReads SubscriptionReadService
+	paymentReads      PaymentReadService
 }
 
 func (a *API) auth(next http.Handler) http.Handler {

@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { Table, TBody, TD, TH, THead, TR } from '@/components/ui/Table'
 import { toast } from '@/components/ui/Toast'
 import { paymentAPI } from '@/api/payment'
+import { xlabPaymentAPI } from '@/api/xlab/payment'
 
 const STATUSES = ['', 'PENDING', 'COMPLETED', 'FAILED', 'REFUNDED', 'CANCELLED']
 
@@ -52,7 +53,7 @@ export default function OrdersPage() {
 
   const query = useQuery({
     queryKey: ['my-payment-orders', page, status],
-    queryFn: () => paymentAPI.getMyOrders({ page, page_size: 20, status: status || undefined })
+    queryFn: () => xlabPaymentAPI.getMyOrders({ page, page_size: 20, status: status || undefined })
   })
 
   const eligibleQuery = useQuery({
