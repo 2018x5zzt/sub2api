@@ -130,6 +130,9 @@ type UsageLog struct {
 
 	GroupID        *int64
 	SubscriptionID *int64
+	// fork(xlab 产品订阅): 命中产品订阅结算时记录产品与产品订阅 ID。
+	ProductID             *int64
+	ProductSubscriptionID *int64
 
 	InputTokens         int
 	OutputTokens        int
@@ -153,6 +156,9 @@ type UsageLog struct {
 	AccountRateMultiplier *float64
 	// AccountStatsCost 账号统计定价预计算费用（nil = 使用默认公式 total_cost × account_rate_multiplier）
 	AccountStatsCost *float64
+	// fork(xlab 产品订阅): 分组结算倍率与产品订阅结算扣费快照。
+	GroupDebitMultiplier *float64
+	ProductDebitCost     *float64
 
 	BillingType  int8
 	RequestType  RequestType
