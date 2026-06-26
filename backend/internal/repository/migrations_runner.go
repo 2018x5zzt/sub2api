@@ -66,7 +66,11 @@ type migrationChecksumCompatibilityRule struct {
 // 规则必须同时匹配「迁移名 + 数据库 checksum + 当前文件 checksum」且两者都落在该迁移的已知版本集合内才会放行，
 // 避免放宽全局校验，也允许将误改的历史 migration 回滚为已发布版本而不要求人工修 checksum。
 var migrationChecksumCompatibilityRules = map[string]migrationChecksumCompatibilityRule{
+	"047_add_sora_pricing_and_media_type.sql":                 newMigrationChecksumCompatibilityRule("0039b5824ed248c24b9bf6a55e94decaa9423178cc9c068774f851542086c292", "d806f44a7dd70b8a2f7abadcb5cc8bf75679db242dacab9c8a69886bc17ed10a"),
 	"054_drop_legacy_cache_columns.sql":                       newMigrationChecksumCompatibilityRule("82de761156e03876653e7a6a4eee883cd927847036f779b0b9f34c42a8af7a7d", "182c193f3359946cf094090cd9e57d5c3fd9abaffbc1e8fc378646b8a6fa12b4"),
+	"063_add_sora_client_tables.sql":                          newMigrationChecksumCompatibilityRule("ed8ae697b9b21672506f9c752f9671bc7c6e4d1d62e85aee510c48a8192cae7f", "23a5777e8c38f269f8777e959af33db063891a8ba19eae0a96ee9c22e6b10103"),
+	"107_add_account_cost_to_dashboard_tables.sql":            newMigrationChecksumCompatibilityRule("8742f876b999808fc9f478fd2db06037b26d9ab74b10e872517211ee7805d663", "96b42b8f7334af67219a40ef814b7be82f2d15776a8876d4bec40bda0f19aa41"),
+	"140_restore_shared_subscription_products.sql":            newMigrationChecksumCompatibilityRule("e88e5d84273b555fa481d0a3fe604c4e445e1b48bed4049600eb06346e2528e1", "1355f6dd2f1f850707ccd915a2989a049b44df8baae8846b78a835bc80ddb150"),
 	"061_add_usage_log_request_type.sql":                      newMigrationChecksumCompatibilityRule("66207e7aa5dd0429c2e2c0fabdaf79783ff157fa0af2e81adff2ee03790ec65c", "08a248652cbab7cfde147fc6ef8cda464f2477674e20b718312faa252e0481c0", "222b4a09c797c22e5922b6b172327c824f5463aaa8760e4f621bc5c22e2be0f3"),
 	"109_auth_identity_compat_backfill.sql":                   newMigrationChecksumCompatibilityRule("0580b4602d85435edf9aca1633db580bb3932f26517f75134106f80275ec2ace", "551e498aa5616d2d91096e9d72cf9fb36e418ee22eacc557f8811cadbc9e20ee"),
 	"110_pending_auth_and_provider_default_grants.sql":        newMigrationChecksumCompatibilityRule("32cf87ee787b1bb36b5c691367c96eee37518fa3eed6f3322cf68795e3745279", "e3d1f433be2b564cfbdc549adf98fce13c5c7b363ebc20fd05b765d0563b0925"),
