@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/server"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -40,6 +41,16 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 
 		// Server layer ProviderSet
 		server.ProviderSet,
+
+		// Payment providers（ProvidePaymentConfigService/ProvidePaymentOrderExpiryService 已在 service.ProviderSet 中提供，此处不再重复）
+		payment.ProvideRegistry,
+		payment.ProvideEncryptionKey,
+		payment.ProvideDefaultLoadBalancer,
+		wire.Bind(new(payment.LoadBalancer), new(*payment.DefaultLoadBalancer)),
+
+		// OAuthRefreshAPI 的可变参数 lockTTL（...time.Duration）需要一个 []time.Duration provider；
+		// 传 nil 表示使用其内部默认锁 TTL。
+		wire.Value([]time.Duration(nil)),
 
 		// Privacy client factory for OpenAI training opt-out
 		providePrivacyClientFactory,
@@ -94,6 +105,7 @@ func provideCleanup(
 	openAIGateway *service.OpenAIGatewayService,
 	scheduledTestRunner *service.ScheduledTestRunnerService,
 	backupSvc *service.BackupService,
+	paymentOrderExpiry *service.PaymentOrderExpiryService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -227,6 +239,12 @@ func provideCleanup(
 			{"BackupService", func() error {
 				if backupSvc != nil {
 					backupSvc.Stop()
+				}
+				return nil
+			}},
+			{"PaymentOrderExpiryService", func() error {
+				if paymentOrderExpiry != nil {
+					paymentOrderExpiry.Stop()
 				}
 				return nil
 			}},
