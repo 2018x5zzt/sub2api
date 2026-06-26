@@ -686,6 +686,68 @@ const (
 	ImageConcurrencyOverflowModeWait   = "wait"
 )
 
+// OpenAIImageJobConfig OpenAI Images 异步 job 配置（xlab 定制：Redis 持久化 + 看门狗超时）。
+type OpenAIImageJobConfig struct {
+	// Concurrency: 当前进程本地执行 image job 的并发数。
+	Concurrency int `mapstructure:"concurrency"`
+	// TimeoutSeconds: 单个 image job 的总超时时间。
+	TimeoutSeconds int `mapstructure:"timeout_seconds"`
+	// TTLSeconds: job 状态和结果在 Redis 中保留的时间。
+	TTLSeconds int `mapstructure:"ttl_seconds"`
+	// MaxAttempts: 上游可重试错误的最大尝试次数。
+	MaxAttempts int `mapstructure:"max_attempts"`
+	// RetryBackoffSeconds: 每次重试前的等待时间序列。
+	RetryBackoffSeconds []int `mapstructure:"retry_backoff_seconds"`
+	// WatchdogIntervalSeconds: stale queued/running job 扫描周期。
+	WatchdogIntervalSeconds int `mapstructure:"watchdog_interval_seconds"`
+	// WatchdogBatchSize: 每次 watchdog 扫描最多处理的 active job 数。
+	WatchdogBatchSize int `mapstructure:"watchdog_batch_size"`
+	// WatchdogLockTTLSeconds: 跨实例 watchdog leader lock 的 TTL。
+	WatchdogLockTTLSeconds int `mapstructure:"watchdog_lock_ttl_seconds"`
+}
+
+func DefaultOpenAIImageJobConfig() OpenAIImageJobConfig {
+	return OpenAIImageJobConfig{
+		Concurrency:             2,
+		TimeoutSeconds:          20 * 60,
+		TTLSeconds:              24 * 60 * 60,
+		MaxAttempts:             3,
+		RetryBackoffSeconds:     []int{10, 30},
+		WatchdogIntervalSeconds: 60,
+		WatchdogBatchSize:       500,
+		WatchdogLockTTLSeconds:  30,
+	}
+}
+
+func (c OpenAIImageJobConfig) WithDefaults() OpenAIImageJobConfig {
+	defaults := DefaultOpenAIImageJobConfig()
+	if c.Concurrency <= 0 {
+		c.Concurrency = defaults.Concurrency
+	}
+	if c.TimeoutSeconds <= 0 {
+		c.TimeoutSeconds = defaults.TimeoutSeconds
+	}
+	if c.TTLSeconds <= 0 {
+		c.TTLSeconds = defaults.TTLSeconds
+	}
+	if c.MaxAttempts <= 0 {
+		c.MaxAttempts = defaults.MaxAttempts
+	}
+	if len(c.RetryBackoffSeconds) == 0 {
+		c.RetryBackoffSeconds = append([]int(nil), defaults.RetryBackoffSeconds...)
+	}
+	if c.WatchdogIntervalSeconds <= 0 {
+		c.WatchdogIntervalSeconds = defaults.WatchdogIntervalSeconds
+	}
+	if c.WatchdogBatchSize <= 0 {
+		c.WatchdogBatchSize = defaults.WatchdogBatchSize
+	}
+	if c.WatchdogLockTTLSeconds <= 0 {
+		c.WatchdogLockTTLSeconds = defaults.WatchdogLockTTLSeconds
+	}
+	return c
+}
+
 // GatewayConfig API网关相关配置
 type GatewayConfig struct {
 	// 等待上游响应头的超时时间（秒），0表示无超时
@@ -801,6 +863,9 @@ type GatewayConfig struct {
 	// UserMessageQueue: 用户消息串行队列配置
 	// 对 role:"user" 的真实用户消息实施账号级串行化 + RPM 自适应延迟
 	UserMessageQueue UserMessageQueueConfig `mapstructure:"user_message_queue"`
+
+	// OpenAIImageJobs: OpenAI Images 异步 job 配置（xlab 定制）。
+	OpenAIImageJobs OpenAIImageJobConfig `mapstructure:"openai_image_jobs"`
 }
 
 // GatewayOpenAIHTTP2Config OpenAI HTTP 上游协议配置。
