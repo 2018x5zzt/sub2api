@@ -45,17 +45,15 @@
             "
           />
           <p class="input-hint">{{ baseUrlHint }}</p>
-          <template v-if="account.platform !== 'sora'">
-            <label class="mt-3 flex cursor-pointer items-start gap-3">
-              <input
-                v-model="editAppendApiPath"
-                type="checkbox"
-                class="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.appendApiPath') }}</span>
-            </label>
-            <p class="input-hint mt-1">{{ t('admin.accounts.appendApiPathHint') }}</p>
-          </template>
+          <label class="mt-3 flex cursor-pointer items-start gap-3">
+            <input
+              v-model="editAppendApiPath"
+              type="checkbox"
+              class="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span class="text-sm text-gray-700 dark:text-gray-300">{{ t('admin.accounts.appendApiPath') }}</span>
+          </label>
+          <p class="input-hint mt-1">{{ t('admin.accounts.appendApiPathHint') }}</p>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.apiKey') }}</label>
@@ -3351,7 +3349,7 @@ const handleSubmit = async () => {
     // For apikey type, handle credentials update
     if (props.account.type === 'apikey') {
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
-      if (props.account.platform !== 'sora' && !editAppendApiPath.value && !editBaseUrl.value.trim()) {
+      if (!editAppendApiPath.value && !editBaseUrl.value.trim()) {
         appStore.showError(t('admin.accounts.pleaseEnterBaseUrl'))
         return
       }

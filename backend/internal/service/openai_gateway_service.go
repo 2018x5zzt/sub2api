@@ -3275,8 +3275,8 @@ func buildSyntheticOpenAIErrorResponseBody(message, code string) []byte {
 			"message": message,
 		},
 	}
-	if strings.TrimSpace(code) != "" {
-		payload["error"].(map[string]any)["code"] = code
+	if errMap, ok := payload["error"].(map[string]any); ok && strings.TrimSpace(code) != "" {
+		errMap["code"] = code
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -3337,18 +3337,6 @@ func wrapRecoverableOpenAIPassthroughError(c *gin.Context, account *Account, res
 		ResponseHeaders:        responseHeaders,
 		RetryableOnSameAccount: account != nil && account.IsPoolMode(),
 	}
-}
-
-func shouldDelayOpenAIPassthroughPrelude(line string) bool {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" {
-		return true
-	}
-	lower := strings.ToLower(trimmed)
-	return strings.HasPrefix(lower, ":") ||
-		strings.HasPrefix(lower, "event:") ||
-		strings.HasPrefix(lower, "id:") ||
-		strings.HasPrefix(lower, "retry:")
 }
 
 type openaiStreamingResultPassthrough struct {

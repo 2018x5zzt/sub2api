@@ -1655,7 +1655,7 @@ func (r *accountRepository) loadAccountGroups(ctx context.Context, accountIDs []
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	type accountGroupRow struct {
 		AccountID         int64
