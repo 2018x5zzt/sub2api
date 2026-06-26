@@ -317,7 +317,7 @@ func newRedeemHandlerTestEnv(t *testing.T) *redeemHandlerTestEnv {
 	}
 	settingRepo := &testSettingRepo{all: make(map[string]string)}
 
-	redeemService := service.NewRedeemService(redeemRepo, userRepo, nil, nil, nil, client, nil)
+	redeemService := service.NewRedeemService(redeemRepo, userRepo, nil, nil, nil, client, nil, nil)
 	promoService := service.NewPromoService(promoRepo, userRepo, nil, client, nil)
 	settingService := service.NewSettingService(settingRepo, &config.Config{})
 
@@ -392,6 +392,14 @@ type testRedeemUserRepo struct {
 
 func (r *testRedeemUserRepo) Create(ctx context.Context, user *service.User) error {
 	return errors.New("not implemented")
+}
+
+func (r *testRedeemUserRepo) BatchSetConcurrency(ctx context.Context, userIDs []int64, value int) (int, error) {
+	return 0, errors.New("not implemented")
+}
+
+func (r *testRedeemUserRepo) BatchAddConcurrency(ctx context.Context, userIDs []int64, delta int) (int, error) {
+	return 0, errors.New("not implemented")
 }
 
 func (r *testRedeemUserRepo) GetByID(ctx context.Context, id int64) (*service.User, error) {
