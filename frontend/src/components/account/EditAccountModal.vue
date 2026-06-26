@@ -35,7 +35,7 @@
             type="text"
             class="input"
             :placeholder="
-              account.platform === 'openai' || account.platform === 'sora'
+              account.platform === 'openai'
                 ? 'https://api.openai.com'
                 : account.platform === 'gemini'
                   ? 'https://generativelanguage.googleapis.com'
@@ -64,7 +64,7 @@
             type="password"
             class="input font-mono"
             :placeholder="
-              account.platform === 'openai' || account.platform === 'sora'
+              account.platform === 'openai'
                 ? 'sk-proj-...'
                 : account.platform === 'gemini'
                   ? 'AIza...'
@@ -2026,7 +2026,7 @@ const tempUnschedPresets = computed(() => [
 
 // Computed: default base URL based on platform
 const defaultBaseUrl = computed(() => {
-  if (props.account?.platform === 'openai' || props.account?.platform === 'sora') return 'https://api.openai.com'
+  if (props.account?.platform === 'openai') return 'https://api.openai.com'
   if (props.account?.platform === 'gemini') return 'https://generativelanguage.googleapis.com'
   return 'https://api.anthropic.com'
 })
@@ -2272,7 +2272,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   if (newAccount.type === 'apikey' && newAccount.credentials) {
     const credentials = newAccount.credentials as Record<string, unknown>
     const platformDefaultUrl =
-      newAccount.platform === 'openai' || newAccount.platform === 'sora'
+      newAccount.platform === 'openai'
         ? 'https://api.openai.com'
         : newAccount.platform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'
@@ -2370,7 +2370,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     editAppendApiPath.value = credentials.append_api_path !== false
   } else {
     const platformDefaultUrl =
-      newAccount.platform === 'openai' || newAccount.platform === 'sora'
+      newAccount.platform === 'openai'
         ? 'https://api.openai.com'
         : newAccount.platform === 'gemini'
           ? 'https://generativelanguage.googleapis.com'

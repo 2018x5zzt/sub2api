@@ -459,7 +459,7 @@ func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *serv
 	}
 
 	defaultModels := defaultModelsForGroup(group)
-	if group.Platform == service.PlatformAntigravity || group.Platform == service.PlatformSora || h.accountRepo == nil {
+	if group.Platform == service.PlatformAntigravity || h.accountRepo == nil {
 		return defaultModels, "default", nil
 	}
 
@@ -495,8 +495,6 @@ func defaultModelsForGroup(group *service.Group) []dto.SupportedModel {
 			supportedModelsFromAntigravity(antigravity.DefaultModels()),
 			group.SupportedModelScopes,
 		)
-	case service.PlatformSora:
-		return supportedModelsFromOpenAI(service.DefaultSoraModels(nil))
 	default:
 		return supportedModelsFromClaude(claude.DefaultModels)
 	}
