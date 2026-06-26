@@ -36,6 +36,7 @@ type OpenAIGatewayHandler struct {
 	contentModerationService *service.ContentModerationService
 	opsService               *service.OpsService
 	concurrencyHelper        *ConcurrencyHelper
+	imageJobStore            *openAIImageJobStore
 	imageLimiter             *imageConcurrencyLimiter
 	maxAccountSwitches       int
 	cfg                      *config.Config
@@ -107,6 +108,7 @@ func NewOpenAIGatewayHandler(
 	errorPassthroughService *service.ErrorPassthroughService,
 	contentModerationService *service.ContentModerationService,
 	opsService *service.OpsService,
+	imageJobPersistence service.OpenAIImageJobStore,
 	cfg *config.Config,
 ) *OpenAIGatewayHandler {
 	pingInterval := time.Duration(0)
@@ -132,6 +134,7 @@ func NewOpenAIGatewayHandler(
 		contentModerationService: contentModerationService,
 		opsService:               opsService,
 		concurrencyHelper:        concurrencyHelper,
+		imageJobStore:            newOpenAIImageJobStoreWithPersistence(imageJobPersistence, buildOpenAIImageJobStoreOptions(cfg)),
 		imageLimiter:             &imageConcurrencyLimiter{},
 		maxAccountSwitches:       maxAccountSwitches,
 		cfg:                      cfg,

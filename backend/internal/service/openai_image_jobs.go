@@ -100,7 +100,9 @@ func (s *OpenAIImageJobWatchdog) Stop() {
 		return
 	}
 	s.stopOnce.Do(func() {
-		close(s.stopCh)
+		if s.stopCh != nil {
+			close(s.stopCh)
+		}
 		logger.LegacyPrintf("service.openai_image_job_watchdog", "[OpenAIImageJobWatchdog] stopped")
 	})
 }

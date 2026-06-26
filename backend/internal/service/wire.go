@@ -193,6 +193,13 @@ func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository, se
 	return svc
 }
 
+// ProvideOpenAIImageJobWatchdog creates and starts the OpenAI image-job watchdog（xlab 定制）。
+func ProvideOpenAIImageJobWatchdog(store OpenAIImageJobStore, lockCache LeaderLockCache, db *sql.DB, cfg *config.Config) *OpenAIImageJobWatchdog {
+	svc := NewOpenAIImageJobWatchdog(store, lockCache, db, cfg)
+	svc.Start()
+	return svc
+}
+
 // ProvideTimingWheelService creates and starts TimingWheelService
 func ProvideTimingWheelService() (*TimingWheelService, error) {
 	svc, err := NewTimingWheelService()
@@ -579,6 +586,7 @@ var ProviderSet = wire.NewSet(
 	ProvideAccountExpiryService,
 	ProvideProxyExpiryService,
 	ProvideSubscriptionExpiryService,
+	ProvideOpenAIImageJobWatchdog,
 	ProvideTimingWheelService,
 	ProvideDashboardAggregationService,
 	ProvideUsageCleanupService,
