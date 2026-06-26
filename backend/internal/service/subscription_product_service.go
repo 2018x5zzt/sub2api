@@ -11,6 +11,12 @@ import (
 
 var beijingLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
 
+// CalculateNaturalDayExpiry 返回 base + days 天后当日 23:59:59（自然日到期，xlab 产品订阅）。
+func CalculateNaturalDayExpiry(base time.Time, days int) time.Time {
+	target := base.AddDate(0, 0, days)
+	return time.Date(target.Year(), target.Month(), target.Day(), 23, 59, 59, 0, target.Location())
+}
+
 type SubscriptionProductService struct {
 	repo ProductSubscriptionRepository
 }
