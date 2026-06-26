@@ -155,6 +155,21 @@ func TestGetModelPricing_UnsupportedOpenAIModelDoesNotFallBackToDifferentFamily(
 	require.Equal(t, 2.5e-6, got.InputCostPerToken)
 }
 
+func TestGetModelPricing_ImageModelDoesNotFallbackToTextModel(t *testing.T) {
+	imagePricing := &LiteLLMModelPricing{InputCostPerToken: 3}
+	textPricing := &LiteLLMModelPricing{InputCostPerToken: 9}
+
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-image-2": imagePricing,
+			"gpt-5.4":     textPricing,
+		},
+	}
+
+	got := svc.GetModelPricing("gpt-image-3")
+	require.Same(t, imagePricing, got)
+}
+
 func TestParsePricingData_PreservesPriorityAndServiceTierFields(t *testing.T) {
 	raw := map[string]any{
 		"gpt-5.4": map[string]any{

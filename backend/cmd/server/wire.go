@@ -43,10 +43,6 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		// Server layer ProviderSet
 		server.ProviderSet,
 
-		// OAuthRefreshAPI 的可变参数 lockTTL（...time.Duration）需要一个 []time.Duration provider；
-		// 传 nil 表示使用其内部默认锁 TTL。
-		wire.Value([]time.Duration(nil)),
-
 		// Privacy client factory for OpenAI training opt-out
 		providePrivacyClientFactory,
 
