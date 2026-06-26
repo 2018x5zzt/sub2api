@@ -572,6 +572,10 @@ func (r *testRedeemCodeRepo) Update(ctx context.Context, code *service.RedeemCod
 	return errors.New("not implemented")
 }
 
+func (r *testRedeemCodeRepo) BatchUpdate(ctx context.Context, ids []int64, fields service.RedeemCodeBatchUpdateFields) (int64, error) {
+	return 0, errors.New("not implemented")
+}
+
 func (r *testRedeemCodeRepo) Delete(ctx context.Context, id int64) error {
 	return errors.New("not implemented")
 }
