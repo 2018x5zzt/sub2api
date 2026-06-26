@@ -23,9 +23,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
-	"github.com/Wei-Shaw/sub2api/ent/inviteadminaction"
-	"github.com/Wei-Shaw/sub2api/ent/inviterelationshipevent"
-	"github.com/Wei-Shaw/sub2api/ent/inviterewardrecord"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
@@ -45,7 +42,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
-	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -508,87 +504,6 @@ func (f TraverseIdentityAdoptionDecision) Traverse(ctx context.Context, q ent.Qu
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.IdentityAdoptionDecisionQuery", q)
-}
-
-// The InviteAdminActionFunc type is an adapter to allow the use of ordinary function as a Querier.
-type InviteAdminActionFunc func(context.Context, *ent.InviteAdminActionQuery) (ent.Value, error)
-
-// Query calls f(ctx, q).
-func (f InviteAdminActionFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
-	if q, ok := q.(*ent.InviteAdminActionQuery); ok {
-		return f(ctx, q)
-	}
-	return nil, fmt.Errorf("unexpected query type %T. expect *ent.InviteAdminActionQuery", q)
-}
-
-// The TraverseInviteAdminAction type is an adapter to allow the use of ordinary function as Traverser.
-type TraverseInviteAdminAction func(context.Context, *ent.InviteAdminActionQuery) error
-
-// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
-func (f TraverseInviteAdminAction) Intercept(next ent.Querier) ent.Querier {
-	return next
-}
-
-// Traverse calls f(ctx, q).
-func (f TraverseInviteAdminAction) Traverse(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.InviteAdminActionQuery); ok {
-		return f(ctx, q)
-	}
-	return fmt.Errorf("unexpected query type %T. expect *ent.InviteAdminActionQuery", q)
-}
-
-// The InviteRelationshipEventFunc type is an adapter to allow the use of ordinary function as a Querier.
-type InviteRelationshipEventFunc func(context.Context, *ent.InviteRelationshipEventQuery) (ent.Value, error)
-
-// Query calls f(ctx, q).
-func (f InviteRelationshipEventFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
-	if q, ok := q.(*ent.InviteRelationshipEventQuery); ok {
-		return f(ctx, q)
-	}
-	return nil, fmt.Errorf("unexpected query type %T. expect *ent.InviteRelationshipEventQuery", q)
-}
-
-// The TraverseInviteRelationshipEvent type is an adapter to allow the use of ordinary function as Traverser.
-type TraverseInviteRelationshipEvent func(context.Context, *ent.InviteRelationshipEventQuery) error
-
-// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
-func (f TraverseInviteRelationshipEvent) Intercept(next ent.Querier) ent.Querier {
-	return next
-}
-
-// Traverse calls f(ctx, q).
-func (f TraverseInviteRelationshipEvent) Traverse(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.InviteRelationshipEventQuery); ok {
-		return f(ctx, q)
-	}
-	return fmt.Errorf("unexpected query type %T. expect *ent.InviteRelationshipEventQuery", q)
-}
-
-// The InviteRewardRecordFunc type is an adapter to allow the use of ordinary function as a Querier.
-type InviteRewardRecordFunc func(context.Context, *ent.InviteRewardRecordQuery) (ent.Value, error)
-
-// Query calls f(ctx, q).
-func (f InviteRewardRecordFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
-	if q, ok := q.(*ent.InviteRewardRecordQuery); ok {
-		return f(ctx, q)
-	}
-	return nil, fmt.Errorf("unexpected query type %T. expect *ent.InviteRewardRecordQuery", q)
-}
-
-// The TraverseInviteRewardRecord type is an adapter to allow the use of ordinary function as Traverser.
-type TraverseInviteRewardRecord func(context.Context, *ent.InviteRewardRecordQuery) error
-
-// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
-func (f TraverseInviteRewardRecord) Intercept(next ent.Querier) ent.Querier {
-	return next
-}
-
-// Traverse calls f(ctx, q).
-func (f TraverseInviteRewardRecord) Traverse(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.InviteRewardRecordQuery); ok {
-		return f(ctx, q)
-	}
-	return fmt.Errorf("unexpected query type %T. expect *ent.InviteRewardRecordQuery", q)
 }
 
 // The PaymentAuditLogFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -1077,33 +992,6 @@ func (f TraverseUserAttributeValue) Traverse(ctx context.Context, q ent.Query) e
 	return fmt.Errorf("unexpected query type %T. expect *ent.UserAttributeValueQuery", q)
 }
 
-// The UserPlatformQuotaFunc type is an adapter to allow the use of ordinary function as a Querier.
-type UserPlatformQuotaFunc func(context.Context, *ent.UserPlatformQuotaQuery) (ent.Value, error)
-
-// Query calls f(ctx, q).
-func (f UserPlatformQuotaFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
-	if q, ok := q.(*ent.UserPlatformQuotaQuery); ok {
-		return f(ctx, q)
-	}
-	return nil, fmt.Errorf("unexpected query type %T. expect *ent.UserPlatformQuotaQuery", q)
-}
-
-// The TraverseUserPlatformQuota type is an adapter to allow the use of ordinary function as Traverser.
-type TraverseUserPlatformQuota func(context.Context, *ent.UserPlatformQuotaQuery) error
-
-// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
-func (f TraverseUserPlatformQuota) Intercept(next ent.Querier) ent.Querier {
-	return next
-}
-
-// Traverse calls f(ctx, q).
-func (f TraverseUserPlatformQuota) Traverse(ctx context.Context, q ent.Query) error {
-	if q, ok := q.(*ent.UserPlatformQuotaQuery); ok {
-		return f(ctx, q)
-	}
-	return fmt.Errorf("unexpected query type %T. expect *ent.UserPlatformQuotaQuery", q)
-}
-
 // The UserSubscriptionFunc type is an adapter to allow the use of ordinary function as a Querier.
 type UserSubscriptionFunc func(context.Context, *ent.UserSubscriptionQuery) (ent.Value, error)
 
@@ -1164,12 +1052,6 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.IdempotencyRecordQuery, predicate.IdempotencyRecord, idempotencyrecord.OrderOption]{typ: ent.TypeIdempotencyRecord, tq: q}, nil
 	case *ent.IdentityAdoptionDecisionQuery:
 		return &query[*ent.IdentityAdoptionDecisionQuery, predicate.IdentityAdoptionDecision, identityadoptiondecision.OrderOption]{typ: ent.TypeIdentityAdoptionDecision, tq: q}, nil
-	case *ent.InviteAdminActionQuery:
-		return &query[*ent.InviteAdminActionQuery, predicate.InviteAdminAction, inviteadminaction.OrderOption]{typ: ent.TypeInviteAdminAction, tq: q}, nil
-	case *ent.InviteRelationshipEventQuery:
-		return &query[*ent.InviteRelationshipEventQuery, predicate.InviteRelationshipEvent, inviterelationshipevent.OrderOption]{typ: ent.TypeInviteRelationshipEvent, tq: q}, nil
-	case *ent.InviteRewardRecordQuery:
-		return &query[*ent.InviteRewardRecordQuery, predicate.InviteRewardRecord, inviterewardrecord.OrderOption]{typ: ent.TypeInviteRewardRecord, tq: q}, nil
 	case *ent.PaymentAuditLogQuery:
 		return &query[*ent.PaymentAuditLogQuery, predicate.PaymentAuditLog, paymentauditlog.OrderOption]{typ: ent.TypePaymentAuditLog, tq: q}, nil
 	case *ent.PaymentOrderQuery:
@@ -1206,8 +1088,6 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.UserAttributeDefinitionQuery, predicate.UserAttributeDefinition, userattributedefinition.OrderOption]{typ: ent.TypeUserAttributeDefinition, tq: q}, nil
 	case *ent.UserAttributeValueQuery:
 		return &query[*ent.UserAttributeValueQuery, predicate.UserAttributeValue, userattributevalue.OrderOption]{typ: ent.TypeUserAttributeValue, tq: q}, nil
-	case *ent.UserPlatformQuotaQuery:
-		return &query[*ent.UserPlatformQuotaQuery, predicate.UserPlatformQuota, userplatformquota.OrderOption]{typ: ent.TypeUserPlatformQuota, tq: q}, nil
 	case *ent.UserSubscriptionQuery:
 		return &query[*ent.UserSubscriptionQuery, predicate.UserSubscription, usersubscription.OrderOption]{typ: ent.TypeUserSubscription, tq: q}, nil
 	default:

@@ -1,33 +1,35 @@
 # =============================================================================
 # Sub2API Multi-Stage Dockerfile
 # =============================================================================
-# Stage 1: Build frontend-v2
+# Stage 1: Build frontend
 # Stage 2: Build Go backend with embedded frontend
 # Stage 3: Final minimal image
 # =============================================================================
 
 ARG NODE_IMAGE=node:24-alpine
-ARG GOLANG_IMAGE=golang:1.26.4-alpine
+ARG GOLANG_IMAGE=golang:1.26.2-alpine
 ARG ALPINE_IMAGE=alpine:3.21
 ARG POSTGRES_IMAGE=postgres:18-alpine
 ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
 
 # -----------------------------------------------------------------------------
-# Stage 1: frontend-v2 Builder
+# Stage 1: Frontend Builder
 # -----------------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS frontend-builder
 
-WORKDIR /app/frontend-v2
+WORKDIR /app/frontend
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Install dependencies first (better caching)
-COPY frontend-v2/package.json frontend-v2/package-lock.json ./
-RUN npm ci
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
 
-# Copy frontend-v2 source and legal docs used by the admin compliance gate.
-COPY docs/legal/ /app/docs/legal/
-COPY frontend-v2/ ./
-RUN npm run build
+# Copy frontend source and build
+COPY frontend/ ./
+RUN pnpm run build
 
 # -----------------------------------------------------------------------------
 # Stage 2: Backend Builder
@@ -57,7 +59,7 @@ RUN go mod download
 COPY backend/ ./
 
 # Copy frontend dist from previous stage (must be after backend copy to avoid being overwritten)
-COPY --from=frontend-builder /app/frontend-v2/dist ./internal/web/dist
+COPY --from=frontend-builder /app/backend/internal/web/dist ./internal/web/dist
 
 # Build the binary (BuildType=release for CI builds, embed frontend)
 # Version precedence: build arg VERSION > cmd/server/VERSION

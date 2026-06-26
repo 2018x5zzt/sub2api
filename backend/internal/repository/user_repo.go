@@ -16,7 +16,6 @@ import (
 	dbgroup "github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
-	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -91,16 +90,9 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
-		SetNillableInviteCode(stringPtrOrNil(normalizedInviteCode(userIn.InviteCode))).
-		SetNillableInvitedByUserID(userIn.InvitedByUserID).
-		SetNillableInviteBoundAt(normalizedInviteBoundAt(userIn.InvitedByUserID, userIn.InviteBoundAt)).
 		SetSignupSource(userSignupSourceOrDefault(userIn.SignupSource)).
 		SetNillableLastLoginAt(userIn.LastLoginAt).
 		SetNillableLastActiveAt(userIn.LastActiveAt).
-		SetSubscriptionBalanceFallbackEnabled(userIn.SubscriptionBalanceFallbackEnabled).
-		SetSubscriptionBalanceFallbackLimitUsd(userIn.SubscriptionBalanceFallbackLimitUSD).
-		SetSubscriptionBalanceFallbackUsedUsd(userIn.SubscriptionBalanceFallbackUsedUSD).
-		SetNillableSubscriptionBalanceFallbackGroupID(userIn.SubscriptionBalanceFallbackGroupID).
 		SetRpmLimit(userIn.RPMLimit).
 		Save(txCtx)
 	if err != nil {
@@ -141,23 +133,6 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 	return out, nil
 }
 
-func (r *userRepository) GetByIDIncludeDeleted(ctx context.Context, id int64) (*service.User, error) {
-	ctx = mixins.SkipSoftDelete(ctx)
-	m, err := r.client.User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
-	if err != nil {
-		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
-	}
-	out := userEntityToService(m)
-	groups, err := r.loadAllowedGroups(ctx, []int64{id})
-	if err != nil {
-		return nil, err
-	}
-	if v, ok := groups[id]; ok {
-		out.AllowedGroups = v
-	}
-	return out, nil
-}
-
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service.User, error) {
 	matches, err := r.client.User.Query().
 		Where(userEmailLookupPredicate(email)).
@@ -183,28 +158,6 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 		out.AllowedGroups = v
 	}
 	return out, nil
-}
-
-func (r *userRepository) GetByInviteCode(ctx context.Context, code string) (*service.User, error) {
-	normalized := normalizedInviteCode(code)
-	if normalized == "" {
-		return nil, service.ErrUserNotFound
-	}
-	m, err := r.client.User.Query().Where(dbuser.InviteCodeEQ(normalized)).Only(ctx)
-	if err != nil {
-		aliasUserID, aliasErr := r.lookupInviteAliasUserID(ctx, normalized)
-		if aliasErr != nil {
-			return nil, aliasErr
-		}
-		if aliasUserID == 0 {
-			return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
-		}
-		m, err = r.client.User.Query().Where(dbuser.IDEQ(aliasUserID)).Only(ctx)
-		if err != nil {
-			return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
-		}
-	}
-	return userEntityToService(m), nil
 }
 
 func (r *userRepository) Update(ctx context.Context, userIn *service.User) error {
@@ -263,18 +216,11 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
-		SetNillableInviteCode(stringPtrOrNil(normalizedInviteCode(userIn.InviteCode))).
-		SetNillableInvitedByUserID(userIn.InvitedByUserID).
-		SetNillableInviteBoundAt(normalizedInviteBoundAt(userIn.InvitedByUserID, userIn.InviteBoundAt)).
 		SetBalanceNotifyEnabled(userIn.BalanceNotifyEnabled).
 		SetBalanceNotifyThresholdType(userIn.BalanceNotifyThresholdType).
 		SetNillableBalanceNotifyThreshold(userIn.BalanceNotifyThreshold).
 		SetBalanceNotifyExtraEmails(marshalExtraEmails(userIn.BalanceNotifyExtraEmails)).
 		SetTotalRecharged(userIn.TotalRecharged).
-		SetSubscriptionBalanceFallbackEnabled(userIn.SubscriptionBalanceFallbackEnabled).
-		SetSubscriptionBalanceFallbackLimitUsd(userIn.SubscriptionBalanceFallbackLimitUSD).
-		SetSubscriptionBalanceFallbackUsedUsd(userIn.SubscriptionBalanceFallbackUsedUSD).
-		SetNillableSubscriptionBalanceFallbackGroupID(userIn.SubscriptionBalanceFallbackGroupID).
 		SetRpmLimit(userIn.RPMLimit)
 	if userIn.SignupSource != "" {
 		updateOp = updateOp.SetSignupSource(userIn.SignupSource)
@@ -308,21 +254,6 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 
 	userIn.UpdatedAt = updated.UpdatedAt
 	return nil
-}
-
-func (r *userRepository) UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error {
-	client := clientFromContext(ctx, r.client)
-	update := client.User.UpdateOneID(inviteeUserID)
-	if inviterUserID != nil {
-		now := time.Now().UTC()
-		update.SetInvitedByUserID(*inviterUserID)
-		update.SetInviteBoundAt(now)
-	} else {
-		update.ClearInvitedByUserID()
-		update.ClearInviteBoundAt()
-	}
-	_, err := update.Save(ctx)
-	return translatePersistenceError(err, service.ErrUserNotFound, nil)
 }
 
 func ensureEmailAuthIdentityWithClient(ctx context.Context, client *dbent.Client, userID int64, email string, source string) error {
@@ -403,33 +334,61 @@ func normalizeEmailAuthIdentitySubject(email string) string {
 	}
 	if strings.HasSuffix(normalized, service.LinuxDoConnectSyntheticEmailDomain) ||
 		strings.HasSuffix(normalized, service.OIDCConnectSyntheticEmailDomain) ||
-		strings.HasSuffix(normalized, service.WeChatConnectSyntheticEmailDomain) ||
-		strings.HasSuffix(normalized, service.DingTalkConnectSyntheticEmailDomain) {
+		strings.HasSuffix(normalized, service.WeChatConnectSyntheticEmailDomain) {
 		return ""
 	}
 	return normalized
 }
 
 func (r *userRepository) Delete(ctx context.Context, id int64) error {
-	// 复用 context 中已存在的事务（如 AdminService.DeleteUser 把删 Key 与删 User 包在同一事务中），
-	// 由调用方负责提交/回滚，保证两者的原子性。
-	if existingTx := dbent.TxFromContext(ctx); existingTx != nil {
-		return r.deleteUser(ctx, existingTx.Client(), id)
-	}
-
 	tx, err := r.client.Tx(ctx)
 	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
-	exec := r.client
+
+	var txClient *dbent.Client
 	if err == nil {
 		defer func() { _ = tx.Rollback() }()
-		exec = tx.Client()
+		txClient = tx.Client()
+	} else {
+		if existingTx := dbent.TxFromContext(ctx); existingTx != nil {
+			txClient = existingTx.Client()
+		} else {
+			txClient = r.client
+		}
 	}
-	// err == dbent.ErrTxStarted 时复用当前事务（exec = r.client）。
 
-	if err := r.deleteUser(ctx, exec, id); err != nil {
-		return err
+	identityIDs, err := txClient.AuthIdentity.Query().
+		Where(authidentity.UserIDEQ(id)).
+		IDs(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	if len(identityIDs) > 0 {
+		if _, err := txClient.IdentityAdoptionDecision.Update().
+			Where(identityadoptiondecision.IdentityIDIn(identityIDs...)).
+			ClearIdentityID().
+			Save(ctx); err != nil {
+			return translatePersistenceError(err, service.ErrUserNotFound, nil)
+		}
+		if _, err := txClient.AuthIdentityChannel.Delete().
+			Where(authidentitychannel.IdentityIDIn(identityIDs...)).
+			Exec(ctx); err != nil {
+			return translatePersistenceError(err, service.ErrUserNotFound, nil)
+		}
+		if _, err := txClient.AuthIdentity.Delete().
+			Where(authidentity.UserIDEQ(id)).
+			Exec(ctx); err != nil {
+			return translatePersistenceError(err, service.ErrUserNotFound, nil)
+		}
+	}
+
+	affected, err := txClient.User.Delete().Where(dbuser.IDEQ(id)).Exec(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	if affected == 0 {
+		return service.ErrUserNotFound
 	}
 
 	if tx != nil {
@@ -440,54 +399,11 @@ func (r *userRepository) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
-// deleteUser 在给定 client（可能是外部事务 client）上删除用户及其身份关联记录，自身不开启/提交事务。
-func (r *userRepository) deleteUser(ctx context.Context, exec *dbent.Client, id int64) error {
-	identityIDs, err := exec.AuthIdentity.Query().
-		Where(authidentity.UserIDEQ(id)).
-		IDs(ctx)
-	if err != nil {
-		return translatePersistenceError(err, service.ErrUserNotFound, nil)
-	}
-	if len(identityIDs) > 0 {
-		if _, err := exec.IdentityAdoptionDecision.Update().
-			Where(identityadoptiondecision.IdentityIDIn(identityIDs...)).
-			ClearIdentityID().
-			Save(ctx); err != nil {
-			return translatePersistenceError(err, service.ErrUserNotFound, nil)
-		}
-		if _, err := exec.AuthIdentityChannel.Delete().
-			Where(authidentitychannel.IdentityIDIn(identityIDs...)).
-			Exec(ctx); err != nil {
-			return translatePersistenceError(err, service.ErrUserNotFound, nil)
-		}
-		if _, err := exec.AuthIdentity.Delete().
-			Where(authidentity.UserIDEQ(id)).
-			Exec(ctx); err != nil {
-			return translatePersistenceError(err, service.ErrUserNotFound, nil)
-		}
-	}
-
-	affected, err := exec.User.Delete().Where(dbuser.IDEQ(id)).Exec(ctx)
-	if err != nil {
-		return translatePersistenceError(err, service.ErrUserNotFound, nil)
-	}
-	if affected == 0 {
-		return service.ErrUserNotFound
-	}
-	return nil
-}
-
 func (r *userRepository) List(ctx context.Context, params pagination.PaginationParams) ([]service.User, *pagination.PaginationResult, error) {
 	return r.ListWithFilters(ctx, params, service.UserListFilters{})
 }
 
 func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, filters service.UserListFilters) ([]service.User, *pagination.PaginationResult, error) {
-	// SkipSoftDelete 仅作用于 User 身份解析（下方 Count/All）；订阅、分组等关联实体沿用原始 ctx，避免穿透到这些同样带软删除的实体而带出已删除行。
-	userCtx := ctx
-	if filters.IncludeDeleted {
-		userCtx = mixins.SkipSoftDelete(ctx)
-	}
-
 	q := r.client.User.Query()
 
 	if filters.Status != "" {
@@ -513,17 +429,6 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 		))
 	}
 
-	if filters.APIKeyGroupID > 0 {
-		// 按"API Key 实际绑定的分组"过滤：用户只要有任意一个未软删除的 API Key
-		// 绑定到该分组即命中（EXISTS 语义）。
-		// 注意：SoftDeleteMixin 的拦截器不会自动下沉到 HasAPIKeysWith 子查询，
-		// 必须显式加 apikey.DeletedAtIsNil()，否则已软删除的 key 会污染过滤结果。
-		q = q.Where(dbuser.HasAPIKeysWith(
-			apikey.GroupIDEQ(filters.APIKeyGroupID),
-			apikey.DeletedAtIsNil(),
-		))
-	}
-
 	// If attribute filters are specified, we need to filter by user IDs first
 	var allowedUserIDs []int64
 	if len(filters.Attributes) > 0 {
@@ -539,7 +444,7 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 		q = q.Where(dbuser.IDIn(allowedUserIDs...))
 	}
 
-	total, err := q.Clone().Count(userCtx)
+	total, err := q.Clone().Count(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -551,7 +456,7 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 		usersQuery = usersQuery.Order(order)
 	}
 
-	users, err := usersQuery.All(userCtx)
+	users, err := usersQuery.All(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -832,56 +737,8 @@ func (r *userRepository) UpdateConcurrency(ctx context.Context, id int64, amount
 	return nil
 }
 
-func (r *userRepository) BatchSetConcurrency(ctx context.Context, userIDs []int64, value int) (int, error) {
-	if len(userIDs) == 0 {
-		return 0, nil
-	}
-	if value < 0 {
-		value = 0
-	}
-	res, err := r.sql.ExecContext(ctx,
-		"UPDATE users SET concurrency = $1, updated_at = NOW() WHERE id = ANY($2) AND deleted_at IS NULL",
-		value, pq.Array(userIDs))
-	if err != nil {
-		return 0, fmt.Errorf("batch set concurrency: %w", err)
-	}
-	affected, _ := res.RowsAffected()
-	return int(affected), nil
-}
-
-func (r *userRepository) BatchAddConcurrency(ctx context.Context, userIDs []int64, delta int) (int, error) {
-	if len(userIDs) == 0 {
-		return 0, nil
-	}
-	res, err := r.sql.ExecContext(ctx,
-		"UPDATE users SET concurrency = GREATEST(concurrency + $1, 0), updated_at = NOW() WHERE id = ANY($2) AND deleted_at IS NULL",
-		delta, pq.Array(userIDs))
-	if err != nil {
-		return 0, fmt.Errorf("batch add concurrency: %w", err)
-	}
-	affected, _ := res.RowsAffected()
-	return int(affected), nil
-}
-
 func (r *userRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	return r.client.User.Query().Where(userEmailLookupPredicate(email)).Exist(ctx)
-}
-
-func (r *userRepository) ExistsByInviteCode(ctx context.Context, code string) (bool, error) {
-	normalized := normalizedInviteCode(code)
-	if normalized == "" {
-		return false, nil
-	}
-	exists, err := r.client.User.Query().Where(dbuser.InviteCodeEQ(normalized)).Exist(ctx)
-	if err != nil || exists {
-		return exists, err
-	}
-	return r.inviteAliasExists(ctx, normalized)
-}
-
-func (r *userRepository) CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error) {
-	total, err := r.client.User.Query().Where(dbuser.InvitedByUserIDEQ(inviterID)).Count(ctx)
-	return int64(total), err
 }
 
 func ensureNormalizedEmailAvailableWithClient(ctx context.Context, client *dbent.Client, userID int64, email string) error {
@@ -929,57 +786,6 @@ func normalizedEmailUniquenessLockKey(email string) string {
 		return ""
 	}
 	return "users:normalized-email:" + normalized
-}
-
-func normalizedInviteCode(code string) string {
-	return strings.TrimSpace(code)
-}
-
-func normalizedInviteBoundAt(invitedByUserID *int64, inviteBoundAt *time.Time) *time.Time {
-	if invitedByUserID == nil {
-		return nil
-	}
-	if inviteBoundAt != nil {
-		return inviteBoundAt
-	}
-	now := time.Now().UTC()
-	return &now
-}
-
-func stringPtrOrNil(value string) *string {
-	if value == "" {
-		return nil
-	}
-	return &value
-}
-
-func (r *userRepository) inviteAliasExists(ctx context.Context, code string) (bool, error) {
-	userID, err := r.lookupInviteAliasUserID(ctx, code)
-	return userID > 0, err
-}
-
-func (r *userRepository) lookupInviteAliasUserID(ctx context.Context, code string) (int64, error) {
-	normalized := normalizedInviteCode(code)
-	if normalized == "" || r.sql == nil {
-		return 0, nil
-	}
-	var userID int64
-	err := scanSingleRow(ctx, r.sql, `
-		SELECT user_id
-		FROM invite_code_aliases
-		WHERE alias_code = $1
-		LIMIT 1
-	`, []any{normalized}, &userID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil
-	}
-	if err != nil {
-		if strings.Contains(err.Error(), "invite_code_aliases") {
-			return 0, nil
-		}
-		return 0, err
-	}
-	return userID, nil
 }
 
 func (r *userRepository) AddGroupToAllowedGroups(ctx context.Context, userID int64, groupID int64) error {
@@ -1108,9 +914,6 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 		return
 	}
 	dst.ID = src.ID
-	dst.InviteCode = normalizedInviteCode(derefString(src.InviteCode))
-	dst.InvitedByUserID = src.InvitedByUserID
-	dst.InviteBoundAt = src.InviteBoundAt
 	dst.SignupSource = src.SignupSource
 	dst.LastLoginAt = src.LastLoginAt
 	dst.LastActiveAt = src.LastActiveAt
@@ -1122,7 +925,7 @@ func userSignupSourceOrDefault(signupSource string) string {
 	switch strings.TrimSpace(strings.ToLower(signupSource)) {
 	case "", "email":
 		return "email"
-	case "linuxdo", "wechat", "oidc", "dingtalk":
+	case "linuxdo", "wechat", "oidc":
 		return strings.TrimSpace(strings.ToLower(signupSource))
 	default:
 		return "email"

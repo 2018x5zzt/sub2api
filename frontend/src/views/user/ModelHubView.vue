@@ -42,54 +42,34 @@
 
           <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
-              <div class="flex items-center gap-2">
-                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400">
-                  <Icon name="grid" size="sm" />
-                </span>
-                <span class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  {{ t('modelHub.groupsLabel') }}
-                </span>
+              <div class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                {{ t('modelHub.groupsLabel') }}
               </div>
-              <div class="mt-3 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
+              <div class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
                 {{ catalogs.length }}
               </div>
             </div>
             <div class="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
-              <div class="flex items-center gap-2">
-                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400">
-                  <Icon name="sparkles" size="sm" />
-                </span>
-                <span class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  {{ t('modelHub.uniqueModelsLabel') }}
-                </span>
+              <div class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                {{ t('modelHub.uniqueModelsLabel') }}
               </div>
-              <div class="mt-3 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
+              <div class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
                 {{ allModelIds.length }}
               </div>
             </div>
             <div class="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
-              <div class="flex items-center gap-2">
-                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400">
-                  <Icon name="eye" size="sm" />
-                </span>
-                <span class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  {{ t('modelHub.visibleModelsLabel') }}
-                </span>
+              <div class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                {{ t('modelHub.visibleModelsLabel') }}
               </div>
-              <div class="mt-3 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
+              <div class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
                 {{ visibleModelIds.length }}
               </div>
             </div>
             <div class="rounded-2xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
-              <div class="flex items-center gap-2">
-                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400">
-                  <Icon name="globe" size="sm" />
-                </span>
-                <span class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  {{ t('modelHub.platformsLabel') }}
-                </span>
+              <div class="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                {{ t('modelHub.platformsLabel') }}
               </div>
-              <div class="mt-3 text-2xl font-bold tabular-nums text-slate-900 dark:text-white">
+              <div class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">
                 {{ platformOptions.length }}
               </div>
             </div>
@@ -247,10 +227,9 @@
             <article
               v-for="catalog in visibleCatalogs"
               :key="catalog.group.id"
-              class="card overflow-hidden transition-shadow duration-200 hover:shadow-md"
+              class="card overflow-hidden"
             >
-              <div class="relative border-b border-gray-100 p-5 dark:border-dark-700">
-                <div class="absolute inset-x-0 top-0 h-[2px]" :class="platformAccentClass(catalog.group.platform)"></div>
+              <div class="border-b border-gray-100 p-5 dark:border-dark-700">
                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div class="min-w-0 space-y-3">
                     <div class="flex flex-wrap items-center gap-3">
@@ -275,7 +254,7 @@
                       {{ catalog.group.description }}
                     </p>
                     <p class="text-xs text-gray-500 dark:text-gray-400">
-                      {{ getCatalogPricingSummary(catalog) }}
+                      {{ t('modelHub.pricingComputedWithRate', { rate: formatRateMultiplier(catalog.effective_rate_multiplier) }) }}
                     </p>
                   </div>
 
@@ -309,31 +288,36 @@
                     v-for="model in catalog.models"
                     :key="`${catalog.group.id}-${model.id}`"
                     type="button"
-                    class="group relative flex items-start justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-[0_4px_12px_rgba(14,165,233,0.08)] dark:border-dark-600 dark:bg-dark-800 dark:hover:border-sky-500/60 dark:hover:shadow-[0_4px_12px_rgba(56,189,248,0.06)]"
+                    class="group flex items-start justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-all hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-sm dark:border-dark-600 dark:bg-dark-800 dark:hover:border-sky-500/60"
                     @click="copyModel(model.id)"
                   >
                     <div class="flex min-w-0 items-start gap-3">
-                      <div class="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 text-slate-700 ring-1 ring-slate-200/60 dark:from-dark-700 dark:to-dark-600 dark:text-slate-200 dark:ring-dark-500/40">
+                      <div class="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 dark:bg-dark-700 dark:text-slate-200">
                         <ModelIcon :model="model.id" size="20px" />
                       </div>
                       <div class="min-w-0">
                         <div class="truncate text-sm font-semibold text-gray-900 dark:text-white">
                           {{ model.display_name }}
                         </div>
-                        <code class="mt-1 block truncate text-xs text-gray-400 dark:text-gray-500">
+                        <code class="mt-1 block truncate text-xs text-gray-500 dark:text-gray-400">
                           {{ model.id }}
                         </code>
-                        <div class="mt-2.5 flex flex-wrap gap-1.5">
+                        <div v-if="hasDisplayedPricing(model)" class="mt-2 flex flex-wrap gap-1.5">
                           <span
-                            v-for="badge in getPricingBadges(model, catalog)"
-                            :key="badge.key"
-                            :class="pricingBadgeClass(badge.tone)"
+                            v-if="model.pricing?.input_price_per_million_tokens !== undefined"
+                            class="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
                           >
-                            {{ badge.text }}
+                            {{ t('modelHub.inputPriceShort') }} {{ formatPerMillionPrice(model.pricing?.input_price_per_million_tokens) }}
+                          </span>
+                          <span
+                            v-if="model.pricing?.output_price_per_million_tokens !== undefined"
+                            class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"
+                          >
+                            {{ t('modelHub.outputPriceShort') }} {{ formatPerMillionPrice(model.pricing?.output_price_per_million_tokens) }}
                           </span>
                         </div>
                         <div
-                          v-if="!hasDisplayedPricing(model)"
+                          v-else
                           class="mt-2 text-[11px] text-gray-400 dark:text-gray-500"
                         >
                           {{ t('modelHub.pricingUnavailable') }}
@@ -342,7 +326,7 @@
                     </div>
 
                     <div
-                      class="ml-3 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-transparent text-gray-400 transition-all duration-200 group-hover:border-sky-200 group-hover:bg-sky-50 group-hover:text-sky-600 dark:group-hover:border-sky-500/30 dark:group-hover:bg-sky-500/10 dark:group-hover:text-sky-300"
+                      class="ml-3 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-transparent text-gray-400 transition-colors group-hover:border-sky-200 group-hover:text-sky-600 dark:group-hover:border-sky-500/30 dark:group-hover:text-sky-300"
                     >
                       <Icon
                         :name="copiedKey === `model:${model.id}` ? 'check' : 'clipboard'"
@@ -364,66 +348,21 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { userGroupsAPI } from '@/api'
-import userChannelsAPI, {
-  type UserAvailableChannel,
-  type UserAvailableGroup,
-  type UserPricingInterval,
-  type UserSupportedModel,
-  type UserSupportedModelPricing,
-} from '@/api/channels'
-import type { GroupPlatform, SubscriptionType } from '@/types'
+import type { GroupModelCatalog, GroupPlatform, SupportedModel } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
-import Icon from '@/components/icons/Icon.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { formatCurrency } from '@/utils/format'
 
-const PER_MILLION_TOKENS = 1_000_000
-
 type PlatformFilter = GroupPlatform | 'all'
 type GroupFilter = number | 'all'
-
-type CatalogSource = 'default' | 'mapping' | 'mixed'
-
-interface SupportedModel {
-  id: string
-  display_name: string
-  pricing: UserSupportedModelPricing | null
-}
-
-interface GroupModelCatalog {
-  group: {
-    id: number
-    name: string
-    description: string | null
-    platform: GroupPlatform
-    subscription_type: SubscriptionType
-    rate_multiplier: number
-    pricing_mode: 'fixed' | 'dynamic'
-    default_budget_multiplier: number | null
-    dynamic_multiplier_min: number | null
-    dynamic_multiplier_max: number | null
-    dynamic_budget_multiplier: number | null
-    dynamic_budget_matched_multiplier: number | null
-  }
-  source: CatalogSource
-  user_rate_multiplier: number | null
-  effective_rate_multiplier: number
-  models: SupportedModel[]
-}
 
 interface PlatformOption {
   value: PlatformFilter
   label: string
-}
-
-interface PricingBadge {
-  key: string
-  text: string
-  tone: 'rate' | 'input' | 'output' | 'request' | 'image' | 'interval'
 }
 
 const { t } = useI18n()
@@ -533,17 +472,7 @@ function getPlatformLabel(platform: GroupPlatform): string {
   return t(`admin.groups.platforms.${platform}`)
 }
 
-function platformAccentClass(platform: GroupPlatform): string {
-  const map: Record<string, string> = {
-    anthropic: 'bg-gradient-to-r from-amber-400 to-orange-500',
-    openai: 'bg-gradient-to-r from-emerald-400 to-teal-500',
-    gemini: 'bg-gradient-to-r from-sky-400 to-blue-500',
-    antigravity: 'bg-gradient-to-r from-violet-400 to-purple-500',
-  }
-  return map[platform] || 'bg-gradient-to-r from-slate-300 to-slate-400 dark:from-slate-600 dark:to-slate-500'
-}
-
-function getSourceLabel(source: CatalogSource): string {
+function getSourceLabel(source: GroupModelCatalog['source']): string {
   if (source === 'mapping') {
     return t('modelHub.sourceMapping')
   }
@@ -560,295 +489,17 @@ function formatRateMultiplier(rate: number): string {
   return rate.toFixed(2).replace(/\.?0+$/, '')
 }
 
-function formatEffectiveRateAdjustedPrice(price: number, rate: number, scale: number): string {
-  const effectiveRate = Number.isFinite(rate) && rate >= 0 ? rate : 1
-  return formatCurrency(price * scale * effectiveRate)
-}
-
-function formatPerMillionPrice(price?: number | null, rate = 1): string {
+function formatPerMillionPrice(price?: number | null): string {
   if (price === null || price === undefined) {
     return t('modelHub.pricingUnavailable')
   }
-  return `${formatEffectiveRateAdjustedPrice(price, rate, PER_MILLION_TOKENS)} ${t('modelHub.perMillionTokens')}`
-}
-
-function formatPerMillionPriceRange(price: number, minRate: number, maxRate: number): string {
-  const min = formatEffectiveRateAdjustedPrice(price, minRate, PER_MILLION_TOKENS)
-  const max = formatEffectiveRateAdjustedPrice(price, maxRate, PER_MILLION_TOKENS)
-  if (min === max) {
-    return `${min} ${t('modelHub.perMillionTokens')}`
-  }
-  return `${min}-${max} ${t('modelHub.perMillionTokens')}`
-}
-
-function formatPerRequestPrice(price?: number | null, billingMode?: string | null, rate = 1): string {
-  if (price === null || price === undefined) {
-    return t('modelHub.pricingUnavailable')
-  }
-  const unitKey = billingMode === 'image' ? 'modelHub.perImage' : 'modelHub.perRequest'
-  return `${formatEffectiveRateAdjustedPrice(price, rate, 1)} ${t(unitKey)}`
-}
-
-function formatCompactTokenCount(tokens?: number | null): string {
-  if (tokens === null || tokens === undefined || !Number.isFinite(tokens)) {
-    return '0'
-  }
-  if (tokens >= 1_000_000) {
-    return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 === 0 ? 0 : 1)}M`
-  }
-  if (tokens >= 1_000) {
-    return `${(tokens / 1_000).toFixed(tokens % 1_000 === 0 ? 0 : 1)}K`
-  }
-  return `${tokens}`
-}
-
-function formatTokenRange(minTokens?: number, maxTokens?: number | null): string {
-  const lower = formatCompactTokenCount(minTokens ?? 0)
-  if (maxTokens === null || maxTokens === undefined) {
-    return `${lower}+`
-  }
-  return `${lower}-${formatCompactTokenCount(maxTokens)}`
-}
-
-function formatTokenIntervalBadge(interval: UserPricingInterval, rate: number): string | null {
-  const parts: string[] = []
-  if (interval.input_price !== undefined && interval.input_price !== null) {
-    parts.push(`${t('modelHub.inputPriceShort')} ${formatPerMillionPrice(interval.input_price, rate)}`)
-  }
-  if (interval.output_price !== undefined && interval.output_price !== null) {
-    parts.push(`${t('modelHub.outputPriceShort')} ${formatPerMillionPrice(interval.output_price, rate)}`)
-  }
-  if (parts.length === 0) {
-    return null
-  }
-  return `${formatTokenRange(interval.min_tokens, interval.max_tokens)} ${parts.join(' · ')}`
-}
-
-function formatRequestTierLabel(tier: UserPricingInterval): string {
-  if (tier.tier_label) {
-    return tier.tier_label
-  }
-  return formatTokenRange(tier.min_tokens ?? 0, tier.max_tokens ?? null)
-}
-
-function getPricingBadges(model: SupportedModel, catalog: GroupModelCatalog): PricingBadge[] {
-  if (isDynamicCatalog(catalog)) {
-    return getDynamicPricingBadges(model, catalog)
-  }
-  const rate = catalog.effective_rate_multiplier
-  const badges: PricingBadge[] = [
-    {
-      key: `rate:${model.id}`,
-      text: `${t('modelHub.rateShort')} ${formatRateMultiplier(rate)}x`,
-      tone: 'rate'
-    }
-  ]
-
-  const pricing = model.pricing
-  if (!pricing) {
-    return badges
-  }
-
-  if (pricing.input_price !== undefined && pricing.input_price !== null) {
-    badges.push({
-      key: `input:${model.id}`,
-      text: `${t('modelHub.inputPriceShort')} ${formatPerMillionPrice(pricing.input_price, rate)}`,
-      tone: 'input'
-    })
-  }
-  if (pricing.output_price !== undefined && pricing.output_price !== null) {
-    badges.push({
-      key: `output:${model.id}`,
-      text: `${t('modelHub.outputPriceShort')} ${formatPerMillionPrice(pricing.output_price, rate)}`,
-      tone: 'output'
-    })
-  }
-  if (pricing.image_output_price !== undefined && pricing.image_output_price !== null) {
-    badges.push({
-      key: `image-output:${model.id}`,
-      text: `${t('modelHub.imageOutputPriceShort')} ${formatPerMillionPrice(pricing.image_output_price, rate)}`,
-      tone: 'image'
-    })
-  }
-  if (pricing.per_request_price !== undefined && pricing.per_request_price !== null) {
-    badges.push({
-      key: `request-default:${model.id}`,
-      text: `${t('modelHub.defaultPriceShort')} ${formatPerRequestPrice(pricing.per_request_price, pricing.billing_mode, rate)}`,
-      tone: 'request'
-    })
-  }
-  for (const [index, tier] of (pricing.intervals || []).entries()) {
-    if (tier.per_request_price === undefined || tier.per_request_price === null) {
-      continue
-    }
-    badges.push({
-      key: `request-tier:${model.id}:${index}`,
-      text: `${formatRequestTierLabel(tier)} ${formatPerRequestPrice(tier.per_request_price, pricing.billing_mode, rate)}`,
-      tone: 'request'
-    })
-  }
-  for (const [index, interval] of (pricing.intervals || []).entries()) {
-    const text = formatTokenIntervalBadge(interval, rate)
-    if (!text) {
-      continue
-    }
-    badges.push({
-      key: `token-interval:${model.id}:${index}`,
-      text,
-      tone: 'interval'
-    })
-  }
-
-  return badges
-}
-
-function getDynamicPricingBadges(model: SupportedModel, catalog: GroupModelCatalog): PricingBadge[] {
-  const budget = catalog.group.dynamic_budget_multiplier ?? catalog.group.default_budget_multiplier
-  const minRate = catalog.group.dynamic_multiplier_min
-  const maxRate = catalog.group.dynamic_multiplier_max
-  const matchedRate = catalog.group.dynamic_budget_matched_multiplier
-  const badges: PricingBadge[] = [
-    {
-      key: `dynamic:${model.id}`,
-      text: t('modelHub.dynamicShort'),
-      tone: 'rate'
-    },
-  ]
-  if (budget !== null && budget !== undefined) {
-    badges.push({
-      key: `dynamic-budget:${model.id}`,
-      text: `${t('modelHub.budgetShort')} ${formatRateMultiplier(budget)}x`,
-      tone: 'rate'
-    })
-  }
-  if (minRate !== null && minRate !== undefined && maxRate !== null && maxRate !== undefined) {
-    badges.push({
-      key: `dynamic-range:${model.id}`,
-      text: `${t('modelHub.accountRateRangeShort')} ${formatRateRange(minRate, maxRate)}`,
-      tone: 'rate'
-    })
-  }
-  badges.push({
-    key: `dynamic-budget-match:${model.id}`,
-    text: `${t('modelHub.budgetMatchedRateShort')} ${matchedRate === null || matchedRate === undefined ? t('modelHub.noBudgetMatchedRate') : `${formatRateMultiplier(matchedRate)}x`}`,
-    tone: 'rate'
-  })
-
-  const pricing = model.pricing
-  if (!pricing || minRate === null || minRate === undefined || maxRate === null || maxRate === undefined) {
-    return badges
-  }
-  if (pricing.input_price !== undefined && pricing.input_price !== null) {
-    badges.push({
-      key: `dynamic-input:${model.id}`,
-      text: `${t('modelHub.inputPriceShort')} ${formatPerMillionPriceRange(pricing.input_price, minRate, maxRate)}`,
-      tone: 'input'
-    })
-  }
-  if (pricing.output_price !== undefined && pricing.output_price !== null) {
-    badges.push({
-      key: `dynamic-output:${model.id}`,
-      text: `${t('modelHub.outputPriceShort')} ${formatPerMillionPriceRange(pricing.output_price, minRate, maxRate)}`,
-      tone: 'output'
-    })
-  }
-  if (pricing.image_output_price !== undefined && pricing.image_output_price !== null) {
-    badges.push({
-      key: `dynamic-image-output:${model.id}`,
-      text: `${t('modelHub.imageOutputPriceShort')} ${formatPerMillionPriceRange(pricing.image_output_price, minRate, maxRate)}`,
-      tone: 'image'
-    })
-  }
-  if (matchedRate !== null && matchedRate !== undefined) {
-    if (pricing.input_price !== undefined && pricing.input_price !== null) {
-      badges.push({
-        key: `dynamic-input-reference:${model.id}`,
-        text: `${t('modelHub.budgetReferenceShort')} ${t('modelHub.inputPriceShort')} ${formatPerMillionPrice(pricing.input_price, matchedRate)}`,
-        tone: 'interval'
-      })
-    }
-    if (pricing.output_price !== undefined && pricing.output_price !== null) {
-      badges.push({
-        key: `dynamic-output-reference:${model.id}`,
-        text: `${t('modelHub.budgetReferenceShort')} ${t('modelHub.outputPriceShort')} ${formatPerMillionPrice(pricing.output_price, matchedRate)}`,
-        tone: 'interval'
-      })
-    }
-    if (pricing.image_output_price !== undefined && pricing.image_output_price !== null) {
-      badges.push({
-        key: `dynamic-image-reference:${model.id}`,
-        text: `${t('modelHub.budgetReferenceShort')} ${t('modelHub.imageOutputPriceShort')} ${formatPerMillionPrice(pricing.image_output_price, matchedRate)}`,
-        tone: 'interval'
-      })
-    }
-  }
-  return badges
-}
-
-function isDynamicCatalog(catalog: GroupModelCatalog): boolean {
-  return catalog.group.pricing_mode === 'dynamic'
-}
-
-function formatRateRange(minRate: number, maxRate: number): string {
-  const min = formatRateMultiplier(minRate)
-  const max = formatRateMultiplier(maxRate)
-  if (min === max) {
-    return `${min}x`
-  }
-  return `${min}x-${max}x`
-}
-
-function getCatalogPricingSummary(catalog: GroupModelCatalog): string {
-  if (!isDynamicCatalog(catalog)) {
-    return t('modelHub.pricingComputedWithRate', { rate: formatRateMultiplier(catalog.effective_rate_multiplier) })
-  }
-  const budget = catalog.group.dynamic_budget_multiplier ?? catalog.group.default_budget_multiplier
-  const budgetText = budget === null || budget === undefined ? '-' : formatRateMultiplier(budget)
-  const minRate = catalog.group.dynamic_multiplier_min
-  const maxRate = catalog.group.dynamic_multiplier_max
-  if (minRate === null || minRate === undefined || maxRate === null || maxRate === undefined) {
-    return t('modelHub.dynamicPricingSummaryNoRange', { budget: budgetText })
-  }
-  return t('modelHub.dynamicPricingSummary', {
-    budget: budgetText,
-    range: formatRateRange(minRate, maxRate)
-  })
-}
-
-function pricingBadgeClass(tone: PricingBadge['tone']): string {
-  const base = 'inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold'
-  if (tone === 'rate') {
-    return `${base} bg-slate-100 text-slate-700 dark:bg-dark-700 dark:text-slate-200`
-  }
-  if (tone === 'input') {
-    return `${base} bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300`
-  }
-  if (tone === 'output') {
-    return `${base} bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300`
-  }
-  if (tone === 'request') {
-    return `${base} bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300`
-  }
-  if (tone === 'image') {
-    return `${base} bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-300`
-  }
-  return `${base} bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300`
+  return `${formatCurrency(price)} ${t('modelHub.perMillionTokens')}`
 }
 
 function hasDisplayedPricing(model: SupportedModel): boolean {
-  return Boolean(
-      model.pricing &&
-    (
-      model.pricing.input_price !== undefined ||
-      model.pricing.output_price !== undefined ||
-      model.pricing.image_output_price !== undefined ||
-      model.pricing.per_request_price !== undefined ||
-      (model.pricing.intervals || []).some((interval) =>
-        interval.input_price !== undefined ||
-        interval.output_price !== undefined ||
-        interval.per_request_price !== undefined
-      )
-    )
+  return (
+    model.pricing?.input_price_per_million_tokens !== undefined ||
+    model.pricing?.output_price_per_million_tokens !== undefined
   )
 }
 
@@ -913,11 +564,7 @@ async function loadCatalogs() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const [channels, rates] = await Promise.all([
-      userChannelsAPI.getAvailable(),
-      userGroupsAPI.getUserGroupRates().catch(() => ({} as Record<number, number>)),
-    ])
-    catalogs.value = buildCatalogs(channels, rates)
+    catalogs.value = await userGroupsAPI.getModels()
   } catch (error) {
     console.error('Failed to load model catalogs:', error)
     errorMessage.value = t('modelHub.loadFailedDescription')
@@ -929,72 +576,4 @@ async function loadCatalogs() {
 onMounted(() => {
   loadCatalogs()
 })
-
-function buildCatalogs(channels: UserAvailableChannel[], rates: Record<number, number>): GroupModelCatalog[] {
-  const byGroup = new Map<number, GroupModelCatalog>()
-  const modelKeysByGroup = new Map<number, Set<string>>()
-
-  for (const channel of channels) {
-    for (const section of channel.platforms) {
-      for (const group of section.groups) {
-        const catalog = ensureCatalog(byGroup, modelKeysByGroup, group, rates)
-        for (const model of section.supported_models) {
-          appendModel(catalog, modelKeysByGroup.get(group.id)!, model)
-        }
-      }
-    }
-  }
-
-  return Array.from(byGroup.values()).sort((a, b) => a.group.name.localeCompare(b.group.name))
-}
-
-function ensureCatalog(
-  byGroup: Map<number, GroupModelCatalog>,
-  modelKeysByGroup: Map<number, Set<string>>,
-  group: UserAvailableGroup,
-  rates: Record<number, number>,
-): GroupModelCatalog {
-  const existing = byGroup.get(group.id)
-  if (existing) {
-    return existing
-  }
-
-  const userRate = rates[group.id] ?? null
-  const rate = userRate ?? group.rate_multiplier
-  const catalog: GroupModelCatalog = {
-    group: {
-      id: group.id,
-      name: group.name,
-      description: null,
-      platform: group.platform as GroupPlatform,
-      subscription_type: (group.subscription_type || 'standard') as SubscriptionType,
-      rate_multiplier: group.rate_multiplier,
-      pricing_mode: group.pricing_mode === 'dynamic' ? 'dynamic' : 'fixed',
-      default_budget_multiplier: group.default_budget_multiplier ?? null,
-      dynamic_multiplier_min: group.dynamic_multiplier_min ?? null,
-      dynamic_multiplier_max: group.dynamic_multiplier_max ?? null,
-      dynamic_budget_multiplier: group.dynamic_budget_multiplier ?? group.default_budget_multiplier ?? null,
-      dynamic_budget_matched_multiplier: group.dynamic_budget_matched_multiplier ?? null,
-    },
-    source: 'default',
-    user_rate_multiplier: userRate,
-    effective_rate_multiplier: rate,
-    models: [],
-  }
-  byGroup.set(group.id, catalog)
-  modelKeysByGroup.set(group.id, new Set<string>())
-  return catalog
-}
-
-function appendModel(catalog: GroupModelCatalog, seen: Set<string>, model: UserSupportedModel) {
-  if (seen.has(model.name)) {
-    return
-  }
-  seen.add(model.name)
-  catalog.models.push({
-    id: model.name,
-    display_name: model.name,
-    pricing: model.pricing,
-  })
-}
 </script>

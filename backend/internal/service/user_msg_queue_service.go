@@ -12,7 +12,6 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/tidwall/gjson"
 )
 
 // UserMsgQueueCache 用户消息串行队列 Redis 缓存接口
@@ -63,48 +62,43 @@ func NewUserMessageQueueService(cache UserMsgQueueCache, rpmCache RPMCache, cfg 
 // 2. 最后一条消息 role == "user"
 // 3. 最后一条消息 content（如果是数组）中不含 type:"tool_result" / "tool_use_result"
 func IsRealUserMessage(parsed *ParsedRequest) bool {
-	if parsed == nil {
-		return false
-	}
-	messagesRaw := parsed.MessagesRaw()
-	if len(messagesRaw) == 0 {
+	if parsed == nil || len(parsed.Messages) == 0 {
 		return false
 	}
 
-	messages := gjson.ParseBytes(messagesRaw)
-	if !messages.IsArray() {
-		return false
-	}
-	lastMsg := gjson.Result{}
-	messages.ForEach(func(_, msg gjson.Result) bool {
-		lastMsg = msg
-		return true
-	})
-	if !lastMsg.Exists() || !lastMsg.IsObject() {
-		return false
-	}
-	if lastMsg.Get("role").String() != "user" {
+	lastMsg := parsed.Messages[len(parsed.Messages)-1]
+	msgMap, ok := lastMsg.(map[string]any)
+	if !ok {
 		return false
 	}
 
-	content := lastMsg.Get("content")
-	if !content.Exists() {
-		return true
-	}
-	if !content.IsArray() {
-		return true
+	role, _ := msgMap["role"].(string)
+	if role != "user" {
+		return false
 	}
 
-	isReal := true
-	content.ForEach(func(_, item gjson.Result) bool {
-		itemType := item.Get("type").String()
+	// 检查 content 是否包含 tool_result 类型
+	content, ok := msgMap["content"]
+	if !ok {
+		return true // 没有 content 字段，视为普通用户消息
+	}
+
+	contentArr, ok := content.([]any)
+	if !ok {
+		return true // content 不是数组（可能是 string），视为普通用户消息
+	}
+
+	for _, item := range contentArr {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		itemType, _ := itemMap["type"].(string)
 		if itemType == "tool_result" || itemType == "tool_use_result" {
-			isReal = false
 			return false
 		}
-		return true
-	})
-	return isReal
+	}
+	return true
 }
 
 // TryAcquire 尝试立即获取串行锁

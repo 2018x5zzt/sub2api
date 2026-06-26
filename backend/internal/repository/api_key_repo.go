@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -45,8 +44,6 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 		SetName(key.Name).
 		SetStatus(key.Status).
 		SetNillableGroupID(key.GroupID).
-		SetNillableSubscriptionProductFamily(key.SubscriptionProductFamily).
-		SetNillableBudgetMultiplier(key.BudgetMultiplier).
 		SetNillableLastUsedAt(key.LastUsedAt).
 		SetQuota(key.Quota).
 		SetQuotaUsed(key.QuotaUsed).
@@ -109,11 +106,7 @@ func (r *apiKeyRepository) GetKeyAndOwnerID(ctx context.Context, id int64) (stri
 func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.APIKey, error) {
 	m, err := r.activeQuery().
 		Where(apikey.KeyEQ(key)).
-		WithUser(func(q *dbent.UserQuery) {
-			q.WithAllowedGroups(func(gq *dbent.GroupQuery) {
-				gq.Select(group.FieldID)
-			})
-		}).
+		WithUser().
 		WithGroup().
 		Only(ctx)
 	if err != nil {
@@ -132,9 +125,6 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldID,
 			apikey.FieldUserID,
 			apikey.FieldGroupID,
-			apikey.FieldSubscriptionProductFamily,
-			apikey.FieldBudgetMultiplier,
-			apikey.FieldName,
 			apikey.FieldStatus,
 			apikey.FieldIPWhitelist,
 			apikey.FieldIPBlacklist,
@@ -159,43 +149,29 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				user.FieldBalanceNotifyThreshold,
 				user.FieldBalanceNotifyExtraEmails,
 				user.FieldTotalRecharged,
-				user.FieldSubscriptionBalanceFallbackEnabled,
-				user.FieldSubscriptionBalanceFallbackLimitUsd,
-				user.FieldSubscriptionBalanceFallbackUsedUsd,
-				user.FieldSubscriptionBalanceFallbackGroupID,
 				user.FieldSignupSource,
 				user.FieldLastLoginAt,
 				user.FieldLastActiveAt,
 				user.FieldRpmLimit,
 			)
-			q.WithAllowedGroups(func(gq *dbent.GroupQuery) {
-				gq.Select(group.FieldID)
-			})
 		}).
 		WithGroup(func(q *dbent.GroupQuery) {
 			q.Select(
 				group.FieldID,
 				group.FieldName,
 				group.FieldPlatform,
-				group.FieldIsExclusive,
 				group.FieldStatus,
 				group.FieldSubscriptionType,
 				group.FieldRateMultiplier,
-				group.FieldPricingMode,
-				group.FieldDefaultBudgetMultiplier,
 				group.FieldDailyLimitUsd,
 				group.FieldWeeklyLimitUsd,
 				group.FieldMonthlyLimitUsd,
-				group.FieldAllowImageGeneration,
-				group.FieldImageRateIndependent,
-				group.FieldImageRateMultiplier,
 				group.FieldImagePrice1k,
 				group.FieldImagePrice2k,
 				group.FieldImagePrice4k,
 				group.FieldClaudeCodeOnly,
 				group.FieldFallbackGroupID,
 				group.FieldFallbackGroupIDOnInvalidRequest,
-				group.FieldBalanceFallbackGroupID,
 				group.FieldModelRoutingEnabled,
 				group.FieldModelRouting,
 				group.FieldMcpXMLInject,
@@ -203,7 +179,6 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldAllowMessagesDispatch,
 				group.FieldDefaultMappedModel,
 				group.FieldMessagesDispatchModelConfig,
-				group.FieldModelsListConfig,
 				group.FieldRpmLimit,
 			)
 		}).
@@ -242,16 +217,6 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 		builder.SetGroupID(*key.GroupID)
 	} else {
 		builder.ClearGroupID()
-	}
-	if key.SubscriptionProductFamily != nil && strings.TrimSpace(*key.SubscriptionProductFamily) != "" {
-		builder.SetSubscriptionProductFamily(strings.TrimSpace(*key.SubscriptionProductFamily))
-	} else {
-		builder.ClearSubscriptionProductFamily()
-	}
-	if key.BudgetMultiplier != nil {
-		builder.SetBudgetMultiplier(*key.BudgetMultiplier)
-	} else {
-		builder.ClearBudgetMultiplier()
 	}
 
 	// Expiration time
@@ -325,76 +290,6 @@ func (r *apiKeyRepository) Delete(ctx context.Context, id int64) error {
 			Exist(mixins.SkipSoftDelete(ctx))
 		if err != nil {
 			return err
-		}
-		if exists {
-			return nil
-		}
-		return service.ErrAPIKeyNotFound
-	}
-	return nil
-}
-
-// DeleteWithAudit 在同一事务内:
-//  1. 把(明文 key、所有者、key 名称)写入 deleted_api_key_audits;
-//  2. 软删除该 key(tombstone 覆盖 key 列以释放唯一约束)。
-//
-// 保证"被删除的 key 一定能反查到所有者"。事务模式与 group_repo.DeleteCascade 一致。
-func (r *apiKeyRepository) DeleteWithAudit(ctx context.Context, id int64) error {
-	tombstoneKey := fmt.Sprintf("__deleted__%d__%d", id, time.Now().UnixNano())
-
-	if existingTx := dbent.TxFromContext(ctx); existingTx != nil {
-		return r.deleteWithAudit(ctx, existingTx.Client(), id, tombstoneKey)
-	}
-
-	tx, err := r.client.Tx(ctx)
-	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
-		return err
-	}
-	exec := r.client
-	if err == nil {
-		defer func() { _ = tx.Rollback() }()
-		exec = tx.Client()
-	}
-
-	if err := r.deleteWithAudit(ctx, exec, id, tombstoneKey); err != nil {
-		return err
-	}
-
-	if tx != nil {
-		return tx.Commit()
-	}
-	return nil
-}
-
-func (r *apiKeyRepository) deleteWithAudit(ctx context.Context, exec *dbent.Client, id int64, tombstoneKey string) error {
-	// 1. 审计:数据源即 api_keys 当前行;WHERE deleted_at IS NULL 保证只对未删除行写一次。
-	if _, err := exec.ExecContext(ctx, `
-		INSERT INTO deleted_api_key_audits (key, api_key_id, user_id, key_name, deleted_at)
-		SELECT key, id, user_id, name, NOW()
-		FROM api_keys
-		WHERE id = $1 AND deleted_at IS NULL`, id); err != nil {
-		return err
-	}
-
-	// 2. 软删除(tombstone 覆盖 key)。
-	res, err := exec.ExecContext(ctx, `
-		UPDATE api_keys
-		SET key = $1, deleted_at = NOW(), updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL`, tombstoneKey, id)
-	if err != nil {
-		return err
-	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected == 0 {
-		// 并发/重复删除:记录已存在(已软删)则幂等返回 nil(defer 回滚空事务),否则 NotFound。
-		exists, existErr := r.client.APIKey.Query().
-			Where(apikey.IDEQ(id)).
-			Exist(mixins.SkipSoftDelete(ctx))
-		if existErr != nil {
-			return existErr
 		}
 		if exists {
 			return nil
@@ -719,42 +614,32 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		return nil
 	}
 	out := &service.APIKey{
-		ID:                        m.ID,
-		UserID:                    m.UserID,
-		Key:                       m.Key,
-		Name:                      m.Name,
-		Status:                    m.Status,
-		IPWhitelist:               m.IPWhitelist,
-		IPBlacklist:               m.IPBlacklist,
-		LastUsedAt:                m.LastUsedAt,
-		CreatedAt:                 m.CreatedAt,
-		UpdatedAt:                 m.UpdatedAt,
-		GroupID:                   m.GroupID,
-		SubscriptionProductFamily: m.SubscriptionProductFamily,
-		BudgetMultiplier:          m.BudgetMultiplier,
-		Quota:                     m.Quota,
-		QuotaUsed:                 m.QuotaUsed,
-		ExpiresAt:                 m.ExpiresAt,
-		RateLimit5h:               m.RateLimit5h,
-		RateLimit1d:               m.RateLimit1d,
-		RateLimit7d:               m.RateLimit7d,
-		Usage5h:                   m.Usage5h,
-		Usage1d:                   m.Usage1d,
-		Usage7d:                   m.Usage7d,
-		Window5hStart:             m.Window5hStart,
-		Window1dStart:             m.Window1dStart,
-		Window7dStart:             m.Window7dStart,
+		ID:            m.ID,
+		UserID:        m.UserID,
+		Key:           m.Key,
+		Name:          m.Name,
+		Status:        m.Status,
+		IPWhitelist:   m.IPWhitelist,
+		IPBlacklist:   m.IPBlacklist,
+		LastUsedAt:    m.LastUsedAt,
+		CreatedAt:     m.CreatedAt,
+		UpdatedAt:     m.UpdatedAt,
+		GroupID:       m.GroupID,
+		Quota:         m.Quota,
+		QuotaUsed:     m.QuotaUsed,
+		ExpiresAt:     m.ExpiresAt,
+		RateLimit5h:   m.RateLimit5h,
+		RateLimit1d:   m.RateLimit1d,
+		RateLimit7d:   m.RateLimit7d,
+		Usage5h:       m.Usage5h,
+		Usage1d:       m.Usage1d,
+		Usage7d:       m.Usage7d,
+		Window5hStart: m.Window5hStart,
+		Window1dStart: m.Window1dStart,
+		Window7dStart: m.Window7dStart,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
-		if allowed := m.Edges.User.Edges.AllowedGroups; len(allowed) > 0 {
-			out.User.AllowedGroups = make([]int64, 0, len(allowed))
-			for _, g := range allowed {
-				if g != nil {
-					out.User.AllowedGroups = append(out.User.AllowedGroups, g.ID)
-				}
-			}
-		}
 	}
 	if m.Edges.Group != nil {
 		out.Group = groupEntityToService(m.Edges.Group)
@@ -767,42 +652,28 @@ func userEntityToService(u *dbent.User) *service.User {
 		return nil
 	}
 	out := &service.User{
-		ID:                                  u.ID,
-		Email:                               u.Email,
-		Username:                            u.Username,
-		Notes:                               u.Notes,
-		PasswordHash:                        u.PasswordHash,
-		Role:                                u.Role,
-		Balance:                             u.Balance,
-		Concurrency:                         u.Concurrency,
-		Status:                              u.Status,
-		InviteCode:                          normalizedInviteCode(derefString(u.InviteCode)),
-		InvitedByUserID:                     u.InvitedByUserID,
-		InviteBoundAt:                       u.InviteBoundAt,
-		SignupSource:                        u.SignupSource,
-		LastLoginAt:                         u.LastLoginAt,
-		LastActiveAt:                        u.LastActiveAt,
-		TotpSecretEncrypted:                 u.TotpSecretEncrypted,
-		TotpEnabled:                         u.TotpEnabled,
-		TotpEnabledAt:                       u.TotpEnabledAt,
-		BalanceNotifyEnabled:                u.BalanceNotifyEnabled,
-		BalanceNotifyThresholdType:          u.BalanceNotifyThresholdType,
-		BalanceNotifyThreshold:              u.BalanceNotifyThreshold,
-		TotalRecharged:                      u.TotalRecharged,
-		SubscriptionBalanceFallbackEnabled:  u.SubscriptionBalanceFallbackEnabled,
-		SubscriptionBalanceFallbackLimitUSD: u.SubscriptionBalanceFallbackLimitUsd,
-		SubscriptionBalanceFallbackUsedUSD:  u.SubscriptionBalanceFallbackUsedUsd,
-		SubscriptionBalanceFallbackGroupID:  u.SubscriptionBalanceFallbackGroupID,
-		RPMLimit:                            u.RpmLimit,
-		CreatedAt:                           u.CreatedAt,
-		UpdatedAt:                           u.UpdatedAt,
-		DeletedAt:                           u.DeletedAt,
-	}
-	if len(u.Edges.AllowedGroups) > 0 {
-		out.AllowedGroups = make([]int64, 0, len(u.Edges.AllowedGroups))
-		for i := range u.Edges.AllowedGroups {
-			out.AllowedGroups = append(out.AllowedGroups, u.Edges.AllowedGroups[i].ID)
-		}
+		ID:                         u.ID,
+		Email:                      u.Email,
+		Username:                   u.Username,
+		Notes:                      u.Notes,
+		PasswordHash:               u.PasswordHash,
+		Role:                       u.Role,
+		Balance:                    u.Balance,
+		Concurrency:                u.Concurrency,
+		Status:                     u.Status,
+		SignupSource:               u.SignupSource,
+		LastLoginAt:                u.LastLoginAt,
+		LastActiveAt:               u.LastActiveAt,
+		TotpSecretEncrypted:        u.TotpSecretEncrypted,
+		TotpEnabled:                u.TotpEnabled,
+		TotpEnabledAt:              u.TotpEnabledAt,
+		BalanceNotifyEnabled:       u.BalanceNotifyEnabled,
+		BalanceNotifyThresholdType: u.BalanceNotifyThresholdType,
+		BalanceNotifyThreshold:     u.BalanceNotifyThreshold,
+		TotalRecharged:             u.TotalRecharged,
+		RPMLimit:                   u.RpmLimit,
+		CreatedAt:                  u.CreatedAt,
+		UpdatedAt:                  u.UpdatedAt,
 	}
 	// Parse extra emails JSON (supports both old []string and new []NotifyEmailEntry format)
 	if u.BalanceNotifyExtraEmails != "" && u.BalanceNotifyExtraEmails != "[]" {
@@ -821,8 +692,6 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		Description:                     derefString(g.Description),
 		Platform:                        g.Platform,
 		RateMultiplier:                  g.RateMultiplier,
-		PricingMode:                     g.PricingMode,
-		DefaultBudgetMultiplier:         g.DefaultBudgetMultiplier,
 		IsExclusive:                     g.IsExclusive,
 		Status:                          g.Status,
 		Hydrated:                        true,
@@ -830,9 +699,6 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		DailyLimitUSD:                   g.DailyLimitUsd,
 		WeeklyLimitUSD:                  g.WeeklyLimitUsd,
 		MonthlyLimitUSD:                 g.MonthlyLimitUsd,
-		AllowImageGeneration:            g.AllowImageGeneration,
-		ImageRateIndependent:            g.ImageRateIndependent,
-		ImageRateMultiplier:             g.ImageRateMultiplier,
 		ImagePrice1K:                    g.ImagePrice1k,
 		ImagePrice2K:                    g.ImagePrice2k,
 		ImagePrice4K:                    g.ImagePrice4k,
@@ -840,7 +706,6 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
 		FallbackGroupID:                 g.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: g.FallbackGroupIDOnInvalidRequest,
-		BalanceFallbackGroupID:          g.BalanceFallbackGroupID,
 		ModelRouting:                    g.ModelRouting,
 		ModelRoutingEnabled:             g.ModelRoutingEnabled,
 		MCPXMLInject:                    g.McpXMLInject,
@@ -851,7 +716,6 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		RequirePrivacySet:               g.RequirePrivacySet,
 		DefaultMappedModel:              g.DefaultMappedModel,
 		MessagesDispatchModelConfig:     g.MessagesDispatchModelConfig,
-		ModelsListConfig:                g.ModelsListConfig,
 		RPMLimit:                        g.RpmLimit,
 		CreatedAt:                       g.CreatedAt,
 		UpdatedAt:                       g.UpdatedAt,

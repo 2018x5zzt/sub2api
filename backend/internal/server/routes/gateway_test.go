@@ -36,7 +36,6 @@ func newGatewayRoutesTestRouter() *gin.Engine {
 		nil,
 		nil,
 		nil,
-		nil,
 		&config.Config{},
 	)
 
@@ -76,56 +75,5 @@ func TestGatewayRoutesOpenAIImagesPathsAreRegistered(t *testing.T) {
 
 		router.ServeHTTP(w, req)
 		require.NotEqual(t, http.StatusNotFound, w.Code, "path=%s should hit OpenAI images handler", path)
-	}
-}
-
-func TestGatewayRoutesOpenAIImageJobPathsAreRegistered(t *testing.T) {
-	router := newGatewayRoutesTestRouter()
-
-	for _, tc := range []struct {
-		method string
-		path   string
-		body   string
-	}{
-		{
-			method: http.MethodPost,
-			path:   "/v1/images/jobs/generations",
-			body:   `{"model":"gpt-image-2","prompt":"draw a cat"}`,
-		},
-		{
-			method: http.MethodPost,
-			path:   "/v1/images/jobs/edits",
-			body:   `{"model":"gpt-image-2","images":[{"image_url":"https://example.com/a.png"}]}`,
-		},
-		{
-			method: http.MethodGet,
-			path:   "/v1/images/jobs/imgjob_test_1",
-		},
-		{
-			method: http.MethodPost,
-			path:   "/images/jobs/generations",
-			body:   `{"model":"gpt-image-2","prompt":"draw a cat"}`,
-		},
-		{
-			method: http.MethodPost,
-			path:   "/images/jobs/edits",
-			body:   `{"model":"gpt-image-2","images":[{"image_url":"https://example.com/a.png"}]}`,
-		},
-		{
-			method: http.MethodGet,
-			path:   "/images/jobs/imgjob_test_2",
-		},
-	} {
-		var req *http.Request
-		if tc.body == "" {
-			req = httptest.NewRequest(tc.method, tc.path, nil)
-		} else {
-			req = httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
-			req.Header.Set("Content-Type", "application/json")
-		}
-		w := httptest.NewRecorder()
-
-		router.ServeHTTP(w, req)
-		require.NotEqual(t, http.StatusNotFound, w.Code, "path=%s should hit OpenAI image jobs handler", tc.path)
 	}
 }

@@ -140,7 +140,7 @@ func TestAccountUsageService_GetOpenAIUsage_DoesNotPromoteCodexExtraToRateLimit(
 		},
 	}
 
-	usage, err := svc.getOpenAIUsage(context.Background(), account, false)
+	usage, err := svc.getOpenAIUsage(context.Background(), account)
 	if err != nil {
 		t.Fatalf("getOpenAIUsage() error = %v", err)
 	}

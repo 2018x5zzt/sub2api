@@ -112,15 +112,6 @@ func TestResolveOpenAIForwardModel(t *testing.T) {
 			defaultMappedModel: "gpt-5.4",
 			expectedModel:      "gpt-5.5-openai-compact",
 		},
-		{
-			name: "canonicalizes gpt5.5 alias instead of group default",
-			account: &Account{
-				Credentials: map[string]any{},
-			},
-			requestedModel:     "gpt5.5",
-			defaultMappedModel: "gpt-5.4",
-			expectedModel:      "gpt-5.5",
-		},
 	}
 
 	for _, tt := range tests {
@@ -222,10 +213,6 @@ func TestNormalizeCodexModel(t *testing.T) {
 		"gpt-5.3-codex-spark-high":  "gpt-5.3-codex-spark",
 		"gpt-5.3-codex-spark-xhigh": "gpt-5.3-codex-spark",
 		"gpt-5.3":                   "gpt-5.3-codex",
-		"gpt5.5":                    "gpt-5.5",
-		"gpt5.5-xhigh":              "gpt-5.5",
-		"openai/gpt5.5":             "gpt-5.5",
-		"openai/gpt5.5-xhigh":       "gpt-5.5",
 		"gpt-image-2":               "gpt-image-2",
 		"gpt-5.4-nano":              "gpt-5.4-nano",
 		"gpt-5.4-nano-high":         "gpt-5.4-nano",
@@ -266,12 +253,6 @@ func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 			want:    "gpt-5.4",
 		},
 		{
-			name:    "oauth preserves codex auto review model",
-			account: &Account{Type: AccountTypeOAuth},
-			model:   "codex-auto-review",
-			want:    "codex-auto-review",
-		},
-		{
 			name:    "apikey preserves custom compatible model",
 			account: &Account{Type: AccountTypeAPIKey},
 			model:   "gemini-3-flash-preview",
@@ -283,12 +264,6 @@ func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 			model:   "gpt-4.1",
 			want:    "gpt-4.1",
 		},
-		{
-			name:    "apikey canonicalizes known gpt55 alias",
-			account: &Account{Type: AccountTypeAPIKey},
-			model:   "gpt5.5",
-			want:    "gpt-5.5",
-		},
 	}
 
 	for _, tt := range tests {
@@ -297,19 +272,5 @@ func TestNormalizeOpenAIModelForUpstream(t *testing.T) {
 				t.Fatalf("normalizeOpenAIModelForUpstream(...) = %q, want %q", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestUsageBillingModelCandidatesPreserveCodexAutoReviewModel(t *testing.T) {
-	candidates := usageBillingModelCandidates("codex-auto-review")
-
-	expected := []string{"codex-auto-review"}
-	if len(candidates) != len(expected) {
-		t.Fatalf("usageBillingModelCandidates(codex-auto-review) = %#v, want %#v", candidates, expected)
-	}
-	for i := range expected {
-		if candidates[i] != expected[i] {
-			t.Fatalf("usageBillingModelCandidates(codex-auto-review) = %#v, want %#v", candidates, expected)
-		}
 	}
 }

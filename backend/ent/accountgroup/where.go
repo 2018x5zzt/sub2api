@@ -25,11 +25,6 @@ func Priority(v int) predicate.AccountGroup {
 	return predicate.AccountGroup(sql.FieldEQ(FieldPriority, v))
 }
 
-// BillingMultiplier applies equality check predicate on the "billing_multiplier" field. It's identical to BillingMultiplierEQ.
-func BillingMultiplier(v float64) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldEQ(FieldBillingMultiplier, v))
-}
-
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.AccountGroup {
 	return predicate.AccountGroup(sql.FieldEQ(FieldCreatedAt, v))
@@ -113,46 +108,6 @@ func PriorityLT(v int) predicate.AccountGroup {
 // PriorityLTE applies the LTE predicate on the "priority" field.
 func PriorityLTE(v int) predicate.AccountGroup {
 	return predicate.AccountGroup(sql.FieldLTE(FieldPriority, v))
-}
-
-// BillingMultiplierEQ applies the EQ predicate on the "billing_multiplier" field.
-func BillingMultiplierEQ(v float64) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldEQ(FieldBillingMultiplier, v))
-}
-
-// BillingMultiplierNEQ applies the NEQ predicate on the "billing_multiplier" field.
-func BillingMultiplierNEQ(v float64) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldNEQ(FieldBillingMultiplier, v))
-}
-
-// BillingMultiplierIn applies the In predicate on the "billing_multiplier" field.
-func BillingMultiplierIn(vs ...float64) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldIn(FieldBillingMultiplier, vs...))
-}
-
-// BillingMultiplierNotIn applies the NotIn predicate on the "billing_multiplier" field.
-func BillingMultiplierNotIn(vs ...float64) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldNotIn(FieldBillingMultiplier, vs...))
-}
-
-// BillingMultiplierGT applies the GT predicate on the "billing_multiplier" field.
-func BillingMultiplierGT(v float64) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldGT(FieldBillingMultiplier, v))
-}
-
-// BillingMultiplierGTE applies the GTE predicate on the "billing_multiplier" field.
-func BillingMultiplierGTE(v float64) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldGTE(FieldBillingMultiplier, v))
-}
-
-// BillingMultiplierLT applies the LT predicate on the "billing_multiplier" field.
-func BillingMultiplierLT(v float64) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldLT(FieldBillingMultiplier, v))
-}
-
-// BillingMultiplierLTE applies the LTE predicate on the "billing_multiplier" field.
-func BillingMultiplierLTE(v float64) predicate.AccountGroup {
-	return predicate.AccountGroup(sql.FieldLTE(FieldBillingMultiplier, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	entsql "entgo.io/ent/dialect/sql"
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/subscriptionplan"
@@ -54,48 +53,6 @@ func validatePlanPatch(req UpdatePlanRequest) error {
 	}
 	if req.OriginalPrice != nil && *req.OriginalPrice < 0 {
 		return infraerrors.BadRequest("PLAN_ORIGINAL_PRICE_INVALID", "original price must be >= 0")
-	}
-	return nil
-}
-
-func (s *PaymentConfigService) validatePlanProductBinding(ctx context.Context, productID *int64, groupID int64) error {
-	if productID == nil || *productID <= 0 {
-		return nil
-	}
-	if groupID <= 0 {
-		return infraerrors.BadRequest("PLAN_GROUP_REQUIRED", "group is required")
-	}
-	if s == nil || s.entClient == nil {
-		return infraerrors.InternalServer("PAYMENT_CONFIG_UNAVAILABLE", "payment config service unavailable")
-	}
-	var exists bool
-	rows := &entsql.Rows{}
-	if err := s.entClient.Driver().Query(ctx, `
-SELECT EXISTS (
-	SELECT 1
-	FROM subscription_products sp
-	JOIN subscription_product_groups spg
-		ON spg.product_id = sp.id
-		AND spg.group_id = $2
-		AND spg.deleted_at IS NULL
-		AND spg.status = 'active'
-	WHERE sp.id = $1
-	  AND sp.deleted_at IS NULL
-	  AND sp.status = 'active'
-)`, []any{*productID, groupID}, rows); err != nil {
-		return fmt.Errorf("validate subscription product binding: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-	if rows.Next() {
-		if err := rows.Scan(&exists); err != nil {
-			return fmt.Errorf("scan subscription product binding: %w", err)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("scan subscription product binding: %w", err)
-	}
-	if !exists {
-		return infraerrors.BadRequest("PLAN_PRODUCT_NOT_BOUND_TO_GROUP", "subscription product must be active and bound to the selected group")
 	}
 	return nil
 }
@@ -167,17 +124,11 @@ func (s *PaymentConfigService) CreatePlan(ctx context.Context, req CreatePlanReq
 	if err := validatePlanRequired(req.Name, req.GroupID, req.Price, req.ValidityDays, req.ValidityUnit, req.OriginalPrice); err != nil {
 		return nil, err
 	}
-	if err := s.validatePlanProductBinding(ctx, req.ProductID, req.GroupID); err != nil {
-		return nil, err
-	}
 	b := s.entClient.SubscriptionPlan.Create().
 		SetGroupID(req.GroupID).SetName(req.Name).SetDescription(req.Description).
 		SetPrice(req.Price).SetValidityDays(req.ValidityDays).SetValidityUnit(req.ValidityUnit).
 		SetFeatures(req.Features).SetProductName(req.ProductName).
 		SetForSale(req.ForSale).SetSortOrder(req.SortOrder)
-	if req.ProductID != nil && *req.ProductID > 0 {
-		b.SetProductID(*req.ProductID)
-	}
 	if req.OriginalPrice != nil {
 		b.SetOriginalPrice(*req.OriginalPrice)
 	}
@@ -191,34 +142,9 @@ func (s *PaymentConfigService) UpdatePlan(ctx context.Context, id int64, req Upd
 	if err := validatePlanPatch(req); err != nil {
 		return nil, err
 	}
-	existing, err := s.entClient.SubscriptionPlan.Get(ctx, id)
-	if err != nil {
-		return nil, infraerrors.NotFound("PLAN_NOT_FOUND", "subscription plan not found")
-	}
-	groupID := existing.GroupID
-	if req.GroupID != nil {
-		groupID = *req.GroupID
-	}
-	productID := existing.ProductID
-	if req.ProductID != nil {
-		productID = nil
-		if *req.ProductID > 0 {
-			productID = req.ProductID
-		}
-	}
-	if err := s.validatePlanProductBinding(ctx, productID, groupID); err != nil {
-		return nil, err
-	}
 	u := s.entClient.SubscriptionPlan.UpdateOneID(id)
 	if req.GroupID != nil {
 		u.SetGroupID(*req.GroupID)
-	}
-	if req.ProductID != nil {
-		if *req.ProductID > 0 {
-			u.SetProductID(*req.ProductID)
-		} else {
-			u.ClearProductID()
-		}
 	}
 	if req.Name != nil {
 		u.SetName(*req.Name)

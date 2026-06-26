@@ -7,15 +7,6 @@ import (
 )
 
 func TestIsMigrationChecksumCompatible(t *testing.T) {
-	t.Run("047历史checksum可兼容", func(t *testing.T) {
-		ok := isMigrationChecksumCompatible(
-			"047_add_sora_pricing_and_media_type.sql",
-			"d806f44a7dd70b8a2f7abadcb5cc8bf75679db242dacab9c8a69886bc17ed10a",
-			"0039b5824ed248c24b9bf6a55e94decaa9423178cc9c068774f851542086c292",
-		)
-		require.True(t, ok)
-	})
-
 	t.Run("054历史checksum可兼容", func(t *testing.T) {
 		ok := isMigrationChecksumCompatible(
 			"054_drop_legacy_cache_columns.sql",
@@ -52,15 +43,6 @@ func TestIsMigrationChecksumCompatible(t *testing.T) {
 		require.True(t, ok)
 	})
 
-	t.Run("063历史checksum可兼容", func(t *testing.T) {
-		ok := isMigrationChecksumCompatible(
-			"063_add_sora_client_tables.sql",
-			"23a5777e8c38f269f8777e959af33db063891a8ba19eae0a96ee9c22e6b10103",
-			"ed8ae697b9b21672506f9c752f9671bc7c6e4d1d62e85aee510c48a8192cae7f",
-		)
-		require.True(t, ok)
-	})
-
 	t.Run("非白名单迁移不兼容", func(t *testing.T) {
 		ok := isMigrationChecksumCompatible(
 			"001_init.sql",
@@ -68,15 +50,6 @@ func TestIsMigrationChecksumCompatible(t *testing.T) {
 			"82de761156e03876653e7a6a4eee883cd927847036f779b0b9f34c42a8af7a7d",
 		)
 		require.False(t, ok)
-	})
-
-	t.Run("107历史checksum可兼容", func(t *testing.T) {
-		ok := isMigrationChecksumCompatible(
-			"107_add_account_cost_to_dashboard_tables.sql",
-			"96b42b8f7334af67219a40ef814b7be82f2d15776a8876d4bec40bda0f19aa41",
-			"8742f876b999808fc9f478fd2db06037b26d9ab74b10e872517211ee7805d663",
-		)
-		require.True(t, ok)
 	})
 
 	t.Run("109历史checksum可兼容", func(t *testing.T) {
@@ -178,15 +151,6 @@ func TestIsMigrationChecksumCompatible(t *testing.T) {
 			)
 			require.True(t, ok)
 		}
-	})
-
-	t.Run("140生产历史checksum可兼容当前不可变版本", func(t *testing.T) {
-		ok := isMigrationChecksumCompatible(
-			"140_restore_shared_subscription_products.sql",
-			"1355f6dd2f1f850707ccd915a2989a049b44df8baae8846b78a835bc80ddb150",
-			"e88e5d84273b555fa481d0a3fe604c4e445e1b48bed4049600eb06346e2528e1",
-		)
-		require.True(t, ok)
 	})
 
 	t.Run("119未知checksum不兼容", func(t *testing.T) {

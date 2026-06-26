@@ -50,15 +50,6 @@ func (Group) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
-		field.String("pricing_mode").
-			MaxLen(20).
-			Default("fixed").
-			Comment("Pricing mode: fixed or dynamic"),
-		field.Float("default_budget_multiplier").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
-			Comment("Default API key budget multiplier for dynamic pricing groups"),
 
 		// Subscription-related fields (added by migration 003)
 		field.String("platform").
@@ -83,16 +74,6 @@ func (Group) Fields() []ent.Field {
 			Default(30),
 
 		// 图片生成计费配置（antigravity 和 gemini 平台使用）
-		field.Bool("allow_image_generation").
-			Default(false).
-			Comment("是否允许该分组使用图片生成能力"),
-		field.Bool("image_rate_independent").
-			Default(false).
-			Comment("图片生成是否使用独立倍率；false 表示共享分组有效倍率"),
-		field.Float("image_rate_multiplier").
-			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}).
-			Default(1.0).
-			Comment("图片生成独立倍率，仅 image_rate_independent=true 时生效"),
 		field.Float("image_price_1k").
 			Optional().
 			Nillable().
@@ -118,10 +99,6 @@ func (Group) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("无效请求兜底使用的分组 ID"),
-		field.Int64("balance_fallback_group_id").
-			Optional().
-			Nillable().
-			Comment("订阅额度耗尽时兜底使用的余额分组 ID"),
 
 		// 模型路由配置 (added by migration 040)
 		field.JSON("model_routing", map[string][]int64{}).
@@ -168,10 +145,6 @@ func (Group) Fields() []ent.Field {
 			Default(domain.OpenAIMessagesDispatchModelConfig{}).
 			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
 			Comment("OpenAI Messages 调度模型配置：按 Claude 系列/精确模型映射到目标 GPT 模型"),
-		field.JSON("models_list_config", domain.GroupModelsListConfig{}).
-			Default(domain.GroupModelsListConfig{}).
-			SchemaType(map[string]string{dialect.Postgres: "jsonb"}).
-			Comment("自定义 /v1/models 展示列表配置；仅影响模型列表响应，不影响调度"),
 
 		// 分组级每分钟请求数上限（0 = 不限制）。设置后优先于用户级兜底生效。
 		field.Int("rpm_limit").
@@ -203,7 +176,6 @@ func (Group) Indexes() []ent.Index {
 		index.Fields("status"),
 		index.Fields("platform"),
 		index.Fields("subscription_type"),
-		index.Fields("pricing_mode"),
 		index.Fields("is_exclusive"),
 		index.Fields("deleted_at"),
 		index.Fields("sort_order"),

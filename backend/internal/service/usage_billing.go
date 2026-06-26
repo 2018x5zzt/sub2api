@@ -11,7 +11,6 @@ import (
 
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
 var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerprint conflict")
-var ErrSubscriptionBalanceFallbackLimitExceeded = errors.New("subscription balance fallback limit exceeded")
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
@@ -20,31 +19,26 @@ type UsageBillingCommand struct {
 	RequestFingerprint string
 	RequestPayloadHash string
 
-	UserID                int64
-	AccountID             int64
-	SubscriptionID        *int64
-	ProductSubscriptionID *int64
-	ProductGroupID        int64
-	AccountType           string
-	Model                 string
-	ServiceTier           string
-	ReasoningEffort       string
-	BillingType           int8
-	InputTokens           int
-	OutputTokens          int
-	CacheCreationTokens   int
-	CacheReadTokens       int
-	ImageCount            int
-	MediaType             string
+	UserID              int64
+	AccountID           int64
+	SubscriptionID      *int64
+	AccountType         string
+	Model               string
+	ServiceTier         string
+	ReasoningEffort     string
+	BillingType         int8
+	InputTokens         int
+	OutputTokens        int
+	CacheCreationTokens int
+	CacheReadTokens     int
+	ImageCount          int
+	MediaType           string
 
-	BalanceCost                     float64
-	SubscriptionCost                float64
-	ProductDebitCost                float64
-	SubscriptionBalanceFallbackCost float64
-	ProductBalanceFallbackCost      float64
-	APIKeyQuotaCost                 float64
-	APIKeyRateLimitCost             float64
-	AccountQuotaCost                float64
+	BalanceCost         float64
+	SubscriptionCost    float64
+	APIKeyQuotaCost     float64
+	APIKeyRateLimitCost float64
+	AccountQuotaCost    float64
 }
 
 func (c *UsageBillingCommand) Normalize() {
@@ -62,7 +56,7 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		return ""
 	}
 	raw := fmt.Sprintf(
-		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%d|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
+		"%d|%d|%d|%s|%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%d|%0.10f|%0.10f|%0.10f|%0.10f|%0.10f",
 		c.UserID,
 		c.AccountID,
 		c.APIKeyID,
@@ -78,13 +72,8 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.ImageCount,
 		strings.TrimSpace(c.MediaType),
 		valueOrZero(c.SubscriptionID),
-		valueOrZero(c.ProductSubscriptionID),
-		c.ProductGroupID,
 		c.BalanceCost,
 		c.SubscriptionCost,
-		c.ProductDebitCost,
-		c.SubscriptionBalanceFallbackCost,
-		c.ProductBalanceFallbackCost,
 		c.APIKeyQuotaCost,
 		c.APIKeyRateLimitCost,
 		c.AccountQuotaCost,
@@ -127,8 +116,6 @@ type UsageBillingApplyResult struct {
 	APIKeyQuotaExhausted bool
 	NewBalance           *float64           // post-deduction balance (nil = no balance deduction)
 	QuotaState           *AccountQuotaState // post-increment quota state (nil = no quota increment)
-	ProductDebitApplied  *float64           // product subscription debit actually applied after quota splitting
-	ProductBalanceCost   float64            // balance charged for product subscription overage
 }
 
 type UsageBillingRepository interface {

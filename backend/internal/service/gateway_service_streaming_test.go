@@ -63,19 +63,3 @@ func TestDetachUpstreamContextIgnoresClientCancel(t *testing.T) {
 	require.NoError(t, upstreamCtx.Err())
 	require.Equal(t, "test-value", upstreamCtx.Value(upstreamContextTestKey("test-key")))
 }
-
-func TestDetachUpstreamContextPreservesParentDeadline(t *testing.T) {
-	parent, cancel := context.WithTimeout(context.WithValue(context.Background(), upstreamContextTestKey("test-key"), "test-value"), 20*time.Millisecond)
-	defer cancel()
-	upstreamCtx, release := detachUpstreamContext(parent)
-	defer release()
-
-	deadline, ok := upstreamCtx.Deadline()
-	require.True(t, ok)
-	require.WithinDuration(t, time.Now().Add(20*time.Millisecond), deadline, 50*time.Millisecond)
-	require.Equal(t, "test-value", upstreamCtx.Value(upstreamContextTestKey("test-key")))
-
-	require.Eventually(t, func() bool {
-		return upstreamCtx.Err() == context.DeadlineExceeded
-	}, time.Second, 10*time.Millisecond)
-}

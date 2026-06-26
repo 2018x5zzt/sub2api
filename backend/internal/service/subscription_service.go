@@ -146,7 +146,6 @@ func (s *SubscriptionService) InvalidateSubCache(userID, groupID int64) {
 type AssignSubscriptionInput struct {
 	UserID       int64
 	GroupID      int64
-	ProductID    int64
 	ValidityDays int
 	AssignedBy   int64
 	Notes        string
@@ -197,12 +196,11 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 		now := time.Now()
 		var newExpiresAt time.Time
 
-		isExpired := !existingSub.ExpiresAt.After(now)
-		if !isExpired {
+		if existingSub.ExpiresAt.After(now) {
 			// 未过期：从当前过期时间累加
-			newExpiresAt = CalculateNaturalDayExpiry(existingSub.ExpiresAt, validityDays)
+			newExpiresAt = existingSub.ExpiresAt.AddDate(0, 0, validityDays)
 		} else {
-			// 已过期：从当前时间开始计算；日卡续购走精确天数，避免自然日边界影响一次性日额度判定
+			// 已过期：从当前时间开始计算
 			newExpiresAt = now.AddDate(0, 0, validityDays)
 		}
 
@@ -211,8 +209,43 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 			newExpiresAt = MaxExpiresAt
 		}
 
-		if err := s.updateExistingSubscriptionTerm(ctx, existingSub, input.Notes, now, newExpiresAt, isExpired); err != nil {
-			return nil, false, err
+		// 开启事务：ExtendExpiry + UpdateStatus + UpdateNotes 在同一事务中完成
+		tx, err := s.entClient.Tx(ctx)
+		if err != nil {
+			return nil, false, fmt.Errorf("begin transaction: %w", err)
+		}
+		txCtx := dbent.NewTxContext(ctx, tx)
+
+		// 更新过期时间
+		if err := s.userSubRepo.ExtendExpiry(txCtx, existingSub.ID, newExpiresAt); err != nil {
+			_ = tx.Rollback()
+			return nil, false, fmt.Errorf("extend subscription: %w", err)
+		}
+
+		// 如果订阅已过期或被暂停，恢复为active状态
+		if existingSub.Status != SubscriptionStatusActive {
+			if err := s.userSubRepo.UpdateStatus(txCtx, existingSub.ID, SubscriptionStatusActive); err != nil {
+				_ = tx.Rollback()
+				return nil, false, fmt.Errorf("update subscription status: %w", err)
+			}
+		}
+
+		// 追加备注
+		if input.Notes != "" {
+			newNotes := existingSub.Notes
+			if newNotes != "" {
+				newNotes += "\n"
+			}
+			newNotes += input.Notes
+			if err := s.userSubRepo.UpdateNotes(txCtx, existingSub.ID, newNotes); err != nil {
+				_ = tx.Rollback()
+				return nil, false, fmt.Errorf("update subscription notes: %w", err)
+			}
+		}
+
+		// 提交事务
+		if err := tx.Commit(); err != nil {
+			return nil, false, fmt.Errorf("commit transaction: %w", err)
 		}
 
 		// 失效订阅缓存
@@ -251,94 +284,6 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 	return sub, false, nil // false 表示是新建
 }
 
-func (s *SubscriptionService) updateExistingSubscriptionTerm(
-	ctx context.Context,
-	existingSub *UserSubscription,
-	notes string,
-	startsAt time.Time,
-	newExpiresAt time.Time,
-	isExpired bool,
-) error {
-	return s.withSubscriptionUpdateTx(ctx, func(txCtx context.Context) error {
-		if isExpired {
-			renewed := renewedSubscriptionTerm(existingSub, notes, startsAt, newExpiresAt)
-			if err := s.userSubRepo.Update(txCtx, renewed); err != nil {
-				return fmt.Errorf("renew expired subscription: %w", err)
-			}
-			return nil
-		}
-
-		// 更新过期时间
-		if err := s.userSubRepo.ExtendExpiry(txCtx, existingSub.ID, newExpiresAt); err != nil {
-			return fmt.Errorf("extend subscription: %w", err)
-		}
-
-		// 如果订阅被暂停，恢复为 active 状态
-		if existingSub.Status != SubscriptionStatusActive {
-			if err := s.userSubRepo.UpdateStatus(txCtx, existingSub.ID, SubscriptionStatusActive); err != nil {
-				return fmt.Errorf("update subscription status: %w", err)
-			}
-		}
-
-		// 追加备注
-		if notes != "" {
-			if err := s.userSubRepo.UpdateNotes(txCtx, existingSub.ID, appendSubscriptionNotes(existingSub.Notes, notes)); err != nil {
-				return fmt.Errorf("update subscription notes: %w", err)
-			}
-		}
-
-		return nil
-	})
-}
-
-func (s *SubscriptionService) withSubscriptionUpdateTx(ctx context.Context, fn func(context.Context) error) error {
-	if s.entClient == nil {
-		return fn(ctx)
-	}
-
-	tx, err := s.entClient.Tx(ctx)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	txCtx := dbent.NewTxContext(ctx, tx)
-
-	if err := fn(txCtx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit transaction: %w", err)
-	}
-	return nil
-}
-
-func renewedSubscriptionTerm(existingSub *UserSubscription, notes string, startsAt, expiresAt time.Time) *UserSubscription {
-	renewed := *existingSub
-	windowStart := startOfDay(startsAt)
-	renewed.StartsAt = startsAt
-	renewed.ExpiresAt = expiresAt
-	renewed.Status = SubscriptionStatusActive
-	renewed.DailyWindowStart = &windowStart
-	renewed.WeeklyWindowStart = &windowStart
-	renewed.MonthlyWindowStart = &windowStart
-	renewed.DailyUsageUSD = 0
-	renewed.WeeklyUsageUSD = 0
-	renewed.MonthlyUsageUSD = 0
-	renewed.Notes = appendSubscriptionNotes(existingSub.Notes, notes)
-	return &renewed
-}
-
-func appendSubscriptionNotes(existingNotes, newNotes string) string {
-	if newNotes == "" {
-		return existingNotes
-	}
-	if existingNotes == "" {
-		return newNotes
-	}
-	return existingNotes + "\n" + newNotes
-}
-
 // createSubscription 创建新订阅（内部方法）
 func (s *SubscriptionService) createSubscription(ctx context.Context, input *AssignSubscriptionInput) (*UserSubscription, error) {
 	validityDays := input.ValidityDays
@@ -350,7 +295,7 @@ func (s *SubscriptionService) createSubscription(ctx context.Context, input *Ass
 	}
 
 	now := time.Now()
-	expiresAt := CalculateNaturalDayExpiry(now, validityDays)
+	expiresAt := now.AddDate(0, 0, validityDays)
 	if expiresAt.After(MaxExpiresAt) {
 		expiresAt = MaxExpiresAt
 	}
@@ -489,7 +434,7 @@ func detectAssignSemanticConflict(existing *UserSubscription, input *AssignSubsc
 
 	normalizedDays := normalizeAssignValidityDays(input.ValidityDays)
 	if !existing.StartsAt.IsZero() {
-		expectedExpiresAt := CalculateNaturalDayExpiry(existing.StartsAt, normalizedDays)
+		expectedExpiresAt := existing.StartsAt.AddDate(0, 0, normalizedDays)
 		if expectedExpiresAt.After(MaxExpiresAt) {
 			expectedExpiresAt = MaxExpiresAt
 		}
@@ -570,14 +515,10 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 	var newExpiresAt time.Time
 	if isExpired {
 		// 已过期：从当前时间开始增加天数
-		if days > 0 {
-			newExpiresAt = CalculateNaturalDayExpiry(now, days)
-		} else {
-			newExpiresAt = now.AddDate(0, 0, days)
-		}
+		newExpiresAt = now.AddDate(0, 0, days)
 	} else {
 		// 未过期：从原过期时间增加/减少天数
-		newExpiresAt = CalculateNaturalDayExpiry(sub.ExpiresAt, days)
+		newExpiresAt = sub.ExpiresAt.AddDate(0, 0, days)
 	}
 
 	if newExpiresAt.After(MaxExpiresAt) {
@@ -617,11 +558,6 @@ func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscripti
 // GetByID 根据ID获取订阅
 func (s *SubscriptionService) GetByID(ctx context.Context, id int64) (*UserSubscription, error) {
 	return s.userSubRepo.GetByID(ctx, id)
-}
-
-func CalculateNaturalDayExpiry(base time.Time, days int) time.Time {
-	target := base.AddDate(0, 0, days)
-	return time.Date(target.Year(), target.Month(), target.Day(), 23, 59, 59, 0, target.Location())
 }
 
 // GetActiveSubscription 获取用户对特定分组的有效订阅
@@ -747,10 +683,6 @@ func normalizeSubscriptionStatus(subs []UserSubscription) {
 // startOfDay 返回给定时间所在日期的零点（保持原时区）
 func startOfDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
-}
-
-func startOfMonth(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
 }
 
 // CheckAndActivateWindow 检查并激活窗口（首次使用时）
@@ -1013,9 +945,6 @@ func (s *SubscriptionService) calculateProgress(sub *UserSubscription, group *Gr
 	if group.HasDailyLimit() && sub.DailyWindowStart != nil {
 		limit := *group.DailyLimitUSD
 		resetsAt := sub.DailyWindowStart.Add(24 * time.Hour)
-		if dailyResetTime := sub.DailyResetTime(); dailyResetTime != nil {
-			resetsAt = *dailyResetTime
-		}
 		progress.Daily = &UsageWindowProgress{
 			LimitUSD:        limit,
 			UsedUSD:         sub.DailyUsageUSD,

@@ -95,16 +95,6 @@ func Status(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldStatus, v))
 }
 
-// PricingMode applies equality check predicate on the "pricing_mode" field. It's identical to PricingModeEQ.
-func PricingMode(v string) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldPricingMode, v))
-}
-
-// DefaultBudgetMultiplier applies equality check predicate on the "default_budget_multiplier" field. It's identical to DefaultBudgetMultiplierEQ.
-func DefaultBudgetMultiplier(v float64) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldDefaultBudgetMultiplier, v))
-}
-
 // Platform applies equality check predicate on the "platform" field. It's identical to PlatformEQ.
 func Platform(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPlatform, v))
@@ -135,21 +125,6 @@ func DefaultValidityDays(v int) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldDefaultValidityDays, v))
 }
 
-// AllowImageGeneration applies equality check predicate on the "allow_image_generation" field. It's identical to AllowImageGenerationEQ.
-func AllowImageGeneration(v bool) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldAllowImageGeneration, v))
-}
-
-// ImageRateIndependent applies equality check predicate on the "image_rate_independent" field. It's identical to ImageRateIndependentEQ.
-func ImageRateIndependent(v bool) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldImageRateIndependent, v))
-}
-
-// ImageRateMultiplier applies equality check predicate on the "image_rate_multiplier" field. It's identical to ImageRateMultiplierEQ.
-func ImageRateMultiplier(v float64) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldImageRateMultiplier, v))
-}
-
 // ImagePrice1k applies equality check predicate on the "image_price_1k" field. It's identical to ImagePrice1kEQ.
 func ImagePrice1k(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldImagePrice1k, v))
@@ -178,11 +153,6 @@ func FallbackGroupID(v int64) predicate.Group {
 // FallbackGroupIDOnInvalidRequest applies equality check predicate on the "fallback_group_id_on_invalid_request" field. It's identical to FallbackGroupIDOnInvalidRequestEQ.
 func FallbackGroupIDOnInvalidRequest(v int64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldFallbackGroupIDOnInvalidRequest, v))
-}
-
-// BalanceFallbackGroupID applies equality check predicate on the "balance_fallback_group_id" field. It's identical to BalanceFallbackGroupIDEQ.
-func BalanceFallbackGroupID(v int64) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldBalanceFallbackGroupID, v))
 }
 
 // ModelRoutingEnabled applies equality check predicate on the "model_routing_enabled" field. It's identical to ModelRoutingEnabledEQ.
@@ -610,121 +580,6 @@ func StatusContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldStatus, v))
 }
 
-// PricingModeEQ applies the EQ predicate on the "pricing_mode" field.
-func PricingModeEQ(v string) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldPricingMode, v))
-}
-
-// PricingModeNEQ applies the NEQ predicate on the "pricing_mode" field.
-func PricingModeNEQ(v string) predicate.Group {
-	return predicate.Group(sql.FieldNEQ(FieldPricingMode, v))
-}
-
-// PricingModeIn applies the In predicate on the "pricing_mode" field.
-func PricingModeIn(vs ...string) predicate.Group {
-	return predicate.Group(sql.FieldIn(FieldPricingMode, vs...))
-}
-
-// PricingModeNotIn applies the NotIn predicate on the "pricing_mode" field.
-func PricingModeNotIn(vs ...string) predicate.Group {
-	return predicate.Group(sql.FieldNotIn(FieldPricingMode, vs...))
-}
-
-// PricingModeGT applies the GT predicate on the "pricing_mode" field.
-func PricingModeGT(v string) predicate.Group {
-	return predicate.Group(sql.FieldGT(FieldPricingMode, v))
-}
-
-// PricingModeGTE applies the GTE predicate on the "pricing_mode" field.
-func PricingModeGTE(v string) predicate.Group {
-	return predicate.Group(sql.FieldGTE(FieldPricingMode, v))
-}
-
-// PricingModeLT applies the LT predicate on the "pricing_mode" field.
-func PricingModeLT(v string) predicate.Group {
-	return predicate.Group(sql.FieldLT(FieldPricingMode, v))
-}
-
-// PricingModeLTE applies the LTE predicate on the "pricing_mode" field.
-func PricingModeLTE(v string) predicate.Group {
-	return predicate.Group(sql.FieldLTE(FieldPricingMode, v))
-}
-
-// PricingModeContains applies the Contains predicate on the "pricing_mode" field.
-func PricingModeContains(v string) predicate.Group {
-	return predicate.Group(sql.FieldContains(FieldPricingMode, v))
-}
-
-// PricingModeHasPrefix applies the HasPrefix predicate on the "pricing_mode" field.
-func PricingModeHasPrefix(v string) predicate.Group {
-	return predicate.Group(sql.FieldHasPrefix(FieldPricingMode, v))
-}
-
-// PricingModeHasSuffix applies the HasSuffix predicate on the "pricing_mode" field.
-func PricingModeHasSuffix(v string) predicate.Group {
-	return predicate.Group(sql.FieldHasSuffix(FieldPricingMode, v))
-}
-
-// PricingModeEqualFold applies the EqualFold predicate on the "pricing_mode" field.
-func PricingModeEqualFold(v string) predicate.Group {
-	return predicate.Group(sql.FieldEqualFold(FieldPricingMode, v))
-}
-
-// PricingModeContainsFold applies the ContainsFold predicate on the "pricing_mode" field.
-func PricingModeContainsFold(v string) predicate.Group {
-	return predicate.Group(sql.FieldContainsFold(FieldPricingMode, v))
-}
-
-// DefaultBudgetMultiplierEQ applies the EQ predicate on the "default_budget_multiplier" field.
-func DefaultBudgetMultiplierEQ(v float64) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldDefaultBudgetMultiplier, v))
-}
-
-// DefaultBudgetMultiplierNEQ applies the NEQ predicate on the "default_budget_multiplier" field.
-func DefaultBudgetMultiplierNEQ(v float64) predicate.Group {
-	return predicate.Group(sql.FieldNEQ(FieldDefaultBudgetMultiplier, v))
-}
-
-// DefaultBudgetMultiplierIn applies the In predicate on the "default_budget_multiplier" field.
-func DefaultBudgetMultiplierIn(vs ...float64) predicate.Group {
-	return predicate.Group(sql.FieldIn(FieldDefaultBudgetMultiplier, vs...))
-}
-
-// DefaultBudgetMultiplierNotIn applies the NotIn predicate on the "default_budget_multiplier" field.
-func DefaultBudgetMultiplierNotIn(vs ...float64) predicate.Group {
-	return predicate.Group(sql.FieldNotIn(FieldDefaultBudgetMultiplier, vs...))
-}
-
-// DefaultBudgetMultiplierGT applies the GT predicate on the "default_budget_multiplier" field.
-func DefaultBudgetMultiplierGT(v float64) predicate.Group {
-	return predicate.Group(sql.FieldGT(FieldDefaultBudgetMultiplier, v))
-}
-
-// DefaultBudgetMultiplierGTE applies the GTE predicate on the "default_budget_multiplier" field.
-func DefaultBudgetMultiplierGTE(v float64) predicate.Group {
-	return predicate.Group(sql.FieldGTE(FieldDefaultBudgetMultiplier, v))
-}
-
-// DefaultBudgetMultiplierLT applies the LT predicate on the "default_budget_multiplier" field.
-func DefaultBudgetMultiplierLT(v float64) predicate.Group {
-	return predicate.Group(sql.FieldLT(FieldDefaultBudgetMultiplier, v))
-}
-
-// DefaultBudgetMultiplierLTE applies the LTE predicate on the "default_budget_multiplier" field.
-func DefaultBudgetMultiplierLTE(v float64) predicate.Group {
-	return predicate.Group(sql.FieldLTE(FieldDefaultBudgetMultiplier, v))
-}
-
-// DefaultBudgetMultiplierIsNil applies the IsNil predicate on the "default_budget_multiplier" field.
-func DefaultBudgetMultiplierIsNil() predicate.Group {
-	return predicate.Group(sql.FieldIsNull(FieldDefaultBudgetMultiplier))
-}
-
-// DefaultBudgetMultiplierNotNil applies the NotNil predicate on the "default_budget_multiplier" field.
-func DefaultBudgetMultiplierNotNil() predicate.Group {
-	return predicate.Group(sql.FieldNotNull(FieldDefaultBudgetMultiplier))
-}
-
 // PlatformEQ applies the EQ predicate on the "platform" field.
 func PlatformEQ(v string) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldPlatform, v))
@@ -1045,66 +900,6 @@ func DefaultValidityDaysLTE(v int) predicate.Group {
 	return predicate.Group(sql.FieldLTE(FieldDefaultValidityDays, v))
 }
 
-// AllowImageGenerationEQ applies the EQ predicate on the "allow_image_generation" field.
-func AllowImageGenerationEQ(v bool) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldAllowImageGeneration, v))
-}
-
-// AllowImageGenerationNEQ applies the NEQ predicate on the "allow_image_generation" field.
-func AllowImageGenerationNEQ(v bool) predicate.Group {
-	return predicate.Group(sql.FieldNEQ(FieldAllowImageGeneration, v))
-}
-
-// ImageRateIndependentEQ applies the EQ predicate on the "image_rate_independent" field.
-func ImageRateIndependentEQ(v bool) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldImageRateIndependent, v))
-}
-
-// ImageRateIndependentNEQ applies the NEQ predicate on the "image_rate_independent" field.
-func ImageRateIndependentNEQ(v bool) predicate.Group {
-	return predicate.Group(sql.FieldNEQ(FieldImageRateIndependent, v))
-}
-
-// ImageRateMultiplierEQ applies the EQ predicate on the "image_rate_multiplier" field.
-func ImageRateMultiplierEQ(v float64) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldImageRateMultiplier, v))
-}
-
-// ImageRateMultiplierNEQ applies the NEQ predicate on the "image_rate_multiplier" field.
-func ImageRateMultiplierNEQ(v float64) predicate.Group {
-	return predicate.Group(sql.FieldNEQ(FieldImageRateMultiplier, v))
-}
-
-// ImageRateMultiplierIn applies the In predicate on the "image_rate_multiplier" field.
-func ImageRateMultiplierIn(vs ...float64) predicate.Group {
-	return predicate.Group(sql.FieldIn(FieldImageRateMultiplier, vs...))
-}
-
-// ImageRateMultiplierNotIn applies the NotIn predicate on the "image_rate_multiplier" field.
-func ImageRateMultiplierNotIn(vs ...float64) predicate.Group {
-	return predicate.Group(sql.FieldNotIn(FieldImageRateMultiplier, vs...))
-}
-
-// ImageRateMultiplierGT applies the GT predicate on the "image_rate_multiplier" field.
-func ImageRateMultiplierGT(v float64) predicate.Group {
-	return predicate.Group(sql.FieldGT(FieldImageRateMultiplier, v))
-}
-
-// ImageRateMultiplierGTE applies the GTE predicate on the "image_rate_multiplier" field.
-func ImageRateMultiplierGTE(v float64) predicate.Group {
-	return predicate.Group(sql.FieldGTE(FieldImageRateMultiplier, v))
-}
-
-// ImageRateMultiplierLT applies the LT predicate on the "image_rate_multiplier" field.
-func ImageRateMultiplierLT(v float64) predicate.Group {
-	return predicate.Group(sql.FieldLT(FieldImageRateMultiplier, v))
-}
-
-// ImageRateMultiplierLTE applies the LTE predicate on the "image_rate_multiplier" field.
-func ImageRateMultiplierLTE(v float64) predicate.Group {
-	return predicate.Group(sql.FieldLTE(FieldImageRateMultiplier, v))
-}
-
 // ImagePrice1kEQ applies the EQ predicate on the "image_price_1k" field.
 func ImagePrice1kEQ(v float64) predicate.Group {
 	return predicate.Group(sql.FieldEQ(FieldImagePrice1k, v))
@@ -1363,56 +1158,6 @@ func FallbackGroupIDOnInvalidRequestIsNil() predicate.Group {
 // FallbackGroupIDOnInvalidRequestNotNil applies the NotNil predicate on the "fallback_group_id_on_invalid_request" field.
 func FallbackGroupIDOnInvalidRequestNotNil() predicate.Group {
 	return predicate.Group(sql.FieldNotNull(FieldFallbackGroupIDOnInvalidRequest))
-}
-
-// BalanceFallbackGroupIDEQ applies the EQ predicate on the "balance_fallback_group_id" field.
-func BalanceFallbackGroupIDEQ(v int64) predicate.Group {
-	return predicate.Group(sql.FieldEQ(FieldBalanceFallbackGroupID, v))
-}
-
-// BalanceFallbackGroupIDNEQ applies the NEQ predicate on the "balance_fallback_group_id" field.
-func BalanceFallbackGroupIDNEQ(v int64) predicate.Group {
-	return predicate.Group(sql.FieldNEQ(FieldBalanceFallbackGroupID, v))
-}
-
-// BalanceFallbackGroupIDIn applies the In predicate on the "balance_fallback_group_id" field.
-func BalanceFallbackGroupIDIn(vs ...int64) predicate.Group {
-	return predicate.Group(sql.FieldIn(FieldBalanceFallbackGroupID, vs...))
-}
-
-// BalanceFallbackGroupIDNotIn applies the NotIn predicate on the "balance_fallback_group_id" field.
-func BalanceFallbackGroupIDNotIn(vs ...int64) predicate.Group {
-	return predicate.Group(sql.FieldNotIn(FieldBalanceFallbackGroupID, vs...))
-}
-
-// BalanceFallbackGroupIDGT applies the GT predicate on the "balance_fallback_group_id" field.
-func BalanceFallbackGroupIDGT(v int64) predicate.Group {
-	return predicate.Group(sql.FieldGT(FieldBalanceFallbackGroupID, v))
-}
-
-// BalanceFallbackGroupIDGTE applies the GTE predicate on the "balance_fallback_group_id" field.
-func BalanceFallbackGroupIDGTE(v int64) predicate.Group {
-	return predicate.Group(sql.FieldGTE(FieldBalanceFallbackGroupID, v))
-}
-
-// BalanceFallbackGroupIDLT applies the LT predicate on the "balance_fallback_group_id" field.
-func BalanceFallbackGroupIDLT(v int64) predicate.Group {
-	return predicate.Group(sql.FieldLT(FieldBalanceFallbackGroupID, v))
-}
-
-// BalanceFallbackGroupIDLTE applies the LTE predicate on the "balance_fallback_group_id" field.
-func BalanceFallbackGroupIDLTE(v int64) predicate.Group {
-	return predicate.Group(sql.FieldLTE(FieldBalanceFallbackGroupID, v))
-}
-
-// BalanceFallbackGroupIDIsNil applies the IsNil predicate on the "balance_fallback_group_id" field.
-func BalanceFallbackGroupIDIsNil() predicate.Group {
-	return predicate.Group(sql.FieldIsNull(FieldBalanceFallbackGroupID))
-}
-
-// BalanceFallbackGroupIDNotNil applies the NotNil predicate on the "balance_fallback_group_id" field.
-func BalanceFallbackGroupIDNotNil() predicate.Group {
-	return predicate.Group(sql.FieldNotNull(FieldBalanceFallbackGroupID))
 }
 
 // ModelRoutingIsNil applies the IsNil predicate on the "model_routing" field.

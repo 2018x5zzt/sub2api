@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"strings"
-	"sync"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
@@ -15,41 +14,30 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 )
 
 // AuthHandler handles authentication-related requests
 type AuthHandler struct {
-	cfg                  *config.Config
-	authService          *service.AuthService
-	userService          *service.UserService
-	settingSvc           *service.SettingService
-	promoService         *service.PromoService
-	redeemService        *service.RedeemService
-	totpService          *service.TotpService
-	userAttributeService *service.UserAttributeService
-	redisClient          *redis.Client
-
-	dingTalkClientInstance *DingTalkClient
-	dingTalkClientMu       sync.Mutex
+	cfg           *config.Config
+	authService   *service.AuthService
+	userService   *service.UserService
+	settingSvc    *service.SettingService
+	promoService  *service.PromoService
+	redeemService *service.RedeemService
+	totpService   *service.TotpService
 }
 
 // NewAuthHandler creates a new AuthHandler
-func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, redeemService *service.RedeemService, totpService *service.TotpService, userAttributeService *service.UserAttributeService, redisClients ...*redis.Client) *AuthHandler {
-	h := &AuthHandler{
-		cfg:                  cfg,
-		authService:          authService,
-		userService:          userService,
-		settingSvc:           settingService,
-		promoService:         promoService,
-		redeemService:        redeemService,
-		totpService:          totpService,
-		userAttributeService: userAttributeService,
+func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, redeemService *service.RedeemService, totpService *service.TotpService) *AuthHandler {
+	return &AuthHandler{
+		cfg:           cfg,
+		authService:   authService,
+		userService:   userService,
+		settingSvc:    settingService,
+		promoService:  promoService,
+		redeemService: redeemService,
+		totpService:   totpService,
 	}
-	if len(redisClients) > 0 {
-		h.redisClient = redisClients[0]
-	}
-	return h
 }
 
 // RegisterRequest represents the registration request payload
@@ -209,7 +197,7 @@ func (h *AuthHandler) SendVerifyCode(c *gin.Context) {
 		return
 	}
 
-	result, err := h.authService.SendVerifyCodeAsync(c.Request.Context(), req.Email, c.GetHeader("Accept-Language"))
+	result, err := h.authService.SendVerifyCodeAsync(c.Request.Context(), req.Email)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -608,7 +596,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 
 	// Request password reset (async)
 	// Note: This returns success even if email doesn't exist (to prevent enumeration)
-	if err := h.authService.RequestPasswordResetAsync(c.Request.Context(), req.Email, frontendBaseURL, c.GetHeader("Accept-Language")); err != nil {
+	if err := h.authService.RequestPasswordResetAsync(c.Request.Context(), req.Email, frontendBaseURL); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}

@@ -19,7 +19,7 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	// schema_migrations should have at least the current migration set.
 	var applied int
 	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM schema_migrations").Scan(&applied))
-	require.GreaterOrEqual(t, applied, 7, "expected schema_migrations to contain applied migrations")
+	require.GreaterOrEqual(t, applied, 8, "expected schema_migrations to contain applied migrations")
 
 	// users: columns required by repository queries
 	requireColumn(t, tx, "users", "username", "character varying", 100, false)
@@ -32,7 +32,6 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireColumn(t, tx, "accounts", "rate_limit_reset_at", "timestamp with time zone", 0, true)
 	requireColumn(t, tx, "accounts", "overload_until", "timestamp with time zone", 0, true)
 	requireColumn(t, tx, "accounts", "session_window_status", "character varying", 20, true)
-	requireIndex(t, tx, "accounts", "idx_accounts_autopause_expiry_due")
 
 	// api_keys: key length should be 128
 	requireColumn(t, tx, "api_keys", "key", "character varying", 128, false)
@@ -45,33 +44,6 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireColumn(t, tx, "usage_logs", "billing_type", "smallint", 0, false)
 	requireColumn(t, tx, "usage_logs", "request_type", "smallint", 0, false)
 	requireColumn(t, tx, "usage_logs", "openai_ws_mode", "boolean", 0, false)
-	requireColumn(t, tx, "usage_logs", "image_input_size", "character varying", 32, true)
-	requireColumn(t, tx, "usage_logs", "image_output_size", "character varying", 32, true)
-	requireColumn(t, tx, "usage_logs", "image_size_source", "character varying", 16, true)
-	requireColumn(t, tx, "usage_logs", "image_size_breakdown", "jsonb", 0, true)
-	requireConstraintDefinitionContains(
-		t,
-		tx,
-		"usage_logs",
-		"usage_logs_image_size_source_check",
-		"image_size_source",
-		"'output'",
-		"'input'",
-		"'default'",
-		"'legacy'",
-	)
-	requireConstraintDefinitionContains(
-		t,
-		tx,
-		"usage_logs",
-		"usage_logs_image_billing_size_check",
-		"image_count",
-		"image_size IS NOT NULL",
-		"'1K'",
-		"'2K'",
-		"'4K'",
-		"'mixed'",
-	)
 
 	// usage_billing_dedup: billing idempotency narrow table
 	var usageBillingDedupRegclass sql.NullString
@@ -97,10 +69,6 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.security_secrets')").Scan(&securitySecretsRegclass))
 	require.True(t, securitySecretsRegclass.Valid, "expected security_secrets table to exist")
 
-	// scheduler_outbox pending dedup support
-	requireColumn(t, tx, "scheduler_outbox", "dedup_key", "text", 0, true)
-	requireIndex(t, tx, "scheduler_outbox", "idx_scheduler_outbox_pending_dedup_key")
-
 	// user_allowed_groups table should exist
 	var uagRegclass sql.NullString
 	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.user_allowed_groups')").Scan(&uagRegclass))
@@ -114,14 +82,9 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT to_regclass('public.orphan_allowed_groups_audit')").Scan(&orphanAuditRegclass))
 	require.True(t, orphanAuditRegclass.Valid, "expected orphan_allowed_groups_audit table to exist")
 
-	// account_groups: created_at should be timestamptz
-	requireColumn(t, tx, "account_groups", "created_at", "timestamp with time zone", 0, false)
+	// account_groups: binding metadata columns should exist with expected types
 	requireColumn(t, tx, "account_groups", "billing_multiplier", "numeric", 0, false)
-
-	// groups: dynamic pricing fields
-	requireColumn(t, tx, "groups", "pricing_mode", "character varying", 20, false)
-	requireColumn(t, tx, "groups", "default_budget_multiplier", "numeric", 0, true)
-	requireIndex(t, tx, "groups", "idx_groups_pricing_mode")
+	requireColumn(t, tx, "account_groups", "created_at", "timestamp with time zone", 0, false)
 
 	// user_allowed_groups: created_at should be timestamptz
 	requireColumn(t, tx, "user_allowed_groups", "created_at", "timestamp with time zone", 0, false)

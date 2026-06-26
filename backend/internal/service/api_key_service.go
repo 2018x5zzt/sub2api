@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"html"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,15 +20,13 @@ import (
 )
 
 var (
-	ErrAPIKeyNotFound          = infraerrors.NotFound("API_KEY_NOT_FOUND", "api key not found")
-	ErrGroupNotAllowed         = infraerrors.Forbidden("GROUP_NOT_ALLOWED", "user is not allowed to bind this group")
-	ErrAPIKeyExists            = infraerrors.Conflict("API_KEY_EXISTS", "api key already exists")
-	ErrAPIKeyTooShort          = infraerrors.BadRequest("API_KEY_TOO_SHORT", "api key must be at least 16 characters")
-	ErrAPIKeyInvalidChars      = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
-	ErrProductFamilyRequired   = infraerrors.BadRequest("PRODUCT_FAMILY_REQUIRED", "subscription product family is required for this group")
-	ErrProductFamilyNotAllowed = infraerrors.Forbidden("PRODUCT_FAMILY_NOT_ALLOWED", "subscription product family is not available for this group")
-	ErrAPIKeyRateLimited       = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
-	ErrInvalidIPPattern        = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
+	ErrAPIKeyNotFound     = infraerrors.NotFound("API_KEY_NOT_FOUND", "api key not found")
+	ErrGroupNotAllowed    = infraerrors.Forbidden("GROUP_NOT_ALLOWED", "user is not allowed to bind this group")
+	ErrAPIKeyExists       = infraerrors.Conflict("API_KEY_EXISTS", "api key already exists")
+	ErrAPIKeyTooShort     = infraerrors.BadRequest("API_KEY_TOO_SHORT", "api key must be at least 16 characters")
+	ErrAPIKeyInvalidChars = infraerrors.BadRequest("API_KEY_INVALID_CHARS", "api key can only contain letters, numbers, underscores, and hyphens")
+	ErrAPIKeyRateLimited  = infraerrors.TooManyRequests("API_KEY_RATE_LIMITED", "too many failed attempts, please try again later")
+	ErrInvalidIPPattern   = infraerrors.BadRequest("INVALID_IP_PATTERN", "invalid IP or CIDR pattern")
 	// ErrAPIKeyExpired        = infraerrors.Forbidden("API_KEY_EXPIRED", "api key has expired")
 	ErrAPIKeyExpired = infraerrors.Forbidden("API_KEY_EXPIRED", "api key 已过期")
 	// ErrAPIKeyQuotaExhausted = infraerrors.TooManyRequests("API_KEY_QUOTA_EXHAUSTED", "api key quota exhausted")
@@ -58,8 +55,6 @@ type APIKeyRepository interface {
 	GetByKeyForAuth(ctx context.Context, key string) (*APIKey, error)
 	Update(ctx context.Context, key *APIKey) error
 	Delete(ctx context.Context, id int64) error
-	// DeleteWithAudit 在同一事务内先写 deleted_api_key_audits 审计、再软删除该 key。
-	DeleteWithAudit(ctx context.Context, id int64) error
 
 	ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams, filters APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error)
 	VerifyOwnership(ctx context.Context, userID int64, apiKeyIDs []int64) ([]int64, error)
@@ -154,12 +149,11 @@ type APIKeyAuthCacheInvalidator interface {
 
 // CreateAPIKeyRequest 创建API Key请求
 type CreateAPIKeyRequest struct {
-	Name             string   `json:"name"`
-	GroupID          *int64   `json:"group_id"`
-	BudgetMultiplier *float64 `json:"budget_multiplier"`
-	CustomKey        *string  `json:"custom_key"`   // 可选的自定义key
-	IPWhitelist      []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist      []string `json:"ip_blacklist"` // IP 黑名单
+	Name        string   `json:"name"`
+	GroupID     *int64   `json:"group_id"`
+	CustomKey   *string  `json:"custom_key"`   // 可选的自定义key
+	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
 
 	// Quota fields
 	Quota         float64 `json:"quota"`           // Quota limit in USD (0 = unlimited)
@@ -173,12 +167,11 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest 更新API Key请求
 type UpdateAPIKeyRequest struct {
-	Name             *string  `json:"name"`
-	GroupID          *int64   `json:"group_id"`
-	BudgetMultiplier *float64 `json:"budget_multiplier"`
-	Status           *string  `json:"status"`
-	IPWhitelist      []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
-	IPBlacklist      []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
+	Name        *string  `json:"name"`
+	GroupID     *int64   `json:"group_id"`
+	Status      *string  `json:"status"`
+	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单（空数组清空）
+	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单（空数组清空）
 
 	// Quota fields
 	Quota           *float64   `json:"quota"`       // Quota limit in USD (nil = no change, 0 = unlimited)
@@ -199,18 +192,12 @@ type RateLimitCacheInvalidator interface {
 	InvalidateAPIKeyRateLimit(ctx context.Context, keyID int64) error
 }
 
-type ProductVisibleGroupsLister interface {
-	ListVisibleGroups(ctx context.Context, userID int64) ([]Group, error)
-	ListVisibleProductFamilies(ctx context.Context, userID, groupID int64) ([]string, error)
-}
-
 type APIKeyService struct {
 	apiKeyRepo            APIKeyRepository
 	userRepo              UserRepository
 	groupRepo             GroupRepository
 	userSubRepo           UserSubscriptionRepository
 	userGroupRateRepo     UserGroupRateRepository
-	productVisibleGroups  ProductVisibleGroupsLister
 	cache                 APIKeyCache
 	rateLimitCacheInvalid RateLimitCacheInvalidator // optional: invalidate Redis rate limit cache
 	cfg                   *config.Config
@@ -248,17 +235,6 @@ func NewAPIKeyService(
 // Called after construction (e.g. in wire) to avoid circular dependencies.
 func (s *APIKeyService) SetRateLimitCacheInvalidator(inv RateLimitCacheInvalidator) {
 	s.rateLimitCacheInvalid = inv
-}
-
-func (s *APIKeyService) SetProductVisibleGroupsLister(lister ProductVisibleGroupsLister) {
-	s.productVisibleGroups = lister
-}
-
-func (s *APIKeyService) GetGroupByID(ctx context.Context, groupID int64) (*Group, error) {
-	if s == nil || s.groupRepo == nil || groupID <= 0 {
-		return nil, ErrGroupNotFound
-	}
-	return s.groupRepo.GetByID(ctx, groupID)
 }
 
 func (s *APIKeyService) compileAPIKeyIPRules(apiKey *APIKey) {
@@ -337,90 +313,16 @@ func (s *APIKeyService) incrementAPIKeyErrorCount(ctx context.Context, userID in
 }
 
 // canUserBindGroup 检查用户是否可以绑定指定分组
-// 对于订阅类型分组：检查用户是否有产品订阅或旧版分组订阅
+// 对于订阅类型分组：检查用户是否有有效订阅
 // 对于标准类型分组：使用原有的 AllowedGroups 和 IsExclusive 逻辑
-func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) (bool, error) {
+func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) bool {
+	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
-		var productErr error
-		if s.productVisibleGroups != nil {
-			productGroups, err := s.productVisibleGroups.ListVisibleGroups(ctx, user.ID)
-			if err != nil {
-				productErr = fmt.Errorf("list product subscription groups: %w", err)
-			} else {
-				for _, productGroup := range productGroups {
-					if productGroup.ID == group.ID {
-						return true, nil
-					}
-				}
-			}
-		}
-		if s.userSubRepo != nil {
-			if _, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID); err == nil {
-				return true, nil
-			}
-		}
-		if productErr != nil {
-			return false, productErr
-		}
-		return false, nil
+		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
+		return err == nil // 有有效订阅则允许
 	}
 	// 标准类型分组：使用原有逻辑
-	return user.CanBindGroup(group.ID, group.IsExclusive), nil
-}
-
-func (s *APIKeyService) resolveAPIKeySubscriptionProductFamily(ctx context.Context, userID int64, group *Group, requested *string) (*string, error) {
-	if group == nil || !group.IsSubscriptionType() {
-		return nil, nil
-	}
-	if s.productVisibleGroups == nil {
-		return nil, nil
-	}
-	families, err := s.productVisibleGroups.ListVisibleProductFamilies(ctx, userID, group.ID)
-	if err != nil {
-		return nil, fmt.Errorf("list product subscription families: %w", err)
-	}
-	normalizedFamilies := normalizeProductFamilyList(families)
-	requestedFamily := ""
-	if requested != nil {
-		requestedFamily = normalizeProductFamilyName(*requested)
-	}
-	if requestedFamily != "" {
-		for _, family := range normalizedFamilies {
-			if family == requestedFamily {
-				return &family, nil
-			}
-		}
-		return nil, ErrProductFamilyNotAllowed
-	}
-	if len(normalizedFamilies) == 1 {
-		family := normalizedFamilies[0]
-		return &family, nil
-	}
-	if len(normalizedFamilies) > 1 {
-		return nil, ErrProductFamilyRequired
-	}
-	return nil, nil
-}
-
-func normalizeProductFamilyList(families []string) []string {
-	seen := make(map[string]struct{}, len(families))
-	out := make([]string, 0, len(families))
-	for _, family := range families {
-		normalized := normalizeProductFamilyName(family)
-		if normalized == "" {
-			normalized = "gpt"
-		}
-		if _, ok := seen[normalized]; ok {
-			continue
-		}
-		seen[normalized] = struct{}{}
-		out = append(out, normalized)
-	}
-	return out
-}
-
-func normalizeProductFamilyName(family string) string {
-	return strings.TrimSpace(family)
+	return user.CanBindGroup(group.ID, group.IsExclusive)
 }
 
 // Create 创建API Key
@@ -446,45 +348,15 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 	}
 
 	// 验证分组权限（如果指定了分组）
-	var subscriptionProductFamily *string
-	var budgetMultiplier *float64
 	if req.GroupID != nil {
 		group, err := s.groupRepo.GetByID(ctx, *req.GroupID)
 		if err != nil {
 			return nil, fmt.Errorf("get group: %w", err)
 		}
 
-		canBind, err := s.canUserBindGroup(ctx, user, group)
-		if err != nil {
-			return nil, err
-		}
-		if !canBind {
+		// 检查用户是否可以绑定该分组
+		if !s.canUserBindGroup(ctx, user, group) {
 			return nil, ErrGroupNotAllowed
-		}
-		family, err := s.resolveAPIKeySubscriptionProductFamily(ctx, user.ID, group, nil)
-		if err != nil {
-			return nil, err
-		}
-		subscriptionProductFamily = family
-		if group.IsDynamicPricing() {
-			validated, err := validateBudgetMultiplier(req.BudgetMultiplier, nil)
-			if err != nil {
-				return nil, err
-			}
-			if validated != nil {
-				budgetMultiplier = validated
-			} else if group.DefaultBudgetMultiplier != nil {
-				budgetMultiplier = group.DefaultBudgetMultiplier
-			} else {
-				v := DefaultBudgetMultiplier
-				budgetMultiplier = &v
-			}
-		} else if req.BudgetMultiplier != nil {
-			validated, err := validateBudgetMultiplier(req.BudgetMultiplier, nil)
-			if err != nil {
-				return nil, err
-			}
-			budgetMultiplier = validated
 		}
 	}
 
@@ -525,20 +397,18 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 
 	// 创建API Key记录
 	apiKey := &APIKey{
-		UserID:                    userID,
-		Key:                       key,
-		Name:                      html.EscapeString(req.Name),
-		GroupID:                   req.GroupID,
-		SubscriptionProductFamily: subscriptionProductFamily,
-		BudgetMultiplier:          budgetMultiplier,
-		Status:                    StatusActive,
-		IPWhitelist:               req.IPWhitelist,
-		IPBlacklist:               req.IPBlacklist,
-		Quota:                     req.Quota,
-		QuotaUsed:                 0,
-		RateLimit5h:               req.RateLimit5h,
-		RateLimit1d:               req.RateLimit1d,
-		RateLimit7d:               req.RateLimit7d,
+		UserID:      userID,
+		Key:         key,
+		Name:        req.Name,
+		GroupID:     req.GroupID,
+		Status:      StatusActive,
+		IPWhitelist: req.IPWhitelist,
+		IPBlacklist: req.IPBlacklist,
+		Quota:       req.Quota,
+		QuotaUsed:   0,
+		RateLimit5h: req.RateLimit5h,
+		RateLimit1d: req.RateLimit1d,
+		RateLimit7d: req.RateLimit7d,
 	}
 
 	// Set expiration time if specified
@@ -668,10 +538,9 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 
 	// 更新字段
 	if req.Name != nil {
-		apiKey.Name = html.EscapeString(*req.Name)
+		apiKey.Name = *req.Name
 	}
 
-	groupChanged := false
 	if req.GroupID != nil {
 		// 验证分组权限
 		user, err := s.userRepo.GetByID(ctx, userID)
@@ -684,62 +553,11 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 			return nil, fmt.Errorf("get group: %w", err)
 		}
 
-		canBind, err := s.canUserBindGroup(ctx, user, group)
-		if err != nil {
-			return nil, err
-		}
-		if !canBind {
+		if !s.canUserBindGroup(ctx, user, group) {
 			return nil, ErrGroupNotAllowed
 		}
 
-		if group.IsDynamicPricing() {
-			validated, err := validateBudgetMultiplier(req.BudgetMultiplier, ErrAPIKeyBudgetRequired)
-			if err != nil {
-				return nil, err
-			}
-			apiKey.BudgetMultiplier = validated
-		} else if req.BudgetMultiplier != nil {
-			validated, err := validateBudgetMultiplier(req.BudgetMultiplier, nil)
-			if err != nil {
-				return nil, err
-			}
-			apiKey.BudgetMultiplier = validated
-		}
-
 		apiKey.GroupID = req.GroupID
-		groupChanged = true
-	}
-
-	if req.GroupID == nil && req.BudgetMultiplier != nil {
-		validated, err := validateBudgetMultiplier(req.BudgetMultiplier, nil)
-		if err != nil {
-			return nil, err
-		}
-		apiKey.BudgetMultiplier = validated
-	}
-
-	if groupChanged {
-		groupID := int64(0)
-		if apiKey.GroupID != nil {
-			groupID = *apiKey.GroupID
-		}
-		if groupID > 0 {
-			user, err := s.userRepo.GetByID(ctx, userID)
-			if err != nil {
-				return nil, fmt.Errorf("get user: %w", err)
-			}
-			group, err := s.groupRepo.GetByID(ctx, groupID)
-			if err != nil {
-				return nil, fmt.Errorf("get group: %w", err)
-			}
-			family, err := s.resolveAPIKeySubscriptionProductFamily(ctx, user.ID, group, nil)
-			if err != nil {
-				return nil, err
-			}
-			apiKey.SubscriptionProductFamily = family
-		} else {
-			apiKey.SubscriptionProductFamily = nil
-		}
 	}
 
 	if req.Status != nil {
@@ -830,16 +648,15 @@ func (s *APIKeyService) Delete(ctx context.Context, id int64, userID int64) erro
 		return ErrInsufficientPerms
 	}
 
-	// 事务内:写审计 + 软删除(tombstone)。
-	if err := s.apiKeyRepo.DeleteWithAudit(ctx, id); err != nil {
-		return fmt.Errorf("delete api key: %w", err)
-	}
-
-	// 删除成功后再清理缓存,避免"缓存已清但删除失败"的竞态。
+	// 清除Redis缓存（使用 userID 而非 apiKey.UserID）
 	if s.cache != nil {
 		_ = s.cache.DeleteCreateAttemptCount(ctx, userID)
 	}
 	s.InvalidateAuthCacheByKey(ctx, key)
+
+	if err := s.apiKeyRepo.Delete(ctx, id); err != nil {
+		return fmt.Errorf("delete api key: %w", err)
+	}
 	s.lastUsedTouchL1.Delete(id)
 
 	return nil
@@ -945,15 +762,6 @@ func (s *APIKeyService) GetAvailableGroups(ctx context.Context, userID int64) ([
 	subscribedGroupIDs := make(map[int64]bool)
 	for _, sub := range activeSubscriptions {
 		subscribedGroupIDs[sub.GroupID] = true
-	}
-	if s.productVisibleGroups != nil {
-		productGroups, err := s.productVisibleGroups.ListVisibleGroups(ctx, userID)
-		if err != nil {
-			return nil, fmt.Errorf("list product subscription groups: %w", err)
-		}
-		for _, group := range productGroups {
-			subscribedGroupIDs[group.ID] = true
-		}
 	}
 
 	// 过滤出用户有权限的分组

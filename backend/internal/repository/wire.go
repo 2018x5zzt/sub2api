@@ -73,16 +73,10 @@ var ProviderSet = wire.NewSet(
 	NewProxyRepository,
 	NewRedeemCodeRepository,
 	NewPromoCodeRepository,
-	NewInviteAdminActionRepository,
-	NewInviteAdminQueryRepository,
-	NewInviteRelationshipEventRepository,
-	NewInviteRewardRecordRepository,
-	ProvideInviteQualifyingRechargeRepository,
 	NewAnnouncementRepository,
 	NewAnnouncementReadRepository,
 	NewUsageLogRepository,
 	NewUsageBillingRepository,
-	NewSubscriptionProductRepository,
 	NewIdempotencyRepository,
 	NewUsageCleanupRepository,
 	NewDashboardAggregationRepository,
@@ -97,15 +91,7 @@ var ProviderSet = wire.NewSet(
 	NewChannelRepository,
 	NewChannelMonitorRepository,
 	NewChannelMonitorRequestTemplateRepository,
-	NewContentModerationRepository,
 	NewAffiliateRepository,
-	ProvideInviteUserRepository,
-	wire.Bind(new(service.InviteRewardRecordRepository), new(*inviteRewardRecordRepository)),
-	wire.Bind(new(service.InviteRewardAdminRepository), new(*inviteRewardRecordRepository)),
-	wire.Bind(new(service.InviteRelationshipEventRepository), new(*inviteRelationshipEventRepository)),
-	wire.Bind(new(service.InviteRelationshipEventAdminRepository), new(*inviteRelationshipEventRepository)),
-	NewUserPlatformQuotaRepository,     // T14: user × platform quota
-	NewUserPlatformQuotaServiceAdapter, // T14: adapter → service.UserPlatformQuotaRepository
 
 	// Cache implementations
 	NewGatewayCache,
@@ -126,7 +112,6 @@ var ProviderSet = wire.NewSet(
 	NewRedeemCache,
 	NewUpdateCache,
 	NewGeminiTokenCache,
-	NewLeaderLockCache,
 	ProvideSchedulerCache,
 	NewSchedulerOutboxRepository,
 	NewProxyLatencyCache,
@@ -134,8 +119,6 @@ var ProviderSet = wire.NewSet(
 	NewRefreshTokenCache,
 	NewErrorPassthroughCache,
 	NewTLSFingerprintProfileCache,
-	NewContentModerationHashCache,
-	NewOpenAIImageJobStore,
 
 	// Encryptors
 	NewAESEncryptor,
@@ -161,16 +144,6 @@ var ProviderSet = wire.NewSet(
 	ProvideSQLDB,
 	ProvideRedis,
 )
-
-// ProvideInviteQualifyingRechargeRepository narrows redeem repository capability for invite recompute wiring.
-func ProvideInviteQualifyingRechargeRepository(client *ent.Client) service.InviteQualifyingRechargeRepository {
-	return &redeemCodeRepository{client: client}
-}
-
-// ProvideInviteUserRepository narrows the user repository to the invite service port.
-func ProvideInviteUserRepository(client *ent.Client, sqlDB *sql.DB) service.InviteUserRepository {
-	return newUserRepositoryWithSQL(client, sqlDB)
-}
 
 // ProvideEnt 为依赖注入提供 Ent 客户端。
 //

@@ -68,37 +68,9 @@ func (b *billingCacheWorkerStub) InvalidateAPIKeyRateLimit(ctx context.Context, 
 	return nil
 }
 
-func (b *billingCacheWorkerStub) GetUserPlatformQuotaCache(ctx context.Context, userID int64, platform string) (*UserPlatformQuotaCacheEntry, bool, error) {
-	return nil, false, nil
-}
-
-func (b *billingCacheWorkerStub) SetUserPlatformQuotaCache(ctx context.Context, userID int64, platform string, entry *UserPlatformQuotaCacheEntry, ttl time.Duration) error {
-	return nil
-}
-
-func (b *billingCacheWorkerStub) DeleteUserPlatformQuotaCache(ctx context.Context, userID int64, platform string) error {
-	return nil
-}
-
-func (b *billingCacheWorkerStub) IncrUserPlatformQuotaUsageCache(ctx context.Context, userID int64, platform string, cost float64, ttl time.Duration, markDirty bool) error {
-	return nil
-}
-
-func (b *billingCacheWorkerStub) PopDirtyUserPlatformQuotaKeys(ctx context.Context, n int) ([]UserPlatformQuotaKey, error) {
-	return nil, nil
-}
-
-func (b *billingCacheWorkerStub) ReaddDirtyUserPlatformQuotaKeys(ctx context.Context, keys []UserPlatformQuotaKey) error {
-	return nil
-}
-
-func (b *billingCacheWorkerStub) BatchGetUserPlatformQuotaCache(ctx context.Context, keys []UserPlatformQuotaKey) ([]*UserPlatformQuotaCacheEntry, error) {
-	return nil, nil
-}
-
 func TestBillingCacheServiceQueueHighLoad(t *testing.T) {
 	cache := &billingCacheWorkerStub{}
-	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{}, nil)
+	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{})
 	t.Cleanup(svc.Stop)
 
 	start := time.Now()
@@ -120,7 +92,7 @@ func TestBillingCacheServiceQueueHighLoad(t *testing.T) {
 
 func TestBillingCacheServiceEnqueueAfterStopReturnsFalse(t *testing.T) {
 	cache := &billingCacheWorkerStub{}
-	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{}, nil)
+	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{})
 	svc.Stop()
 
 	enqueued := svc.enqueueCacheWrite(cacheWriteTask{
@@ -129,41 +101,4 @@ func TestBillingCacheServiceEnqueueAfterStopReturnsFalse(t *testing.T) {
 		amount: 1,
 	})
 	require.False(t, enqueued)
-}
-
-type billingEligibilityCacheStub struct {
-	billingCacheWorkerStub
-}
-
-func (b *billingEligibilityCacheStub) GetSubscriptionCache(ctx context.Context, userID, groupID int64) (*SubscriptionCacheData, error) {
-	return &SubscriptionCacheData{
-		Status:    SubscriptionStatusActive,
-		ExpiresAt: time.Now().Add(time.Hour),
-	}, nil
-}
-
-func (b *billingEligibilityCacheStub) GetAPIKeyRateLimit(ctx context.Context, keyID int64) (*APIKeyRateLimitCacheData, error) {
-	now := time.Now()
-	return &APIKeyRateLimitCacheData{
-		Usage1d:  45,
-		Window1d: now.Unix(),
-	}, nil
-}
-
-func TestBillingCacheServiceCheckBillingEligibilitySkipsAPIKeyRateLimitsForSubscriptions(t *testing.T) {
-	cache := &billingEligibilityCacheStub{}
-	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, &config.Config{}, nil)
-	t.Cleanup(svc.Stop)
-
-	limit := 45.0
-	err := svc.CheckBillingEligibility(
-		context.Background(),
-		&User{ID: 1},
-		&APIKey{ID: 2, RateLimit1d: 45},
-		&Group{ID: 3, SubscriptionType: SubscriptionTypeSubscription, DailyLimitUSD: &limit},
-		&UserSubscription{ID: 4, Status: SubscriptionStatusActive, ExpiresAt: time.Now().Add(time.Hour)},
-		"anthropic",
-	)
-
-	require.NoError(t, err)
 }

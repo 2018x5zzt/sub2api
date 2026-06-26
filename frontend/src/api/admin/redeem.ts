@@ -7,7 +7,6 @@ import { apiClient } from '../client'
 import type {
   RedeemCode,
   GenerateRedeemCodesRequest,
-  BatchUpdateRedeemCodeFields,
   RedeemCodeType,
   PaginatedResponse
 } from '@/types'
@@ -24,7 +23,7 @@ export async function list(
   pageSize: number = 20,
   filters?: {
     type?: RedeemCodeType
-    status?: 'active' | 'used' | 'expired' | 'unused' | 'disabled'
+    status?: 'active' | 'used' | 'expired' | 'unused'
     search?: string
     sort_by?: string
     sort_order?: 'asc' | 'desc'
@@ -59,48 +58,29 @@ export async function getById(id: number): Promise<RedeemCode> {
  * @param count - Number of codes to generate
  * @param type - Type of redeem code
  * @param value - Value of the code
- * @param optionsOrGroupId - Product subscription options or legacy Group ID
- * @param legacyValidityDays - Validity days for legacy group calls
- * @param expiresInDays - Days before the code itself expires
+ * @param groupId - Group ID (required for subscription type)
+ * @param validityDays - Validity days (for subscription type)
  * @returns Array of generated redeem codes
  */
-export interface GenerateRedeemCodesOptions {
-  groupId?: number | null
-  productId?: number | null
-  validityDays?: number
-  sourceType?: 'commercial' | 'benefit' | 'compensation' | 'system_grant' | string
-}
-
 export async function generate(
   count: number,
   type: RedeemCodeType,
   value: number,
-  optionsOrGroupId?: GenerateRedeemCodesOptions | number | null,
-  legacyValidityDays?: number,
-  expiresInDays?: number | null
+  groupId?: number | null,
+  validityDays?: number
 ): Promise<RedeemCode[]> {
-  const options = typeof optionsOrGroupId === 'object' && optionsOrGroupId !== null ? optionsOrGroupId : undefined
   const payload: GenerateRedeemCodesRequest = {
     count,
     type,
-    value,
-    source_type: options?.sourceType
+    value
   }
 
   // 订阅类型专用字段
   if (type === 'subscription') {
-    if (options?.productId != null) {
-      payload.product_id = options.productId
-    } else {
-      payload.group_id = options?.groupId ?? (typeof optionsOrGroupId === 'number' ? optionsOrGroupId : undefined)
-    }
-    const validityDays = options?.validityDays ?? legacyValidityDays
+    payload.group_id = groupId
     if (validityDays && validityDays > 0) {
       payload.validity_days = validityDays
     }
-  }
-  if (expiresInDays && expiresInDays > 0) {
-    payload.expires_in_days = expiresInDays
   }
 
   const { data } = await apiClient.post<RedeemCode[]>('/admin/redeem-codes/generate', payload)
@@ -130,26 +110,6 @@ export async function batchDelete(ids: number[]): Promise<{
     deleted: number
     message: string
   }>('/admin/redeem-codes/batch-delete', { ids })
-  return data
-}
-
-/**
- * Batch update selected redeem code fields
- * @param ids - Array of redeem code IDs
- * @param fields - Field collection to update
- * @returns Updated count
- */
-export async function batchUpdate(
-  ids: number[],
-  fields: BatchUpdateRedeemCodeFields
-): Promise<{
-  updated: number
-  message: string
-}> {
-  const { data } = await apiClient.post<{
-    updated: number
-    message: string
-  }>('/admin/redeem-codes/batch-update', { ids, fields })
   return data
 }
 
@@ -193,7 +153,7 @@ export async function getStats(): Promise<{
  */
 export async function exportCodes(filters?: {
   type?: RedeemCodeType
-  status?: 'used' | 'expired' | 'unused' | 'disabled'
+  status?: 'used' | 'expired' | 'unused'
   search?: string
   sort_by?: string
   sort_order?: 'asc' | 'desc'
@@ -211,7 +171,6 @@ export const redeemAPI = {
   generate,
   delete: deleteCode,
   batchDelete,
-  batchUpdate,
   expire,
   getStats,
   exportCodes

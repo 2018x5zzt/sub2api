@@ -3,11 +3,16 @@ package handler
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -18,26 +23,35 @@ import (
 
 // APIKeyHandler handles API key-related requests
 type APIKeyHandler struct {
-	apiKeyService *service.APIKeyService
+	apiKeyService  *service.APIKeyService
+	accountRepo    service.AccountRepository
+	billingService *service.BillingService
 }
 
 // NewAPIKeyHandler creates a new APIKeyHandler
-func NewAPIKeyHandler(apiKeyService *service.APIKeyService) *APIKeyHandler {
+func NewAPIKeyHandler(apiKeyService *service.APIKeyService, accountRepo service.AccountRepository) *APIKeyHandler {
 	return &APIKeyHandler{
 		apiKeyService: apiKeyService,
+		accountRepo:   accountRepo,
 	}
+}
+
+func (h *APIKeyHandler) SetBillingService(billingService *service.BillingService) {
+	if h == nil {
+		return
+	}
+	h.billingService = billingService
 }
 
 // CreateAPIKeyRequest represents the create API key request payload
 type CreateAPIKeyRequest struct {
-	Name             string   `json:"name" binding:"required"`
-	GroupID          *int64   `json:"group_id"`          // nullable
-	BudgetMultiplier *float64 `json:"budget_multiplier"` // 动态倍率预算
-	CustomKey        *string  `json:"custom_key"`        // 可选的自定义key
-	IPWhitelist      []string `json:"ip_whitelist"`      // IP 白名单
-	IPBlacklist      []string `json:"ip_blacklist"`      // IP 黑名单
-	Quota            *float64 `json:"quota"`             // 配额限制 (USD)
-	ExpiresInDays    *int     `json:"expires_in_days"`   // 过期天数
+	Name          string   `json:"name" binding:"required"`
+	GroupID       *int64   `json:"group_id"`        // nullable
+	CustomKey     *string  `json:"custom_key"`      // 可选的自定义key
+	IPWhitelist   []string `json:"ip_whitelist"`    // IP 白名单
+	IPBlacklist   []string `json:"ip_blacklist"`    // IP 黑名单
+	Quota         *float64 `json:"quota"`           // 配额限制 (USD)
+	ExpiresInDays *int     `json:"expires_in_days"` // 过期天数
 
 	// Rate limit fields (0 = unlimited)
 	RateLimit5h *float64 `json:"rate_limit_5h"`
@@ -47,15 +61,14 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest represents the update API key request payload
 type UpdateAPIKeyRequest struct {
-	Name             string   `json:"name"`
-	GroupID          *int64   `json:"group_id"`
-	BudgetMultiplier *float64 `json:"budget_multiplier"` // 动态倍率预算
-	Status           string   `json:"status" binding:"omitempty,oneof=active inactive"`
-	IPWhitelist      []string `json:"ip_whitelist"` // IP 白名单
-	IPBlacklist      []string `json:"ip_blacklist"` // IP 黑名单
-	Quota            *float64 `json:"quota"`        // 配额限制 (USD), 0=无限制
-	ExpiresAt        *string  `json:"expires_at"`   // 过期时间 (ISO 8601)
-	ResetQuota       *bool    `json:"reset_quota"`  // 重置已用配额
+	Name        string   `json:"name"`
+	GroupID     *int64   `json:"group_id"`
+	Status      string   `json:"status" binding:"omitempty,oneof=active inactive"`
+	IPWhitelist []string `json:"ip_whitelist"` // IP 白名单
+	IPBlacklist []string `json:"ip_blacklist"` // IP 黑名单
+	Quota       *float64 `json:"quota"`        // 配额限制 (USD), 0=无限制
+	ExpiresAt   *string  `json:"expires_at"`   // 过期时间 (ISO 8601)
+	ResetQuota  *bool    `json:"reset_quota"`  // 重置已用配额
 
 	// Rate limit fields (nil = no change, 0 = unlimited)
 	RateLimit5h         *float64 `json:"rate_limit_5h"`
@@ -133,7 +146,7 @@ func (h *APIKeyHandler) GetByID(c *gin.Context) {
 
 	// 验证所有权
 	if key.UserID != subject.UserID {
-		response.NotFound(c, "API key not found")
+		response.Forbidden(c, "Not authorized to access this key")
 		return
 	}
 
@@ -156,13 +169,12 @@ func (h *APIKeyHandler) Create(c *gin.Context) {
 	}
 
 	svcReq := service.CreateAPIKeyRequest{
-		Name:             req.Name,
-		GroupID:          req.GroupID,
-		BudgetMultiplier: req.BudgetMultiplier,
-		CustomKey:        req.CustomKey,
-		IPWhitelist:      req.IPWhitelist,
-		IPBlacklist:      req.IPBlacklist,
-		ExpiresInDays:    req.ExpiresInDays,
+		Name:          req.Name,
+		GroupID:       req.GroupID,
+		CustomKey:     req.CustomKey,
+		IPWhitelist:   req.IPWhitelist,
+		IPBlacklist:   req.IPBlacklist,
+		ExpiresInDays: req.ExpiresInDays,
 	}
 	if req.Quota != nil {
 		svcReq.Quota = *req.Quota
@@ -210,7 +222,6 @@ func (h *APIKeyHandler) Update(c *gin.Context) {
 	svcReq := service.UpdateAPIKeyRequest{
 		IPWhitelist:         req.IPWhitelist,
 		IPBlacklist:         req.IPBlacklist,
-		BudgetMultiplier:    req.BudgetMultiplier,
 		Quota:               req.Quota,
 		ResetQuota:          req.ResetQuota,
 		RateLimit5h:         req.RateLimit5h,
@@ -296,6 +307,139 @@ func (h *APIKeyHandler) GetAvailableGroups(c *gin.Context) {
 	response.Success(c, out)
 }
 
+// GetAvailableGroupModels 获取当前用户可用分组的模型列表
+// GET /api/v1/groups/models
+func (h *APIKeyHandler) GetAvailableGroupModels(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	groups, err := h.apiKeyService.GetAvailableGroups(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	userRates, err := h.apiKeyService.GetUserGroupRates(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	pricingCache := make(map[string]cachedModelPricing)
+	out := make([]dto.GroupModelCatalog, 0, len(groups))
+	for i := range groups {
+		models, source, err := h.getGroupSupportedModels(c.Request.Context(), &groups[i])
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		effectiveRateMultiplier, userRateMultiplier := resolveGroupRateMultiplier(&groups[i], userRates)
+		out = append(out, dto.GroupModelCatalog{
+			Group:                   *dto.GroupFromService(&groups[i]),
+			Models:                  h.attachSupportedModelPricing(models, effectiveRateMultiplier, pricingCache),
+			Source:                  source,
+			EffectiveRateMultiplier: effectiveRateMultiplier,
+			UserRateMultiplier:      userRateMultiplier,
+		})
+	}
+	response.Success(c, out)
+}
+
+type cachedModelPricing struct {
+	pricing *service.ModelPricing
+	loaded  bool
+}
+
+func resolveGroupRateMultiplier(group *service.Group, userRates map[int64]float64) (float64, *float64) {
+	if group == nil {
+		return 1, nil
+	}
+
+	effective := group.RateMultiplier
+	if len(userRates) == 0 {
+		return effective, nil
+	}
+
+	userRate, ok := userRates[group.ID]
+	if !ok {
+		return effective, nil
+	}
+
+	rateCopy := userRate
+	return userRate, &rateCopy
+}
+
+func (h *APIKeyHandler) attachSupportedModelPricing(
+	models []dto.SupportedModel,
+	effectiveRateMultiplier float64,
+	pricingCache map[string]cachedModelPricing,
+) []dto.SupportedModel {
+	if len(models) == 0 {
+		return models
+	}
+
+	out := make([]dto.SupportedModel, 0, len(models))
+	for _, model := range models {
+		modelCopy := model
+		modelCopy.Pricing = h.buildSupportedModelPricing(model.ID, effectiveRateMultiplier, pricingCache)
+		out = append(out, modelCopy)
+	}
+	return out
+}
+
+func (h *APIKeyHandler) buildSupportedModelPricing(
+	modelID string,
+	effectiveRateMultiplier float64,
+	pricingCache map[string]cachedModelPricing,
+) *dto.SupportedModelPricing {
+	if h == nil || h.billingService == nil || modelID == "" {
+		return nil
+	}
+
+	entry, ok := pricingCache[modelID]
+	if !ok || !entry.loaded {
+		pricing, err := h.billingService.GetModelPricing(modelID)
+		if err == nil {
+			entry.pricing = pricing
+		}
+		entry.loaded = true
+		pricingCache[modelID] = entry
+	}
+
+	return supportedModelPricingFromService(entry.pricing, effectiveRateMultiplier)
+}
+
+func supportedModelPricingFromService(
+	pricing *service.ModelPricing,
+	effectiveRateMultiplier float64,
+) *dto.SupportedModelPricing {
+	if pricing == nil {
+		return nil
+	}
+
+	hasInput := pricing.InputPricePerToken > 0
+	hasOutput := pricing.OutputPricePerToken > 0
+	if !hasInput && !hasOutput {
+		return nil
+	}
+
+	const tokensPerMillion = 1_000_000.0
+
+	out := &dto.SupportedModelPricing{Currency: "USD"}
+	if hasInput {
+		v := pricing.InputPricePerToken * effectiveRateMultiplier * tokensPerMillion
+		out.InputPricePerMillionTokens = &v
+	}
+	if hasOutput {
+		v := pricing.OutputPricePerToken * effectiveRateMultiplier * tokensPerMillion
+		out.OutputPricePerMillionTokens = &v
+	}
+	return out
+}
+
 // GetUserGroupRates 获取当前用户的专属分组倍率配置
 // GET /api/v1/groups/rates
 func (h *APIKeyHandler) GetUserGroupRates(c *gin.Context) {
@@ -312,4 +456,313 @@ func (h *APIKeyHandler) GetUserGroupRates(c *gin.Context) {
 	}
 
 	response.Success(c, rates)
+}
+
+func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *service.Group) ([]dto.SupportedModel, string, error) {
+	if group == nil {
+		return nil, "default", nil
+	}
+
+	defaultModels := defaultModelsForGroup(group)
+	if group.Platform == service.PlatformAntigravity || h.accountRepo == nil {
+		return defaultModels, "default", nil
+	}
+
+	accounts, err := h.accountRepo.ListSchedulableByGroupID(ctx, group.ID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	mappedModelIDs, hasAnyMapping, includeDefaults := collectGroupModelIDs(group.Platform, accounts, defaultModels)
+	if !hasAnyMapping {
+		return defaultModels, "default", nil
+	}
+
+	if includeDefaults {
+		return mergeDefaultAndMappedModels(defaultModels, mappedModelIDs), "mixed", nil
+	}
+
+	return buildMappedModels(mappedModelIDs, defaultModels), "mapping", nil
+}
+
+func defaultModelsForGroup(group *service.Group) []dto.SupportedModel {
+	if group == nil {
+		return nil
+	}
+
+	switch group.Platform {
+	case service.PlatformOpenAI:
+		return supportedModelsFromOpenAI(openai.DefaultModels)
+	case service.PlatformGemini:
+		return supportedModelsFromGemini(geminicli.DefaultModels)
+	case service.PlatformAntigravity:
+		return filterAntigravityModelsByScopes(
+			supportedModelsFromAntigravity(antigravity.DefaultModels()),
+			group.SupportedModelScopes,
+		)
+	default:
+		return supportedModelsFromClaude(claude.DefaultModels)
+	}
+}
+
+func collectGroupModelIDs(platform string, accounts []service.Account, defaults []dto.SupportedModel) ([]string, bool, bool) {
+	modelSet := make(map[string]struct{})
+	hasAnyMapping := false
+	includeDefaults := false
+
+	for i := range accounts {
+		account := &accounts[i]
+		mapping := account.GetModelMapping()
+		if accountUsesDefaultModels(platform, account, mapping) {
+			includeDefaults = true
+			continue
+		}
+		hasAnyMapping = true
+		addMappedModelIDs(modelSet, mapping, defaults)
+	}
+
+	if !hasAnyMapping {
+		return nil, false, includeDefaults
+	}
+
+	models := make([]string, 0, len(modelSet))
+	for modelID := range modelSet {
+		models = append(models, modelID)
+	}
+	sort.Strings(models)
+	return models, true, includeDefaults
+}
+
+func accountUsesDefaultModels(platform string, account *service.Account, mapping map[string]string) bool {
+	if account == nil {
+		return false
+	}
+	if len(mapping) == 0 {
+		return true
+	}
+
+	switch platform {
+	case service.PlatformOpenAI:
+		return account.IsOpenAIPassthroughEnabled()
+	case service.PlatformGemini:
+		return account.IsOAuth()
+	default:
+		return account.IsOAuth()
+	}
+}
+
+func addMappedModelIDs(modelSet map[string]struct{}, mapping map[string]string, defaults []dto.SupportedModel) {
+	for modelID := range mapping {
+		expanded := expandMappedModelSelector(modelID, defaults)
+		if len(expanded) == 0 {
+			modelSet[modelID] = struct{}{}
+			continue
+		}
+		for _, expandedID := range expanded {
+			modelSet[expandedID] = struct{}{}
+		}
+	}
+}
+
+func expandMappedModelSelector(selector string, defaults []dto.SupportedModel) []string {
+	selector = strings.TrimSpace(selector)
+	if selector == "" {
+		return nil
+	}
+	if !strings.Contains(selector, "*") {
+		return []string{selector}
+	}
+
+	expanded := make([]string, 0, len(defaults))
+	for _, model := range defaults {
+		if matchModelSelector(selector, model.ID) {
+			expanded = append(expanded, model.ID)
+		}
+	}
+	if len(expanded) == 0 {
+		return nil
+	}
+	return expanded
+}
+
+func matchModelSelector(selector, modelID string) bool {
+	if strings.HasSuffix(selector, "*") {
+		return strings.HasPrefix(modelID, strings.TrimSuffix(selector, "*"))
+	}
+	return selector == modelID
+}
+
+func buildMappedModels(mappedModelIDs []string, defaults []dto.SupportedModel) []dto.SupportedModel {
+	if len(mappedModelIDs) == 0 {
+		return nil
+	}
+
+	defaultMap := make(map[string]dto.SupportedModel, len(defaults))
+	for _, model := range defaults {
+		defaultMap[model.ID] = model
+	}
+
+	models := make([]dto.SupportedModel, 0, len(mappedModelIDs))
+	remaining := make(map[string]struct{}, len(mappedModelIDs))
+	for _, modelID := range mappedModelIDs {
+		remaining[modelID] = struct{}{}
+	}
+
+	for _, model := range defaults {
+		if _, ok := remaining[model.ID]; ok {
+			models = append(models, model)
+			delete(remaining, model.ID)
+		}
+	}
+
+	if len(remaining) == 0 {
+		return models
+	}
+
+	extraIDs := make([]string, 0, len(remaining))
+	for modelID := range remaining {
+		extraIDs = append(extraIDs, modelID)
+	}
+	sort.Strings(extraIDs)
+	for _, modelID := range extraIDs {
+		model, ok := defaultMap[modelID]
+		if ok {
+			models = append(models, model)
+			continue
+		}
+		models = append(models, dto.SupportedModel{
+			ID:          modelID,
+			DisplayName: modelID,
+		})
+	}
+	return models
+}
+
+func mergeDefaultAndMappedModels(defaults []dto.SupportedModel, mappedModelIDs []string) []dto.SupportedModel {
+	models := make([]dto.SupportedModel, 0, len(defaults)+len(mappedModelIDs))
+	models = append(models, defaults...)
+
+	seen := make(map[string]struct{}, len(defaults))
+	for _, model := range defaults {
+		seen[model.ID] = struct{}{}
+	}
+
+	extraIDs := make([]string, 0, len(mappedModelIDs))
+	for _, modelID := range mappedModelIDs {
+		if _, ok := seen[modelID]; ok {
+			continue
+		}
+		seen[modelID] = struct{}{}
+		extraIDs = append(extraIDs, modelID)
+	}
+	sort.Strings(extraIDs)
+	for _, modelID := range extraIDs {
+		models = append(models, dto.SupportedModel{
+			ID:          modelID,
+			DisplayName: modelID,
+		})
+	}
+	return models
+}
+
+func supportedModelsFromOpenAI(models []openai.Model) []dto.SupportedModel {
+	out := make([]dto.SupportedModel, 0, len(models))
+	for _, model := range models {
+		displayName := model.DisplayName
+		if displayName == "" {
+			displayName = model.ID
+		}
+		out = append(out, dto.SupportedModel{
+			ID:          model.ID,
+			DisplayName: displayName,
+		})
+	}
+	return out
+}
+
+func supportedModelsFromClaude(models []claude.Model) []dto.SupportedModel {
+	out := make([]dto.SupportedModel, 0, len(models))
+	for _, model := range models {
+		displayName := model.DisplayName
+		if displayName == "" {
+			displayName = model.ID
+		}
+		out = append(out, dto.SupportedModel{
+			ID:          model.ID,
+			DisplayName: displayName,
+		})
+	}
+	return out
+}
+
+func supportedModelsFromGemini(models []geminicli.Model) []dto.SupportedModel {
+	out := make([]dto.SupportedModel, 0, len(models))
+	for _, model := range models {
+		displayName := model.DisplayName
+		if displayName == "" {
+			displayName = model.ID
+		}
+		out = append(out, dto.SupportedModel{
+			ID:          model.ID,
+			DisplayName: displayName,
+		})
+	}
+	return out
+}
+
+func supportedModelsFromAntigravity(models []antigravity.ClaudeModel) []dto.SupportedModel {
+	out := make([]dto.SupportedModel, 0, len(models))
+	for _, model := range models {
+		displayName := model.DisplayName
+		if displayName == "" {
+			displayName = model.ID
+		}
+		out = append(out, dto.SupportedModel{
+			ID:          model.ID,
+			DisplayName: displayName,
+		})
+	}
+	return out
+}
+
+func filterAntigravityModelsByScopes(models []dto.SupportedModel, scopes []string) []dto.SupportedModel {
+	if len(scopes) == 0 {
+		return models
+	}
+
+	allowedScopes := make(map[string]struct{}, len(scopes))
+	for _, scope := range scopes {
+		allowedScopes[strings.TrimSpace(scope)] = struct{}{}
+	}
+
+	filtered := make([]dto.SupportedModel, 0, len(models))
+	for _, model := range models {
+		if antigravityScopeAllowsModel(model.ID, allowedScopes) {
+			filtered = append(filtered, model)
+		}
+	}
+	return filtered
+}
+
+func antigravityScopeAllowsModel(modelID string, allowedScopes map[string]struct{}) bool {
+	if len(allowedScopes) == 0 {
+		return true
+	}
+
+	modelLower := strings.ToLower(modelID)
+	if strings.Contains(modelLower, "claude") {
+		_, ok := allowedScopes["claude"]
+		return ok
+	}
+
+	if strings.Contains(modelLower, "gemini") {
+		if strings.Contains(modelLower, "image") {
+			_, ok := allowedScopes["gemini_image"]
+			return ok
+		}
+		_, ok := allowedScopes["gemini_text"]
+		return ok
+	}
+
+	return true
 }

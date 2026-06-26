@@ -30,18 +30,3 @@ describe('AppSidebar header styles', () => {
     expect(sidebarBrandBlockMatch?.[0]).not.toContain('overflow: hidden;')
   })
 })
-
-describe('AppSidebar subscription management navigation', () => {
-  it('points the main subscription management entry at the canonical admin subscriptions URL', () => {
-    expect(componentSource).toContain("{ path: '/admin/subscriptions', label: t('nav.subscriptionManagement')")
-  })
-})
-
-describe('AppSidebar custom menu navigation', () => {
-  it('uses internal custom menu URLs directly instead of routing them through iframe custom pages', () => {
-    expect(componentSource).toContain("function customMenuItemPath(item: { id: string; url: string }): string")
-    expect(componentSource).toContain("return item.url.startsWith('/') ? item.url : `/custom/${item.id}`")
-    expect(componentSource).toContain('path: customMenuItemPath(item)')
-    expect(componentSource).toContain('path: customMenuItemPath(cm)')
-  })
-})

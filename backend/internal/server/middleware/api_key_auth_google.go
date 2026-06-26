@@ -21,15 +21,6 @@ func APIKeyAuthGoogle(apiKeyService *service.APIKeyService, cfg *config.Config) 
 //
 // It is intended for Gemini native endpoints (/v1beta) to match Gemini SDK expectations.
 func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
-	return APIKeyAuthWithProductSubscriptionGoogle(apiKeyService, subscriptionService, nil, cfg)
-}
-
-func APIKeyAuthWithProductSubscriptionGoogle(
-	apiKeyService *service.APIKeyService,
-	subscriptionService *service.SubscriptionService,
-	productSubscriptionService *service.SubscriptionProductService,
-	cfg *config.Config,
-) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if v := strings.TrimSpace(c.Query("api_key")); v != "" {
 			abortWithGoogleError(c, 400, "Query parameter api_key is deprecated. Use Authorization header or key instead.")
@@ -51,10 +42,6 @@ func APIKeyAuthWithProductSubscriptionGoogle(
 			return
 		}
 
-		// 同 api_key_auth.go：早退中断前也写入 Ops 回退 key，便于错误日志展示
-		// user/group/platform。
-		SetOpsFallbackAPIKey(c, apiKey)
-
 		if !apiKey.IsActive() {
 			abortWithGoogleError(c, 401, "API key is disabled")
 			return
@@ -65,11 +52,6 @@ func APIKeyAuthWithProductSubscriptionGoogle(
 		}
 		if !apiKey.User.IsActive() {
 			abortWithGoogleError(c, 401, "User account is not active")
-			return
-		}
-		if _, message, ok := validateAPIKeyGroupAvailable(apiKey); !ok {
-			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
-			abortWithGoogleError(c, 403, message)
 			return
 		}
 
@@ -88,122 +70,40 @@ func APIKeyAuthWithProductSubscriptionGoogle(
 		}
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
-		var productSettlement *service.ProductSettlementContext
-		productSubscriptionChecked := false
-		subscriptionBalanceFallback := false
-		if isSubscriptionType && productSubscriptionService != nil {
-			productSubscriptionChecked = true
-			settlement, productErr := productSubscriptionService.GetActiveProductSubscriptionForFamily(
-				c.Request.Context(),
-				apiKey.User.ID,
-				apiKey.Group.ID,
-				apiKey.SubscriptionProductFamily,
-			)
-			if productErr == nil {
-				productSettlement = settlement
-			} else if isSubscriptionLimitError(productErr) {
-				if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
-					apiKey = fallbackAPIKey
-					isSubscriptionType = false
-					subscriptionBalanceFallback = true
-				} else {
-					abortWithGoogleError(c, 429, productErr.Error())
-					return
-				}
-			} else if !errors.Is(productErr, service.ErrSubscriptionNotFound) {
-				abortWithGoogleError(c, 403, productErr.Error())
-				return
-			} else {
-				abortWithGoogleError(c, 403, "No active subscription found for this group")
-				return
-			}
-		}
-		if productSettlement != nil {
-			if err := productSubscriptionService.CheckProductLimits(productSettlement, 0); err != nil {
-				status := 403
-				if errors.Is(err, service.ErrDailyLimitExceeded) ||
-					errors.Is(err, service.ErrWeeklyLimitExceeded) ||
-					errors.Is(err, service.ErrMonthlyLimitExceeded) {
-					status = 429
-				}
-				if isSubscriptionLimitError(err) {
-					if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
-						apiKey = fallbackAPIKey
-						productSettlement = nil
-						subscriptionBalanceFallback = true
-					} else {
-						abortWithGoogleError(c, status, err.Error())
-						return
-					}
-				} else {
-					abortWithGoogleError(c, status, err.Error())
-					return
-				}
-			}
-		} else if isSubscriptionType && !productSubscriptionChecked && subscriptionService != nil {
+		if isSubscriptionType && subscriptionService != nil {
 			subscription, err := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,
 				apiKey.Group.ID,
 			)
 			if err != nil {
-				if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
-					apiKey = fallbackAPIKey
-					isSubscriptionType = false
-					subscriptionBalanceFallback = true
-				} else {
-					abortWithGoogleError(c, 403, "No active subscription found for this group")
-					return
-				}
+				abortWithGoogleError(c, 403, "No active subscription found for this group")
+				return
 			}
 
-			if isSubscriptionType {
-				needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-				if err != nil {
-					status := 403
-					if errors.Is(err, service.ErrDailyLimitExceeded) ||
-						errors.Is(err, service.ErrWeeklyLimitExceeded) ||
-						errors.Is(err, service.ErrMonthlyLimitExceeded) {
-						status = 429
-					}
-					if isSubscriptionLimitError(err) {
-						if fallbackAPIKey, fallbackErr := resolveSubscriptionBalanceFallbackAPIKey(c.Request.Context(), apiKeyService, apiKey); fallbackErr == nil {
-							apiKey = fallbackAPIKey
-							subscription = nil
-							subscriptionBalanceFallback = true
-						} else {
-							abortWithGoogleError(c, status, err.Error())
-							return
-						}
-					} else {
-						abortWithGoogleError(c, status, err.Error())
-						return
-					}
+			needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
+			if err != nil {
+				status := 403
+				if errors.Is(err, service.ErrDailyLimitExceeded) ||
+					errors.Is(err, service.ErrWeeklyLimitExceeded) ||
+					errors.Is(err, service.ErrMonthlyLimitExceeded) {
+					status = 429
 				}
+				abortWithGoogleError(c, status, err.Error())
+				return
+			}
 
-				if subscription != nil {
-					c.Set(string(ContextKeySubscription), subscription)
-				}
+			c.Set(string(ContextKeySubscription), subscription)
 
-				if subscription != nil && needsMaintenance {
-					maintenanceCopy := *subscription
-					subscriptionService.DoWindowMaintenance(&maintenanceCopy)
-				}
+			if needsMaintenance {
+				maintenanceCopy := *subscription
+				subscriptionService.DoWindowMaintenance(&maintenanceCopy)
 			}
 		} else {
-			if apiKey.User.Balance < 0 {
+			if apiKey.User.Balance <= 0 {
 				abortWithGoogleError(c, 403, "Insufficient account balance")
 				return
 			}
-		}
-
-		if productSettlement != nil {
-			c.Set(string(ContextKeyProductSettlement), productSettlement)
-			ctx := service.ContextWithProductSettlement(c.Request.Context(), productSettlement)
-			c.Request = c.Request.WithContext(ctx)
-		}
-		if subscriptionBalanceFallback {
-			c.Request = c.Request.WithContext(service.ContextWithSubscriptionBalanceFallback(c.Request.Context()))
 		}
 
 		c.Set(string(ContextKeyAPIKey), apiKey)

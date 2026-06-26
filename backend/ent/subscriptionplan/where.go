@@ -59,11 +59,6 @@ func GroupID(v int64) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldGroupID, v))
 }
 
-// ProductID applies equality check predicate on the "product_id" field. It's identical to ProductIDEQ.
-func ProductID(v int64) predicate.SubscriptionPlan {
-	return predicate.SubscriptionPlan(sql.FieldEQ(FieldProductID, v))
-}
-
 // Name applies equality check predicate on the "name" field. It's identical to NameEQ.
 func Name(v string) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldEQ(FieldName, v))
@@ -162,56 +157,6 @@ func GroupIDLT(v int64) predicate.SubscriptionPlan {
 // GroupIDLTE applies the LTE predicate on the "group_id" field.
 func GroupIDLTE(v int64) predicate.SubscriptionPlan {
 	return predicate.SubscriptionPlan(sql.FieldLTE(FieldGroupID, v))
-}
-
-// ProductIDEQ applies the EQ predicate on the "product_id" field.
-func ProductIDEQ(v int64) predicate.SubscriptionPlan {
-	return predicate.SubscriptionPlan(sql.FieldEQ(FieldProductID, v))
-}
-
-// ProductIDNEQ applies the NEQ predicate on the "product_id" field.
-func ProductIDNEQ(v int64) predicate.SubscriptionPlan {
-	return predicate.SubscriptionPlan(sql.FieldNEQ(FieldProductID, v))
-}
-
-// ProductIDIn applies the In predicate on the "product_id" field.
-func ProductIDIn(vs ...int64) predicate.SubscriptionPlan {
-	return predicate.SubscriptionPlan(sql.FieldIn(FieldProductID, vs...))
-}
-
-// ProductIDNotIn applies the NotIn predicate on the "product_id" field.
-func ProductIDNotIn(vs ...int64) predicate.SubscriptionPlan {
-	return predicate.SubscriptionPlan(sql.FieldNotIn(FieldProductID, vs...))
-}
-
-// ProductIDGT applies the GT predicate on the "product_id" field.
-func ProductIDGT(v int64) predicate.SubscriptionPlan {
-	return predicate.SubscriptionPlan(sql.FieldGT(FieldProductID, v))
-}
-
-// ProductIDGTE applies the GTE predicate on the "product_id" field.
-func ProductIDGTE(v int64) predicate.SubscriptionPlan {
-	return predicate.SubscriptionPlan(sql.FieldGTE(FieldProductID, v))
-}
-
-// ProductIDLT applies the LT predicate on the "product_id" field.
-func ProductIDLT(v int64) predicate.SubscriptionPlan {
-	return predicate.SubscriptionPlan(sql.FieldLT(FieldProductID, v))
-}
-
-// ProductIDLTE applies the LTE predicate on the "product_id" field.
-func ProductIDLTE(v int64) predicate.SubscriptionPlan {
-	return predicate.SubscriptionPlan(sql.FieldLTE(FieldProductID, v))
-}
-
-// ProductIDIsNil applies the IsNil predicate on the "product_id" field.
-func ProductIDIsNil() predicate.SubscriptionPlan {
-	return predicate.SubscriptionPlan(sql.FieldIsNull(FieldProductID))
-}
-
-// ProductIDNotNil applies the NotNil predicate on the "product_id" field.
-func ProductIDNotNil() predicate.SubscriptionPlan {
-	return predicate.SubscriptionPlan(sql.FieldNotNull(FieldProductID))
 }
 
 // NameEQ applies the EQ predicate on the "name" field.

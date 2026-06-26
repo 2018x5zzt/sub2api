@@ -4,14 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
 var codexModelMap = map[string]string{
-	"gpt5.5":                     "gpt-5.5",
 	"gpt-5.5":                    "gpt-5.5",
-	"codex-auto-review":          "codex-auto-review",
 	"gpt-5.4":                    "gpt-5.4",
 	"gpt-5.4-mini":               "gpt-5.4-mini",
 	"gpt-5.4-none":               "gpt-5.4",
@@ -73,13 +69,6 @@ type codexTransformResult struct {
 	PromptCacheKey  string
 }
 
-type codexOAuthTransformOptions struct {
-	IsCodexCLI              bool
-	IsCompact               bool
-	SkipDefaultInstructions bool
-	PreserveToolCallIDs     bool
-}
-
 const (
 	codexImageGenerationBridgeMarker = "<sub2api-codex-image-generation>"
 	codexImageGenerationBridgeText   = codexImageGenerationBridgeMarker + "\nWhen the user asks for raster image generation or editing, use the OpenAI Responses native `image_generation` tool attached to this request. The local Codex client may not expose an `image_gen` namespace, but that does not mean image generation is unavailable. Do not ask the user to switch to CLI fallback solely because `image_gen` is absent.\n</sub2api-codex-image-generation>"
@@ -105,13 +94,6 @@ var openAICodexOAuthUnsupportedFields = append([]string{
 }, openAIChatGPTInternalUnsupportedFields...)
 
 func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact bool) codexTransformResult {
-	return applyCodexOAuthTransformWithOptions(reqBody, codexOAuthTransformOptions{
-		IsCodexCLI: isCodexCLI,
-		IsCompact:  isCompact,
-	})
-}
-
-func applyCodexOAuthTransformWithOptions(reqBody map[string]any, opts codexOAuthTransformOptions) codexTransformResult {
 	result := codexTransformResult{}
 	// 工具续链需求会影响存储策略与 input 过滤逻辑。
 	needsToolContinuation := NeedsToolContinuation(reqBody)
@@ -129,7 +111,7 @@ func applyCodexOAuthTransformWithOptions(reqBody map[string]any, opts codexOAuth
 		result.NormalizedModel = normalizedModel
 	}
 
-	if opts.IsCompact {
+	if isCompact {
 		if _, ok := reqBody["store"]; ok {
 			delete(reqBody, "store")
 			result.Modified = true
@@ -157,12 +139,6 @@ func applyCodexOAuthTransformWithOptions(reqBody map[string]any, opts codexOAuth
 			delete(reqBody, key)
 			result.Modified = true
 		}
-	}
-
-	// 请求带 reasoning 时补齐 include:["reasoning.encrypted_content"]，与真实 Codex 对齐
-	// （compact 端点形态不同，单独处理，此处跳过）。
-	if !opts.IsCompact && ensureCodexReasoningInclude(reqBody) {
-		result.Modified = true
 	}
 
 	// 兼容遗留的 functions 和 function_call，转换为 tools 和 tool_choice
@@ -207,10 +183,6 @@ func applyCodexOAuthTransformWithOptions(reqBody map[string]any, opts codexOAuth
 
 	if v, ok := reqBody["prompt_cache_key"].(string); ok {
 		result.PromptCacheKey = strings.TrimSpace(v)
-		if isOpenAICompatMessagesBridgeRequestBody(reqBody) {
-			delete(reqBody, "prompt_cache_key")
-			result.Modified = true
-		}
 	}
 
 	// 提取 input 中 role:"system" 消息至 instructions（OAuth 上游不支持 system role）。
@@ -219,7 +191,7 @@ func applyCodexOAuthTransformWithOptions(reqBody map[string]any, opts codexOAuth
 	}
 
 	// instructions 处理逻辑：根据是否是 Codex CLI 分别调用不同方法
-	if !opts.SkipDefaultInstructions && applyInstructions(reqBody, opts.IsCodexCLI) {
+	if applyInstructions(reqBody, isCodexCLI) {
 		result.Modified = true
 	}
 	if isCodexSparkModel(normalizedModel) && applyCodexSparkImageUnsupportedInstructions(reqBody) {
@@ -236,10 +208,7 @@ func applyCodexOAuthTransformWithOptions(reqBody map[string]any, opts codexOAuth
 			input = normalizedInput
 			result.Modified = true
 		}
-		input = filterCodexInputWithOptions(input, codexInputFilterOptions{
-			PreserveReferences: needsToolContinuation,
-			PreserveCallIDs:    opts.PreserveToolCallIDs,
-		})
+		input = filterCodexInput(input, needsToolContinuation)
 		reqBody["input"] = input
 		result.Modified = true
 	} else if inputStr, ok := reqBody["input"].(string); ok {
@@ -516,14 +485,12 @@ func normalizeKnownCodexModel(model string) (string, bool) {
 		return model, true
 	}
 
-	modelID := lastOpenAIModelSegment(model)
+	modelID := model
+	if strings.Contains(modelID, "/") {
+		parts := strings.Split(modelID, "/")
+		modelID = parts[len(parts)-1]
+	}
 
-	if normalized := canonicalizeOpenAIModelAliasSpelling(modelID); normalized != "" {
-		modelID = normalized
-	}
-	if mapped := normalizeKnownOpenAICodexModel(modelID); mapped != "" {
-		return mapped, true
-	}
 	key := codexModelLookupKey(modelID)
 	if key == "" {
 		return "", false
@@ -552,11 +519,7 @@ func codexModelLookupKey(modelID string) string {
 		parts := strings.Split(modelID, "/")
 		modelID = parts[len(parts)-1]
 	}
-	key := strings.ToLower(strings.Join(strings.Fields(modelID), "-"))
-	if strings.HasPrefix(key, "gpt5.") {
-		key = "gpt-5." + strings.TrimPrefix(key, "gpt5.")
-	}
-	return key
+	return strings.ToLower(strings.Join(strings.Fields(modelID), "-"))
 }
 
 func isKnownCodexModelSuffix(suffix string) bool {
@@ -850,9 +813,6 @@ func normalizeOpenAIModelForUpstream(account *Account, model string) string {
 	if account == nil || account.Type == AccountTypeOAuth {
 		return normalizeCodexModel(model)
 	}
-	if normalized := normalizeKnownOpenAICompatAlias(model); normalized != "" {
-		return normalized
-	}
 	return strings.TrimSpace(model)
 }
 
@@ -890,28 +850,8 @@ func getNormalizedCodexModel(modelID string) string {
 	return ""
 }
 
-func normalizeKnownOpenAICompatModel(model string) string {
-	return normalizeKnownOpenAICodexModel(model)
-}
-
-func normalizeKnownOpenAICompatAlias(model string) string {
-	modelID := strings.TrimSpace(model)
-	if modelID == "" {
-		return ""
-	}
-	if strings.Contains(modelID, "/") {
-		parts := strings.Split(modelID, "/")
-		modelID = parts[len(parts)-1]
-	}
-	normalized := normalizeKnownOpenAICodexModel(modelID)
-	if normalized == "" || strings.EqualFold(modelID, normalized) {
-		return ""
-	}
-	return normalized
-}
-
 // extractTextFromContent extracts plain text from a content value that is either
-// a Go string or a []any of text-like content-part maps.
+// a Go string or a []any of content-part maps with type:"text".
 func extractTextFromContent(content any) string {
 	switch v := content.(type) {
 	case string:
@@ -923,8 +863,7 @@ func extractTextFromContent(content any) string {
 			if !ok {
 				continue
 			}
-			switch t, _ := m["type"].(string); t {
-			case "text", "input_text", "output_text":
+			if t, _ := m["type"].(string); t == "text" {
 				if text, ok := m["text"].(string); ok {
 					parts = append(parts, text)
 				}
@@ -978,116 +917,12 @@ func extractSystemMessagesFromInput(reqBody map[string]any) bool {
 	return true
 }
 
-func extractPromptLikeInstructionsFromInput(reqBody map[string]any) string {
-	input, ok := reqBody["input"].([]any)
-	if !ok || len(input) == 0 {
-		return ""
-	}
-	var texts []string
-	for _, item := range input {
-		m, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		role, _ := m["role"].(string)
-		switch role {
-		case "developer", "system":
-			if text := strings.TrimSpace(extractTextFromContent(m["content"])); text != "" {
-				texts = append(texts, text)
-			}
-		}
-	}
-	return strings.Join(texts, "\n\n")
-}
-
-// defaultCodexSynthInstructions 返回合成路径在 instructions 为空时应填入的默认提示词。
-//
-// 按 model 选择真实 Codex CLI 的 base instructions（codex 系→GPT-5-Codex，
-// gpt-5.2→GPT-5.2，gpt-5.1/gpt-5→GPT-5.1），使合成请求在提示词层面贴近真实 Codex 行为；
-// 若内嵌 prompt 意外为空，回退到最小占位符以保证字段非空。
-func defaultCodexSynthInstructions(model string) string {
-	if instructions := strings.TrimSpace(openai.CodexBaseInstructionsForModel(model)); instructions != "" {
-		return instructions
-	}
-	return "You are a helpful coding assistant."
-}
-
-// ensureCodexReasoningInclude 在请求带 reasoning 时补齐 include:["reasoning.encrypted_content"]。
-//
-// 真实 Codex 在 reasoning 存在时总会请求加密推理内容（ChatGPT/store=false 场景下用于上下文回放）。
-// 该函数为加法式、幂等：仅在 include 缺失或未包含该项时追加；对非数组的异常 include 不做破坏性改写。
-func ensureCodexReasoningInclude(reqBody map[string]any) bool {
-	reasoning, ok := reqBody["reasoning"].(map[string]any)
-	if !ok || len(reasoning) == 0 {
-		return false
-	}
-	const encrypted = "reasoning.encrypted_content"
-	switch existing := reqBody["include"].(type) {
-	case nil:
-		reqBody["include"] = []any{encrypted}
-		return true
-	case []any:
-		for _, v := range existing {
-			if s, ok := v.(string); ok && s == encrypted {
-				return false
-			}
-		}
-		reqBody["include"] = append(existing, encrypted)
-		return true
-	default:
-		// include 为非预期类型时保持原样，避免破坏调用方意图。
-		return false
-	}
-}
-
-// applyCodexClientMetadata 在请求体补齐 client_metadata["x-codex-installation-id"]，
-// 取值为账号真实的 openai_device_id（最新 Codex 在请求体携带的安装标识）。
-//
-// 加法式、幂等：仅在账号存在 device_id 且该键缺失时注入，绝不覆盖既有 client_metadata
-// （如 turn metadata），也不伪造——无 device_id 时不写入。
-func applyCodexClientMetadata(reqBody map[string]any, account *Account) bool {
-	if account == nil {
-		return false
-	}
-	deviceID := strings.TrimSpace(account.GetOpenAIDeviceID())
-	if deviceID == "" {
-		return false
-	}
-	const key = "x-codex-installation-id"
-	switch existing := reqBody["client_metadata"].(type) {
-	case map[string]any:
-		if v, ok := existing[key].(string); ok && strings.TrimSpace(v) != "" {
-			return false
-		}
-		existing[key] = deviceID
-		reqBody["client_metadata"] = existing
-		return true
-	case map[string]string:
-		if strings.TrimSpace(existing[key]) != "" {
-			return false
-		}
-		next := make(map[string]any, len(existing)+1)
-		for k, v := range existing {
-			next[k] = v
-		}
-		next[key] = deviceID
-		reqBody["client_metadata"] = next
-		return true
-	case nil:
-		reqBody["client_metadata"] = map[string]any{key: deviceID}
-		return true
-	default:
-		return false
-	}
-}
-
 // applyInstructions 处理 instructions 字段：仅在 instructions 为空时填充默认值。
 func applyInstructions(reqBody map[string]any, isCodexCLI bool) bool {
 	if !isInstructionsEmpty(reqBody) {
 		return false
 	}
-	model, _ := reqBody["model"].(string)
-	reqBody["instructions"] = defaultCodexSynthInstructions(model)
+	reqBody["instructions"] = "You are a helpful coding assistant."
 	return true
 }
 
@@ -1108,20 +943,9 @@ func isInstructionsEmpty(reqBody map[string]any) bool {
 	return strings.TrimSpace(str) == ""
 }
 
-type codexInputFilterOptions struct {
-	PreserveReferences bool
-	PreserveCallIDs    bool
-}
-
 // filterCodexInput 按需过滤 item_reference 与 id。
 // preserveReferences 为 true 时保持引用与 id，以满足续链请求对上下文的依赖。
 func filterCodexInput(input []any, preserveReferences bool) []any {
-	return filterCodexInputWithOptions(input, codexInputFilterOptions{
-		PreserveReferences: preserveReferences,
-	})
-}
-
-func filterCodexInputWithOptions(input []any, opts codexInputFilterOptions) []any {
 	filtered := make([]any, 0, len(input))
 	for _, item := range input {
 		m, ok := item.(map[string]any)
@@ -1142,20 +966,17 @@ func filterCodexInputWithOptions(input []any, opts codexInputFilterOptions) []an
 		// 仅修正真正的 tool/function call 标识，避免误改普通 message/reasoning id；
 		// 若 item_reference 指向 legacy call_* 标识，则仅修正该引用本身。
 		fixCallIDPrefix := func(id string) string {
-			if opts.PreserveCallIDs {
-				return id
-			}
 			if id == "" || strings.HasPrefix(id, "fc") {
 				return id
 			}
 			if strings.HasPrefix(id, "call_") {
-				return "fc_" + strings.TrimPrefix(id, "call_")
+				return "fc" + strings.TrimPrefix(id, "call_")
 			}
 			return "fc_" + id
 		}
 
 		if typ == "item_reference" {
-			if !opts.PreserveReferences {
+			if !preserveReferences {
 				continue
 			}
 			newItem := make(map[string]any, len(m))
@@ -1223,7 +1044,7 @@ func filterCodexInputWithOptions(input []any, opts codexInputFilterOptions) []an
 			}
 		}
 
-		if !opts.PreserveReferences {
+		if !preserveReferences {
 			ensureCopy()
 			delete(newItem, "id")
 		}

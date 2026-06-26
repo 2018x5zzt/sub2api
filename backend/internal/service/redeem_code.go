@@ -3,25 +3,21 @@ package service
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"strings"
 	"time"
 )
 
 type RedeemCode struct {
-	ID           int64
-	Code         string
-	Type         string
-	Value        float64
-	Status       string
-	SourceType   string
-	UsedBy       *int64
-	UsedAt       *time.Time
-	Notes        string
-	CreatedAt    time.Time
-	ExpiresAt    *time.Time
+	ID        int64
+	Code      string
+	Type      string
+	Value     float64
+	Status    string
+	UsedBy    *int64
+	UsedAt    *time.Time
+	Notes     string
+	CreatedAt time.Time
 
 	GroupID      *int64
-	ProductID    *int64
 	ValidityDays int
 
 	User  *User
@@ -32,22 +28,8 @@ func (r *RedeemCode) IsUsed() bool {
 	return r.Status == StatusUsed
 }
 
-func (r *RedeemCode) IsExpired() bool {
-	return r.IsExpiredAt(time.Now())
-}
-
-func (r *RedeemCode) IsExpiredAt(now time.Time) bool {
-	if r == nil {
-		return false
-	}
-	if r.Status == StatusExpired {
-		return true
-	}
-	return r.Status == StatusUnused && r.ExpiresAt != nil && !r.ExpiresAt.After(now)
-}
-
 func (r *RedeemCode) CanUse() bool {
-	return r.Status == StatusUnused && !r.IsExpired()
+	return r.Status == StatusUnused
 }
 
 func GenerateRedeemCode() (string, error) {
@@ -56,34 +38,4 @@ func GenerateRedeemCode() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
-}
-
-func IsValidRedeemSourceType(sourceType string) bool {
-	switch strings.TrimSpace(sourceType) {
-	case RedeemSourceCommercial, RedeemSourceBenefit, RedeemSourceCompensation, RedeemSourceSystemGrant:
-		return true
-	default:
-		return false
-	}
-}
-
-func NormalizeRedeemSourceType(sourceType, fallback string) string {
-	normalized := strings.TrimSpace(sourceType)
-	if normalized == "" {
-		normalized = strings.TrimSpace(fallback)
-	}
-	if normalized == "" {
-		return ""
-	}
-	if !IsValidRedeemSourceType(normalized) {
-		return strings.TrimSpace(fallback)
-	}
-	return normalized
-}
-
-func IsCommercialRechargeRedeem(code *RedeemCode) bool {
-	if code == nil || NormalizeRedeemSourceType(code.SourceType, "") != RedeemSourceCommercial {
-		return false
-	}
-	return code.Type == RedeemTypeBalance || code.Type == RedeemTypeSubscription
 }

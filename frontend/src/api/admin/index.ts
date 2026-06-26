@@ -14,13 +14,13 @@ import announcementsAPI from './announcements'
 import settingsAPI from './settings'
 import systemAPI from './system'
 import subscriptionsAPI from './subscriptions'
-import subscriptionProductsAPI from './subscriptionProducts'
 import usageAPI from './usage'
 import geminiAPI from './gemini'
 import antigravityAPI from './antigravity'
 import userAttributesAPI from './userAttributes'
 import opsAPI from './ops'
 import errorPassthroughAPI from './errorPassthrough'
+import dataManagementAPI from './dataManagement'
 import apiKeysAPI from './apiKeys'
 import scheduledTestsAPI from './scheduledTests'
 import backupAPI from './backup'
@@ -30,8 +30,6 @@ import channelMonitorAPI from './channelMonitor'
 import channelMonitorTemplateAPI from './channelMonitorTemplate'
 import adminPaymentAPI from './payment'
 import affiliatesAPI from './affiliates'
-import riskControlAPI from './riskControl'
-import adminComplianceAPI from './compliance'
 
 /**
  * Unified admin API object for convenient access
@@ -48,13 +46,13 @@ export const adminAPI = {
   settings: settingsAPI,
   system: systemAPI,
   subscriptions: subscriptionsAPI,
-  subscriptionProducts: subscriptionProductsAPI,
   usage: usageAPI,
   gemini: geminiAPI,
   antigravity: antigravityAPI,
   userAttributes: userAttributesAPI,
   ops: opsAPI,
   errorPassthrough: errorPassthroughAPI,
+  dataManagement: dataManagementAPI,
   apiKeys: apiKeysAPI,
   scheduledTests: scheduledTestsAPI,
   backup: backupAPI,
@@ -63,9 +61,7 @@ export const adminAPI = {
   channelMonitor: channelMonitorAPI,
   channelMonitorTemplate: channelMonitorTemplateAPI,
   payment: adminPaymentAPI,
-  affiliates: affiliatesAPI,
-  riskControl: riskControlAPI,
-  compliance: adminComplianceAPI
+  affiliates: affiliatesAPI
 }
 
 export {
@@ -80,13 +76,13 @@ export {
   settingsAPI,
   systemAPI,
   subscriptionsAPI,
-  subscriptionProductsAPI,
   usageAPI,
   geminiAPI,
   antigravityAPI,
   userAttributesAPI,
   opsAPI,
   errorPassthroughAPI,
+  dataManagementAPI,
   apiKeysAPI,
   scheduledTestsAPI,
   backupAPI,
@@ -95,9 +91,7 @@ export {
   channelMonitorAPI,
   channelMonitorTemplateAPI,
   adminPaymentAPI,
-  affiliatesAPI,
-  riskControlAPI,
-  adminComplianceAPI
+  affiliatesAPI
 }
 
 export default adminAPI
@@ -105,5 +99,5 @@ export default adminAPI
 // Re-export types used by components
 export type { BalanceHistoryItem } from './users'
 export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from './errorPassthrough'
+export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
-export type { ContentModerationConfig, ContentModerationLog, ModerationMode } from './riskControl'

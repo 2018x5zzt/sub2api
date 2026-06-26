@@ -56,14 +56,6 @@ func (s *emailSyncRepoStub) GetByEmail(_ context.Context, _ string) (*User, erro
 	return nil, ErrUserNotFound
 }
 
-func (s *emailSyncRepoStub) GetByInviteCode(context.Context, string) (*User, error) {
-	return nil, ErrUserNotFound
-}
-
-func (s *emailSyncRepoStub) ExistsByInviteCode(context.Context, string) (bool, error) {
-	return false, nil
-}
-
 func (s *emailSyncRepoStub) GetFirstAdmin(context.Context) (*User, error) {
 	return nil, fmt.Errorf("unexpected GetFirstAdmin call")
 }
@@ -72,10 +64,6 @@ func (s *emailSyncRepoStub) Update(_ context.Context, user *User) error {
 	s.updateCalls++
 	s.updated = append(s.updated, user)
 	s.user = user
-	return nil
-}
-
-func (s *emailSyncRepoStub) UpdateInviterBinding(context.Context, int64, *int64) error {
 	return nil
 }
 
@@ -125,18 +113,7 @@ func (s *emailSyncRepoStub) RemoveGroupFromAllowedGroups(context.Context, int64)
 	return 0, nil
 }
 
-func (s *emailSyncRepoStub) BatchSetConcurrency(context.Context, []int64, int) (int, error) {
-	return 0, nil
-}
-func (s *emailSyncRepoStub) BatchAddConcurrency(context.Context, []int64, int) (int, error) {
-	return 0, nil
-}
-
 func (s *emailSyncRepoStub) AddGroupToAllowedGroups(context.Context, int64, int64) error { return nil }
-
-func (s *emailSyncRepoStub) CountInviteesByInviter(context.Context, int64) (int64, error) {
-	return 0, nil
-}
 
 func (s *emailSyncRepoStub) RemoveGroupFromUserAllowedGroups(context.Context, int64, int64) error {
 	return nil
@@ -153,9 +130,6 @@ func (s *emailSyncRepoStub) UpdateTotpSecret(context.Context, int64, *string) er
 func (s *emailSyncRepoStub) EnableTotp(context.Context, int64) error { return nil }
 
 func (s *emailSyncRepoStub) DisableTotp(context.Context, int64) error { return nil }
-func (s *emailSyncRepoStub) GetByIDIncludeDeleted(ctx context.Context, id int64) (*User, error) {
-	return s.GetByID(ctx, id)
-}
 
 func (s *emailSyncRepoStub) EnsureEmailAuthIdentity(_ context.Context, userID int64, email string) error {
 	s.ensureCalls = append(s.ensureCalls, ensureEmailCall{userID: userID, email: email})

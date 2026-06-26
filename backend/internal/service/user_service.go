@@ -65,36 +65,23 @@ var (
 
 // UserListFilters contains all filter options for listing users
 type UserListFilters struct {
-	Status    string // User status filter
-	Role      string // User role filter
-	Search    string // Search in email, username
-	GroupName string // Filter by allowed group name (fuzzy match)
-	// APIKeyGroupID filters users who own at least one non-soft-deleted API key
-	// bound to this group (api_keys.group_id). 0 = no filter. Covers all three
-	// group types since it matches the key's group directly, not allowed_groups.
-	APIKeyGroupID int64
-	Attributes    map[int64]string // Custom attribute filters: attributeID -> value
+	Status     string           // User status filter
+	Role       string           // User role filter
+	Search     string           // Search in email, username
+	GroupName  string           // Filter by allowed group name (fuzzy match)
+	Attributes map[int64]string // Custom attribute filters: attributeID -> value
 	// IncludeSubscriptions controls whether ListWithFilters should load active subscriptions.
 	// For large datasets this can be expensive; admin list pages should enable it on demand.
 	// nil means not specified (default: load subscriptions for backward compatibility).
 	IncludeSubscriptions *bool
-	// IncludeDeleted 为 true 时绕过软删除过滤，返回含已删除（deleted_at 非空）的用户。
-	// 仅供 /admin/usage 的 SearchUsers 端点使用，其他列表调用方不要设置。
-	IncludeDeleted bool
 }
 
 type UserRepository interface {
 	Create(ctx context.Context, user *User) error
 	GetByID(ctx context.Context, id int64) (*User, error)
-	// GetByIDIncludeDeleted 绕过软删除过滤按 ID 取用户（含已删）。仅供管理员审计/usage 点击使用。
-	GetByIDIncludeDeleted(ctx context.Context, id int64) (*User, error)
 	GetByEmail(ctx context.Context, email string) (*User, error)
-	GetByInviteCode(ctx context.Context, code string) (*User, error)
-	ExistsByInviteCode(ctx context.Context, code string) (bool, error)
-	CountInviteesByInviter(ctx context.Context, inviterID int64) (int64, error)
 	GetFirstAdmin(ctx context.Context) (*User, error)
 	Update(ctx context.Context, user *User) error
-	UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
 	Delete(ctx context.Context, id int64) error
 	GetUserAvatar(ctx context.Context, userID int64) (*UserAvatar, error)
 	UpsertUserAvatar(ctx context.Context, userID int64, input UpsertUserAvatarInput) (*UserAvatar, error)
@@ -109,8 +96,6 @@ type UserRepository interface {
 	UpdateBalance(ctx context.Context, id int64, amount float64) error
 	DeductBalance(ctx context.Context, id int64, amount float64) error
 	UpdateConcurrency(ctx context.Context, id int64, amount int) error
-	BatchSetConcurrency(ctx context.Context, userIDs []int64, value int) (int, error)
-	BatchAddConcurrency(ctx context.Context, userIDs []int64, delta int) (int, error)
 	ExistsByEmail(ctx context.Context, email string) (bool, error)
 	RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error)
 	// AddGroupToAllowedGroups 将指定分组增量添加到用户的 allowed_groups（幂等，冲突忽略）
@@ -154,11 +139,10 @@ type UserIdentitySummary struct {
 }
 
 type UserIdentitySummarySet struct {
-	Email    UserIdentitySummary `json:"email"`
-	LinuxDo  UserIdentitySummary `json:"linuxdo"`
-	OIDC     UserIdentitySummary `json:"oidc"`
-	WeChat   UserIdentitySummary `json:"wechat"`
-	DingTalk UserIdentitySummary `json:"dingtalk"`
+	Email   UserIdentitySummary `json:"email"`
+	LinuxDo UserIdentitySummary `json:"linuxdo"`
+	OIDC    UserIdentitySummary `json:"oidc"`
+	WeChat  UserIdentitySummary `json:"wechat"`
 }
 
 type StartUserIdentityBindingRequest struct {
@@ -181,15 +165,12 @@ const (
 
 // UpdateProfileRequest 更新用户资料请求
 type UpdateProfileRequest struct {
-	Email                               *string  `json:"email"`
-	Username                            *string  `json:"username"`
-	AvatarURL                           *string  `json:"avatar_url"`
-	Concurrency                         *int     `json:"concurrency"`
-	BalanceNotifyEnabled                *bool    `json:"balance_notify_enabled"`
-	BalanceNotifyThreshold              *float64 `json:"balance_notify_threshold"`
-	SubscriptionBalanceFallbackEnabled  *bool    `json:"subscription_balance_fallback_enabled"`
-	SubscriptionBalanceFallbackLimitUSD *float64 `json:"subscription_balance_fallback_limit_usd"`
-	SubscriptionBalanceFallbackGroupID  *int64   `json:"subscription_balance_fallback_group_id"`
+	Email                  *string  `json:"email"`
+	Username               *string  `json:"username"`
+	AvatarURL              *string  `json:"avatar_url"`
+	Concurrency            *int     `json:"concurrency"`
+	BalanceNotifyEnabled   *bool    `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold *float64 `json:"balance_notify_threshold"`
 }
 
 type UserAvatar struct {
@@ -223,7 +204,6 @@ type ChangePasswordRequest struct {
 // UserService 用户服务
 type UserService struct {
 	userRepo             UserRepository
-	groupRepo            GroupRepository
 	settingRepo          SettingRepository
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 	billingCache         BillingCache
@@ -232,22 +212,13 @@ type UserService struct {
 }
 
 // NewUserService 创建用户服务实例
-func NewUserService(userRepo UserRepository, settingRepo SettingRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache, groupRepo ...GroupRepository) *UserService {
-	var fallbackGroupRepo GroupRepository
-	if len(groupRepo) > 0 {
-		fallbackGroupRepo = groupRepo[0]
-	}
+func NewUserService(userRepo UserRepository, settingRepo SettingRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache) *UserService {
 	return &UserService{
 		userRepo:             userRepo,
-		groupRepo:            fallbackGroupRepo,
 		settingRepo:          settingRepo,
 		authCacheInvalidator: authCacheInvalidator,
 		billingCache:         billingCache,
 	}
-}
-
-func ProvideUserService(userRepo UserRepository, settingRepo SettingRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache, groupRepo GroupRepository) *UserService {
-	return NewUserService(userRepo, settingRepo, authCacheInvalidator, billingCache, groupRepo)
 }
 
 // GetFirstAdmin 获取首个管理员用户（用于 Admin API Key 认证）
@@ -287,11 +258,10 @@ func (s *UserService) GetProfileIdentitySummaries(ctx context.Context, userID in
 	}
 
 	summaries := UserIdentitySummarySet{
-		Email:    s.buildEmailIdentitySummary(user, records),
-		LinuxDo:  s.buildProviderIdentitySummary("linuxdo", user, records),
-		OIDC:     s.buildProviderIdentitySummary("oidc", user, records),
-		WeChat:   s.buildProviderIdentitySummary("wechat", user, records),
-		DingTalk: s.buildProviderIdentitySummary("dingtalk", user, records),
+		Email:   s.buildEmailIdentitySummary(user, records),
+		LinuxDo: s.buildProviderIdentitySummary("linuxdo", user, records),
+		OIDC:    s.buildProviderIdentitySummary("oidc", user, records),
+		WeChat:  s.buildProviderIdentitySummary("wechat", user, records),
 	}
 
 	s.applyExplicitProviderAvailability(ctx, &summaries)
@@ -311,7 +281,6 @@ func (s *UserService) applyExplicitProviderAvailability(ctx context.Context, sum
 		SettingKeyWeChatConnectMPEnabled,
 		SettingKeyWeChatConnectMobileEnabled,
 		SettingKeyWeChatConnectMode,
-		SettingKeyDingTalkConnectEnabled,
 	})
 	if err != nil {
 		return
@@ -319,9 +288,6 @@ func (s *UserService) applyExplicitProviderAvailability(ctx context.Context, sum
 
 	if raw, ok := settings[SettingKeyLinuxDoConnectEnabled]; ok && strings.TrimSpace(raw) != "" && raw != "true" {
 		disableIdentityBindAction(&summaries.LinuxDo)
-	}
-	if raw, ok := settings[SettingKeyDingTalkConnectEnabled]; ok && strings.TrimSpace(raw) != "" && raw != "true" {
-		disableIdentityBindAction(&summaries.DingTalk)
 	}
 	if raw, ok := settings[SettingKeyOIDCConnectEnabled]; ok && strings.TrimSpace(raw) != "" && raw != "true" {
 		disableIdentityBindAction(&summaries.OIDC)
@@ -420,7 +386,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req Updat
 		}); err != nil {
 			return nil, err
 		}
-		if s.authCacheInvalidator != nil && updated != nil && (updated.Concurrency != oldConcurrency || req.SubscriptionBalanceFallbackEnabled != nil || req.SubscriptionBalanceFallbackLimitUSD != nil || req.SubscriptionBalanceFallbackGroupID != nil) {
+		if s.authCacheInvalidator != nil && updated != nil && updated.Concurrency != oldConcurrency {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 		}
 		return updated, nil
@@ -430,7 +396,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req Updat
 	if err != nil {
 		return nil, err
 	}
-	if s.authCacheInvalidator != nil && (updated.Concurrency != oldConcurrency || req.SubscriptionBalanceFallbackEnabled != nil || req.SubscriptionBalanceFallbackLimitUSD != nil || req.SubscriptionBalanceFallbackGroupID != nil) {
+	if s.authCacheInvalidator != nil && updated.Concurrency != oldConcurrency {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
 	return updated, nil
@@ -481,26 +447,6 @@ func (s *UserService) updateProfile(ctx context.Context, userID int64, req Updat
 		} else {
 			user.BalanceNotifyThreshold = req.BalanceNotifyThreshold
 		}
-	}
-	if req.SubscriptionBalanceFallbackEnabled != nil {
-		user.SubscriptionBalanceFallbackEnabled = *req.SubscriptionBalanceFallbackEnabled
-	}
-	if req.SubscriptionBalanceFallbackLimitUSD != nil {
-		if *req.SubscriptionBalanceFallbackLimitUSD <= 0 {
-			user.SubscriptionBalanceFallbackLimitUSD = 0
-		} else {
-			user.SubscriptionBalanceFallbackLimitUSD = *req.SubscriptionBalanceFallbackLimitUSD
-		}
-	}
-	if req.SubscriptionBalanceFallbackGroupID != nil {
-		if *req.SubscriptionBalanceFallbackGroupID <= 0 {
-			user.SubscriptionBalanceFallbackGroupID = nil
-		} else {
-			user.SubscriptionBalanceFallbackGroupID = req.SubscriptionBalanceFallbackGroupID
-		}
-	}
-	if err := validateSubscriptionBalanceFallbackConfig(ctx, s.groupRepo, user); err != nil {
-		return nil, oldConcurrency, err
 	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
@@ -748,7 +694,7 @@ func (s *UserService) canUnbindProvider(provider string, user *User, records []U
 		return true
 	}
 
-	for _, candidate := range []string{"linuxdo", "oidc", "wechat", "dingtalk"} {
+	for _, candidate := range []string{"linuxdo", "oidc", "wechat"} {
 		if candidate == provider {
 			continue
 		}
@@ -824,8 +770,6 @@ func buildUserIdentityBindAuthorizeURL(provider, redirectTo string) (string, err
 		path = "/api/v1/auth/oauth/oidc/bind/start"
 	case "wechat":
 		path = "/api/v1/auth/oauth/wechat/bind/start"
-	case "dingtalk":
-		path = "/api/v1/auth/oauth/dingtalk/bind/start"
 	default:
 		return "", ErrIdentityProviderInvalid
 	}
@@ -844,8 +788,6 @@ func normalizeUserIdentityProvider(provider string) string {
 		return "oidc"
 	case "wechat":
 		return "wechat"
-	case "dingtalk":
-		return "dingtalk"
 	case "email":
 		return "email"
 	default:
@@ -1167,7 +1109,7 @@ func (s *UserService) Delete(ctx context.Context, userID int64) error {
 }
 
 // SendNotifyEmailCode sends a verification code to the extra notification email.
-func (s *UserService) SendNotifyEmailCode(ctx context.Context, userID int64, email string, emailService *EmailService, cache EmailCache, locale ...string) error {
+func (s *UserService) SendNotifyEmailCode(ctx context.Context, userID int64, email string, emailService *EmailService, cache EmailCache) error {
 	if err := checkNotifyCodeRateLimit(ctx, cache, userID, email); err != nil {
 		return err
 	}
@@ -1179,7 +1121,7 @@ func (s *UserService) SendNotifyEmailCode(ctx context.Context, userID int64, ema
 
 	// Send email first — if SMTP fails, don't write cache or increment counters,
 	// so the user is not locked out by cooldown/rate-limit for a code they never received.
-	if err := s.sendNotifyVerifyEmail(ctx, emailService, userID, email, code, firstEmailLocale(locale)); err != nil {
+	if err := s.sendNotifyVerifyEmail(ctx, emailService, email, code); err != nil {
 		return err
 	}
 
@@ -1225,31 +1167,11 @@ func saveNotifyVerifyCode(ctx context.Context, cache EmailCache, email, code str
 }
 
 // sendNotifyVerifyEmail builds and sends the verification email.
-func (s *UserService) sendNotifyVerifyEmail(ctx context.Context, emailService *EmailService, userID int64, email, code, locale string) error {
+func (s *UserService) sendNotifyVerifyEmail(ctx context.Context, emailService *EmailService, email, code string) error {
 	siteName := "Sub2API"
 	if s.settingRepo != nil {
 		if name, err := s.settingRepo.GetValue(ctx, SettingKeySiteName); err == nil && name != "" {
 			siteName = name
-		}
-	}
-	if emailService.notificationEmailService != nil {
-		if err := emailService.notificationEmailService.Send(ctx, NotificationEmailSendInput{
-			Event:          NotificationEmailEventNotificationEmailVerifyCode,
-			Locale:         locale,
-			RecipientEmail: email,
-			RecipientName:  emailRecipientName(email),
-			UserID:         userID,
-			Variables: map[string]string{
-				"verification_code":  code,
-				"expires_in_minutes": strconv.Itoa(int(verifyCodeTTL / time.Minute)),
-			},
-		}); err == nil {
-			return nil
-		} else {
-			if !shouldFallbackNotificationEmail(err) {
-				return err
-			}
-			slog.Warn("template notification email verification failed; falling back to built-in body", "recipient_hash", notificationEmailHash(email), "err", err.Error())
 		}
 	}
 	subject := fmt.Sprintf("[%s] 通知邮箱验证码 / Notification Email Verification", siteName)

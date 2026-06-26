@@ -53,10 +53,6 @@ func (s *authRepoStub) Delete(ctx context.Context, id int64) error {
 	panic("unexpected Delete call")
 }
 
-func (s *authRepoStub) DeleteWithAudit(ctx context.Context, id int64) error {
-	panic("unexpected DeleteWithAudit call")
-}
-
 func (s *authRepoStub) ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams, filters APIKeyListFilters) ([]APIKey, *pagination.PaginationResult, error) {
 	panic("unexpected ListByUserID call")
 }
@@ -239,7 +235,6 @@ func TestAPIKeyService_SnapshotRoundTrip_PreservesMessagesDispatchModelConfig(t 
 		UserID:  2,
 		GroupID: &groupID,
 		Key:     "k-roundtrip",
-		Name:    "Audit Key",
 		Status:  StatusActive,
 		User: &User{
 			ID:          2,
@@ -272,7 +267,6 @@ func TestAPIKeyService_SnapshotRoundTrip_PreservesMessagesDispatchModelConfig(t 
 	roundTrip := svc.snapshotToAPIKey(apiKey.Key, snapshot)
 
 	require.NotNil(t, roundTrip)
-	require.Equal(t, apiKey.Name, roundTrip.Name)
 	require.NotNil(t, roundTrip.Group)
 	require.Equal(t, apiKey.Group.MessagesDispatchModelConfig, roundTrip.Group.MessagesDispatchModelConfig)
 }

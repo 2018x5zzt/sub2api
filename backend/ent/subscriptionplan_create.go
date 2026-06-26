@@ -28,20 +28,6 @@ func (_c *SubscriptionPlanCreate) SetGroupID(v int64) *SubscriptionPlanCreate {
 	return _c
 }
 
-// SetProductID sets the "product_id" field.
-func (_c *SubscriptionPlanCreate) SetProductID(v int64) *SubscriptionPlanCreate {
-	_c.mutation.SetProductID(v)
-	return _c
-}
-
-// SetNillableProductID sets the "product_id" field if the given value is not nil.
-func (_c *SubscriptionPlanCreate) SetNillableProductID(v *int64) *SubscriptionPlanCreate {
-	if v != nil {
-		_c.SetProductID(*v)
-	}
-	return _c
-}
-
 // SetName sets the "name" field.
 func (_c *SubscriptionPlanCreate) SetName(v string) *SubscriptionPlanCreate {
 	_c.mutation.SetName(v)
@@ -351,10 +337,6 @@ func (_c *SubscriptionPlanCreate) createSpec() (*SubscriptionPlan, *sqlgraph.Cre
 		_spec.SetField(subscriptionplan.FieldGroupID, field.TypeInt64, value)
 		_node.GroupID = value
 	}
-	if value, ok := _c.mutation.ProductID(); ok {
-		_spec.SetField(subscriptionplan.FieldProductID, field.TypeInt64, value)
-		_node.ProductID = &value
-	}
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(subscriptionplan.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -470,30 +452,6 @@ func (u *SubscriptionPlanUpsert) UpdateGroupID() *SubscriptionPlanUpsert {
 // AddGroupID adds v to the "group_id" field.
 func (u *SubscriptionPlanUpsert) AddGroupID(v int64) *SubscriptionPlanUpsert {
 	u.Add(subscriptionplan.FieldGroupID, v)
-	return u
-}
-
-// SetProductID sets the "product_id" field.
-func (u *SubscriptionPlanUpsert) SetProductID(v int64) *SubscriptionPlanUpsert {
-	u.Set(subscriptionplan.FieldProductID, v)
-	return u
-}
-
-// UpdateProductID sets the "product_id" field to the value that was provided on create.
-func (u *SubscriptionPlanUpsert) UpdateProductID() *SubscriptionPlanUpsert {
-	u.SetExcluded(subscriptionplan.FieldProductID)
-	return u
-}
-
-// AddProductID adds v to the "product_id" field.
-func (u *SubscriptionPlanUpsert) AddProductID(v int64) *SubscriptionPlanUpsert {
-	u.Add(subscriptionplan.FieldProductID, v)
-	return u
-}
-
-// ClearProductID clears the value of the "product_id" field.
-func (u *SubscriptionPlanUpsert) ClearProductID() *SubscriptionPlanUpsert {
-	u.SetNull(subscriptionplan.FieldProductID)
 	return u
 }
 
@@ -722,34 +680,6 @@ func (u *SubscriptionPlanUpsertOne) AddGroupID(v int64) *SubscriptionPlanUpsertO
 func (u *SubscriptionPlanUpsertOne) UpdateGroupID() *SubscriptionPlanUpsertOne {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateGroupID()
-	})
-}
-
-// SetProductID sets the "product_id" field.
-func (u *SubscriptionPlanUpsertOne) SetProductID(v int64) *SubscriptionPlanUpsertOne {
-	return u.Update(func(s *SubscriptionPlanUpsert) {
-		s.SetProductID(v)
-	})
-}
-
-// AddProductID adds v to the "product_id" field.
-func (u *SubscriptionPlanUpsertOne) AddProductID(v int64) *SubscriptionPlanUpsertOne {
-	return u.Update(func(s *SubscriptionPlanUpsert) {
-		s.AddProductID(v)
-	})
-}
-
-// UpdateProductID sets the "product_id" field to the value that was provided on create.
-func (u *SubscriptionPlanUpsertOne) UpdateProductID() *SubscriptionPlanUpsertOne {
-	return u.Update(func(s *SubscriptionPlanUpsert) {
-		s.UpdateProductID()
-	})
-}
-
-// ClearProductID clears the value of the "product_id" field.
-func (u *SubscriptionPlanUpsertOne) ClearProductID() *SubscriptionPlanUpsertOne {
-	return u.Update(func(s *SubscriptionPlanUpsert) {
-		s.ClearProductID()
 	})
 }
 
@@ -1171,34 +1101,6 @@ func (u *SubscriptionPlanUpsertBulk) AddGroupID(v int64) *SubscriptionPlanUpsert
 func (u *SubscriptionPlanUpsertBulk) UpdateGroupID() *SubscriptionPlanUpsertBulk {
 	return u.Update(func(s *SubscriptionPlanUpsert) {
 		s.UpdateGroupID()
-	})
-}
-
-// SetProductID sets the "product_id" field.
-func (u *SubscriptionPlanUpsertBulk) SetProductID(v int64) *SubscriptionPlanUpsertBulk {
-	return u.Update(func(s *SubscriptionPlanUpsert) {
-		s.SetProductID(v)
-	})
-}
-
-// AddProductID adds v to the "product_id" field.
-func (u *SubscriptionPlanUpsertBulk) AddProductID(v int64) *SubscriptionPlanUpsertBulk {
-	return u.Update(func(s *SubscriptionPlanUpsert) {
-		s.AddProductID(v)
-	})
-}
-
-// UpdateProductID sets the "product_id" field to the value that was provided on create.
-func (u *SubscriptionPlanUpsertBulk) UpdateProductID() *SubscriptionPlanUpsertBulk {
-	return u.Update(func(s *SubscriptionPlanUpsert) {
-		s.UpdateProductID()
-	})
-}
-
-// ClearProductID clears the value of the "product_id" field.
-func (u *SubscriptionPlanUpsertBulk) ClearProductID() *SubscriptionPlanUpsertBulk {
-	return u.Update(func(s *SubscriptionPlanUpsert) {
-		s.ClearProductID()
 	})
 }
 

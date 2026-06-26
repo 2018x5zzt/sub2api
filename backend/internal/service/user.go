@@ -1,33 +1,28 @@
 package service
 
 import (
-	"context"
 	"time"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
-	ID              int64
-	Email           string
-	Username        string
-	Notes           string
-	AvatarURL       string
-	AvatarSource    string
-	AvatarMIME      string
-	AvatarByteSize  int
-	AvatarSHA256    string
-	PasswordHash    string
-	Role            string
-	Balance         float64
-	Concurrency     int
-	Status          string
-	InviteCode      string
-	InvitedByUserID *int64
-	InviteBoundAt   *time.Time
-	AllowedGroups   []int64
-	TokenVersion    int64 // Incremented on password change to invalidate existing tokens
+	ID             int64
+	Email          string
+	Username       string
+	Notes          string
+	AvatarURL      string
+	AvatarSource   string
+	AvatarMIME     string
+	AvatarByteSize int
+	AvatarSHA256   string
+	PasswordHash   string
+	Role           string
+	Balance        float64
+	Concurrency    int
+	Status         string
+	AllowedGroups  []int64
+	TokenVersion   int64 // Incremented on password change to invalidate existing tokens
 	// TokenVersionResolved indicates TokenVersion already contains the fingerprint-derived
 	// value expected in JWT claims and refresh-token state.
 	TokenVersionResolved bool
@@ -37,7 +32,6 @@ type User struct {
 	LastUsedAt           *time.Time
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
-	DeletedAt            *time.Time // 非 nil 表示用户已软删除
 
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]rateMultiplier
@@ -54,12 +48,6 @@ type User struct {
 	BalanceNotifyThreshold     *float64
 	BalanceNotifyExtraEmails   []NotifyEmailEntry
 	TotalRecharged             float64
-
-	// 订阅余额兜底：默认关闭；开启后，订阅产品额度耗尽时可在累计上限内自动扣余额。
-	SubscriptionBalanceFallbackEnabled  bool
-	SubscriptionBalanceFallbackLimitUSD float64
-	SubscriptionBalanceFallbackUsedUSD  float64
-	SubscriptionBalanceFallbackGroupID  *int64
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制）。仅在所用分组未设置 rpm_limit
 	// 且该 (用户, 分组) 无 rpm_override 时作为全局兜底生效，计数键 rpm:u:{userID}:{min}。
@@ -98,48 +86,6 @@ func (u *User) CanBindGroup(groupID int64, isExclusive bool) bool {
 		}
 	}
 	return false
-}
-
-// HasExplicitGroupAuthorization reports whether the user has an explicit grant for the group.
-// Unlike CanBindGroup, this requires the group to be present in AllowedGroups even for public groups.
-func (u *User) HasExplicitGroupAuthorization(groupID int64) bool {
-	if u == nil {
-		return false
-	}
-	for _, id := range u.AllowedGroups {
-		if id == groupID {
-			return true
-		}
-	}
-	return false
-}
-
-func validateSubscriptionBalanceFallbackConfig(ctx context.Context, groupRepo GroupRepository, user *User) error {
-	if user == nil || !user.SubscriptionBalanceFallbackEnabled {
-		return nil
-	}
-	if user.SubscriptionBalanceFallbackLimitUSD <= 0 {
-		return infraerrors.BadRequest("SUBSCRIPTION_BALANCE_FALLBACK_LIMIT_REQUIRED", "subscription balance fallback limit must be greater than 0")
-	}
-	if user.SubscriptionBalanceFallbackGroupID == nil || *user.SubscriptionBalanceFallbackGroupID <= 0 {
-		return infraerrors.BadRequest("SUBSCRIPTION_BALANCE_FALLBACK_GROUP_REQUIRED", "subscription balance fallback group is required")
-	}
-	if groupRepo == nil {
-		return infraerrors.BadRequest("SUBSCRIPTION_BALANCE_FALLBACK_GROUP_INVALID", "subscription balance fallback group cannot be validated")
-	}
-	fallbackGroup, err := groupRepo.GetByID(ctx, *user.SubscriptionBalanceFallbackGroupID)
-	if err != nil {
-		return err
-	}
-	if fallbackGroup == nil ||
-		!fallbackGroup.IsActive() ||
-		fallbackGroup.SubscriptionType != SubscriptionTypeStandard {
-		return infraerrors.BadRequest("SUBSCRIPTION_BALANCE_FALLBACK_GROUP_INVALID", "subscription balance fallback group must be an active standard group")
-	}
-	if !user.CanBindGroup(fallbackGroup.ID, fallbackGroup.IsExclusive) {
-		return infraerrors.Forbidden("SUBSCRIPTION_BALANCE_FALLBACK_GROUP_FORBIDDEN", "user is not authorized to use the selected balance fallback group")
-	}
-	return nil
 }
 
 func (u *User) SetPassword(password string) error {

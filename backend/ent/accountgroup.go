@@ -23,8 +23,6 @@ type AccountGroup struct {
 	GroupID int64 `json:"group_id,omitempty"`
 	// Priority holds the value of the "priority" field.
 	Priority int `json:"priority,omitempty"`
-	// User-facing billing multiplier for this account inside this group
-	BillingMultiplier float64 `json:"billing_multiplier,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -71,8 +69,6 @@ func (*AccountGroup) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case accountgroup.FieldBillingMultiplier:
-			values[i] = new(sql.NullFloat64)
 		case accountgroup.FieldAccountID, accountgroup.FieldGroupID, accountgroup.FieldPriority:
 			values[i] = new(sql.NullInt64)
 		case accountgroup.FieldCreatedAt:
@@ -109,12 +105,6 @@ func (_m *AccountGroup) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field priority", values[i])
 			} else if value.Valid {
 				_m.Priority = int(value.Int64)
-			}
-		case accountgroup.FieldBillingMultiplier:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field billing_multiplier", values[i])
-			} else if value.Valid {
-				_m.BillingMultiplier = value.Float64
 			}
 		case accountgroup.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -175,9 +165,6 @@ func (_m *AccountGroup) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("priority=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Priority))
-	builder.WriteString(", ")
-	builder.WriteString("billing_multiplier=")
-	builder.WriteString(fmt.Sprintf("%v", _m.BillingMultiplier))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

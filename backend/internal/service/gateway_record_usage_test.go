@@ -44,7 +44,6 @@ func newGatewayRecordUsageServiceForTest(usageRepo UsageLogRepository, userRepo 
 		nil,
 		nil,
 		nil,
-		nil, // userPlatformQuotaRepo
 	)
 }
 
@@ -193,152 +192,6 @@ func TestGatewayServiceRecordUsage_PreservesRequestedAndUpstreamModels(t *testin
 	require.Equal(t, mappedModel, *usageRepo.lastLog.UpstreamModel)
 }
 
-func TestGatewayServiceRecordUsage_EmptyImageSizeDefaultsBeforeBillingAndPersistence(t *testing.T) {
-	imagePrice2K := 0.19
-	groupID := int64(901)
-	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
-	svc := newGatewayRecordUsageServiceForTest(usageRepo, &openAIRecordUsageUserRepoStub{}, &openAIRecordUsageSubRepoStub{})
-
-	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
-		Result: &ForwardResult{
-			RequestID:      "gateway_image_default_size",
-			Model:          "gemini-image",
-			ImageCount:     1,
-			ImageInputSize: "auto",
-			Duration:       time.Second,
-		},
-		APIKey: &APIKey{
-			ID:      801,
-			GroupID: i64p(groupID),
-			Group: &Group{
-				ID:             groupID,
-				RateMultiplier: 1.0,
-				ImagePrice2K:   &imagePrice2K,
-			},
-		},
-		User:    &User{ID: 601},
-		Account: &Account{ID: 701},
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, 1, usageRepo.lastLog.ImageCount)
-	require.NotNil(t, usageRepo.lastLog.ImageSize)
-	require.Equal(t, ImageBillingSize2K, *usageRepo.lastLog.ImageSize)
-	require.NotNil(t, usageRepo.lastLog.ImageInputSize)
-	require.Equal(t, "auto", *usageRepo.lastLog.ImageInputSize)
-	require.NotNil(t, usageRepo.lastLog.ImageSizeSource)
-	require.Equal(t, ImageSizeSourceDefault, *usageRepo.lastLog.ImageSizeSource)
-	require.InDelta(t, 0.19, usageRepo.lastLog.TotalCost, 1e-12)
-	require.InDelta(t, 0.19, usageRepo.lastLog.ActualCost, 1e-12)
-}
-
-func TestGatewayServiceRecordUsage_DynamicPricingUsesAccountGroupBillingMultiplier(t *testing.T) {
-	groupID := int64(21)
-	accountBillingMultiplier := 3.0
-	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
-	userRepo := &openAIRecordUsageUserRepoStub{}
-	subRepo := &openAIRecordUsageSubRepoStub{}
-	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, subRepo)
-
-	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
-		Result: &ForwardResult{
-			RequestID: "gateway_dynamic_account_group_multiplier",
-			Usage: ClaudeUsage{
-				InputTokens:  10,
-				OutputTokens: 6,
-			},
-			Model:    "claude-sonnet-4",
-			Duration: time.Second,
-		},
-		APIKey: &APIKey{
-			ID:      502,
-			GroupID: i64p(groupID),
-			Group: &Group{
-				ID:             groupID,
-				RateMultiplier: 1,
-				PricingMode:    GroupPricingModeDynamic,
-			},
-		},
-		User: &User{ID: 602},
-		Account: &Account{
-			ID: 702,
-			AccountGroups: []AccountGroup{{
-				AccountID:         702,
-				GroupID:           groupID,
-				BillingMultiplier: accountBillingMultiplier,
-			}},
-		},
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, accountBillingMultiplier, usageRepo.lastLog.RateMultiplier)
-
-	expected, err := svc.billingService.CalculateCost("claude-sonnet-4", UsageTokens{
-		InputTokens:  10,
-		OutputTokens: 6,
-	}, accountBillingMultiplier)
-	require.NoError(t, err)
-	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
-	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
-	require.Equal(t, 1, userRepo.deductCalls)
-}
-
-func TestGatewayServiceRecordUsage_FixedPricingAppliesAccountGroupBillingMultiplier(t *testing.T) {
-	groupID := int64(22)
-	groupRate := 2.0
-	accountBillingMultiplier := 3.0
-	effectiveMultiplier := groupRate * accountBillingMultiplier
-	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
-	userRepo := &openAIRecordUsageUserRepoStub{}
-	subRepo := &openAIRecordUsageSubRepoStub{}
-	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, subRepo)
-
-	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
-		Result: &ForwardResult{
-			RequestID: "gateway_fixed_account_group_multiplier",
-			Usage: ClaudeUsage{
-				InputTokens:  10,
-				OutputTokens: 6,
-			},
-			Model:    "claude-sonnet-4",
-			Duration: time.Second,
-		},
-		APIKey: &APIKey{
-			ID:      503,
-			GroupID: i64p(groupID),
-			Group: &Group{
-				ID:             groupID,
-				RateMultiplier: groupRate,
-				PricingMode:    GroupPricingModeFixed,
-			},
-		},
-		User: &User{ID: 603},
-		Account: &Account{
-			ID: 703,
-			AccountGroups: []AccountGroup{{
-				AccountID:         703,
-				GroupID:           groupID,
-				BillingMultiplier: accountBillingMultiplier,
-			}},
-		},
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, usageRepo.lastLog)
-	require.Equal(t, effectiveMultiplier, usageRepo.lastLog.RateMultiplier)
-
-	expected, err := svc.billingService.CalculateCost("claude-sonnet-4", UsageTokens{
-		InputTokens:  10,
-		OutputTokens: 6,
-	}, effectiveMultiplier)
-	require.NoError(t, err)
-	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
-	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
-	require.Equal(t, 1, userRepo.deductCalls)
-}
-
 func TestGatewayServiceRecordUsage_UsageLogWriteErrorDoesNotSkipBilling(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: false, err: MarkUsageLogCreateNotPersisted(context.Canceled)}
 	userRepo := &openAIRecordUsageUserRepoStub{}
@@ -435,6 +288,56 @@ func TestGatewayServiceRecordUsage_UsesFallbackRequestIDForUsageLog(t *testing.T
 	require.NoError(t, err)
 	require.NotNil(t, usageRepo.lastLog)
 	require.Equal(t, "local:gateway-local-fallback", usageRepo.lastLog.RequestID)
+}
+
+func TestGatewayServiceRecordUsage_MultipliesAccountGroupBillingMultiplier(t *testing.T) {
+	groupID := int64(801)
+	groupRate := 1.6
+	accountGroupMultiplier := 1.25
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newGatewayRecordUsageServiceForTest(usageRepo, userRepo, subRepo)
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_group_binding_multiplier",
+			Usage: ClaudeUsage{
+				InputTokens:  10,
+				OutputTokens: 6,
+			},
+			Model:    "claude-sonnet-4",
+			Duration: time.Second,
+		},
+		APIKey: &APIKey{
+			ID:      901,
+			GroupID: &groupID,
+			Group: &Group{
+				ID:             groupID,
+				RateMultiplier: groupRate,
+			},
+		},
+		User: &User{ID: 1001},
+		Account: &Account{
+			ID: 1101,
+			AccountGroups: []AccountGroup{
+				{GroupID: groupID, BillingMultiplier: accountGroupMultiplier},
+			},
+		},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	expectedMultiplier := groupRate * accountGroupMultiplier
+	require.Equal(t, expectedMultiplier, usageRepo.lastLog.RateMultiplier)
+
+	expected, calcErr := svc.billingService.CalculateCost("claude-sonnet-4", UsageTokens{
+		InputTokens:  10,
+		OutputTokens: 6,
+	}, expectedMultiplier)
+	require.NoError(t, calcErr)
+	require.InDelta(t, expected.ActualCost, usageRepo.lastLog.ActualCost, 1e-12)
+	require.InDelta(t, expected.ActualCost, userRepo.lastAmount, 1e-12)
 }
 
 func TestGatewayServiceRecordUsage_PrefersClientRequestIDOverUpstreamRequestID(t *testing.T) {

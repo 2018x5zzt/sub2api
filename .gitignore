@@ -11,12 +11,9 @@ docs/claude-relay-service/
 *.so
 *.dylib
 backend/bin/
-xlab-backend/bin/*
-!xlab-backend/bin/.gitkeep
 backend/server
 backend/sub2api
 backend/main
-server-backup/
 
 # Go 测试二进制
 *.test
@@ -134,14 +131,8 @@ docs/*
 !docs/PAYMENT.md
 !docs/PAYMENT_CN.md
 !docs/ADMIN_PAYMENT_INTEGRATION_API.md
-!docs/PRODUCT_SUBSCRIPTIONS_CN.md
-!docs/superpowers/
-!docs/superpowers/**
-!docs/legal/
-!docs/legal/*.md
 .serena/
 .codex/
-.worktrees/
 frontend/coverage/
 aicodex
 output/

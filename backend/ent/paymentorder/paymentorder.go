@@ -48,8 +48,6 @@ const (
 	FieldPlanID = "plan_id"
 	// FieldSubscriptionGroupID holds the string denoting the subscription_group_id field in the database.
 	FieldSubscriptionGroupID = "subscription_group_id"
-	// FieldSubscriptionProductID holds the string denoting the subscription_product_id field in the database.
-	FieldSubscriptionProductID = "subscription_product_id"
 	// FieldSubscriptionDays holds the string denoting the subscription_days field in the database.
 	FieldSubscriptionDays = "subscription_days"
 	// FieldProviderInstanceID holds the string denoting the provider_instance_id field in the database.
@@ -127,7 +125,6 @@ var Columns = []string{
 	FieldOrderType,
 	FieldPlanID,
 	FieldSubscriptionGroupID,
-	FieldSubscriptionProductID,
 	FieldSubscriptionDays,
 	FieldProviderInstanceID,
 	FieldProviderKey,
@@ -300,11 +297,6 @@ func ByPlanID(opts ...sql.OrderTermOption) OrderOption {
 // BySubscriptionGroupID orders the results by the subscription_group_id field.
 func BySubscriptionGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionGroupID, opts...).ToFunc()
-}
-
-// BySubscriptionProductID orders the results by the subscription_product_id field.
-func BySubscriptionProductID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSubscriptionProductID, opts...).ToFunc()
 }
 
 // BySubscriptionDays orders the results by the subscription_days field.

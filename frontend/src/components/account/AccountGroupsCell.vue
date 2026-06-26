@@ -1,17 +1,28 @@
 <template>
-  <div v-if="groups && groups.length > 0" class="relative max-w-56">
+  <div v-if="entries.length > 0" class="relative max-w-56">
     <!-- 分组容器：固定最大宽度，最多显示2行 -->
     <div class="flex flex-wrap gap-1 max-h-14 overflow-hidden">
-      <GroupBadge
-        v-for="group in displayGroups"
-        :key="group.id"
-        :name="group.name"
-        :platform="group.platform"
-        :subscription-type="group.subscription_type"
-        :rate-multiplier="group.rate_multiplier"
-        :show-rate="false"
-        class="max-w-24"
-      />
+      <div
+        v-for="entry in displayEntries"
+        :key="entry.key"
+        class="inline-flex items-center gap-1"
+      >
+        <GroupBadge
+          :name="entry.group.name"
+          :platform="entry.group.platform"
+          :subscription-type="entry.group.subscription_type"
+          :rate-multiplier="entry.group.rate_multiplier"
+          :show-rate="false"
+          class="max-w-24"
+        />
+        <span
+          v-if="showBindingMultiplier && entry.bindingMultiplier !== null"
+          class="inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+          :title="t('admin.accounts.groupBindingMultiplierValue', { rate: formatMultiplier(entry.bindingMultiplier) })"
+        >
+          {{ t('admin.accounts.groupBindingMultiplierShort') }} {{ formatMultiplier(entry.bindingMultiplier) }}x
+        </span>
+      </div>
       <!-- 更多数量徽章 -->
       <button
         v-if="hiddenCount > 0"
@@ -41,7 +52,7 @@
         >
           <div class="mb-2 flex items-center justify-between">
             <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.groupCountTotal', { count: groups.length }) }}
+              {{ t('admin.accounts.groupCountTotal', { count: entries.length }) }}
             </span>
             <button
               @click="showPopover = false"
@@ -53,15 +64,26 @@
             </button>
           </div>
           <div class="flex flex-wrap gap-1.5 max-h-64 overflow-y-auto">
-            <GroupBadge
-              v-for="group in groups"
-              :key="group.id"
-              :name="group.name"
-              :platform="group.platform"
-              :subscription-type="group.subscription_type"
-              :rate-multiplier="group.rate_multiplier"
-              :show-rate="false"
-            />
+            <div
+              v-for="entry in entries"
+              :key="entry.key"
+              class="inline-flex items-center gap-1"
+            >
+              <GroupBadge
+                :name="entry.group.name"
+                :platform="entry.group.platform"
+                :subscription-type="entry.group.subscription_type"
+                :rate-multiplier="entry.group.rate_multiplier"
+                :show-rate="false"
+              />
+              <span
+                v-if="showBindingMultiplier && entry.bindingMultiplier !== null"
+                class="inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                :title="t('admin.accounts.groupBindingMultiplierValue', { rate: formatMultiplier(entry.bindingMultiplier) })"
+              >
+                {{ t('admin.accounts.groupBindingMultiplierShort') }} {{ formatMultiplier(entry.bindingMultiplier) }}x
+              </span>
+            </div>
           </div>
         </div>
       </Transition>
@@ -81,15 +103,24 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import GroupBadge from '@/components/common/GroupBadge.vue'
-import type { Group } from '@/types'
+import type { AccountGroup, Group } from '@/types'
+
+interface GroupEntry {
+  key: string
+  group: Group
+  bindingMultiplier: number | null
+}
 
 interface Props {
   groups: Group[] | null | undefined
+  accountGroups?: AccountGroup[] | null | undefined
   maxDisplay?: number
+  showBindingMultiplier?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  maxDisplay: 4
+  maxDisplay: 4,
+  showBindingMultiplier: false
 })
 
 const { t } = useI18n()
@@ -98,21 +129,43 @@ const moreButtonRef = ref<HTMLElement | null>(null)
 const popoverRef = ref<HTMLElement | null>(null)
 const showPopover = ref(false)
 
+const formatMultiplier = (value: number) => value.toFixed(2)
+
+const entries = computed<GroupEntry[]>(() => {
+  if (props.accountGroups && props.accountGroups.length > 0) {
+    const mapped: GroupEntry[] = []
+    for (const [index, accountGroup] of props.accountGroups.entries()) {
+      const group = accountGroup.group ?? props.groups?.find(item => item.id === accountGroup.group_id)
+      if (!group) continue
+      mapped.push({
+        key: `ag-${accountGroup.account_id}-${accountGroup.group_id}-${index}`,
+        group,
+        bindingMultiplier: accountGroup.billing_multiplier ?? 1
+      })
+    }
+    return mapped
+  }
+
+  return (props.groups ?? []).map((group, index) => ({
+    key: `g-${group.id}-${index}`,
+    group,
+    bindingMultiplier: null
+  }))
+})
+
 // 显示的分组（最多显示 maxDisplay 个）
-const displayGroups = computed(() => {
-  if (!props.groups) return []
-  if (props.groups.length <= props.maxDisplay) {
-    return props.groups
+const displayEntries = computed(() => {
+  if (entries.value.length <= props.maxDisplay) {
+    return entries.value
   }
   // 留一个位置给 +N 按钮
-  return props.groups.slice(0, props.maxDisplay - 1)
+  return entries.value.slice(0, props.maxDisplay - 1)
 })
 
 // 隐藏的数量
 const hiddenCount = computed(() => {
-  if (!props.groups) return 0
-  if (props.groups.length <= props.maxDisplay) return 0
-  return props.groups.length - (props.maxDisplay - 1)
+  if (entries.value.length <= props.maxDisplay) return 0
+  return entries.value.length - (props.maxDisplay - 1)
 })
 
 // Popover 位置样式

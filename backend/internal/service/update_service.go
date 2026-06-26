@@ -17,12 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-)
-
-var (
-	ErrNoUpdateAvailable = infraerrors.Conflict("ALREADY_UP_TO_DATE", "no update available; current version is latest")
 )
 
 const (
@@ -152,7 +146,7 @@ func (s *UpdateService) PerformUpdate(ctx context.Context) error {
 	}
 
 	if !info.HasUpdate {
-		return ErrNoUpdateAvailable
+		return fmt.Errorf("no update available")
 	}
 
 	// Find matching archive and checksum for current platform

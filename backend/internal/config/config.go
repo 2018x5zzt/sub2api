@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"github.com/spf13/viper"
@@ -29,7 +28,7 @@ const (
 
 // DefaultCSPPolicy is the default Content-Security-Policy with nonce support
 // __CSP_NONCE__ will be replaced with actual nonce at request time by the SecurityHeaders middleware
-const DefaultCSPPolicy = "default-src 'self'; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://static.cloudflareinsights.com https://*.stripe.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://static.airwallex.com https://checkout.airwallex.com https://static-demo.airwallex.com https://checkout-demo.airwallex.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com https://*.stripe.com https://checkout.airwallex.com https://checkout-demo.airwallex.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+const DefaultCSPPolicy = "default-src 'self'; script-src 'self' __CSP_NONCE__ https://challenges.cloudflare.com https://static.cloudflareinsights.com https://*.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src https://challenges.cloudflare.com https://*.stripe.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 
 // UMQ（用户消息队列）模式常量
 const (
@@ -73,9 +72,6 @@ type Config struct {
 	LinuxDo                 LinuxDoConnectConfig          `mapstructure:"linuxdo_connect"`
 	WeChat                  WeChatConnectConfig           `mapstructure:"wechat_connect"`
 	OIDC                    OIDCConnectConfig             `mapstructure:"oidc_connect"`
-	DingTalk                DingTalkConnectConfig         `mapstructure:"dingtalk_connect"`
-	GitHubOAuth             EmailOAuthProviderConfig      `mapstructure:"github_oauth"`
-	GoogleOAuth             EmailOAuthProviderConfig      `mapstructure:"google_oauth"`
 	Default                 DefaultConfig                 `mapstructure:"default"`
 	RateLimit               RateLimitConfig               `mapstructure:"rate_limit"`
 	Pricing                 PricingConfig                 `mapstructure:"pricing"`
@@ -93,7 +89,6 @@ type Config struct {
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
-	XlabOAuthProvider       XlabOAuthProviderConfig       `mapstructure:"xlab_oauth_provider"`
 }
 
 type LogConfig struct {
@@ -176,15 +171,6 @@ type IdempotencyConfig struct {
 	CleanupBatchSize int `mapstructure:"cleanup_batch_size"`
 }
 
-type XlabOAuthProviderConfig struct {
-	Clients []XlabOAuthProviderClientConfig `mapstructure:"clients"`
-}
-
-type XlabOAuthProviderClientConfig struct {
-	ClientID     string `mapstructure:"client_id"`
-	ClientSecret string `mapstructure:"client_secret"`
-}
-
 type LinuxDoConnectConfig struct {
 	Enabled             bool   `mapstructure:"enabled"`
 	ClientID            string `mapstructure:"client_id"`
@@ -252,60 +238,6 @@ type OIDCConnectConfig struct {
 	UserInfoEmailPath    string `mapstructure:"userinfo_email_path"`
 	UserInfoIDPath       string `mapstructure:"userinfo_id_path"`
 	UserInfoUsernamePath string `mapstructure:"userinfo_username_path"`
-}
-
-type DingTalkConnectConfig struct {
-	Enabled             bool   `mapstructure:"enabled"`
-	ClientID            string `mapstructure:"client_id"`
-	ClientSecret        string `mapstructure:"client_secret"`
-	AuthorizeURL        string `mapstructure:"authorize_url"`
-	TokenURL            string `mapstructure:"token_url"`
-	UserInfoURL         string `mapstructure:"userinfo_url"`
-	Scopes              string `mapstructure:"scopes"`
-	RedirectURL         string `mapstructure:"redirect_url"`
-	FrontendRedirectURL string `mapstructure:"frontend_redirect_url"`
-
-	// 平台底座 + 业务行为
-	DingTalkAppKind string `mapstructure:"dingtalk_app_kind"` // 仅 "internal_app"（V4 fail-closed）
-	AppType         string `mapstructure:"app_type"`          // "public" (default) | "internal"
-
-	// Corp 限定（none | internal_only）
-	CorpRestrictionPolicy   string `mapstructure:"corp_restriction_policy"`
-	InternalCorpID          string `mapstructure:"internal_corp_id"`
-	BypassRegistration      bool   `mapstructure:"bypass_registration"`
-	SyncCorpEmail           bool   `mapstructure:"sync_corp_email"`
-	SyncDisplayName         bool   `mapstructure:"sync_display_name"`
-	SyncDept                bool   `mapstructure:"sync_dept"`
-	SyncCorpEmailAttrKey    string `mapstructure:"sync_corp_email_attr_key"`
-	SyncDisplayNameAttrKey  string `mapstructure:"sync_display_name_attr_key"`
-	SyncDeptAttrKey         string `mapstructure:"sync_dept_attr_key"`
-	SyncCorpEmailAttrName   string `mapstructure:"sync_corp_email_attr_name"`
-	SyncDisplayNameAttrName string `mapstructure:"sync_display_name_attr_name"`
-	SyncDeptAttrName        string `mapstructure:"sync_dept_attr_name"`
-
-	// 邮箱 + Username
-	RequireEmail            bool   `mapstructure:"require_email"`
-	UsernameOverwritePolicy string `mapstructure:"username_overwrite_policy"`
-
-	// Attribute（私有版扩展点；开源版仅声明）
-	UsernameAttributeKey         string   `mapstructure:"username_attribute_key"`
-	EnableAttributeMatching      bool     `mapstructure:"enable_attribute_matching"`
-	EnableAttributeSync          bool     `mapstructure:"enable_attribute_sync"`
-	AttributeSyncFields          []string `mapstructure:"attribute_sync_fields"`
-	AttributeSyncOverwritePolicy string   `mapstructure:"attribute_sync_overwrite_policy"`
-}
-
-type EmailOAuthProviderConfig struct {
-	Enabled             bool   `mapstructure:"enabled"`
-	ClientID            string `mapstructure:"client_id"`
-	ClientSecret        string `mapstructure:"client_secret"`
-	AuthorizeURL        string `mapstructure:"authorize_url"`
-	TokenURL            string `mapstructure:"token_url"`
-	UserInfoURL         string `mapstructure:"userinfo_url"`
-	EmailsURL           string `mapstructure:"emails_url"`
-	Scopes              string `mapstructure:"scopes"`
-	RedirectURL         string `mapstructure:"redirect_url"`
-	FrontendRedirectURL string `mapstructure:"frontend_redirect_url"`
 }
 
 const (
@@ -584,35 +516,11 @@ type CORSConfig struct {
 }
 
 type SecurityConfig struct {
-	URLAllowlist                     URLAllowlistConfig   `mapstructure:"url_allowlist"`
-	ResponseHeaders                  ResponseHeaderConfig `mapstructure:"response_headers"`
-	CSP                              CSPConfig            `mapstructure:"csp"`
-	ProxyFallback                    ProxyFallbackConfig  `mapstructure:"proxy_fallback"`
-	ProxyProbe                       ProxyProbeConfig     `mapstructure:"proxy_probe"`
-	TrustForwardedIPForAPIKeyACL     bool                 `mapstructure:"trust_forwarded_ip_for_api_key_acl"`
-	trustForwardedIPForAPIKeyACLLive *atomic.Bool         `mapstructure:"-"`
-}
-
-func (c *Config) TrustForwardedIPForAPIKeyACL() bool {
-	if c == nil {
-		return false
-	}
-	live := c.Security.trustForwardedIPForAPIKeyACLLive
-	if live == nil {
-		return c.Security.TrustForwardedIPForAPIKeyACL
-	}
-	return live.Load()
-}
-
-func (c *Config) SetTrustForwardedIPForAPIKeyACL(enabled bool) {
-	if c == nil {
-		return
-	}
-	c.Security.TrustForwardedIPForAPIKeyACL = enabled
-	if c.Security.trustForwardedIPForAPIKeyACLLive == nil {
-		c.Security.trustForwardedIPForAPIKeyACLLive = &atomic.Bool{}
-	}
-	c.Security.trustForwardedIPForAPIKeyACLLive.Store(enabled)
+	URLAllowlist    URLAllowlistConfig   `mapstructure:"url_allowlist"`
+	ResponseHeaders ResponseHeaderConfig `mapstructure:"response_headers"`
+	CSP             CSPConfig            `mapstructure:"csp"`
+	ProxyFallback   ProxyFallbackConfig  `mapstructure:"proxy_fallback"`
+	ProxyProbe      ProxyProbeConfig     `mapstructure:"proxy_probe"`
 }
 
 type URLAllowlistConfig struct {
@@ -653,15 +561,6 @@ type ProxyProbeConfig struct {
 
 type BillingConfig struct {
 	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
-	// UserPlatformQuotaCacheTTLSeconds 用户 × 平台 quota 缓存 TTL（秒），默认 86400=1天，覆盖典型 daily 窗口。
-	// 消费点：
-	//   - billing_cache_service.cacheWriteWorker 异步累加
-	//   - billing_cache_service.checkUserPlatformQuotaEligibility 首次缓存装载
-	// 读写两端必须共用同一 TTL，避免缓存生命周期不一致导致 quota 计数漂移。
-	UserPlatformQuotaCacheTTLSeconds int `mapstructure:"user_platform_quota_cache_ttl_seconds"`
-	// UserPlatformQuotaSentinelTTLSeconds sentinel(无 limit 占位)entry 的 TTL,
-	// 显著短于 quota cache 默认 86400s 以控 Redis 内存;默认 3600=1h。
-	UserPlatformQuotaSentinelTTLSeconds int `mapstructure:"user_platform_quota_sentinel_ttl_seconds"`
 }
 
 type CircuitBreakerConfig struct {
@@ -674,95 +573,15 @@ type CircuitBreakerConfig struct {
 type ConcurrencyConfig struct {
 	// PingInterval: 并发等待期间的 SSE ping 间隔（秒）
 	PingInterval int `mapstructure:"ping_interval"`
+	// UserSlotWaitTimeout: 用户并发槽位最大等待时间
+	UserSlotWaitTimeout time.Duration `mapstructure:"user_slot_wait_timeout"`
 }
-
-type ImageConcurrencyConfig struct {
-	// Enabled: 是否启用图片生成独立并发限制，默认关闭以保持现有行为
-	Enabled bool `mapstructure:"enabled"`
-	// MaxConcurrentRequests: 当前进程允许同时处理的图片生成请求数，0表示不限制
-	MaxConcurrentRequests int `mapstructure:"max_concurrent_requests"`
-	// OverflowMode: 图片并发达到上限后的处理方式：reject/wait
-	OverflowMode string `mapstructure:"overflow_mode"`
-	// WaitTimeoutSeconds: overflow_mode=wait 时等待图片并发槽位的超时时间（秒）
-	WaitTimeoutSeconds int `mapstructure:"wait_timeout_seconds"`
-	// MaxWaitingRequests: overflow_mode=wait 时当前进程允许排队等待的图片请求数
-	MaxWaitingRequests int `mapstructure:"max_waiting_requests"`
-}
-
-type OpenAIImageJobConfig struct {
-	// Concurrency: 当前进程本地执行 image job 的并发数。
-	Concurrency int `mapstructure:"concurrency"`
-	// TimeoutSeconds: 单个 image job 的总超时时间。
-	TimeoutSeconds int `mapstructure:"timeout_seconds"`
-	// TTLSeconds: job 状态和结果在 Redis 中保留的时间。
-	TTLSeconds int `mapstructure:"ttl_seconds"`
-	// MaxAttempts: 上游可重试错误的最大尝试次数。
-	MaxAttempts int `mapstructure:"max_attempts"`
-	// RetryBackoffSeconds: 每次重试前的等待时间序列。
-	RetryBackoffSeconds []int `mapstructure:"retry_backoff_seconds"`
-	// WatchdogIntervalSeconds: stale queued/running job 扫描周期。
-	WatchdogIntervalSeconds int `mapstructure:"watchdog_interval_seconds"`
-	// WatchdogBatchSize: 每次 watchdog 扫描最多处理的 active job 数。
-	WatchdogBatchSize int `mapstructure:"watchdog_batch_size"`
-	// WatchdogLockTTLSeconds: 跨实例 watchdog leader lock 的 TTL。
-	WatchdogLockTTLSeconds int `mapstructure:"watchdog_lock_ttl_seconds"`
-}
-
-func DefaultOpenAIImageJobConfig() OpenAIImageJobConfig {
-	return OpenAIImageJobConfig{
-		Concurrency:             2,
-		TimeoutSeconds:          20 * 60,
-		TTLSeconds:              24 * 60 * 60,
-		MaxAttempts:             3,
-		RetryBackoffSeconds:     []int{10, 30},
-		WatchdogIntervalSeconds: 60,
-		WatchdogBatchSize:       500,
-		WatchdogLockTTLSeconds:  30,
-	}
-}
-
-func (c OpenAIImageJobConfig) WithDefaults() OpenAIImageJobConfig {
-	defaults := DefaultOpenAIImageJobConfig()
-	if c.Concurrency <= 0 {
-		c.Concurrency = defaults.Concurrency
-	}
-	if c.TimeoutSeconds <= 0 {
-		c.TimeoutSeconds = defaults.TimeoutSeconds
-	}
-	if c.TTLSeconds <= 0 {
-		c.TTLSeconds = defaults.TTLSeconds
-	}
-	if c.MaxAttempts <= 0 {
-		c.MaxAttempts = defaults.MaxAttempts
-	}
-	if len(c.RetryBackoffSeconds) == 0 {
-		c.RetryBackoffSeconds = append([]int(nil), defaults.RetryBackoffSeconds...)
-	}
-	if c.WatchdogIntervalSeconds <= 0 {
-		c.WatchdogIntervalSeconds = defaults.WatchdogIntervalSeconds
-	}
-	if c.WatchdogBatchSize <= 0 {
-		c.WatchdogBatchSize = defaults.WatchdogBatchSize
-	}
-	if c.WatchdogLockTTLSeconds <= 0 {
-		c.WatchdogLockTTLSeconds = defaults.WatchdogLockTTLSeconds
-	}
-	return c
-}
-
-const (
-	ImageConcurrencyOverflowModeReject = "reject"
-	ImageConcurrencyOverflowModeWait   = "wait"
-)
 
 // GatewayConfig API网关相关配置
 type GatewayConfig struct {
 	// 等待上游响应头的超时时间（秒），0表示无超时
 	// 注意：这不影响流式数据传输，只控制等待响应头的时间
 	ResponseHeaderTimeout int `mapstructure:"response_header_timeout"`
-	// OpenAIResponseHeaderTimeout: OpenAI/Codex 上游等待响应头的超时时间（秒），0表示无超时
-	// OpenAI/Codex 请求可能在上游排队较久；默认不使用通用响应头超时截断。
-	OpenAIResponseHeaderTimeout int `mapstructure:"openai_response_header_timeout"`
 	// 请求体最大字节数，用于网关请求体大小限制
 	MaxBodySize int64 `mapstructure:"max_body_size"`
 	// 非流式上游响应体读取上限（字节），用于防止无界读取导致内存放大
@@ -776,9 +595,6 @@ type GatewayConfig struct {
 	// ForceCodexCLI: 强制将 OpenAI `/v1/responses` 请求按 Codex CLI 处理。
 	// 用于网关未透传/改写 User-Agent 时的兼容兜底（默认关闭，避免影响其他客户端）。
 	ForceCodexCLI bool `mapstructure:"force_codex_cli"`
-	// CodexImageGenerationBridgeEnabled: 是否为 Codex `/v1/responses` 自动注入 image_generation 工具和桥接指令。
-	// 默认关闭，避免纯文本 Codex 请求被意外改写；显式携带 image_generation 工具的请求仍按分组能力转发。
-	CodexImageGenerationBridgeEnabled bool `mapstructure:"codex_image_generation_bridge_enabled"`
 	// ForcedCodexInstructionsTemplateFile: 服务端强制附加到 Codex 顶层 instructions 的模板文件路径。
 	// 模板渲染后会直接覆盖最终 instructions；若需要保留客户端 system 转换结果，请在模板中显式引用 {{ .ExistingInstructions }}。
 	ForcedCodexInstructionsTemplateFile string `mapstructure:"forced_codex_instructions_template_file"`
@@ -790,14 +606,6 @@ type GatewayConfig struct {
 	OpenAIPassthroughAllowTimeoutHeaders bool `mapstructure:"openai_passthrough_allow_timeout_headers"`
 	// OpenAIWS: OpenAI Responses WebSocket 配置（默认开启，可按需回滚到 HTTP）
 	OpenAIWS GatewayOpenAIWSConfig `mapstructure:"openai_ws"`
-	// OpenAIScheduler: OpenAI 高级调度器粘性逃逸配置
-	OpenAIScheduler GatewayOpenAISchedulerConfig `mapstructure:"openai_scheduler"`
-	// OpenAIHTTP2: OpenAI HTTP 上游协议策略（默认启用 HTTP/2，可按代理能力回退 HTTP/1.1）
-	OpenAIHTTP2 GatewayOpenAIHTTP2Config `mapstructure:"openai_http2"`
-	// ImageConcurrency: 图片生成独立并发限制配置（默认关闭）
-	ImageConcurrency ImageConcurrencyConfig `mapstructure:"image_concurrency"`
-	// OpenAIImageJobs: OpenAI Images 异步 job 配置。
-	OpenAIImageJobs OpenAIImageJobConfig `mapstructure:"openai_image_jobs"`
 
 	// HTTP 上游连接池配置（性能优化：支持高并发场景调优）
 	// MaxIdleConns: 所有主机的最大空闲连接总数
@@ -829,10 +637,6 @@ type GatewayConfig struct {
 	StreamDataIntervalTimeout int `mapstructure:"stream_data_interval_timeout"`
 	// StreamKeepaliveInterval: 流式 keepalive 间隔（秒），0表示禁用
 	StreamKeepaliveInterval int `mapstructure:"stream_keepalive_interval"`
-	// ImageStreamDataIntervalTimeout: 图片流数据间隔超时（秒），0表示禁用
-	ImageStreamDataIntervalTimeout int `mapstructure:"image_stream_data_interval_timeout"`
-	// ImageStreamKeepaliveInterval: 图片流式 keepalive 间隔（秒），0表示禁用
-	ImageStreamKeepaliveInterval int `mapstructure:"image_stream_keepalive_interval"`
 	// MaxLineSize: 上游 SSE 单行最大字节数（0使用默认值）
 	MaxLineSize int `mapstructure:"max_line_size"`
 
@@ -872,21 +676,6 @@ type GatewayConfig struct {
 	// UserMessageQueue: 用户消息串行队列配置
 	// 对 role:"user" 的真实用户消息实施账号级串行化 + RPM 自适应延迟
 	UserMessageQueue UserMessageQueueConfig `mapstructure:"user_message_queue"`
-}
-
-// GatewayOpenAIHTTP2Config OpenAI HTTP 上游协议配置。
-// 默认启用 HTTP/2；在部分代理不兼容时按策略回退 HTTP/1.1。
-type GatewayOpenAIHTTP2Config struct {
-	// Enabled: 是否启用 OpenAI HTTP/2 优先策略
-	Enabled bool `mapstructure:"enabled"`
-	// AllowProxyFallbackToHTTP1: HTTP/HTTPS 代理出现明确 H2 兼容错误时，临时回退 HTTP/1.1
-	AllowProxyFallbackToHTTP1 bool `mapstructure:"allow_proxy_fallback_to_http1"`
-	// FallbackErrorThreshold: 回退窗口内累计多少次兼容错误后触发回退
-	FallbackErrorThreshold int `mapstructure:"fallback_error_threshold"`
-	// FallbackWindowSeconds: 统计兼容错误的时间窗口（秒）
-	FallbackWindowSeconds int `mapstructure:"fallback_window_seconds"`
-	// FallbackTTLSeconds: 触发后回退 HTTP/1.1 的持续时间（秒）
-	FallbackTTLSeconds int `mapstructure:"fallback_ttl_seconds"`
 }
 
 // UserMessageQueueConfig 用户消息串行队列配置
@@ -960,12 +749,6 @@ type GatewayOpenAIWSConfig struct {
 	StoreDisabledForceNewConn bool `mapstructure:"store_disabled_force_new_conn"`
 	// PrewarmGenerateEnabled: 是否启用 WSv2 generate=false 预热（默认 false）
 	PrewarmGenerateEnabled bool `mapstructure:"prewarm_generate_enabled"`
-	// ClientReadLimitBytes: 入站客户端 WS 单帧读取上限。
-	ClientReadLimitBytes int64 `mapstructure:"client_read_limit_bytes"`
-	// HTTPBridgeEnabled: 首包过大时，保持客户端 WS，改用 HTTP Responses 上游。
-	HTTPBridgeEnabled bool `mapstructure:"http_bridge_enabled"`
-	// HTTPBridgeThresholdBytes: 触发 HTTP bridge 的入站 WS payload 阈值。
-	HTTPBridgeThresholdBytes int64 `mapstructure:"http_bridge_threshold_bytes"`
 
 	// Feature 开关：v2 优先于 v1
 	ResponsesWebsockets   bool `mapstructure:"responses_websockets"`
@@ -1030,16 +813,6 @@ type GatewayOpenAIWSSchedulerScoreWeights struct {
 	Queue     float64 `mapstructure:"queue"`
 	ErrorRate float64 `mapstructure:"error_rate"`
 	TTFT      float64 `mapstructure:"ttft"`
-}
-
-// GatewayOpenAISchedulerConfig OpenAI 高级调度器配置。
-type GatewayOpenAISchedulerConfig struct {
-	// StickyEscapeEnabled: 是否允许 session_hash sticky 在账号健康度劣化时临时逃逸
-	StickyEscapeEnabled bool `mapstructure:"sticky_escape_enabled"`
-	// StickyEscapeTTFTMs: TTFT EWMA 超过该阈值时跳过 sticky
-	StickyEscapeTTFTMs int `mapstructure:"sticky_escape_ttft_ms"`
-	// StickyEscapeErrorRate: 错误率 EWMA 超过该阈值时跳过 sticky
-	StickyEscapeErrorRate float64 `mapstructure:"sticky_escape_error_rate"`
 }
 
 // GatewayUsageRecordConfig 使用量记录异步队列配置
@@ -1129,8 +902,7 @@ type GatewaySchedulingConfig struct {
 	FallbackSelectionMode string `mapstructure:"fallback_selection_mode"`
 
 	// 负载计算
-	LoadBatchEnabled    bool `mapstructure:"load_batch_enabled"`
-	LoadBatchCacheTTLMS int  `mapstructure:"load_batch_cache_ttl_ms"`
+	LoadBatchEnabled bool `mapstructure:"load_batch_enabled"`
 	// 快照桶读取时的 MGET 分块大小
 	SnapshotMGetChunkSize int `mapstructure:"snapshot_mget_chunk_size"`
 	// 快照重建时的缓存写入分块大小
@@ -1185,13 +957,6 @@ type DatabaseConfig struct {
 	ConnMaxLifetimeMinutes int `mapstructure:"conn_max_lifetime_minutes"`
 	// ConnMaxIdleTimeMinutes: 空闲连接最大存活时间，及时释放不活跃连接
 	ConnMaxIdleTimeMinutes int `mapstructure:"conn_max_idle_time_minutes"`
-	// UserPlatformQuotaFlusherEnabled: 是否启用 user×platform 配额写聚合 flusher
-	UserPlatformQuotaFlusherEnabled bool `mapstructure:"user_platform_quota_flusher_enabled"`
-	// UserPlatformQuotaFlushIntervalMs: flusher 刷写间隔（毫秒）
-	UserPlatformQuotaFlushIntervalMs int `mapstructure:"user_platform_quota_flush_interval_ms"`
-	// UserPlatformQuotaFlushBatchSize: flusher 单批最大条数
-	// 建议 ≤ 6000（单条 UPSERT 原子上限）
-	UserPlatformQuotaFlushBatchSize int `mapstructure:"user_platform_quota_flush_batch_size"`
 }
 
 func (d *DatabaseConfig) DSN() string {
@@ -1455,6 +1220,9 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	// 环境变量支持
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	_ = viper.BindEnv("concurrency.user_slot_wait_timeout")
+	_ = viper.BindEnv("gateway.scheduling.fallback_wait_timeout")
+	_ = viper.BindEnv("gateway.scheduling.db_fallback_enabled")
 
 	// 默认值
 	setDefaults()
@@ -1469,15 +1237,6 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	var cfg Config
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config error: %w", err)
-	}
-	if cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs == 0 {
-		cfg.Gateway.OpenAIScheduler.StickyEscapeTTFTMs = 15000
-	}
-	if cfg.Gateway.OpenAIScheduler.StickyEscapeErrorRate == 0 {
-		cfg.Gateway.OpenAIScheduler.StickyEscapeErrorRate = 0.5
-	}
-	if !cfg.Gateway.OpenAIScheduler.StickyEscapeEnabled && !viper.IsSet("gateway.openai_scheduler.sticky_escape_enabled") {
-		cfg.Gateway.OpenAIScheduler.StickyEscapeEnabled = true
 	}
 
 	cfg.RunMode = NormalizeRunMode(cfg.RunMode)
@@ -1520,16 +1279,11 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 	cfg.OIDC.UserInfoUsernamePath = strings.TrimSpace(cfg.OIDC.UserInfoUsernamePath)
 	cfg.OIDC.UsePKCEExplicit = hasExplicitConfigOrEnv("oidc_connect.use_pkce", "OIDC_CONNECT_USE_PKCE")
 	cfg.OIDC.ValidateIDTokenExplicit = hasExplicitConfigOrEnv("oidc_connect.validate_id_token", "OIDC_CONNECT_VALIDATE_ID_TOKEN")
-	for i := range cfg.XlabOAuthProvider.Clients {
-		cfg.XlabOAuthProvider.Clients[i].ClientID = strings.TrimSpace(cfg.XlabOAuthProvider.Clients[i].ClientID)
-		cfg.XlabOAuthProvider.Clients[i].ClientSecret = strings.TrimSpace(cfg.XlabOAuthProvider.Clients[i].ClientSecret)
-	}
 	cfg.Dashboard.KeyPrefix = strings.TrimSpace(cfg.Dashboard.KeyPrefix)
 	cfg.CORS.AllowedOrigins = normalizeStringSlice(cfg.CORS.AllowedOrigins)
 	cfg.Security.ResponseHeaders.AdditionalAllowed = normalizeStringSlice(cfg.Security.ResponseHeaders.AdditionalAllowed)
 	cfg.Security.ResponseHeaders.ForceRemove = normalizeStringSlice(cfg.Security.ResponseHeaders.ForceRemove)
 	cfg.Security.CSP.Policy = strings.TrimSpace(cfg.Security.CSP.Policy)
-	cfg.SetTrustForwardedIPForAPIKeyACL(cfg.Security.TrustForwardedIPForAPIKeyACL)
 	cfg.Log.Level = strings.ToLower(strings.TrimSpace(cfg.Log.Level))
 	cfg.Log.Format = strings.ToLower(strings.TrimSpace(cfg.Log.Format))
 	cfg.Log.ServiceName = strings.TrimSpace(cfg.Log.ServiceName)
@@ -1674,7 +1428,6 @@ func setDefaults() {
 	viper.SetDefault("security.csp.enabled", true)
 	viper.SetDefault("security.csp.policy", DefaultCSPPolicy)
 	viper.SetDefault("security.proxy_probe.insecure_skip_verify", false)
-	viper.SetDefault("security.trust_forwarded_ip_for_api_key_acl", false)
 
 	// Security - disable direct fallback on proxy error
 	viper.SetDefault("security.proxy_fallback.allow_direct_on_error", false)
@@ -1684,8 +1437,6 @@ func setDefaults() {
 	viper.SetDefault("billing.circuit_breaker.failure_threshold", 5)
 	viper.SetDefault("billing.circuit_breaker.reset_timeout_seconds", 30)
 	viper.SetDefault("billing.circuit_breaker.half_open_requests", 3)
-	viper.SetDefault("billing.user_platform_quota_cache_ttl_seconds", 86400)
-	viper.SetDefault("billing.user_platform_quota_sentinel_ttl_seconds", 3600)
 
 	// Turnstile
 	viper.SetDefault("turnstile.required", false)
@@ -1748,19 +1499,6 @@ func setDefaults() {
 	viper.SetDefault("oidc_connect.userinfo_id_path", "")
 	viper.SetDefault("oidc_connect.userinfo_username_path", "")
 
-	// DingTalk Connect OAuth 登录
-	viper.SetDefault("dingtalk_connect.enabled", false)
-	viper.SetDefault("dingtalk_connect.authorize_url", "https://login.dingtalk.com/oauth2/auth")
-	viper.SetDefault("dingtalk_connect.token_url", "https://api.dingtalk.com/v1.0/oauth2/userAccessToken")
-	viper.SetDefault("dingtalk_connect.userinfo_url", "https://api.dingtalk.com/v1.0/contact/users/me")
-	viper.SetDefault("dingtalk_connect.scopes", "openid")
-	viper.SetDefault("dingtalk_connect.frontend_redirect_url", "/auth/dingtalk/callback")
-	viper.SetDefault("dingtalk_connect.dingtalk_app_kind", "internal_app")
-	viper.SetDefault("dingtalk_connect.app_type", "public")
-	viper.SetDefault("dingtalk_connect.corp_restriction_policy", "none")
-	viper.SetDefault("dingtalk_connect.require_email", true)
-	viper.SetDefault("dingtalk_connect.username_overwrite_policy", "if_empty")
-
 	// Database
 	viper.SetDefault("database.host", "localhost")
 	viper.SetDefault("database.port", 5432)
@@ -1772,9 +1510,6 @@ func setDefaults() {
 	viper.SetDefault("database.max_idle_conns", 128)
 	viper.SetDefault("database.conn_max_lifetime_minutes", 30)
 	viper.SetDefault("database.conn_max_idle_time_minutes", 5)
-	viper.SetDefault("database.user_platform_quota_flusher_enabled", false)
-	viper.SetDefault("database.user_platform_quota_flush_interval_ms", 2000)
-	viper.SetDefault("database.user_platform_quota_flush_batch_size", 1000)
 
 	// Redis
 	viper.SetDefault("redis.host", "localhost")
@@ -1886,11 +1621,8 @@ func setDefaults() {
 	viper.SetDefault("idempotency.cleanup_interval_seconds", 60)
 	viper.SetDefault("idempotency.cleanup_batch_size", 500)
 
-	viper.SetDefault("xlab_oauth_provider.clients", []map[string]string{})
-
 	// Gateway
 	viper.SetDefault("gateway.response_header_timeout", 600) // 600秒(10分钟)等待上游响应头，LLM高负载时可能排队较久
-	viper.SetDefault("gateway.openai_response_header_timeout", 0)
 	viper.SetDefault("gateway.log_upstream_error_body", true)
 	viper.SetDefault("gateway.log_upstream_error_body_max_bytes", 2048)
 	viper.SetDefault("gateway.inject_beta_for_apikey", false)
@@ -1898,7 +1630,6 @@ func setDefaults() {
 	viper.SetDefault("gateway.max_account_switches", 10)
 	viper.SetDefault("gateway.max_account_switches_gemini", 3)
 	viper.SetDefault("gateway.force_codex_cli", false)
-	viper.SetDefault("gateway.codex_image_generation_bridge_enabled", false)
 	viper.SetDefault("gateway.openai_passthrough_allow_timeout_headers", false)
 	// OpenAI Responses WebSocket（默认开启；可通过 force_http 紧急回滚）
 	viper.SetDefault("gateway.openai_ws.enabled", true)
@@ -1912,9 +1643,6 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_ws.store_disabled_conn_mode", "strict")
 	viper.SetDefault("gateway.openai_ws.store_disabled_force_new_conn", true)
 	viper.SetDefault("gateway.openai_ws.prewarm_generate_enabled", false)
-	viper.SetDefault("gateway.openai_ws.client_read_limit_bytes", 64*1024*1024)
-	viper.SetDefault("gateway.openai_ws.http_bridge_enabled", true)
-	viper.SetDefault("gateway.openai_ws.http_bridge_threshold_bytes", 15*1024*1024)
 	viper.SetDefault("gateway.openai_ws.responses_websockets", false)
 	viper.SetDefault("gateway.openai_ws.responses_websockets_v2", true)
 	viper.SetDefault("gateway.openai_ws.max_conns_per_account", 128)
@@ -1949,26 +1677,6 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_ws.scheduler_score_weights.queue", 0.7)
 	viper.SetDefault("gateway.openai_ws.scheduler_score_weights.error_rate", 0.8)
 	viper.SetDefault("gateway.openai_ws.scheduler_score_weights.ttft", 0.5)
-	// OpenAI HTTP upstream protocol strategy
-	viper.SetDefault("gateway.openai_http2.enabled", true)
-	viper.SetDefault("gateway.openai_http2.allow_proxy_fallback_to_http1", true)
-	viper.SetDefault("gateway.openai_http2.fallback_error_threshold", 2)
-	viper.SetDefault("gateway.openai_http2.fallback_window_seconds", 60)
-	viper.SetDefault("gateway.openai_http2.fallback_ttl_seconds", 600)
-	viper.SetDefault("gateway.image_concurrency.enabled", false)
-	viper.SetDefault("gateway.image_concurrency.max_concurrent_requests", 0)
-	viper.SetDefault("gateway.image_concurrency.overflow_mode", ImageConcurrencyOverflowModeReject)
-	viper.SetDefault("gateway.image_concurrency.wait_timeout_seconds", 30)
-	viper.SetDefault("gateway.image_concurrency.max_waiting_requests", 100)
-	openAIImageJobDefaults := DefaultOpenAIImageJobConfig()
-	viper.SetDefault("gateway.openai_image_jobs.concurrency", openAIImageJobDefaults.Concurrency)
-	viper.SetDefault("gateway.openai_image_jobs.timeout_seconds", openAIImageJobDefaults.TimeoutSeconds)
-	viper.SetDefault("gateway.openai_image_jobs.ttl_seconds", openAIImageJobDefaults.TTLSeconds)
-	viper.SetDefault("gateway.openai_image_jobs.max_attempts", openAIImageJobDefaults.MaxAttempts)
-	viper.SetDefault("gateway.openai_image_jobs.retry_backoff_seconds", openAIImageJobDefaults.RetryBackoffSeconds)
-	viper.SetDefault("gateway.openai_image_jobs.watchdog_interval_seconds", openAIImageJobDefaults.WatchdogIntervalSeconds)
-	viper.SetDefault("gateway.openai_image_jobs.watchdog_batch_size", openAIImageJobDefaults.WatchdogBatchSize)
-	viper.SetDefault("gateway.openai_image_jobs.watchdog_lock_ttl_seconds", openAIImageJobDefaults.WatchdogLockTTLSeconds)
 	viper.SetDefault("gateway.antigravity_fallback_cooldown_minutes", 1)
 	viper.SetDefault("gateway.antigravity_extra_retries", 10)
 	viper.SetDefault("gateway.max_body_size", int64(256*1024*1024))
@@ -1986,8 +1694,6 @@ func setDefaults() {
 	viper.SetDefault("gateway.concurrency_slot_ttl_minutes", 30) // 并发槽位过期时间（支持超长请求）
 	viper.SetDefault("gateway.stream_data_interval_timeout", 180)
 	viper.SetDefault("gateway.stream_keepalive_interval", 10)
-	viper.SetDefault("gateway.image_stream_data_interval_timeout", 900)
-	viper.SetDefault("gateway.image_stream_keepalive_interval", 10)
 	viper.SetDefault("gateway.max_line_size", 500*1024*1024)
 	viper.SetDefault("gateway.scheduling.sticky_session_max_waiting", 3)
 	viper.SetDefault("gateway.scheduling.sticky_session_wait_timeout", 120*time.Second)
@@ -1995,7 +1701,6 @@ func setDefaults() {
 	viper.SetDefault("gateway.scheduling.fallback_max_waiting", 100)
 	viper.SetDefault("gateway.scheduling.fallback_selection_mode", "last_used")
 	viper.SetDefault("gateway.scheduling.load_batch_enabled", true)
-	viper.SetDefault("gateway.scheduling.load_batch_cache_ttl_ms", 200)
 	viper.SetDefault("gateway.scheduling.snapshot_mget_chunk_size", 128)
 	viper.SetDefault("gateway.scheduling.snapshot_write_chunk_size", 256)
 	viper.SetDefault("gateway.scheduling.slot_cleanup_interval", 30*time.Second)
@@ -2035,6 +1740,7 @@ func setDefaults() {
 
 	viper.SetDefault("gateway.tls_fingerprint.enabled", true)
 	viper.SetDefault("concurrency.ping_interval", 10)
+	viper.SetDefault("concurrency.user_slot_wait_timeout", 30*time.Second)
 
 	// TokenRefresh
 	viper.SetDefault("token_refresh.enabled", true)
@@ -2531,12 +2237,6 @@ func (c *Config) Validate() error {
 	if c.Gateway.ProxyProbeResponseReadMaxBytes <= 0 {
 		return fmt.Errorf("gateway.proxy_probe_response_read_max_bytes must be positive")
 	}
-	if c.Gateway.ResponseHeaderTimeout < 0 {
-		return fmt.Errorf("gateway.response_header_timeout must be non-negative")
-	}
-	if c.Gateway.OpenAIResponseHeaderTimeout < 0 {
-		return fmt.Errorf("gateway.openai_response_header_timeout must be non-negative")
-	}
 	if strings.TrimSpace(c.Gateway.ConnectionPoolIsolation) != "" {
 		switch c.Gateway.ConnectionPoolIsolation {
 		case ConnectionPoolIsolationProxy, ConnectionPoolIsolationAccount, ConnectionPoolIsolationAccountProxy:
@@ -2544,47 +2244,6 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("gateway.connection_pool_isolation must be one of: %s/%s/%s",
 				ConnectionPoolIsolationProxy, ConnectionPoolIsolationAccount, ConnectionPoolIsolationAccountProxy)
 		}
-	}
-	if c.Gateway.ImageConcurrency.MaxConcurrentRequests < 0 {
-		return fmt.Errorf("gateway.image_concurrency.max_concurrent_requests must be non-negative")
-	}
-	switch strings.TrimSpace(c.Gateway.ImageConcurrency.OverflowMode) {
-	case "", ImageConcurrencyOverflowModeReject, ImageConcurrencyOverflowModeWait:
-	default:
-		return fmt.Errorf("gateway.image_concurrency.overflow_mode must be one of: %s/%s",
-			ImageConcurrencyOverflowModeReject, ImageConcurrencyOverflowModeWait)
-	}
-	if c.Gateway.ImageConcurrency.WaitTimeoutSeconds < 0 {
-		return fmt.Errorf("gateway.image_concurrency.wait_timeout_seconds must be non-negative")
-	}
-	if c.Gateway.ImageConcurrency.MaxWaitingRequests < 0 {
-		return fmt.Errorf("gateway.image_concurrency.max_waiting_requests must be non-negative")
-	}
-	if c.Gateway.OpenAIImageJobs.Concurrency <= 0 {
-		return fmt.Errorf("gateway.openai_image_jobs.concurrency must be positive")
-	}
-	if c.Gateway.OpenAIImageJobs.TimeoutSeconds <= 0 {
-		return fmt.Errorf("gateway.openai_image_jobs.timeout_seconds must be positive")
-	}
-	if c.Gateway.OpenAIImageJobs.TTLSeconds <= 0 {
-		return fmt.Errorf("gateway.openai_image_jobs.ttl_seconds must be positive")
-	}
-	if c.Gateway.OpenAIImageJobs.MaxAttempts <= 0 {
-		return fmt.Errorf("gateway.openai_image_jobs.max_attempts must be positive")
-	}
-	for _, backoff := range c.Gateway.OpenAIImageJobs.RetryBackoffSeconds {
-		if backoff < 0 {
-			return fmt.Errorf("gateway.openai_image_jobs.retry_backoff_seconds must contain non-negative values")
-		}
-	}
-	if c.Gateway.OpenAIImageJobs.WatchdogIntervalSeconds <= 0 {
-		return fmt.Errorf("gateway.openai_image_jobs.watchdog_interval_seconds must be positive")
-	}
-	if c.Gateway.OpenAIImageJobs.WatchdogBatchSize <= 0 {
-		return fmt.Errorf("gateway.openai_image_jobs.watchdog_batch_size must be positive")
-	}
-	if c.Gateway.OpenAIImageJobs.WatchdogLockTTLSeconds <= 0 {
-		return fmt.Errorf("gateway.openai_image_jobs.watchdog_lock_ttl_seconds must be positive")
 	}
 	if c.Gateway.MaxIdleConns <= 0 {
 		return fmt.Errorf("gateway.max_idle_conns must be positive")
@@ -2623,20 +2282,6 @@ func (c *Config) Validate() error {
 	if c.Gateway.StreamKeepaliveInterval != 0 &&
 		(c.Gateway.StreamKeepaliveInterval < 5 || c.Gateway.StreamKeepaliveInterval > 30) {
 		return fmt.Errorf("gateway.stream_keepalive_interval must be 0 or between 5-30 seconds")
-	}
-	if c.Gateway.ImageStreamDataIntervalTimeout < 0 {
-		return fmt.Errorf("gateway.image_stream_data_interval_timeout must be non-negative")
-	}
-	if c.Gateway.ImageStreamDataIntervalTimeout != 0 &&
-		(c.Gateway.ImageStreamDataIntervalTimeout < 60 || c.Gateway.ImageStreamDataIntervalTimeout > 1800) {
-		return fmt.Errorf("gateway.image_stream_data_interval_timeout must be 0 or between 60-1800 seconds")
-	}
-	if c.Gateway.ImageStreamKeepaliveInterval < 0 {
-		return fmt.Errorf("gateway.image_stream_keepalive_interval must be non-negative")
-	}
-	if c.Gateway.ImageStreamKeepaliveInterval != 0 &&
-		(c.Gateway.ImageStreamKeepaliveInterval < 5 || c.Gateway.ImageStreamKeepaliveInterval > 60) {
-		return fmt.Errorf("gateway.image_stream_keepalive_interval must be 0 or between 5-60 seconds")
 	}
 	// 兼容旧键 sticky_previous_response_ttl_seconds
 	if c.Gateway.OpenAIWS.StickyResponseIDTTLSeconds <= 0 && c.Gateway.OpenAIWS.StickyPreviousResponseTTLSeconds > 0 {
@@ -2686,15 +2331,6 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.OpenAIWS.PrewarmCooldownMS < 0 {
 		return fmt.Errorf("gateway.openai_ws.prewarm_cooldown_ms must be non-negative")
-	}
-	if c.Gateway.OpenAIWS.ClientReadLimitBytes <= 0 {
-		return fmt.Errorf("gateway.openai_ws.client_read_limit_bytes must be positive")
-	}
-	if c.Gateway.OpenAIWS.HTTPBridgeThresholdBytes < 0 {
-		return fmt.Errorf("gateway.openai_ws.http_bridge_threshold_bytes must be non-negative")
-	}
-	if c.Gateway.OpenAIWS.HTTPBridgeEnabled && c.Gateway.OpenAIWS.HTTPBridgeThresholdBytes == 0 {
-		return fmt.Errorf("gateway.openai_ws.http_bridge_threshold_bytes must be positive when http_bridge_enabled is true")
 	}
 	if c.Gateway.OpenAIWS.FallbackCooldownSeconds < 0 {
 		return fmt.Errorf("gateway.openai_ws.fallback_cooldown_seconds must be non-negative")
@@ -2746,15 +2382,6 @@ func (c *Config) Validate() error {
 	if c.Gateway.OpenAIWS.StickyPreviousResponseTTLSeconds < 0 {
 		return fmt.Errorf("gateway.openai_ws.sticky_previous_response_ttl_seconds must be non-negative")
 	}
-	if c.Gateway.OpenAIHTTP2.FallbackErrorThreshold < 0 {
-		return fmt.Errorf("gateway.openai_http2.fallback_error_threshold must be non-negative")
-	}
-	if c.Gateway.OpenAIHTTP2.FallbackWindowSeconds < 0 {
-		return fmt.Errorf("gateway.openai_http2.fallback_window_seconds must be non-negative")
-	}
-	if c.Gateway.OpenAIHTTP2.FallbackTTLSeconds < 0 {
-		return fmt.Errorf("gateway.openai_http2.fallback_ttl_seconds must be non-negative")
-	}
 	if c.Gateway.OpenAIWS.SchedulerScoreWeights.Priority < 0 ||
 		c.Gateway.OpenAIWS.SchedulerScoreWeights.Load < 0 ||
 		c.Gateway.OpenAIWS.SchedulerScoreWeights.Queue < 0 ||
@@ -2769,12 +2396,6 @@ func (c *Config) Validate() error {
 		c.Gateway.OpenAIWS.SchedulerScoreWeights.TTFT
 	if weightSum <= 0 {
 		return fmt.Errorf("gateway.openai_ws.scheduler_score_weights must not all be zero")
-	}
-	if c.Gateway.OpenAIScheduler.StickyEscapeTTFTMs <= 0 {
-		return fmt.Errorf("gateway.openai_scheduler.sticky_escape_ttft_ms must be positive")
-	}
-	if c.Gateway.OpenAIScheduler.StickyEscapeErrorRate < 0 || c.Gateway.OpenAIScheduler.StickyEscapeErrorRate > 1 {
-		return fmt.Errorf("gateway.openai_scheduler.sticky_escape_error_rate must be between 0 and 1")
 	}
 	if c.Gateway.MaxLineSize < 0 {
 		return fmt.Errorf("gateway.max_line_size must be non-negative")
@@ -2858,9 +2479,6 @@ func (c *Config) Validate() error {
 	if c.Gateway.Scheduling.FallbackMaxWaiting <= 0 {
 		return fmt.Errorf("gateway.scheduling.fallback_max_waiting must be positive")
 	}
-	if c.Gateway.Scheduling.LoadBatchCacheTTLMS < 0 {
-		return fmt.Errorf("gateway.scheduling.load_batch_cache_ttl_ms must be non-negative")
-	}
 	if c.Gateway.Scheduling.SnapshotMGetChunkSize <= 0 {
 		return fmt.Errorf("gateway.scheduling.snapshot_mget_chunk_size must be positive")
 	}
@@ -2917,8 +2535,8 @@ func (c *Config) Validate() error {
 	if c.Concurrency.PingInterval < 5 || c.Concurrency.PingInterval > 30 {
 		return fmt.Errorf("concurrency.ping_interval must be between 5-30 seconds")
 	}
-	if err := ValidateDingTalkConfig(c.DingTalk); err != nil {
-		return fmt.Errorf("dingtalk_connect: %w", err)
+	if c.Concurrency.UserSlotWaitTimeout <= 0 {
+		return fmt.Errorf("concurrency.user_slot_wait_timeout must be positive")
 	}
 	return nil
 }

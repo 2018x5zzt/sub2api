@@ -54,18 +54,6 @@ func (User) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
-		field.String("invite_code").
-			MaxLen(32).
-			Optional().
-			Nillable().
-			Unique(),
-		field.Int64("invited_by_user_id").
-			Optional().
-			Nillable(),
-		field.Time("invite_bound_at").
-			Optional().
-			Nillable().
-			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
 
 		// Optional profile fields (added later; default '' in DB migration)
 		field.String("username").
@@ -89,10 +77,10 @@ func (User) Fields() []ent.Field {
 		field.String("signup_source").
 			Validate(func(value string) error {
 				switch value {
-				case "email", "linuxdo", "wechat", "oidc", "github", "google", "dingtalk":
+				case "email", "linuxdo", "wechat", "oidc":
 					return nil
 				default:
-					return fmt.Errorf("must be one of email, linuxdo, wechat, oidc, github, google, dingtalk")
+					return fmt.Errorf("must be one of email, linuxdo, wechat, oidc")
 				}
 			}).
 			Default("email"),
@@ -120,17 +108,6 @@ func (User) Fields() []ent.Field {
 		field.Float("total_recharged").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
-		field.Bool("subscription_balance_fallback_enabled").
-			Default(false),
-		field.Float("subscription_balance_fallback_limit_usd").
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Default(0),
-		field.Float("subscription_balance_fallback_used_usd").
-			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
-			Default(0),
-		field.Int64("subscription_balance_fallback_group_id").
-			Optional().
-			Nillable(),
 
 		// 用户级每分钟请求数上限（0 = 不限制）。仅当所在分组未设置 rpm_limit 时作为兜底生效。
 		field.Int("rpm_limit").
@@ -154,17 +131,13 @@ func (User) Edges() []ent.Edge {
 		edge.To("auth_identities", AuthIdentity.Type).
 			Annotations(entsql.OnDelete(entsql.Cascade)),
 		edge.To("pending_auth_sessions", PendingAuthSession.Type),
-		edge.To("platform_quotas", UserPlatformQuota.Type),
 	}
 }
 
 func (User) Indexes() []ent.Index {
 	return []ent.Index{
 		// email 字段已在 Fields() 中声明 Unique()，无需重复索引
-		index.Fields("invite_code"),
-		index.Fields("invited_by_user_id"),
 		index.Fields("status"),
-		index.Fields("subscription_balance_fallback_group_id"),
 		index.Fields("deleted_at"),
 	}
 }

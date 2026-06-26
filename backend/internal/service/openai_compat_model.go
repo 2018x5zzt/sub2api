@@ -49,65 +49,6 @@ func applyOpenAICompatModelNormalization(req *apicompat.AnthropicRequest) {
 	req.OutputConfig.Effort = claudeEffort
 }
 
-func applyClaudeImplicitThinkingModelDefaults(req *apicompat.AnthropicRequest) *string {
-	if req == nil {
-		return nil
-	}
-
-	if req.OutputConfig != nil && strings.TrimSpace(req.OutputConfig.Effort) != "" {
-		return nil
-	}
-	if req.Thinking != nil && strings.TrimSpace(req.Thinking.Type) != "" {
-		return nil
-	}
-
-	effort := implicitClaudeOutputEffortFromModel(req.Model)
-	if effort == "" {
-		return nil
-	}
-
-	req.OutputConfig = &apicompat.AnthropicOutputConfig{Effort: effort}
-	req.Thinking = &apicompat.AnthropicThinking{
-		Type:         "enabled",
-		BudgetTokens: BudgetRectifyBudgetTokens,
-	}
-	if req.MaxTokens < BudgetRectifyMinMaxTokens {
-		req.MaxTokens = BudgetRectifyMaxTokens
-	}
-
-	openAIEffort := mapClaudeOutputEffortToOpenAIReasoningEffort(effort)
-	if openAIEffort == "" {
-		return nil
-	}
-	return &openAIEffort
-}
-
-func implicitClaudeOutputEffortFromModel(model string) string {
-	modelID := strings.ToLower(strings.TrimSpace(model))
-	if strings.Contains(modelID, "/") {
-		parts := strings.Split(modelID, "/")
-		modelID = strings.TrimSpace(parts[len(parts)-1])
-	}
-
-	switch modelID {
-	case "claude-opus-4-6", "claude-opus-4-6-thinking":
-		return "max"
-	default:
-		return ""
-	}
-}
-
-func mapClaudeOutputEffortToOpenAIReasoningEffort(effort string) string {
-	switch strings.TrimSpace(effort) {
-	case "low", "medium", "high":
-		return effort
-	case "max", "xhigh":
-		return "xhigh"
-	default:
-		return ""
-	}
-}
-
 func splitOpenAICompatReasoningModel(model string) (normalizedModel string, reasoningEffort string, ok bool) {
 	trimmed := strings.TrimSpace(model)
 	if trimmed == "" {
@@ -120,12 +61,11 @@ func splitOpenAICompatReasoningModel(model string) (normalizedModel string, reas
 		modelID = parts[len(parts)-1]
 	}
 	modelID = strings.TrimSpace(modelID)
-	lowerModelID := strings.ToLower(modelID)
-	if !strings.HasPrefix(lowerModelID, "gpt-") && !strings.HasPrefix(lowerModelID, "gpt5.") {
+	if !strings.HasPrefix(strings.ToLower(modelID), "gpt-") {
 		return trimmed, "", false
 	}
 
-	parts := strings.FieldsFunc(lowerModelID, func(r rune) bool {
+	parts := strings.FieldsFunc(strings.ToLower(modelID), func(r rune) bool {
 		switch r {
 		case '-', '_', ' ':
 			return true

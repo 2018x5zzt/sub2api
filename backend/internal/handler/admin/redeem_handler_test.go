@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -64,15 +62,15 @@ func TestCreateAndRedeem_TypeDefaultsToBalance(t *testing.T) {
 		"omitting type should default to balance and pass validation")
 }
 
-func TestCreateAndRedeem_SubscriptionRequiresProductIDForPositiveGrant(t *testing.T) {
+func TestCreateAndRedeem_SubscriptionRequiresGroupID(t *testing.T) {
 	h := newCreateAndRedeemHandler()
 	code := postCreateAndRedeemValidation(t, h, map[string]any{
-		"code":          "test-sub-group-only-positive",
+		"code":          "test-sub-no-group",
 		"type":          "subscription",
 		"value":         29.9,
 		"user_id":       1,
-		"group_id":      5,
 		"validity_days": 30,
+		// group_id 缺失
 	})
 
 	assert.Equal(t, http.StatusBadRequest, code)
@@ -113,14 +111,14 @@ func TestCreateAndRedeem_SubscriptionRequiresNonZeroValidityDays(t *testing.T) {
 }
 
 func TestCreateAndRedeem_SubscriptionValidParamsPassValidation(t *testing.T) {
-	productID := int64(88)
+	groupID := int64(5)
 	h := newCreateAndRedeemHandler()
 	code := postCreateAndRedeemValidation(t, h, map[string]any{
 		"code":          "test-sub-valid",
 		"type":          "subscription",
 		"value":         29.9,
 		"user_id":       1,
-		"product_id":    productID,
+		"group_id":      groupID,
 		"validity_days": 31,
 	})
 
@@ -140,126 +138,4 @@ func TestCreateAndRedeem_BalanceIgnoresSubscriptionFields(t *testing.T) {
 
 	assert.NotEqual(t, http.StatusBadRequest, code,
 		"balance type should not require group_id or validity_days")
-}
-
-func TestGenerateRedeemCodesAcceptsCommercialSourceType(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-
-	body := map[string]any{
-		"count":       1,
-		"type":        "balance",
-		"value":       20,
-		"source_type": "commercial",
-	}
-	jsonBytes, err := json.Marshal(body)
-	require.NoError(t, err)
-	c.Request, _ = http.NewRequest(http.MethodPost, "/api/v1/admin/redeem-codes/generate", bytes.NewReader(jsonBytes))
-	c.Request.Header.Set("Content-Type", "application/json")
-
-	adminSvc := newStubAdminService()
-	h := &RedeemHandler{adminService: adminSvc}
-	h.Generate(c)
-
-	assert.NotEqual(t, http.StatusBadRequest, w.Code)
-	require.NotNil(t, adminSvc.lastGenerateRedeemCodes)
-	require.Equal(t, "commercial", adminSvc.lastGenerateRedeemCodes.SourceType)
-}
-
-func TestGenerateRedeemCodesSubscriptionAcceptsProductIDAliases(t *testing.T) {
-	cases := []struct {
-		name  string
-		field string
-	}{
-		{name: "camelCase productId", field: "productId"},
-		{name: "legacy productionid", field: "productionid"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			gin.SetMode(gin.TestMode)
-			w := httptest.NewRecorder()
-			c, _ := gin.CreateTestContext(w)
-
-			body := map[string]any{
-				"count":         1,
-				"type":          "subscription",
-				"value":         1,
-				"validity_days": 30,
-				tc.field:        88,
-			}
-			jsonBytes, err := json.Marshal(body)
-			require.NoError(t, err)
-			c.Request, _ = http.NewRequest(http.MethodPost, "/api/v1/admin/redeem-codes/generate", bytes.NewReader(jsonBytes))
-			c.Request.Header.Set("Content-Type", "application/json")
-
-			adminSvc := newStubAdminService()
-			h := &RedeemHandler{adminService: adminSvc}
-			h.Generate(c)
-
-			assert.NotEqual(t, http.StatusBadRequest, w.Code)
-			require.NotNil(t, adminSvc.lastGenerateRedeemCodes)
-			require.NotNil(t, adminSvc.lastGenerateRedeemCodes.ProductID)
-			require.Equal(t, int64(88), *adminSvc.lastGenerateRedeemCodes.ProductID)
-			require.Nil(t, adminSvc.lastGenerateRedeemCodes.GroupID)
-		})
-	}
-}
-
-func TestCreateAndRedeemSubscriptionAcceptsProductIDAliases(t *testing.T) {
-	cases := []struct {
-		name  string
-		field string
-	}{
-		{name: "camelCase productId", field: "productId"},
-		{name: "legacy productionid", field: "productionid"},
-	}
-
-	h := newCreateAndRedeemHandler()
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			code := postCreateAndRedeemValidation(t, h, map[string]any{
-				"code":          "test-sub-valid-" + strings.ReplaceAll(tc.field, "_", "-"),
-				"type":          "subscription",
-				"value":         29.9,
-				"user_id":       1,
-				"validity_days": 30,
-				tc.field:        88,
-			})
-
-			assert.NotEqual(t, http.StatusBadRequest, code,
-				"subscription positive grants should accept product id aliases")
-		})
-	}
-}
-
-func TestResolveRedeemCodeExpiresAt_FromDays(t *testing.T) {
-	days := 3
-	expiresAt, err := resolveRedeemCodeExpiresAt(nil, &days)
-	require.NoError(t, err)
-	require.NotNil(t, expiresAt)
-	require.WithinDuration(t, time.Now().UTC().AddDate(0, 0, days), *expiresAt, 2*time.Second)
-}
-
-func TestResolveRedeemCodeExpiresAt_RejectsPastAbsoluteTime(t *testing.T) {
-	past := time.Now().UTC().Add(-time.Minute)
-	expiresAt, err := resolveRedeemCodeExpiresAt(&past, nil)
-	require.Error(t, err)
-	require.Nil(t, expiresAt)
-}
-
-func TestResolveRedeemCodeExpiresAt_RejectsNonPositiveDays(t *testing.T) {
-	days := 0
-	expiresAt, err := resolveRedeemCodeExpiresAt(nil, &days)
-	require.Error(t, err)
-	require.Nil(t, expiresAt)
-}
-
-func TestResolveRedeemCodeExpiresAt_RejectsConflictingInputs(t *testing.T) {
-	future := time.Now().UTC().Add(time.Hour)
-	days := 3
-	expiresAt, err := resolveRedeemCodeExpiresAt(&future, &days)
-	require.Error(t, err)
-	require.Nil(t, expiresAt)
 }

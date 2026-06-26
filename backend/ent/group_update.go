@@ -145,47 +145,6 @@ func (_u *GroupUpdate) SetNillableStatus(v *string) *GroupUpdate {
 	return _u
 }
 
-// SetPricingMode sets the "pricing_mode" field.
-func (_u *GroupUpdate) SetPricingMode(v string) *GroupUpdate {
-	_u.mutation.SetPricingMode(v)
-	return _u
-}
-
-// SetNillablePricingMode sets the "pricing_mode" field if the given value is not nil.
-func (_u *GroupUpdate) SetNillablePricingMode(v *string) *GroupUpdate {
-	if v != nil {
-		_u.SetPricingMode(*v)
-	}
-	return _u
-}
-
-// SetDefaultBudgetMultiplier sets the "default_budget_multiplier" field.
-func (_u *GroupUpdate) SetDefaultBudgetMultiplier(v float64) *GroupUpdate {
-	_u.mutation.ResetDefaultBudgetMultiplier()
-	_u.mutation.SetDefaultBudgetMultiplier(v)
-	return _u
-}
-
-// SetNillableDefaultBudgetMultiplier sets the "default_budget_multiplier" field if the given value is not nil.
-func (_u *GroupUpdate) SetNillableDefaultBudgetMultiplier(v *float64) *GroupUpdate {
-	if v != nil {
-		_u.SetDefaultBudgetMultiplier(*v)
-	}
-	return _u
-}
-
-// AddDefaultBudgetMultiplier adds value to the "default_budget_multiplier" field.
-func (_u *GroupUpdate) AddDefaultBudgetMultiplier(v float64) *GroupUpdate {
-	_u.mutation.AddDefaultBudgetMultiplier(v)
-	return _u
-}
-
-// ClearDefaultBudgetMultiplier clears the value of the "default_budget_multiplier" field.
-func (_u *GroupUpdate) ClearDefaultBudgetMultiplier() *GroupUpdate {
-	_u.mutation.ClearDefaultBudgetMultiplier()
-	return _u
-}
-
 // SetPlatform sets the "platform" field.
 func (_u *GroupUpdate) SetPlatform(v string) *GroupUpdate {
 	_u.mutation.SetPlatform(v)
@@ -313,55 +272,6 @@ func (_u *GroupUpdate) SetNillableDefaultValidityDays(v *int) *GroupUpdate {
 // AddDefaultValidityDays adds value to the "default_validity_days" field.
 func (_u *GroupUpdate) AddDefaultValidityDays(v int) *GroupUpdate {
 	_u.mutation.AddDefaultValidityDays(v)
-	return _u
-}
-
-// SetAllowImageGeneration sets the "allow_image_generation" field.
-func (_u *GroupUpdate) SetAllowImageGeneration(v bool) *GroupUpdate {
-	_u.mutation.SetAllowImageGeneration(v)
-	return _u
-}
-
-// SetNillableAllowImageGeneration sets the "allow_image_generation" field if the given value is not nil.
-func (_u *GroupUpdate) SetNillableAllowImageGeneration(v *bool) *GroupUpdate {
-	if v != nil {
-		_u.SetAllowImageGeneration(*v)
-	}
-	return _u
-}
-
-// SetImageRateIndependent sets the "image_rate_independent" field.
-func (_u *GroupUpdate) SetImageRateIndependent(v bool) *GroupUpdate {
-	_u.mutation.SetImageRateIndependent(v)
-	return _u
-}
-
-// SetNillableImageRateIndependent sets the "image_rate_independent" field if the given value is not nil.
-func (_u *GroupUpdate) SetNillableImageRateIndependent(v *bool) *GroupUpdate {
-	if v != nil {
-		_u.SetImageRateIndependent(*v)
-	}
-	return _u
-}
-
-// SetImageRateMultiplier sets the "image_rate_multiplier" field.
-func (_u *GroupUpdate) SetImageRateMultiplier(v float64) *GroupUpdate {
-	_u.mutation.ResetImageRateMultiplier()
-	_u.mutation.SetImageRateMultiplier(v)
-	return _u
-}
-
-// SetNillableImageRateMultiplier sets the "image_rate_multiplier" field if the given value is not nil.
-func (_u *GroupUpdate) SetNillableImageRateMultiplier(v *float64) *GroupUpdate {
-	if v != nil {
-		_u.SetImageRateMultiplier(*v)
-	}
-	return _u
-}
-
-// AddImageRateMultiplier adds value to the "image_rate_multiplier" field.
-func (_u *GroupUpdate) AddImageRateMultiplier(v float64) *GroupUpdate {
-	_u.mutation.AddImageRateMultiplier(v)
 	return _u
 }
 
@@ -514,33 +424,6 @@ func (_u *GroupUpdate) ClearFallbackGroupIDOnInvalidRequest() *GroupUpdate {
 	return _u
 }
 
-// SetBalanceFallbackGroupID sets the "balance_fallback_group_id" field.
-func (_u *GroupUpdate) SetBalanceFallbackGroupID(v int64) *GroupUpdate {
-	_u.mutation.ResetBalanceFallbackGroupID()
-	_u.mutation.SetBalanceFallbackGroupID(v)
-	return _u
-}
-
-// SetNillableBalanceFallbackGroupID sets the "balance_fallback_group_id" field if the given value is not nil.
-func (_u *GroupUpdate) SetNillableBalanceFallbackGroupID(v *int64) *GroupUpdate {
-	if v != nil {
-		_u.SetBalanceFallbackGroupID(*v)
-	}
-	return _u
-}
-
-// AddBalanceFallbackGroupID adds value to the "balance_fallback_group_id" field.
-func (_u *GroupUpdate) AddBalanceFallbackGroupID(v int64) *GroupUpdate {
-	_u.mutation.AddBalanceFallbackGroupID(v)
-	return _u
-}
-
-// ClearBalanceFallbackGroupID clears the value of the "balance_fallback_group_id" field.
-func (_u *GroupUpdate) ClearBalanceFallbackGroupID() *GroupUpdate {
-	_u.mutation.ClearBalanceFallbackGroupID()
-	return _u
-}
-
 // SetModelRouting sets the "model_routing" field.
 func (_u *GroupUpdate) SetModelRouting(v map[string][]int64) *GroupUpdate {
 	_u.mutation.SetModelRouting(v)
@@ -680,20 +563,6 @@ func (_u *GroupUpdate) SetMessagesDispatchModelConfig(v domain.OpenAIMessagesDis
 func (_u *GroupUpdate) SetNillableMessagesDispatchModelConfig(v *domain.OpenAIMessagesDispatchModelConfig) *GroupUpdate {
 	if v != nil {
 		_u.SetMessagesDispatchModelConfig(*v)
-	}
-	return _u
-}
-
-// SetModelsListConfig sets the "models_list_config" field.
-func (_u *GroupUpdate) SetModelsListConfig(v domain.GroupModelsListConfig) *GroupUpdate {
-	_u.mutation.SetModelsListConfig(v)
-	return _u
-}
-
-// SetNillableModelsListConfig sets the "models_list_config" field if the given value is not nil.
-func (_u *GroupUpdate) SetNillableModelsListConfig(v *domain.GroupModelsListConfig) *GroupUpdate {
-	if v != nil {
-		_u.SetModelsListConfig(*v)
 	}
 	return _u
 }
@@ -994,11 +863,6 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.PricingMode(); ok {
-		if err := group.PricingModeValidator(v); err != nil {
-			return &ValidationError{Name: "pricing_mode", err: fmt.Errorf(`ent: validator failed for field "Group.pricing_mode": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Platform(); ok {
 		if err := group.PlatformValidator(v); err != nil {
 			return &ValidationError{Name: "platform", err: fmt.Errorf(`ent: validator failed for field "Group.platform": %w`, err)}
@@ -1059,18 +923,6 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.PricingMode(); ok {
-		_spec.SetField(group.FieldPricingMode, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.DefaultBudgetMultiplier(); ok {
-		_spec.SetField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedDefaultBudgetMultiplier(); ok {
-		_spec.AddField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64, value)
-	}
-	if _u.mutation.DefaultBudgetMultiplierCleared() {
-		_spec.ClearField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64)
-	}
 	if value, ok := _u.mutation.Platform(); ok {
 		_spec.SetField(group.FieldPlatform, field.TypeString, value)
 	}
@@ -1109,18 +961,6 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedDefaultValidityDays(); ok {
 		_spec.AddField(group.FieldDefaultValidityDays, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AllowImageGeneration(); ok {
-		_spec.SetField(group.FieldAllowImageGeneration, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.ImageRateIndependent(); ok {
-		_spec.SetField(group.FieldImageRateIndependent, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.ImageRateMultiplier(); ok {
-		_spec.SetField(group.FieldImageRateMultiplier, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedImageRateMultiplier(); ok {
-		_spec.AddField(group.FieldImageRateMultiplier, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.ImagePrice1k(); ok {
 		_spec.SetField(group.FieldImagePrice1k, field.TypeFloat64, value)
@@ -1170,15 +1010,6 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.FallbackGroupIDOnInvalidRequestCleared() {
 		_spec.ClearField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64)
 	}
-	if value, ok := _u.mutation.BalanceFallbackGroupID(); ok {
-		_spec.SetField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedBalanceFallbackGroupID(); ok {
-		_spec.AddField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if _u.mutation.BalanceFallbackGroupIDCleared() {
-		_spec.ClearField(group.FieldBalanceFallbackGroupID, field.TypeInt64)
-	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
 	}
@@ -1219,9 +1050,6 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.MessagesDispatchModelConfig(); ok {
 		_spec.SetField(group.FieldMessagesDispatchModelConfig, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.ModelsListConfig(); ok {
-		_spec.SetField(group.FieldModelsListConfig, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.RpmLimit(); ok {
 		_spec.SetField(group.FieldRpmLimit, field.TypeInt, value)
@@ -1652,47 +1480,6 @@ func (_u *GroupUpdateOne) SetNillableStatus(v *string) *GroupUpdateOne {
 	return _u
 }
 
-// SetPricingMode sets the "pricing_mode" field.
-func (_u *GroupUpdateOne) SetPricingMode(v string) *GroupUpdateOne {
-	_u.mutation.SetPricingMode(v)
-	return _u
-}
-
-// SetNillablePricingMode sets the "pricing_mode" field if the given value is not nil.
-func (_u *GroupUpdateOne) SetNillablePricingMode(v *string) *GroupUpdateOne {
-	if v != nil {
-		_u.SetPricingMode(*v)
-	}
-	return _u
-}
-
-// SetDefaultBudgetMultiplier sets the "default_budget_multiplier" field.
-func (_u *GroupUpdateOne) SetDefaultBudgetMultiplier(v float64) *GroupUpdateOne {
-	_u.mutation.ResetDefaultBudgetMultiplier()
-	_u.mutation.SetDefaultBudgetMultiplier(v)
-	return _u
-}
-
-// SetNillableDefaultBudgetMultiplier sets the "default_budget_multiplier" field if the given value is not nil.
-func (_u *GroupUpdateOne) SetNillableDefaultBudgetMultiplier(v *float64) *GroupUpdateOne {
-	if v != nil {
-		_u.SetDefaultBudgetMultiplier(*v)
-	}
-	return _u
-}
-
-// AddDefaultBudgetMultiplier adds value to the "default_budget_multiplier" field.
-func (_u *GroupUpdateOne) AddDefaultBudgetMultiplier(v float64) *GroupUpdateOne {
-	_u.mutation.AddDefaultBudgetMultiplier(v)
-	return _u
-}
-
-// ClearDefaultBudgetMultiplier clears the value of the "default_budget_multiplier" field.
-func (_u *GroupUpdateOne) ClearDefaultBudgetMultiplier() *GroupUpdateOne {
-	_u.mutation.ClearDefaultBudgetMultiplier()
-	return _u
-}
-
 // SetPlatform sets the "platform" field.
 func (_u *GroupUpdateOne) SetPlatform(v string) *GroupUpdateOne {
 	_u.mutation.SetPlatform(v)
@@ -1820,55 +1607,6 @@ func (_u *GroupUpdateOne) SetNillableDefaultValidityDays(v *int) *GroupUpdateOne
 // AddDefaultValidityDays adds value to the "default_validity_days" field.
 func (_u *GroupUpdateOne) AddDefaultValidityDays(v int) *GroupUpdateOne {
 	_u.mutation.AddDefaultValidityDays(v)
-	return _u
-}
-
-// SetAllowImageGeneration sets the "allow_image_generation" field.
-func (_u *GroupUpdateOne) SetAllowImageGeneration(v bool) *GroupUpdateOne {
-	_u.mutation.SetAllowImageGeneration(v)
-	return _u
-}
-
-// SetNillableAllowImageGeneration sets the "allow_image_generation" field if the given value is not nil.
-func (_u *GroupUpdateOne) SetNillableAllowImageGeneration(v *bool) *GroupUpdateOne {
-	if v != nil {
-		_u.SetAllowImageGeneration(*v)
-	}
-	return _u
-}
-
-// SetImageRateIndependent sets the "image_rate_independent" field.
-func (_u *GroupUpdateOne) SetImageRateIndependent(v bool) *GroupUpdateOne {
-	_u.mutation.SetImageRateIndependent(v)
-	return _u
-}
-
-// SetNillableImageRateIndependent sets the "image_rate_independent" field if the given value is not nil.
-func (_u *GroupUpdateOne) SetNillableImageRateIndependent(v *bool) *GroupUpdateOne {
-	if v != nil {
-		_u.SetImageRateIndependent(*v)
-	}
-	return _u
-}
-
-// SetImageRateMultiplier sets the "image_rate_multiplier" field.
-func (_u *GroupUpdateOne) SetImageRateMultiplier(v float64) *GroupUpdateOne {
-	_u.mutation.ResetImageRateMultiplier()
-	_u.mutation.SetImageRateMultiplier(v)
-	return _u
-}
-
-// SetNillableImageRateMultiplier sets the "image_rate_multiplier" field if the given value is not nil.
-func (_u *GroupUpdateOne) SetNillableImageRateMultiplier(v *float64) *GroupUpdateOne {
-	if v != nil {
-		_u.SetImageRateMultiplier(*v)
-	}
-	return _u
-}
-
-// AddImageRateMultiplier adds value to the "image_rate_multiplier" field.
-func (_u *GroupUpdateOne) AddImageRateMultiplier(v float64) *GroupUpdateOne {
-	_u.mutation.AddImageRateMultiplier(v)
 	return _u
 }
 
@@ -2021,33 +1759,6 @@ func (_u *GroupUpdateOne) ClearFallbackGroupIDOnInvalidRequest() *GroupUpdateOne
 	return _u
 }
 
-// SetBalanceFallbackGroupID sets the "balance_fallback_group_id" field.
-func (_u *GroupUpdateOne) SetBalanceFallbackGroupID(v int64) *GroupUpdateOne {
-	_u.mutation.ResetBalanceFallbackGroupID()
-	_u.mutation.SetBalanceFallbackGroupID(v)
-	return _u
-}
-
-// SetNillableBalanceFallbackGroupID sets the "balance_fallback_group_id" field if the given value is not nil.
-func (_u *GroupUpdateOne) SetNillableBalanceFallbackGroupID(v *int64) *GroupUpdateOne {
-	if v != nil {
-		_u.SetBalanceFallbackGroupID(*v)
-	}
-	return _u
-}
-
-// AddBalanceFallbackGroupID adds value to the "balance_fallback_group_id" field.
-func (_u *GroupUpdateOne) AddBalanceFallbackGroupID(v int64) *GroupUpdateOne {
-	_u.mutation.AddBalanceFallbackGroupID(v)
-	return _u
-}
-
-// ClearBalanceFallbackGroupID clears the value of the "balance_fallback_group_id" field.
-func (_u *GroupUpdateOne) ClearBalanceFallbackGroupID() *GroupUpdateOne {
-	_u.mutation.ClearBalanceFallbackGroupID()
-	return _u
-}
-
 // SetModelRouting sets the "model_routing" field.
 func (_u *GroupUpdateOne) SetModelRouting(v map[string][]int64) *GroupUpdateOne {
 	_u.mutation.SetModelRouting(v)
@@ -2187,20 +1898,6 @@ func (_u *GroupUpdateOne) SetMessagesDispatchModelConfig(v domain.OpenAIMessages
 func (_u *GroupUpdateOne) SetNillableMessagesDispatchModelConfig(v *domain.OpenAIMessagesDispatchModelConfig) *GroupUpdateOne {
 	if v != nil {
 		_u.SetMessagesDispatchModelConfig(*v)
-	}
-	return _u
-}
-
-// SetModelsListConfig sets the "models_list_config" field.
-func (_u *GroupUpdateOne) SetModelsListConfig(v domain.GroupModelsListConfig) *GroupUpdateOne {
-	_u.mutation.SetModelsListConfig(v)
-	return _u
-}
-
-// SetNillableModelsListConfig sets the "models_list_config" field if the given value is not nil.
-func (_u *GroupUpdateOne) SetNillableModelsListConfig(v *domain.GroupModelsListConfig) *GroupUpdateOne {
-	if v != nil {
-		_u.SetModelsListConfig(*v)
 	}
 	return _u
 }
@@ -2514,11 +2211,6 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.PricingMode(); ok {
-		if err := group.PricingModeValidator(v); err != nil {
-			return &ValidationError{Name: "pricing_mode", err: fmt.Errorf(`ent: validator failed for field "Group.pricing_mode": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Platform(); ok {
 		if err := group.PlatformValidator(v); err != nil {
 			return &ValidationError{Name: "platform", err: fmt.Errorf(`ent: validator failed for field "Group.platform": %w`, err)}
@@ -2596,18 +2288,6 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(group.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.PricingMode(); ok {
-		_spec.SetField(group.FieldPricingMode, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.DefaultBudgetMultiplier(); ok {
-		_spec.SetField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedDefaultBudgetMultiplier(); ok {
-		_spec.AddField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64, value)
-	}
-	if _u.mutation.DefaultBudgetMultiplierCleared() {
-		_spec.ClearField(group.FieldDefaultBudgetMultiplier, field.TypeFloat64)
-	}
 	if value, ok := _u.mutation.Platform(); ok {
 		_spec.SetField(group.FieldPlatform, field.TypeString, value)
 	}
@@ -2646,18 +2326,6 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedDefaultValidityDays(); ok {
 		_spec.AddField(group.FieldDefaultValidityDays, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AllowImageGeneration(); ok {
-		_spec.SetField(group.FieldAllowImageGeneration, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.ImageRateIndependent(); ok {
-		_spec.SetField(group.FieldImageRateIndependent, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.ImageRateMultiplier(); ok {
-		_spec.SetField(group.FieldImageRateMultiplier, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedImageRateMultiplier(); ok {
-		_spec.AddField(group.FieldImageRateMultiplier, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.ImagePrice1k(); ok {
 		_spec.SetField(group.FieldImagePrice1k, field.TypeFloat64, value)
@@ -2707,15 +2375,6 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	if _u.mutation.FallbackGroupIDOnInvalidRequestCleared() {
 		_spec.ClearField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64)
 	}
-	if value, ok := _u.mutation.BalanceFallbackGroupID(); ok {
-		_spec.SetField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedBalanceFallbackGroupID(); ok {
-		_spec.AddField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if _u.mutation.BalanceFallbackGroupIDCleared() {
-		_spec.ClearField(group.FieldBalanceFallbackGroupID, field.TypeInt64)
-	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
 	}
@@ -2756,9 +2415,6 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.MessagesDispatchModelConfig(); ok {
 		_spec.SetField(group.FieldMessagesDispatchModelConfig, field.TypeJSON, value)
-	}
-	if value, ok := _u.mutation.ModelsListConfig(); ok {
-		_spec.SetField(group.FieldModelsListConfig, field.TypeJSON, value)
 	}
 	if value, ok := _u.mutation.RpmLimit(); ok {
 		_spec.SetField(group.FieldRpmLimit, field.TypeInt, value)

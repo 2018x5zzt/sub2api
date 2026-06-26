@@ -79,6 +79,48 @@ func (_u *PromoCodeUsageUpdate) AddBonusAmount(v float64) *PromoCodeUsageUpdate 
 	return _u
 }
 
+// SetFixedBonusAmount sets the "fixed_bonus_amount" field.
+func (_u *PromoCodeUsageUpdate) SetFixedBonusAmount(v float64) *PromoCodeUsageUpdate {
+	_u.mutation.ResetFixedBonusAmount()
+	_u.mutation.SetFixedBonusAmount(v)
+	return _u
+}
+
+// SetNillableFixedBonusAmount sets the "fixed_bonus_amount" field if the given value is not nil.
+func (_u *PromoCodeUsageUpdate) SetNillableFixedBonusAmount(v *float64) *PromoCodeUsageUpdate {
+	if v != nil {
+		_u.SetFixedBonusAmount(*v)
+	}
+	return _u
+}
+
+// AddFixedBonusAmount adds value to the "fixed_bonus_amount" field.
+func (_u *PromoCodeUsageUpdate) AddFixedBonusAmount(v float64) *PromoCodeUsageUpdate {
+	_u.mutation.AddFixedBonusAmount(v)
+	return _u
+}
+
+// SetRandomBonusAmount sets the "random_bonus_amount" field.
+func (_u *PromoCodeUsageUpdate) SetRandomBonusAmount(v float64) *PromoCodeUsageUpdate {
+	_u.mutation.ResetRandomBonusAmount()
+	_u.mutation.SetRandomBonusAmount(v)
+	return _u
+}
+
+// SetNillableRandomBonusAmount sets the "random_bonus_amount" field if the given value is not nil.
+func (_u *PromoCodeUsageUpdate) SetNillableRandomBonusAmount(v *float64) *PromoCodeUsageUpdate {
+	if v != nil {
+		_u.SetRandomBonusAmount(*v)
+	}
+	return _u
+}
+
+// AddRandomBonusAmount adds value to the "random_bonus_amount" field.
+func (_u *PromoCodeUsageUpdate) AddRandomBonusAmount(v float64) *PromoCodeUsageUpdate {
+	_u.mutation.AddRandomBonusAmount(v)
+	return _u
+}
+
 // SetUsedAt sets the "used_at" field.
 func (_u *PromoCodeUsageUpdate) SetUsedAt(v time.Time) *PromoCodeUsageUpdate {
 	_u.mutation.SetUsedAt(v)
@@ -175,6 +217,18 @@ func (_u *PromoCodeUsageUpdate) sqlSave(ctx context.Context) (_node int, err err
 	}
 	if value, ok := _u.mutation.AddedBonusAmount(); ok {
 		_spec.AddField(promocodeusage.FieldBonusAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.FixedBonusAmount(); ok {
+		_spec.SetField(promocodeusage.FieldFixedBonusAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedFixedBonusAmount(); ok {
+		_spec.AddField(promocodeusage.FieldFixedBonusAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.RandomBonusAmount(); ok {
+		_spec.SetField(promocodeusage.FieldRandomBonusAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedRandomBonusAmount(); ok {
+		_spec.AddField(promocodeusage.FieldRandomBonusAmount, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.UsedAt(); ok {
 		_spec.SetField(promocodeusage.FieldUsedAt, field.TypeTime, value)
@@ -306,6 +360,48 @@ func (_u *PromoCodeUsageUpdateOne) AddBonusAmount(v float64) *PromoCodeUsageUpda
 	return _u
 }
 
+// SetFixedBonusAmount sets the "fixed_bonus_amount" field.
+func (_u *PromoCodeUsageUpdateOne) SetFixedBonusAmount(v float64) *PromoCodeUsageUpdateOne {
+	_u.mutation.ResetFixedBonusAmount()
+	_u.mutation.SetFixedBonusAmount(v)
+	return _u
+}
+
+// SetNillableFixedBonusAmount sets the "fixed_bonus_amount" field if the given value is not nil.
+func (_u *PromoCodeUsageUpdateOne) SetNillableFixedBonusAmount(v *float64) *PromoCodeUsageUpdateOne {
+	if v != nil {
+		_u.SetFixedBonusAmount(*v)
+	}
+	return _u
+}
+
+// AddFixedBonusAmount adds value to the "fixed_bonus_amount" field.
+func (_u *PromoCodeUsageUpdateOne) AddFixedBonusAmount(v float64) *PromoCodeUsageUpdateOne {
+	_u.mutation.AddFixedBonusAmount(v)
+	return _u
+}
+
+// SetRandomBonusAmount sets the "random_bonus_amount" field.
+func (_u *PromoCodeUsageUpdateOne) SetRandomBonusAmount(v float64) *PromoCodeUsageUpdateOne {
+	_u.mutation.ResetRandomBonusAmount()
+	_u.mutation.SetRandomBonusAmount(v)
+	return _u
+}
+
+// SetNillableRandomBonusAmount sets the "random_bonus_amount" field if the given value is not nil.
+func (_u *PromoCodeUsageUpdateOne) SetNillableRandomBonusAmount(v *float64) *PromoCodeUsageUpdateOne {
+	if v != nil {
+		_u.SetRandomBonusAmount(*v)
+	}
+	return _u
+}
+
+// AddRandomBonusAmount adds value to the "random_bonus_amount" field.
+func (_u *PromoCodeUsageUpdateOne) AddRandomBonusAmount(v float64) *PromoCodeUsageUpdateOne {
+	_u.mutation.AddRandomBonusAmount(v)
+	return _u
+}
+
 // SetUsedAt sets the "used_at" field.
 func (_u *PromoCodeUsageUpdateOne) SetUsedAt(v time.Time) *PromoCodeUsageUpdateOne {
 	_u.mutation.SetUsedAt(v)
@@ -432,6 +528,18 @@ func (_u *PromoCodeUsageUpdateOne) sqlSave(ctx context.Context) (_node *PromoCod
 	}
 	if value, ok := _u.mutation.AddedBonusAmount(); ok {
 		_spec.AddField(promocodeusage.FieldBonusAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.FixedBonusAmount(); ok {
+		_spec.SetField(promocodeusage.FieldFixedBonusAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedFixedBonusAmount(); ok {
+		_spec.AddField(promocodeusage.FieldFixedBonusAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.RandomBonusAmount(); ok {
+		_spec.SetField(promocodeusage.FieldRandomBonusAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedRandomBonusAmount(); ok {
+		_spec.AddField(promocodeusage.FieldRandomBonusAmount, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.UsedAt(); ok {
 		_spec.SetField(promocodeusage.FieldUsedAt, field.TypeTime, value)

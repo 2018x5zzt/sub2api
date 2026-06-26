@@ -111,33 +111,9 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 			return err
 		}
 	}
-	if cmd.ProductDebitCost > 0 && cmd.ProductSubscriptionID != nil {
-		productDebitApplied := cmd.ProductDebitCost
-		var err error
-		if cmd.ProductGroupID > 0 {
-			productDebitApplied, err = splitAndIncrementProductSubscriptionUsage(ctx, tx, cmd.UserID, *cmd.ProductSubscriptionID, cmd.ProductGroupID, cmd.ProductDebitCost)
-		} else {
-			err = advanceAndIncrementProductSubscriptionUsage(ctx, tx, *cmd.ProductSubscriptionID, cmd.ProductDebitCost)
-		}
-		result.ProductDebitApplied = &productDebitApplied
-		if err != nil {
-			if cmd.ProductBalanceFallbackCost <= 0 || !errors.Is(err, service.ErrDailyLimitExceeded) {
-				return err
-			}
-		}
-		if cmd.ProductBalanceFallbackCost > 0 && productDebitApplied < cmd.ProductDebitCost {
-			fallbackCost := proportionalProductBalanceFallbackCost(cmd.ProductBalanceFallbackCost, cmd.ProductDebitCost, productDebitApplied)
-			newBalance, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, fallbackCost, fallbackCost)
-			if err != nil {
-				return err
-			}
-			result.NewBalance = &newBalance
-			result.ProductBalanceCost = fallbackCost
-		}
-	}
 
 	if cmd.BalanceCost > 0 {
-		newBalance, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost, cmd.SubscriptionBalanceFallbackCost)
+		newBalance, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
 		if err != nil {
 			return err
 		}
@@ -169,13 +145,6 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	return nil
 }
 
-func proportionalProductBalanceFallbackCost(fallbackCost, productDebitCost, productDebitApplied float64) float64 {
-	if fallbackCost <= 0 || productDebitCost <= 0 || productDebitApplied >= productDebitCost {
-		return 0
-	}
-	return fallbackCost * ((productDebitCost - productDebitApplied) / productDebitCost)
-}
-
 func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {
 	const updateSQL = `
 		UPDATE user_subscriptions us
@@ -204,37 +173,8 @@ func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscrip
 	return service.ErrSubscriptionNotFound
 }
 
-func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount, subscriptionBalanceFallbackCost float64) (float64, error) {
+func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) (float64, error) {
 	var newBalance float64
-	if subscriptionBalanceFallbackCost > 0 {
-		err := tx.QueryRowContext(ctx, `
-		UPDATE users
-		SET balance = balance - $1,
-			subscription_balance_fallback_used_usd = subscription_balance_fallback_used_usd + $3,
-			updated_at = NOW()
-		WHERE id = $2
-			AND deleted_at IS NULL
-			AND subscription_balance_fallback_enabled = TRUE
-			AND subscription_balance_fallback_limit_usd > 0
-			AND subscription_balance_fallback_used_usd + $3 <= subscription_balance_fallback_limit_usd
-		RETURNING balance
-	`, amount, userID, subscriptionBalanceFallbackCost).Scan(&newBalance)
-		if errors.Is(err, sql.ErrNoRows) {
-			var exists bool
-			if existsErr := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL)`, userID).Scan(&exists); existsErr != nil {
-				return 0, existsErr
-			}
-			if !exists {
-				return 0, service.ErrUserNotFound
-			}
-			return 0, service.ErrSubscriptionBalanceFallbackLimitExceeded
-		}
-		if err != nil {
-			return 0, err
-		}
-		return newBalance, nil
-	}
-
 	err := tx.QueryRowContext(ctx, `
 		UPDATE users
 		SET balance = balance - $1,

@@ -28,24 +28,14 @@ func toResponsePagination(p *pagination.PaginationResult) *response.PaginationRe
 
 // SubscriptionHandler handles admin subscription management
 type SubscriptionHandler struct {
-	subscriptionService  *service.SubscriptionService
-	subscriptionAssigner service.DefaultSubscriptionAssigner
+	subscriptionService *service.SubscriptionService
 }
 
 // NewSubscriptionHandler creates a new admin subscription handler
 func NewSubscriptionHandler(subscriptionService *service.SubscriptionService) *SubscriptionHandler {
 	return &SubscriptionHandler{
-		subscriptionService:  subscriptionService,
-		subscriptionAssigner: subscriptionService,
+		subscriptionService: subscriptionService,
 	}
-}
-
-func NewSubscriptionHandlerWithAssigner(subscriptionService *service.SubscriptionService, subscriptionAssigner service.DefaultSubscriptionAssigner) *SubscriptionHandler {
-	h := NewSubscriptionHandler(subscriptionService)
-	if subscriptionAssigner != nil {
-		h.subscriptionAssigner = subscriptionAssigner
-	}
-	return h
 }
 
 // AssignSubscriptionRequest represents assign subscription request
@@ -154,11 +144,7 @@ func (h *SubscriptionHandler) Assign(c *gin.Context) {
 	// Get admin user ID from context
 	adminID := getAdminIDFromContext(c)
 
-	assigner := h.subscriptionAssigner
-	if assigner == nil {
-		assigner = h.subscriptionService
-	}
-	subscription, _, err := assigner.AssignOrExtendSubscription(c.Request.Context(), &service.AssignSubscriptionInput{
+	subscription, err := h.subscriptionService.AssignSubscription(c.Request.Context(), &service.AssignSubscriptionInput{
 		UserID:       req.UserID,
 		GroupID:      req.GroupID,
 		ValidityDays: req.ValidityDays,
@@ -185,46 +171,19 @@ func (h *SubscriptionHandler) BulkAssign(c *gin.Context) {
 	// Get admin user ID from context
 	adminID := getAdminIDFromContext(c)
 
-	response.Success(c, dto.BulkAssignResultFromService(h.bulkAssign(c.Request.Context(), req, adminID)))
-}
+	result, err := h.subscriptionService.BulkAssignSubscription(c.Request.Context(), &service.BulkAssignSubscriptionInput{
+		UserIDs:      req.UserIDs,
+		GroupID:      req.GroupID,
+		ValidityDays: req.ValidityDays,
+		AssignedBy:   adminID,
+		Notes:        req.Notes,
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 
-func (h *SubscriptionHandler) bulkAssign(ctx context.Context, req BulkAssignSubscriptionRequest, adminID int64) *service.BulkAssignResult {
-	result := &service.BulkAssignResult{
-		Subscriptions: make([]service.UserSubscription, 0, len(req.UserIDs)),
-		Errors:        make([]string, 0),
-		Statuses:      make(map[int64]string, len(req.UserIDs)),
-	}
-	assigner := h.subscriptionAssigner
-	if assigner == nil {
-		assigner = h.subscriptionService
-	}
-	for _, userID := range req.UserIDs {
-		sub, reused, err := assigner.AssignOrExtendSubscription(ctx, &service.AssignSubscriptionInput{
-			UserID:       userID,
-			GroupID:      req.GroupID,
-			ValidityDays: req.ValidityDays,
-			AssignedBy:   adminID,
-			Notes:        req.Notes,
-		})
-		if err != nil {
-			result.FailedCount++
-			result.Errors = append(result.Errors, "user "+strconv.FormatInt(userID, 10)+": "+err.Error())
-			result.Statuses[userID] = "failed"
-			continue
-		}
-		result.SuccessCount++
-		if sub != nil {
-			result.Subscriptions = append(result.Subscriptions, *sub)
-		}
-		if reused {
-			result.ReusedCount++
-			result.Statuses[userID] = "reused"
-		} else {
-			result.CreatedCount++
-			result.Statuses[userID] = "created"
-		}
-	}
-	return result
+	response.Success(c, dto.BulkAssignResultFromService(result))
 }
 
 // Extend handles adjusting a subscription (extend or shorten)

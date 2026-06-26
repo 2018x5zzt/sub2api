@@ -35,12 +35,6 @@ type User struct {
 	Concurrency int `json:"concurrency,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
-	// InviteCode holds the value of the "invite_code" field.
-	InviteCode *string `json:"invite_code,omitempty"`
-	// InvitedByUserID holds the value of the "invited_by_user_id" field.
-	InvitedByUserID *int64 `json:"invited_by_user_id,omitempty"`
-	// InviteBoundAt holds the value of the "invite_bound_at" field.
-	InviteBoundAt *time.Time `json:"invite_bound_at,omitempty"`
 	// Username holds the value of the "username" field.
 	Username string `json:"username,omitempty"`
 	// Notes holds the value of the "notes" field.
@@ -67,14 +61,6 @@ type User struct {
 	BalanceNotifyExtraEmails string `json:"balance_notify_extra_emails,omitempty"`
 	// TotalRecharged holds the value of the "total_recharged" field.
 	TotalRecharged float64 `json:"total_recharged,omitempty"`
-	// SubscriptionBalanceFallbackEnabled holds the value of the "subscription_balance_fallback_enabled" field.
-	SubscriptionBalanceFallbackEnabled bool `json:"subscription_balance_fallback_enabled,omitempty"`
-	// SubscriptionBalanceFallbackLimitUsd holds the value of the "subscription_balance_fallback_limit_usd" field.
-	SubscriptionBalanceFallbackLimitUsd float64 `json:"subscription_balance_fallback_limit_usd,omitempty"`
-	// SubscriptionBalanceFallbackUsedUsd holds the value of the "subscription_balance_fallback_used_usd" field.
-	SubscriptionBalanceFallbackUsedUsd float64 `json:"subscription_balance_fallback_used_usd,omitempty"`
-	// SubscriptionBalanceFallbackGroupID holds the value of the "subscription_balance_fallback_group_id" field.
-	SubscriptionBalanceFallbackGroupID *int64 `json:"subscription_balance_fallback_group_id,omitempty"`
 	// RpmLimit holds the value of the "rpm_limit" field.
 	RpmLimit int `json:"rpm_limit,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -109,13 +95,11 @@ type UserEdges struct {
 	AuthIdentities []*AuthIdentity `json:"auth_identities,omitempty"`
 	// PendingAuthSessions holds the value of the pending_auth_sessions edge.
 	PendingAuthSessions []*PendingAuthSession `json:"pending_auth_sessions,omitempty"`
-	// PlatformQuotas holds the value of the platform_quotas edge.
-	PlatformQuotas []*UserPlatformQuota `json:"platform_quotas,omitempty"`
 	// UserAllowedGroups holds the value of the user_allowed_groups edge.
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [14]bool
+	loadedTypes [13]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -226,19 +210,10 @@ func (e UserEdges) PendingAuthSessionsOrErr() ([]*PendingAuthSession, error) {
 	return nil, &NotLoadedError{edge: "pending_auth_sessions"}
 }
 
-// PlatformQuotasOrErr returns the PlatformQuotas value or an error if the edge
-// was not loaded in eager-loading.
-func (e UserEdges) PlatformQuotasOrErr() ([]*UserPlatformQuota, error) {
-	if e.loadedTypes[12] {
-		return e.PlatformQuotas, nil
-	}
-	return nil, &NotLoadedError{edge: "platform_quotas"}
-}
-
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[13] {
+	if e.loadedTypes[12] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -249,15 +224,15 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldTotpEnabled, user.FieldBalanceNotifyEnabled, user.FieldSubscriptionBalanceFallbackEnabled:
+		case user.FieldTotpEnabled, user.FieldBalanceNotifyEnabled:
 			values[i] = new(sql.NullBool)
-		case user.FieldBalance, user.FieldBalanceNotifyThreshold, user.FieldTotalRecharged, user.FieldSubscriptionBalanceFallbackLimitUsd, user.FieldSubscriptionBalanceFallbackUsedUsd:
+		case user.FieldBalance, user.FieldBalanceNotifyThreshold, user.FieldTotalRecharged:
 			values[i] = new(sql.NullFloat64)
-		case user.FieldID, user.FieldConcurrency, user.FieldInvitedByUserID, user.FieldSubscriptionBalanceFallbackGroupID, user.FieldRpmLimit:
+		case user.FieldID, user.FieldConcurrency, user.FieldRpmLimit:
 			values[i] = new(sql.NullInt64)
-		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldInviteCode, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldSignupSource, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails:
+		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldSignupSource, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails:
 			values[i] = new(sql.NullString)
-		case user.FieldCreatedAt, user.FieldUpdatedAt, user.FieldDeletedAt, user.FieldInviteBoundAt, user.FieldTotpEnabledAt, user.FieldLastLoginAt, user.FieldLastActiveAt:
+		case user.FieldCreatedAt, user.FieldUpdatedAt, user.FieldDeletedAt, user.FieldTotpEnabledAt, user.FieldLastLoginAt, user.FieldLastActiveAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -334,27 +309,6 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
-			}
-		case user.FieldInviteCode:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field invite_code", values[i])
-			} else if value.Valid {
-				_m.InviteCode = new(string)
-				*_m.InviteCode = value.String
-			}
-		case user.FieldInvitedByUserID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field invited_by_user_id", values[i])
-			} else if value.Valid {
-				_m.InvitedByUserID = new(int64)
-				*_m.InvitedByUserID = value.Int64
-			}
-		case user.FieldInviteBoundAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field invite_bound_at", values[i])
-			} else if value.Valid {
-				_m.InviteBoundAt = new(time.Time)
-				*_m.InviteBoundAt = value.Time
 			}
 		case user.FieldUsername:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -439,31 +393,6 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.TotalRecharged = value.Float64
 			}
-		case user.FieldSubscriptionBalanceFallbackEnabled:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field subscription_balance_fallback_enabled", values[i])
-			} else if value.Valid {
-				_m.SubscriptionBalanceFallbackEnabled = value.Bool
-			}
-		case user.FieldSubscriptionBalanceFallbackLimitUsd:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field subscription_balance_fallback_limit_usd", values[i])
-			} else if value.Valid {
-				_m.SubscriptionBalanceFallbackLimitUsd = value.Float64
-			}
-		case user.FieldSubscriptionBalanceFallbackUsedUsd:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
-				return fmt.Errorf("unexpected type %T for field subscription_balance_fallback_used_usd", values[i])
-			} else if value.Valid {
-				_m.SubscriptionBalanceFallbackUsedUsd = value.Float64
-			}
-		case user.FieldSubscriptionBalanceFallbackGroupID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field subscription_balance_fallback_group_id", values[i])
-			} else if value.Valid {
-				_m.SubscriptionBalanceFallbackGroupID = new(int64)
-				*_m.SubscriptionBalanceFallbackGroupID = value.Int64
-			}
 		case user.FieldRpmLimit:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field rpm_limit", values[i])
@@ -543,11 +472,6 @@ func (_m *User) QueryPendingAuthSessions() *PendingAuthSessionQuery {
 	return NewUserClient(_m.config).QueryPendingAuthSessions(_m)
 }
 
-// QueryPlatformQuotas queries the "platform_quotas" edge of the User entity.
-func (_m *User) QueryPlatformQuotas() *UserPlatformQuotaQuery {
-	return NewUserClient(_m.config).QueryPlatformQuotas(_m)
-}
-
 // QueryUserAllowedGroups queries the "user_allowed_groups" edge of the User entity.
 func (_m *User) QueryUserAllowedGroups() *UserAllowedGroupQuery {
 	return NewUserClient(_m.config).QueryUserAllowedGroups(_m)
@@ -605,21 +529,6 @@ func (_m *User) String() string {
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
 	builder.WriteString(", ")
-	if v := _m.InviteCode; v != nil {
-		builder.WriteString("invite_code=")
-		builder.WriteString(*v)
-	}
-	builder.WriteString(", ")
-	if v := _m.InvitedByUserID; v != nil {
-		builder.WriteString("invited_by_user_id=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	if v := _m.InviteBoundAt; v != nil {
-		builder.WriteString("invite_bound_at=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
-	builder.WriteString(", ")
 	builder.WriteString("username=")
 	builder.WriteString(_m.Username)
 	builder.WriteString(", ")
@@ -668,20 +577,6 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("total_recharged=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TotalRecharged))
-	builder.WriteString(", ")
-	builder.WriteString("subscription_balance_fallback_enabled=")
-	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionBalanceFallbackEnabled))
-	builder.WriteString(", ")
-	builder.WriteString("subscription_balance_fallback_limit_usd=")
-	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionBalanceFallbackLimitUsd))
-	builder.WriteString(", ")
-	builder.WriteString("subscription_balance_fallback_used_usd=")
-	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionBalanceFallbackUsedUsd))
-	builder.WriteString(", ")
-	if v := _m.SubscriptionBalanceFallbackGroupID; v != nil {
-		builder.WriteString("subscription_balance_fallback_group_id=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
 	builder.WriteString(", ")
 	builder.WriteString("rpm_limit=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RpmLimit))

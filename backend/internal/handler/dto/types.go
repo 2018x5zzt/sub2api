@@ -1,8 +1,6 @@
 package dto
 
 import (
-	"bytes"
-	"encoding/json"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
@@ -20,18 +18,13 @@ type User struct {
 	LastActiveAt  *time.Time `json:"last_active_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
-	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
 
 	// 余额不足通知
-	BalanceNotifyEnabled                bool               `json:"balance_notify_enabled"`
-	BalanceNotifyThresholdType          string             `json:"balance_notify_threshold_type"`
-	BalanceNotifyThreshold              *float64           `json:"balance_notify_threshold"`
-	BalanceNotifyExtraEmails            []NotifyEmailEntry `json:"balance_notify_extra_emails"`
-	TotalRecharged                      float64            `json:"total_recharged"`
-	SubscriptionBalanceFallbackEnabled  bool               `json:"subscription_balance_fallback_enabled"`
-	SubscriptionBalanceFallbackLimitUSD float64            `json:"subscription_balance_fallback_limit_usd"`
-	SubscriptionBalanceFallbackUsedUSD  float64            `json:"subscription_balance_fallback_used_usd"`
-	SubscriptionBalanceFallbackGroupID  *int64             `json:"subscription_balance_fallback_group_id"`
+	BalanceNotifyEnabled       bool               `json:"balance_notify_enabled"`
+	BalanceNotifyThresholdType string             `json:"balance_notify_threshold_type"`
+	BalanceNotifyThreshold     *float64           `json:"balance_notify_threshold"`
+	BalanceNotifyExtraEmails   []NotifyEmailEntry `json:"balance_notify_extra_emails"`
+	TotalRecharged             float64            `json:"total_recharged"`
 
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制），仅在所用分组未设置 rpm_limit 时作为兜底生效。
 	RPMLimit int `json:"rpm_limit"`
@@ -53,22 +46,20 @@ type AdminUser struct {
 }
 
 type APIKey struct {
-	ID                        int64      `json:"id"`
-	UserID                    int64      `json:"user_id"`
-	Key                       string     `json:"key"`
-	Name                      string     `json:"name"`
-	GroupID                   *int64     `json:"group_id"`
-	SubscriptionProductFamily *string    `json:"subscription_product_family"`
-	BudgetMultiplier          *float64   `json:"budget_multiplier,omitempty"`
-	Status                    string     `json:"status"`
-	IPWhitelist               []string   `json:"ip_whitelist"`
-	IPBlacklist               []string   `json:"ip_blacklist"`
-	LastUsedAt                *time.Time `json:"last_used_at"`
-	Quota                     float64    `json:"quota"`      // Quota limit in USD (0 = unlimited)
-	QuotaUsed                 float64    `json:"quota_used"` // Used quota amount in USD
-	ExpiresAt                 *time.Time `json:"expires_at"` // Expiration time (nil = never expires)
-	CreatedAt                 time.Time  `json:"created_at"`
-	UpdatedAt                 time.Time  `json:"updated_at"`
+	ID          int64      `json:"id"`
+	UserID      int64      `json:"user_id"`
+	Key         string     `json:"key"`
+	Name        string     `json:"name"`
+	GroupID     *int64     `json:"group_id"`
+	Status      string     `json:"status"`
+	IPWhitelist []string   `json:"ip_whitelist"`
+	IPBlacklist []string   `json:"ip_blacklist"`
+	LastUsedAt  *time.Time `json:"last_used_at"`
+	Quota       float64    `json:"quota"`      // Quota limit in USD (0 = unlimited)
+	QuotaUsed   float64    `json:"quota_used"` // Used quota amount in USD
+	ExpiresAt   *time.Time `json:"expires_at"` // Expiration time (nil = never expires)
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 
 	// Rate limit fields
 	RateLimit5h   float64    `json:"rate_limit_5h"`
@@ -97,28 +88,21 @@ type Group struct {
 	IsExclusive    bool    `json:"is_exclusive"`
 	Status         string  `json:"status"`
 
-	PricingMode             string   `json:"pricing_mode"`
-	DefaultBudgetMultiplier *float64 `json:"default_budget_multiplier,omitempty"`
-
 	SubscriptionType string   `json:"subscription_type"`
 	DailyLimitUSD    *float64 `json:"daily_limit_usd"`
 	WeeklyLimitUSD   *float64 `json:"weekly_limit_usd"`
 	MonthlyLimitUSD  *float64 `json:"monthly_limit_usd"`
 
 	// 图片生成计费配置（仅 antigravity 平台使用）
-	AllowImageGeneration bool     `json:"allow_image_generation"`
-	ImageRateIndependent bool     `json:"image_rate_independent"`
-	ImageRateMultiplier  float64  `json:"image_rate_multiplier"`
-	ImagePrice1K         *float64 `json:"image_price_1k"`
-	ImagePrice2K         *float64 `json:"image_price_2k"`
-	ImagePrice4K         *float64 `json:"image_price_4k"`
+	ImagePrice1K *float64 `json:"image_price_1k"`
+	ImagePrice2K *float64 `json:"image_price_2k"`
+	ImagePrice4K *float64 `json:"image_price_4k"`
 
 	// Claude Code 客户端限制
 	ClaudeCodeOnly  bool   `json:"claude_code_only"`
 	FallbackGroupID *int64 `json:"fallback_group_id"`
 	// 无效请求兜底分组
 	FallbackGroupIDOnInvalidRequest *int64 `json:"fallback_group_id_on_invalid_request"`
-	BalanceFallbackGroupID          *int64 `json:"balance_fallback_group_id"`
 
 	// OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
 	AllowMessagesDispatch bool `json:"allow_messages_dispatch"`
@@ -132,6 +116,26 @@ type Group struct {
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type SupportedModel struct {
+	ID          string                 `json:"id"`
+	DisplayName string                 `json:"display_name"`
+	Pricing     *SupportedModelPricing `json:"pricing,omitempty"`
+}
+
+type SupportedModelPricing struct {
+	Currency                    string   `json:"currency"`
+	InputPricePerMillionTokens  *float64 `json:"input_price_per_million_tokens,omitempty"`
+	OutputPricePerMillionTokens *float64 `json:"output_price_per_million_tokens,omitempty"`
+}
+
+type GroupModelCatalog struct {
+	Group                   Group            `json:"group"`
+	Models                  []SupportedModel `json:"models"`
+	Source                  string           `json:"source"`
+	EffectiveRateMultiplier float64          `json:"effective_rate_multiplier"`
+	UserRateMultiplier      *float64         `json:"user_rate_multiplier,omitempty"`
 }
 
 // AdminGroup 是管理员接口使用的 group DTO（包含敏感/内部字段）。
@@ -149,7 +153,6 @@ type AdminGroup struct {
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
 	DefaultMappedModel          string                                   `json:"default_mapped_model"`
 	MessagesDispatchModelConfig domain.OpenAIMessagesDispatchModelConfig `json:"messages_dispatch_model_config"`
-	ModelsListConfig            domain.GroupModelsListConfig             `json:"models_list_config"`
 
 	// 支持的模型系列（仅 antigravity 平台使用）
 	SupportedModelScopes    []string       `json:"supported_model_scopes"`
@@ -163,30 +166,25 @@ type AdminGroup struct {
 }
 
 type Account struct {
-	ID       int64   `json:"id"`
-	Name     string  `json:"name"`
-	Notes    *string `json:"notes"`
-	Platform string  `json:"platform"`
-	Type     string  `json:"type"`
-	// Credentials 经 RedactCredentials 处理后只含非敏感子键；敏感 token / api_key / 私钥
-	// 的存在性通过 CredentialsStatus（has_<key>）暴露，原始值不返回前端。
-	Credentials             map[string]any  `json:"credentials"`
-	CredentialsStatus       map[string]bool `json:"credentials_status,omitempty"`
-	Extra                   map[string]any  `json:"extra"`
-	ProxyID                 *int64          `json:"proxy_id"`
-	ProxyFallbackOriginID   *int64          `json:"proxy_fallback_origin_id"`
-	ProxyFallbackOriginName *string         `json:"proxy_fallback_origin_name,omitempty"`
-	Concurrency             int             `json:"concurrency"`
-	LoadFactor              *int            `json:"load_factor,omitempty"`
-	Priority                int             `json:"priority"`
-	RateMultiplier          float64         `json:"rate_multiplier"`
-	Status                  string          `json:"status"`
-	ErrorMessage            string          `json:"error_message"`
-	LastUsedAt              *time.Time      `json:"last_used_at"`
-	ExpiresAt               *int64          `json:"expires_at"`
-	AutoPauseOnExpired      bool            `json:"auto_pause_on_expired"`
-	CreatedAt               time.Time       `json:"created_at"`
-	UpdatedAt               time.Time       `json:"updated_at"`
+	ID                 int64          `json:"id"`
+	Name               string         `json:"name"`
+	Notes              *string        `json:"notes"`
+	Platform           string         `json:"platform"`
+	Type               string         `json:"type"`
+	Credentials        map[string]any `json:"credentials"`
+	Extra              map[string]any `json:"extra"`
+	ProxyID            *int64         `json:"proxy_id"`
+	Concurrency        int            `json:"concurrency"`
+	LoadFactor         *int           `json:"load_factor,omitempty"`
+	Priority           int            `json:"priority"`
+	RateMultiplier     float64        `json:"rate_multiplier"`
+	Status             string         `json:"status"`
+	ErrorMessage       string         `json:"error_message"`
+	LastUsedAt         *time.Time     `json:"last_used_at"`
+	ExpiresAt          *int64         `json:"expires_at"`
+	AutoPauseOnExpired bool           `json:"auto_pause_on_expired"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
 
 	Schedulable bool `json:"schedulable"`
 
@@ -292,11 +290,6 @@ type Proxy struct {
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-
-	ExpiresAt      *time.Time `json:"expires_at"`
-	FallbackMode   string     `json:"fallback_mode"`
-	BackupProxyID  *int64     `json:"backup_proxy_id"`
-	ExpiryWarnDays int        `json:"expiry_warn_days"`
 }
 
 type ProxyWithAccountCount struct {
@@ -352,19 +345,16 @@ type ProxyAccountSummary struct {
 }
 
 type RedeemCode struct {
-	ID           int64      `json:"id"`
-	Code         string     `json:"code"`
-	Type         string     `json:"type"`
-	Value        float64    `json:"value"`
-	Status       string     `json:"status"`
-	SourceType   string     `json:"source_type"`
-	UsedBy       *int64     `json:"used_by"`
-	UsedAt       *time.Time `json:"used_at"`
-	CreatedAt    time.Time  `json:"created_at"`
-	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	ID        int64      `json:"id"`
+	Code      string     `json:"code"`
+	Type      string     `json:"type"`
+	Value     float64    `json:"value"`
+	Status    string     `json:"status"`
+	UsedBy    *int64     `json:"used_by"`
+	UsedAt    *time.Time `json:"used_at"`
+	CreatedAt time.Time  `json:"created_at"`
 
 	GroupID      *int64 `json:"group_id"`
-	ProductID    *int64 `json:"product_id"`
 	ValidityDays int    `json:"validity_days"`
 
 	// Notes is only populated for admin_balance/admin_concurrency types
@@ -381,59 +371,6 @@ type AdminRedeemCode struct {
 	RedeemCode
 
 	Notes string `json:"notes"`
-}
-
-type NullableTimeField struct {
-	Set   bool
-	Value *time.Time
-}
-
-func (f *NullableTimeField) UnmarshalJSON(data []byte) error {
-	f.Set = true
-	if bytes.Equal(data, []byte("null")) {
-		f.Value = nil
-		return nil
-	}
-	var value time.Time
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	f.Value = &value
-	return nil
-}
-
-type NullableInt64Field struct {
-	Set   bool
-	Value *int64
-}
-
-func (f *NullableInt64Field) UnmarshalJSON(data []byte) error {
-	f.Set = true
-	if bytes.Equal(data, []byte("null")) {
-		f.Value = nil
-		return nil
-	}
-	var value int64
-	if err := json.Unmarshal(data, &value); err != nil {
-		return err
-	}
-	f.Value = &value
-	return nil
-}
-
-type BatchUpdateRedeemCodeFields struct {
-	Status    *string            `json:"status,omitempty"`
-	ExpiresAt NullableTimeField  `json:"expires_at,omitempty"`
-	Notes     *string            `json:"notes,omitempty"`
-	GroupID   NullableInt64Field `json:"group_id,omitempty"`
-
-	Type  *string  `json:"type,omitempty"`
-	Value *float64 `json:"value,omitempty"`
-}
-
-type BatchUpdateRedeemCodesRequest struct {
-	IDs    []int64                     `json:"ids" binding:"required,min=1"`
-	Fields BatchUpdateRedeemCodeFields `json:"fields" binding:"required"`
 }
 
 // UsageLog 是普通用户接口使用的 usage log DTO（不包含管理员字段）。
@@ -481,15 +418,9 @@ type UsageLog struct {
 	FirstTokenMs *int   `json:"first_token_ms"`
 
 	// 图片生成字段
-	ImageCount         int            `json:"image_count"`
-	ImageSize          *string        `json:"image_size"`
-	ImageInputSize     *string        `json:"image_input_size"`
-	ImageOutputSize    *string        `json:"image_output_size"`
-	ImageOutputTokens  int            `json:"image_output_tokens"`
-	ImageOutputCost    float64        `json:"image_output_cost"`
-	ImageSizeSource    *string        `json:"image_size_source"`
-	ImageSizeBreakdown map[string]int `json:"image_size_breakdown"`
-	MediaType          *string        `json:"media_type"`
+	ImageCount int     `json:"image_count"`
+	ImageSize  *string `json:"image_size"`
+	MediaType  *string `json:"media_type"`
 
 	// User-Agent
 	UserAgent *string `json:"user_agent"`
@@ -625,25 +556,32 @@ type BulkAssignResult struct {
 
 // PromoCode 注册优惠码
 type PromoCode struct {
-	ID          int64      `json:"id"`
-	Code        string     `json:"code"`
-	BonusAmount float64    `json:"bonus_amount"`
-	MaxUses     int        `json:"max_uses"`
-	UsedCount   int        `json:"used_count"`
-	Status      string     `json:"status"`
-	ExpiresAt   *time.Time `json:"expires_at"`
-	Notes       string     `json:"notes"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID                    int64      `json:"id"`
+	Code                  string     `json:"code"`
+	Scene                 string     `json:"scene"`
+	BonusAmount           float64    `json:"bonus_amount"`
+	RandomBonusPoolAmount float64    `json:"random_bonus_pool_amount"`
+	RandomBonusRemaining  float64    `json:"random_bonus_remaining"`
+	MaxUses               int        `json:"max_uses"`
+	UsedCount             int        `json:"used_count"`
+	LeaderboardEnabled    bool       `json:"leaderboard_enabled"`
+	Status                string     `json:"status"`
+	ExpiresAt             *time.Time `json:"expires_at"`
+	SuccessMessage        string     `json:"success_message"`
+	Notes                 string     `json:"notes"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
 }
 
 // PromoCodeUsage 优惠码使用记录
 type PromoCodeUsage struct {
-	ID          int64     `json:"id"`
-	PromoCodeID int64     `json:"promo_code_id"`
-	UserID      int64     `json:"user_id"`
-	BonusAmount float64   `json:"bonus_amount"`
-	UsedAt      time.Time `json:"used_at"`
+	ID                int64     `json:"id"`
+	PromoCodeID       int64     `json:"promo_code_id"`
+	UserID            int64     `json:"user_id"`
+	BonusAmount       float64   `json:"bonus_amount"`
+	FixedBonusAmount  float64   `json:"fixed_bonus_amount"`
+	RandomBonusAmount float64   `json:"random_bonus_amount"`
+	UsedAt            time.Time `json:"used_at"`
 
 	User *User `json:"user,omitempty"`
 }

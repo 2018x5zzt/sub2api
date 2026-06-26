@@ -78,27 +78,6 @@ func (_u *AccountGroupUpdate) AddPriority(v int) *AccountGroupUpdate {
 	return _u
 }
 
-// SetBillingMultiplier sets the "billing_multiplier" field.
-func (_u *AccountGroupUpdate) SetBillingMultiplier(v float64) *AccountGroupUpdate {
-	_u.mutation.ResetBillingMultiplier()
-	_u.mutation.SetBillingMultiplier(v)
-	return _u
-}
-
-// SetNillableBillingMultiplier sets the "billing_multiplier" field if the given value is not nil.
-func (_u *AccountGroupUpdate) SetNillableBillingMultiplier(v *float64) *AccountGroupUpdate {
-	if v != nil {
-		_u.SetBillingMultiplier(*v)
-	}
-	return _u
-}
-
-// AddBillingMultiplier adds value to the "billing_multiplier" field.
-func (_u *AccountGroupUpdate) AddBillingMultiplier(v float64) *AccountGroupUpdate {
-	_u.mutation.AddBillingMultiplier(v)
-	return _u
-}
-
 // SetAccount sets the "account" edge to the Account entity.
 func (_u *AccountGroupUpdate) SetAccount(v *Account) *AccountGroupUpdate {
 	return _u.SetAccountID(v.ID)
@@ -181,12 +160,6 @@ func (_u *AccountGroupUpdate) sqlSave(ctx context.Context) (_node int, err error
 	}
 	if value, ok := _u.mutation.AddedPriority(); ok {
 		_spec.AddField(accountgroup.FieldPriority, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.BillingMultiplier(); ok {
-		_spec.SetField(accountgroup.FieldBillingMultiplier, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedBillingMultiplier(); ok {
-		_spec.AddField(accountgroup.FieldBillingMultiplier, field.TypeFloat64, value)
 	}
 	if _u.mutation.AccountCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -315,27 +288,6 @@ func (_u *AccountGroupUpdateOne) AddPriority(v int) *AccountGroupUpdateOne {
 	return _u
 }
 
-// SetBillingMultiplier sets the "billing_multiplier" field.
-func (_u *AccountGroupUpdateOne) SetBillingMultiplier(v float64) *AccountGroupUpdateOne {
-	_u.mutation.ResetBillingMultiplier()
-	_u.mutation.SetBillingMultiplier(v)
-	return _u
-}
-
-// SetNillableBillingMultiplier sets the "billing_multiplier" field if the given value is not nil.
-func (_u *AccountGroupUpdateOne) SetNillableBillingMultiplier(v *float64) *AccountGroupUpdateOne {
-	if v != nil {
-		_u.SetBillingMultiplier(*v)
-	}
-	return _u
-}
-
-// AddBillingMultiplier adds value to the "billing_multiplier" field.
-func (_u *AccountGroupUpdateOne) AddBillingMultiplier(v float64) *AccountGroupUpdateOne {
-	_u.mutation.AddBillingMultiplier(v)
-	return _u
-}
-
 // SetAccount sets the "account" edge to the Account entity.
 func (_u *AccountGroupUpdateOne) SetAccount(v *Account) *AccountGroupUpdateOne {
 	return _u.SetAccountID(v.ID)
@@ -450,12 +402,6 @@ func (_u *AccountGroupUpdateOne) sqlSave(ctx context.Context) (_node *AccountGro
 	}
 	if value, ok := _u.mutation.AddedPriority(); ok {
 		_spec.AddField(accountgroup.FieldPriority, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.BillingMultiplier(); ok {
-		_spec.SetField(accountgroup.FieldBillingMultiplier, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedBillingMultiplier(); ok {
-		_spec.AddField(accountgroup.FieldBillingMultiplier, field.TypeFloat64, value)
 	}
 	if _u.mutation.AccountCleared() {
 		edge := &sqlgraph.EdgeSpec{

@@ -4,7 +4,6 @@ package service
 
 import (
 	"context"
-	"slices"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -54,14 +53,14 @@ func TestSettingService_GetPublicSettings_ExposesRegistrationEmailSuffixWhitelis
 		values: map[string]string{
 			SettingKeyRegistrationEnabled:              "true",
 			SettingKeyEmailVerifyEnabled:               "true",
-			SettingKeyRegistrationEmailSuffixWhitelist: `["@EXAMPLE.com"," @foo.bar ","*.EDU.CN","@invalid_domain",""]`,
+			SettingKeyRegistrationEmailSuffixWhitelist: `["@EXAMPLE.com"," @foo.bar ","@invalid_domain",""]`,
 		},
 	}
 	svc := NewSettingService(repo, &config.Config{})
 
 	settings, err := svc.GetPublicSettings(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, []string{"@example.com", "@foo.bar", "*.edu.cn"}, settings.RegistrationEmailSuffixWhitelist)
+	require.Equal(t, []string{"@example.com", "@foo.bar"}, settings.RegistrationEmailSuffixWhitelist)
 }
 
 func TestSettingService_GetPublicSettings_ExposesTablePreferences(t *testing.T) {
@@ -90,44 +89,6 @@ func TestSettingService_GetPublicSettings_ExposesForceEmailOnThirdPartySignup(t 
 	settings, err := svc.GetPublicSettings(context.Background())
 	require.NoError(t, err)
 	require.True(t, settings.ForceEmailOnThirdPartySignup)
-}
-
-func TestSettingService_GetFrameSrcOrigins_IncludesImageStudioOrigins(t *testing.T) {
-	svc := NewSettingService(&settingPublicRepoStub{
-		values: map[string]string{
-			SettingKeyCustomMenuItems: `[{"id":"image-studio","label":"创作图片","url":"/image-studio","visibility":"user","sort_order":0}]`,
-		},
-	}, &config.Config{})
-
-	origins, err := svc.GetFrameSrcOrigins(context.Background())
-	require.NoError(t, err)
-	require.True(t, slices.Contains(origins, "https://ai.mikuapi.org"))
-	require.True(t, slices.Contains(origins, "https://iframe.mikuapi.org"))
-}
-
-func TestSettingService_GetFrameSrcOrigins_IncludesImageStudioOriginsWithoutCustomMenu(t *testing.T) {
-	svc := NewSettingService(&settingPublicRepoStub{
-		values: map[string]string{},
-	}, &config.Config{})
-
-	origins, err := svc.GetFrameSrcOrigins(context.Background())
-	require.NoError(t, err)
-	require.True(t, slices.Contains(origins, "https://ai.mikuapi.org"))
-	require.True(t, slices.Contains(origins, "https://iframe.mikuapi.org"))
-}
-
-func TestSettingService_GetPublicSettings_ExposesAllowUserViewErrorRequests(t *testing.T) {
-	repo := &settingPublicRepoStub{
-		values: map[string]string{
-			SettingKeyAllowUserViewErrorRequests: "true",
-		},
-	}
-	svc := NewSettingService(repo, &config.Config{})
-
-	settings, err := svc.GetPublicSettings(context.Background())
-	require.NoError(t, err)
-	require.True(t, settings.AllowUserViewErrorRequests)
-
 }
 
 func TestSettingService_GetPublicSettings_ExposesWeChatOAuthModeCapabilities(t *testing.T) {

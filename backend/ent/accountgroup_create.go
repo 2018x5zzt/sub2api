@@ -50,20 +50,6 @@ func (_c *AccountGroupCreate) SetNillablePriority(v *int) *AccountGroupCreate {
 	return _c
 }
 
-// SetBillingMultiplier sets the "billing_multiplier" field.
-func (_c *AccountGroupCreate) SetBillingMultiplier(v float64) *AccountGroupCreate {
-	_c.mutation.SetBillingMultiplier(v)
-	return _c
-}
-
-// SetNillableBillingMultiplier sets the "billing_multiplier" field if the given value is not nil.
-func (_c *AccountGroupCreate) SetNillableBillingMultiplier(v *float64) *AccountGroupCreate {
-	if v != nil {
-		_c.SetBillingMultiplier(*v)
-	}
-	return _c
-}
-
 // SetCreatedAt sets the "created_at" field.
 func (_c *AccountGroupCreate) SetCreatedAt(v time.Time) *AccountGroupCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -127,10 +113,6 @@ func (_c *AccountGroupCreate) defaults() {
 		v := accountgroup.DefaultPriority
 		_c.mutation.SetPriority(v)
 	}
-	if _, ok := _c.mutation.BillingMultiplier(); !ok {
-		v := accountgroup.DefaultBillingMultiplier
-		_c.mutation.SetBillingMultiplier(v)
-	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := accountgroup.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -147,9 +129,6 @@ func (_c *AccountGroupCreate) check() error {
 	}
 	if _, ok := _c.mutation.Priority(); !ok {
 		return &ValidationError{Name: "priority", err: errors.New(`ent: missing required field "AccountGroup.priority"`)}
-	}
-	if _, ok := _c.mutation.BillingMultiplier(); !ok {
-		return &ValidationError{Name: "billing_multiplier", err: errors.New(`ent: missing required field "AccountGroup.billing_multiplier"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "AccountGroup.created_at"`)}
@@ -186,10 +165,6 @@ func (_c *AccountGroupCreate) createSpec() (*AccountGroup, *sqlgraph.CreateSpec)
 	if value, ok := _c.mutation.Priority(); ok {
 		_spec.SetField(accountgroup.FieldPriority, field.TypeInt, value)
 		_node.Priority = value
-	}
-	if value, ok := _c.mutation.BillingMultiplier(); ok {
-		_spec.SetField(accountgroup.FieldBillingMultiplier, field.TypeFloat64, value)
-		_node.BillingMultiplier = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(accountgroup.FieldCreatedAt, field.TypeTime, value)
@@ -323,24 +298,6 @@ func (u *AccountGroupUpsert) AddPriority(v int) *AccountGroupUpsert {
 	return u
 }
 
-// SetBillingMultiplier sets the "billing_multiplier" field.
-func (u *AccountGroupUpsert) SetBillingMultiplier(v float64) *AccountGroupUpsert {
-	u.Set(accountgroup.FieldBillingMultiplier, v)
-	return u
-}
-
-// UpdateBillingMultiplier sets the "billing_multiplier" field to the value that was provided on create.
-func (u *AccountGroupUpsert) UpdateBillingMultiplier() *AccountGroupUpsert {
-	u.SetExcluded(accountgroup.FieldBillingMultiplier)
-	return u
-}
-
-// AddBillingMultiplier adds v to the "billing_multiplier" field.
-func (u *AccountGroupUpsert) AddBillingMultiplier(v float64) *AccountGroupUpsert {
-	u.Add(accountgroup.FieldBillingMultiplier, v)
-	return u
-}
-
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -432,27 +389,6 @@ func (u *AccountGroupUpsertOne) AddPriority(v int) *AccountGroupUpsertOne {
 func (u *AccountGroupUpsertOne) UpdatePriority() *AccountGroupUpsertOne {
 	return u.Update(func(s *AccountGroupUpsert) {
 		s.UpdatePriority()
-	})
-}
-
-// SetBillingMultiplier sets the "billing_multiplier" field.
-func (u *AccountGroupUpsertOne) SetBillingMultiplier(v float64) *AccountGroupUpsertOne {
-	return u.Update(func(s *AccountGroupUpsert) {
-		s.SetBillingMultiplier(v)
-	})
-}
-
-// AddBillingMultiplier adds v to the "billing_multiplier" field.
-func (u *AccountGroupUpsertOne) AddBillingMultiplier(v float64) *AccountGroupUpsertOne {
-	return u.Update(func(s *AccountGroupUpsert) {
-		s.AddBillingMultiplier(v)
-	})
-}
-
-// UpdateBillingMultiplier sets the "billing_multiplier" field to the value that was provided on create.
-func (u *AccountGroupUpsertOne) UpdateBillingMultiplier() *AccountGroupUpsertOne {
-	return u.Update(func(s *AccountGroupUpsert) {
-		s.UpdateBillingMultiplier()
 	})
 }
 
@@ -690,27 +626,6 @@ func (u *AccountGroupUpsertBulk) AddPriority(v int) *AccountGroupUpsertBulk {
 func (u *AccountGroupUpsertBulk) UpdatePriority() *AccountGroupUpsertBulk {
 	return u.Update(func(s *AccountGroupUpsert) {
 		s.UpdatePriority()
-	})
-}
-
-// SetBillingMultiplier sets the "billing_multiplier" field.
-func (u *AccountGroupUpsertBulk) SetBillingMultiplier(v float64) *AccountGroupUpsertBulk {
-	return u.Update(func(s *AccountGroupUpsert) {
-		s.SetBillingMultiplier(v)
-	})
-}
-
-// AddBillingMultiplier adds v to the "billing_multiplier" field.
-func (u *AccountGroupUpsertBulk) AddBillingMultiplier(v float64) *AccountGroupUpsertBulk {
-	return u.Update(func(s *AccountGroupUpsert) {
-		s.AddBillingMultiplier(v)
-	})
-}
-
-// UpdateBillingMultiplier sets the "billing_multiplier" field to the value that was provided on create.
-func (u *AccountGroupUpsertBulk) UpdateBillingMultiplier() *AccountGroupUpsertBulk {
-	return u.Update(func(s *AccountGroupUpsert) {
-		s.UpdateBillingMultiplier()
 	})
 }
 

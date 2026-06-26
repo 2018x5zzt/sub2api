@@ -31,8 +31,6 @@ func RegisterUserRoutes(
 			user.POST("/account-bindings/email", h.User.BindEmailIdentity)
 			user.DELETE("/account-bindings/:provider", h.User.UnbindIdentity)
 			user.POST("/auth-identities/bind/start", h.User.StartIdentityBinding)
-			user.GET("/api-keys/:id/usage/daily", h.Usage.GetMyAPIKeyDailyUsage)
-			user.GET("/platform-quotas", h.User.GetMyPlatformQuotas)
 
 			// 通知邮箱管理
 			notifyEmail := user.Group("/notify-email")
@@ -69,6 +67,7 @@ func RegisterUserRoutes(
 		groups := authenticated.Group("/groups")
 		{
 			groups.GET("/available", h.APIKey.GetAvailableGroups)
+			groups.GET("/models", h.APIKey.GetAvailableGroupModels)
 			groups.GET("/rates", h.APIKey.GetUserGroupRates)
 		}
 
@@ -82,8 +81,6 @@ func RegisterUserRoutes(
 		usage := authenticated.Group("/usage")
 		{
 			usage.GET("", h.Usage.List)
-			usage.GET("/errors", h.Usage.ListErrors)
-			usage.GET("/errors/:id", h.Usage.GetErrorDetail)
 			usage.GET("/:id", h.Usage.GetByID)
 			usage.GET("/stats", h.Usage.Stats)
 			// User dashboard endpoints
@@ -104,14 +101,8 @@ func RegisterUserRoutes(
 		redeem := authenticated.Group("/redeem")
 		{
 			redeem.POST("", h.Redeem.Redeem)
+			redeem.POST("/benefit-leaderboard", h.Redeem.GetBenefitLeaderboard)
 			redeem.GET("/history", h.Redeem.GetHistory)
-		}
-
-		// 邀请返利
-		invite := authenticated.Group("/invite")
-		{
-			invite.GET("/summary", h.Invite.GetSummary)
-			invite.GET("/rewards", h.Invite.ListRewards)
 		}
 
 		// 用户订阅
@@ -121,13 +112,6 @@ func RegisterUserRoutes(
 			subscriptions.GET("/active", h.Subscription.GetActive)
 			subscriptions.GET("/progress", h.Subscription.GetProgress)
 			subscriptions.GET("/summary", h.Subscription.GetSummary)
-		}
-
-		subscriptionProducts := authenticated.Group("/subscription-products")
-		{
-			subscriptionProducts.GET("/active", h.SubscriptionProduct.GetActive)
-			subscriptionProducts.GET("/progress", h.SubscriptionProduct.GetProgress)
-			subscriptionProducts.GET("/summary", h.SubscriptionProduct.GetSummary)
 		}
 
 		// 渠道监控（用户只读）

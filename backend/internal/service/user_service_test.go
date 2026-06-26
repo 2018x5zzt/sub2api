@@ -55,55 +55,6 @@ type mockUserSettingRepo struct {
 	values map[string]string
 }
 
-type mockUserGroupRepo struct {
-	groups map[int64]*Group
-}
-
-func (m *mockUserGroupRepo) Create(context.Context, *Group) error { return nil }
-func (m *mockUserGroupRepo) GetByID(_ context.Context, id int64) (*Group, error) {
-	if group, ok := m.groups[id]; ok {
-		cloned := *group
-		return &cloned, nil
-	}
-	return nil, ErrGroupNotFound
-}
-func (m *mockUserGroupRepo) GetByIDLite(ctx context.Context, id int64) (*Group, error) {
-	return m.GetByID(ctx, id)
-}
-func (m *mockUserGroupRepo) Update(context.Context, *Group) error { return nil }
-func (m *mockUserGroupRepo) Delete(context.Context, int64) error  { return nil }
-func (m *mockUserGroupRepo) DeleteCascade(context.Context, int64) ([]int64, error) {
-	return nil, nil
-}
-func (m *mockUserGroupRepo) List(context.Context, pagination.PaginationParams) ([]Group, *pagination.PaginationResult, error) {
-	return nil, nil, nil
-}
-func (m *mockUserGroupRepo) ListWithFilters(context.Context, pagination.PaginationParams, string, string, string, *bool) ([]Group, *pagination.PaginationResult, error) {
-	return nil, nil, nil
-}
-func (m *mockUserGroupRepo) ListActive(context.Context) ([]Group, error) { return nil, nil }
-func (m *mockUserGroupRepo) ListActiveByPlatform(context.Context, string) ([]Group, error) {
-	return nil, nil
-}
-func (m *mockUserGroupRepo) ExistsByName(context.Context, string) (bool, error) {
-	return false, nil
-}
-func (m *mockUserGroupRepo) GetAccountCount(context.Context, int64) (int64, int64, error) {
-	return 0, 0, nil
-}
-func (m *mockUserGroupRepo) DeleteAccountGroupsByGroupID(context.Context, int64) (int64, error) {
-	return 0, nil
-}
-func (m *mockUserGroupRepo) GetAccountIDsByGroupIDs(context.Context, []int64) ([]int64, error) {
-	return nil, nil
-}
-func (m *mockUserGroupRepo) BindAccountsToGroup(context.Context, int64, []int64) error {
-	return nil
-}
-func (m *mockUserGroupRepo) UpdateSortOrders(context.Context, []GroupSortOrderUpdate) error {
-	return nil
-}
-
 func (m *mockUserSettingRepo) Get(context.Context, string) (*Setting, error) {
 	panic("unexpected Get call")
 }
@@ -154,11 +105,7 @@ func (m *mockUserRepo) GetByID(ctx context.Context, _ int64) (*User, error) {
 	return &User{}, nil
 }
 func (m *mockUserRepo) GetByEmail(context.Context, string) (*User, error) { return &User{}, nil }
-func (m *mockUserRepo) GetByInviteCode(context.Context, string) (*User, error) {
-	return nil, ErrUserNotFound
-}
-func (m *mockUserRepo) ExistsByInviteCode(context.Context, string) (bool, error) { return false, nil }
-func (m *mockUserRepo) GetFirstAdmin(context.Context) (*User, error)             { return &User{}, nil }
+func (m *mockUserRepo) GetFirstAdmin(context.Context) (*User, error)      { return &User{}, nil }
 func (m *mockUserRepo) Update(ctx context.Context, user *User) error {
 	m.updateCalls++
 	if m.updateFn != nil {
@@ -166,8 +113,7 @@ func (m *mockUserRepo) Update(ctx context.Context, user *User) error {
 	}
 	return nil
 }
-func (m *mockUserRepo) UpdateInviterBinding(context.Context, int64, *int64) error { return nil }
-func (m *mockUserRepo) Delete(context.Context, int64) error                       { return nil }
+func (m *mockUserRepo) Delete(context.Context, int64) error { return nil }
 func (m *mockUserRepo) GetUserAvatar(ctx context.Context, userID int64) (*UserAvatar, error) {
 	if m.getAvatarFn != nil {
 		return m.getAvatarFn(ctx, userID)
@@ -253,13 +199,7 @@ func (m *mockUserRepo) ExistsByEmail(context.Context, string) (bool, error) { re
 func (m *mockUserRepo) RemoveGroupFromAllowedGroups(context.Context, int64) (int64, error) {
 	return 0, nil
 }
-
-func (m *mockUserRepo) BatchSetConcurrency(context.Context, []int64, int) (int, error) { return 0, nil }
-func (m *mockUserRepo) BatchAddConcurrency(context.Context, []int64, int) (int, error) { return 0, nil }
-func (m *mockUserRepo) AddGroupToAllowedGroups(context.Context, int64, int64) error    { return nil }
-func (m *mockUserRepo) CountInviteesByInviter(context.Context, int64) (int64, error) {
-	return 0, nil
-}
+func (m *mockUserRepo) AddGroupToAllowedGroups(context.Context, int64, int64) error { return nil }
 func (m *mockUserRepo) ListUserAuthIdentities(context.Context, int64) ([]UserAuthIdentityRecord, error) {
 	out := make([]UserAuthIdentityRecord, len(m.identities))
 	copy(out, m.identities)
@@ -291,10 +231,6 @@ func (m *mockUserRepo) UnbindUserAuthProvider(_ context.Context, _ int64, provid
 	}
 	m.identities = append([]UserAuthIdentityRecord(nil), filtered...)
 	return nil
-}
-
-func (m *mockUserRepo) GetByIDIncludeDeleted(ctx context.Context, id int64) (*User, error) {
-	return m.GetByID(ctx, id)
 }
 
 func (m *mockUserRepo) WithUserProfileIdentityTx(ctx context.Context, fn func(txCtx context.Context) error) error {
@@ -374,34 +310,6 @@ func (m *mockBillingCache) UpdateAPIKeyRateLimitUsage(context.Context, int64, fl
 }
 func (m *mockBillingCache) InvalidateAPIKeyRateLimit(context.Context, int64) error {
 	return nil
-}
-
-func (m *mockBillingCache) GetUserPlatformQuotaCache(context.Context, int64, string) (*UserPlatformQuotaCacheEntry, bool, error) {
-	return nil, false, nil
-}
-
-func (m *mockBillingCache) SetUserPlatformQuotaCache(context.Context, int64, string, *UserPlatformQuotaCacheEntry, time.Duration) error {
-	return nil
-}
-
-func (m *mockBillingCache) DeleteUserPlatformQuotaCache(context.Context, int64, string) error {
-	return nil
-}
-
-func (m *mockBillingCache) IncrUserPlatformQuotaUsageCache(context.Context, int64, string, float64, time.Duration, bool) error {
-	return nil
-}
-
-func (m *mockBillingCache) PopDirtyUserPlatformQuotaKeys(context.Context, int) ([]UserPlatformQuotaKey, error) {
-	return nil, nil
-}
-
-func (m *mockBillingCache) ReaddDirtyUserPlatformQuotaKeys(context.Context, []UserPlatformQuotaKey) error {
-	return nil
-}
-
-func (m *mockBillingCache) BatchGetUserPlatformQuotaCache(context.Context, []UserPlatformQuotaKey) ([]*UserPlatformQuotaCacheEntry, error) {
-	return nil, nil
 }
 
 // --- 测试 ---
@@ -733,58 +641,6 @@ func TestUpdateBalance_WithAuthCacheInvalidator(t *testing.T) {
 	}, 2*time.Second, 10*time.Millisecond)
 }
 
-func TestUpdateProfile_EnableSubscriptionBalanceFallbackRequiresGroup(t *testing.T) {
-	enabled := true
-	limit := 5.0
-	repo := &mockUserRepo{
-		getByIDUser: &User{
-			ID:       15,
-			Email:    "fallback-required@example.com",
-			Username: "fallback-required",
-			Status:   StatusActive,
-		},
-	}
-	svc := NewUserService(repo, nil, nil, nil, &mockUserGroupRepo{})
-
-	_, err := svc.UpdateProfile(context.Background(), 15, UpdateProfileRequest{
-		SubscriptionBalanceFallbackEnabled:  &enabled,
-		SubscriptionBalanceFallbackLimitUSD: &limit,
-	})
-
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "SUBSCRIPTION_BALANCE_FALLBACK_GROUP_REQUIRED")
-	require.Zero(t, repo.updateCalls)
-}
-
-func TestUpdateProfile_InvalidatesAuthCacheWhenFallbackGroupChanges(t *testing.T) {
-	groupID := int64(42)
-	repo := &mockUserRepo{
-		getByIDUser: &User{
-			ID:                                  16,
-			Email:                               "fallback-group@example.com",
-			Username:                            "fallback-group",
-			Status:                              StatusActive,
-			SubscriptionBalanceFallbackEnabled:  true,
-			SubscriptionBalanceFallbackLimitUSD: 5,
-		},
-	}
-	auth := &mockAuthCacheInvalidator{}
-	svc := NewUserService(repo, nil, auth, nil, &mockUserGroupRepo{groups: map[int64]*Group{
-		groupID: {ID: groupID, Name: "fallback", Status: StatusActive, SubscriptionType: SubscriptionTypeStandard},
-	}})
-
-	updated, err := svc.UpdateProfile(context.Background(), 16, UpdateProfileRequest{
-		SubscriptionBalanceFallbackGroupID: &groupID,
-	})
-
-	require.NoError(t, err)
-	require.NotNil(t, updated.SubscriptionBalanceFallbackGroupID)
-	require.Equal(t, groupID, *updated.SubscriptionBalanceFallbackGroupID)
-	auth.mu.Lock()
-	defer auth.mu.Unlock()
-	require.Equal(t, []int64{16}, auth.invalidatedUserIDs)
-}
-
 func TestNewUserService_FieldsAssignment(t *testing.T) {
 	repo := &mockUserRepo{}
 	auth := &mockAuthCacheInvalidator{}
@@ -991,90 +847,4 @@ func TestGetProfile_HydratesAvatarFromRepository(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "https://cdn.example.com/profile.png", user.AvatarURL)
 	require.Equal(t, "remote_url", user.AvatarSource)
-}
-
-func TestUpdateProfileRejectsFallbackGroupThatIsNotActiveStandard(t *testing.T) {
-	groupID := int64(77)
-	enabled := true
-	limit := 10.0
-	repo := &mockUserRepo{
-		getByIDUser: &User{
-			ID:                                  12,
-			Email:                               "fallback@example.com",
-			Status:                              StatusActive,
-			SubscriptionBalanceFallbackGroupID:  &groupID,
-			SubscriptionBalanceFallbackLimitUSD: 10,
-			SubscriptionBalanceFallbackEnabled:  false,
-		},
-	}
-	groupRepo := &mockUserGroupRepo{groups: map[int64]*Group{
-		groupID: {ID: groupID, Name: "Sub", Status: StatusActive, SubscriptionType: SubscriptionTypeSubscription},
-	}}
-	svc := NewUserService(repo, nil, nil, nil, groupRepo)
-
-	_, err := svc.UpdateProfile(context.Background(), 12, UpdateProfileRequest{
-		SubscriptionBalanceFallbackEnabled:  &enabled,
-		SubscriptionBalanceFallbackLimitUSD: &limit,
-		SubscriptionBalanceFallbackGroupID:  &groupID,
-	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "active standard group")
-	require.Zero(t, repo.updateCalls)
-}
-
-func TestUpdateProfileRejectsUnauthorizedExclusiveFallbackGroup(t *testing.T) {
-	groupID := int64(78)
-	enabled := true
-	limit := 10.0
-	repo := &mockUserRepo{
-		getByIDUser: &User{
-			ID:            13,
-			Email:         "fallback-exclusive@example.com",
-			Status:        StatusActive,
-			AllowedGroups: []int64{},
-		},
-	}
-	groupRepo := &mockUserGroupRepo{groups: map[int64]*Group{
-		groupID: {ID: groupID, Name: "Exclusive", Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, IsExclusive: true},
-	}}
-	svc := NewUserService(repo, nil, nil, nil, groupRepo)
-
-	_, err := svc.UpdateProfile(context.Background(), 13, UpdateProfileRequest{
-		SubscriptionBalanceFallbackEnabled:  &enabled,
-		SubscriptionBalanceFallbackLimitUSD: &limit,
-		SubscriptionBalanceFallbackGroupID:  &groupID,
-	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "not authorized")
-	require.Zero(t, repo.updateCalls)
-}
-
-func TestUpdateProfileAcceptsAuthorizedFallbackGroup(t *testing.T) {
-	groupID := int64(79)
-	enabled := true
-	limit := 10.0
-	repo := &mockUserRepo{
-		getByIDUser: &User{
-			ID:            14,
-			Email:         "fallback-ok@example.com",
-			Status:        StatusActive,
-			AllowedGroups: []int64{groupID},
-		},
-	}
-	groupRepo := &mockUserGroupRepo{groups: map[int64]*Group{
-		groupID: {ID: groupID, Name: "Exclusive", Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, IsExclusive: true},
-	}}
-	svc := NewUserService(repo, nil, nil, nil, groupRepo)
-
-	updated, err := svc.UpdateProfile(context.Background(), 14, UpdateProfileRequest{
-		SubscriptionBalanceFallbackEnabled:  &enabled,
-		SubscriptionBalanceFallbackLimitUSD: &limit,
-		SubscriptionBalanceFallbackGroupID:  &groupID,
-	})
-	require.NoError(t, err)
-	require.True(t, updated.SubscriptionBalanceFallbackEnabled)
-	require.Equal(t, 10.0, updated.SubscriptionBalanceFallbackLimitUSD)
-	require.NotNil(t, updated.SubscriptionBalanceFallbackGroupID)
-	require.Equal(t, groupID, *updated.SubscriptionBalanceFallbackGroupID)
-	require.Equal(t, 1, repo.updateCalls)
 }

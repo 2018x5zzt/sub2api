@@ -17,13 +17,9 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/util/httputil"
 )
@@ -33,12 +29,10 @@ type AdminService interface {
 	// User management
 	ListUsers(ctx context.Context, page, pageSize int, filters UserListFilters, sortBy, sortOrder string) ([]User, int64, error)
 	GetUser(ctx context.Context, id int64) (*User, error)
-	GetUserIncludeDeleted(ctx context.Context, id int64) (*User, error)
 	CreateUser(ctx context.Context, input *CreateUserInput) (*User, error)
 	UpdateUser(ctx context.Context, id int64, input *UpdateUserInput) (*User, error)
 	DeleteUser(ctx context.Context, id int64) error
 	UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*User, error)
-	BatchUpdateConcurrency(ctx context.Context, userIDs []int64, value int, mode string) (int, error)
 	GetUserAPIKeys(ctx context.Context, userID int64, page, pageSize int, sortBy, sortOrder string) ([]APIKey, int64, error)
 	GetUserUsageStats(ctx context.Context, userID int64, period string) (any, error)
 	GetUserRPMStatus(ctx context.Context, userID int64) (*UserRPMStatus, error)
@@ -52,11 +46,7 @@ type AdminService interface {
 	ListGroups(ctx context.Context, page, pageSize int, platform, status, search string, isExclusive *bool, sortBy, sortOrder string) ([]Group, int64, error)
 	GetAllGroups(ctx context.Context) ([]Group, error)
 	GetAllGroupsByPlatform(ctx context.Context, platform string) ([]Group, error)
-	// GetAllGroupsIncludingInactive returns all groups regardless of status (active + disabled),
-	// ordered by sort_order then id. Used by the API Key group filter dropdown.
-	GetAllGroupsIncludingInactive(ctx context.Context) ([]Group, error)
 	GetGroup(ctx context.Context, id int64) (*Group, error)
-	GetGroupModelsListCandidates(ctx context.Context, id int64, platform string) ([]string, error)
 	CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error)
 	UpdateGroup(ctx context.Context, id int64, input *UpdateGroupInput) (*Group, error)
 	DeleteGroup(ctx context.Context, id int64) error
@@ -81,9 +71,6 @@ type AdminService interface {
 	GetAccountsByIDs(ctx context.Context, ids []int64) ([]*Account, error)
 	CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error)
 	UpdateAccount(ctx context.Context, id int64, input *UpdateAccountInput) (*Account, error)
-	// UpdateAccountExtra 仅对 Extra 做 JSONB 增量合并（key 级覆盖），不会影响其它字段或运行态键。
-	// 用于刷新流程持久化 account_uuid / org_uuid 等少量键，避免被全量快照覆盖。
-	UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error
 	DeleteAccount(ctx context.Context, id int64) error
 	RefreshAccountCredentials(ctx context.Context, id int64) (*Account, error)
 	ClearAccountError(ctx context.Context, id int64) (*Account, error)
@@ -99,9 +86,6 @@ type AdminService interface {
 	SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*Account, error)
 	BulkUpdateAccounts(ctx context.Context, input *BulkUpdateAccountsInput) (*BulkUpdateAccountsResult, error)
 	CheckMixedChannelRisk(ctx context.Context, currentAccountID int64, currentAccountPlatform string, groupIDs []int64) error
-	// RevertAccountProxyFallback 将账号的 proxy_id 切回 proxy_fallback_origin_id，并清空 origin 字段。
-	// 若账号不存在返回 ErrAccountNotFound；若账号存在但不在 fallback 状态，返回 ErrAccountNotInFallback。
-	RevertAccountProxyFallback(ctx context.Context, id int64) error
 
 	// Proxy management
 	ListProxies(ctx context.Context, page, pageSize int, protocol, status, search string, sortBy, sortOrder string) ([]Proxy, int64, error)
@@ -127,16 +111,6 @@ type AdminService interface {
 	BatchDeleteRedeemCodes(ctx context.Context, ids []int64) (int64, error)
 	ExpireRedeemCode(ctx context.Context, id int64) (*RedeemCode, error)
 	ResetAccountQuota(ctx context.Context, id int64) error
-
-	// Invite read/write management
-	GetInviteStats(ctx context.Context) (*AdminInviteStats, error)
-	ListInviteRelationships(ctx context.Context, page, pageSize int, filters AdminInviteRelationshipFilters) ([]AdminInviteRelationship, int64, error)
-	ListInviteRewards(ctx context.Context, page, pageSize int, filters AdminInviteRewardFilters) ([]AdminInviteRewardRow, int64, error)
-	ListInviteActions(ctx context.Context, page, pageSize int, filters InviteAdminActionFilters) ([]InviteAdminAction, int64, error)
-	RebindInviter(ctx context.Context, input RebindInviterInput) error
-	CreateManualInviteGrant(ctx context.Context, input ManualInviteGrantInput) error
-	PreviewInviteRecompute(ctx context.Context, input InviteRecomputeInput) (*InviteRecomputePreview, error)
-	ExecuteInviteRecompute(ctx context.Context, input InviteRecomputeExecuteInput) error
 }
 
 // CreateUserInput represents input for creating a new user via admin operations.
@@ -145,26 +119,22 @@ type CreateUserInput struct {
 	Password      string
 	Username      string
 	Notes         string
-	Balance       *float64
+	Balance       float64
 	Concurrency   int
 	RPMLimit      int
 	AllowedGroups []int64
 }
 
 type UpdateUserInput struct {
-	Email                               string
-	Password                            string
-	Username                            *string
-	Notes                               *string
-	Balance                             *float64 // 使用指针区分"未提供"和"设置为0"
-	Concurrency                         *int     // 使用指针区分"未提供"和"设置为0"
-	RPMLimit                            *int     // 使用指针区分"未提供"和"设置为0"
-	Status                              string
-	AllowedGroups                       *[]int64 // 使用指针区分"未提供"和"设置为空数组"
-	SubscriptionBalanceFallbackEnabled  *bool
-	SubscriptionBalanceFallbackLimitUSD *float64
-	SubscriptionBalanceFallbackUsedUSD  *float64
-	SubscriptionBalanceFallbackGroupID  *int64
+	Email         string
+	Password      string
+	Username      *string
+	Notes         *string
+	Balance       *float64 // 使用指针区分"未提供"和"设置为0"
+	Concurrency   *int     // 使用指针区分"未提供"和"设置为0"
+	RPMLimit      *int     // 使用指针区分"未提供"和"设置为0"
+	Status        string
+	AllowedGroups *[]int64 // 使用指针区分"未提供"和"设置为空数组"
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]*rate，nil 表示删除该分组的专属倍率
 	GroupRates map[int64]*float64
@@ -219,14 +189,11 @@ type CreateGroupInput struct {
 	WeeklyLimitUSD   *float64 // 周限额 (USD)
 	MonthlyLimitUSD  *float64 // 月限额 (USD)
 	// 图片生成计费配置（仅 antigravity 平台使用）
-	AllowImageGeneration bool
-	ImageRateIndependent bool
-	ImageRateMultiplier  *float64
-	ImagePrice1K         *float64
-	ImagePrice2K         *float64
-	ImagePrice4K         *float64
-	ClaudeCodeOnly       bool   // 仅允许 Claude Code 客户端
-	FallbackGroupID      *int64 // 降级分组 ID
+	ImagePrice1K    *float64
+	ImagePrice2K    *float64
+	ImagePrice4K    *float64
+	ClaudeCodeOnly  bool   // 仅允许 Claude Code 客户端
+	FallbackGroupID *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
 	// 模型路由配置（仅 anthropic 平台使用）
@@ -241,7 +208,6 @@ type CreateGroupInput struct {
 	RequireOAuthOnly            bool
 	RequirePrivacySet           bool
 	MessagesDispatchModelConfig OpenAIMessagesDispatchModelConfig
-	ModelsListConfig            GroupModelsListConfig
 	// RPMLimit 分组 RPM 上限（0 = 不限制）
 	RPMLimit int
 	// 从指定分组复制账号（创建分组后在同一事务内绑定）
@@ -250,7 +216,7 @@ type CreateGroupInput struct {
 
 type UpdateGroupInput struct {
 	Name             string
-	Description      *string
+	Description      string
 	Platform         string
 	RateMultiplier   *float64 // 使用指针以支持设置为0
 	IsExclusive      *bool
@@ -260,14 +226,11 @@ type UpdateGroupInput struct {
 	WeeklyLimitUSD   *float64 // 周限额 (USD)
 	MonthlyLimitUSD  *float64 // 月限额 (USD)
 	// 图片生成计费配置（仅 antigravity 平台使用）
-	AllowImageGeneration *bool
-	ImageRateIndependent *bool
-	ImageRateMultiplier  *float64
-	ImagePrice1K         *float64
-	ImagePrice2K         *float64
-	ImagePrice4K         *float64
-	ClaudeCodeOnly       *bool  // 仅允许 Claude Code 客户端
-	FallbackGroupID      *int64 // 降级分组 ID
+	ImagePrice1K    *float64
+	ImagePrice2K    *float64
+	ImagePrice4K    *float64
+	ClaudeCodeOnly  *bool  // 仅允许 Claude Code 客户端
+	FallbackGroupID *int64 // 降级分组 ID
 	// 无效请求兜底分组 ID（仅 anthropic 平台使用）
 	FallbackGroupIDOnInvalidRequest *int64
 	// 模型路由配置（仅 anthropic 平台使用）
@@ -282,7 +245,6 @@ type UpdateGroupInput struct {
 	RequireOAuthOnly            *bool
 	RequirePrivacySet           *bool
 	MessagesDispatchModelConfig *OpenAIMessagesDispatchModelConfig
-	ModelsListConfig            *GroupModelsListConfig
 	// RPMLimit 分组 RPM 上限（0 = 不限制），nil 表示未提供不改动。
 	RPMLimit *int
 	// 从指定分组复制账号（同步操作：先清空当前分组的账号绑定，再绑定源分组的账号）
@@ -310,10 +272,6 @@ type CreateAccountInput struct {
 	// SkipMixedChannelCheck skips the mixed channel risk check when binding groups.
 	// This should only be set when the caller has explicitly confirmed the risk.
 	SkipMixedChannelCheck bool
-}
-
-type accountGroupBindingRepository interface {
-	BindGroupBindings(ctx context.Context, accountID int64, bindings []AccountGroupBindingInput) error
 }
 
 type UpdateAccountInput struct {
@@ -410,41 +368,30 @@ type BulkUpdateAccountsResult struct {
 }
 
 type CreateProxyInput struct {
-	Name           string
-	Protocol       string
-	Host           string
-	Port           int
-	Username       string
-	Password       string
-	ExpiresAt      *time.Time
-	FallbackMode   string
-	BackupProxyID  *int64
-	ExpiryWarnDays int
+	Name     string
+	Protocol string
+	Host     string
+	Port     int
+	Username string
+	Password string
 }
 
 type UpdateProxyInput struct {
-	Name           string
-	Protocol       string
-	Host           string
-	Port           int
-	Username       string
-	Password       string
-	Status         string
-	ExpiresAt      *time.Time
-	FallbackMode   string
-	BackupProxyID  *int64
-	ExpiryWarnDays int
+	Name     string
+	Protocol string
+	Host     string
+	Port     int
+	Username string
+	Password string
+	Status   string
 }
 
 type GenerateRedeemCodesInput struct {
 	Count        int
 	Type         string
 	Value        float64
-	SourceType   string
 	GroupID      *int64 // 订阅类型专用：关联的分组ID
-	ProductID    *int64 // 产品订阅类型专用：关联的产品ID
 	ValidityDays int    // 订阅类型专用：有效天数
-	ExpiresAt    *time.Time
 }
 
 type ProxyBatchDeleteResult struct {
@@ -557,36 +504,67 @@ const (
 	proxyQualityClientUserAgent       = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 )
 
+type accountGroupBindingWriter interface {
+	BindGroupBindings(ctx context.Context, accountID int64, bindings []AccountGroupBindingInput) error
+}
+
+func groupIDsFromAccountBindings(bindings []AccountGroupBindingInput) []int64 {
+	if len(bindings) == 0 {
+		return nil
+	}
+	ids := make([]int64, 0, len(bindings))
+	seen := make(map[int64]struct{}, len(bindings))
+	for _, binding := range bindings {
+		if binding.GroupID <= 0 {
+			continue
+		}
+		if _, exists := seen[binding.GroupID]; exists {
+			continue
+		}
+		seen[binding.GroupID] = struct{}{}
+		ids = append(ids, binding.GroupID)
+	}
+	return ids
+}
+
+func validateAccountGroupBindings(bindings []AccountGroupBindingInput) error {
+	seen := make(map[int64]struct{}, len(bindings))
+	for _, binding := range bindings {
+		if binding.GroupID <= 0 {
+			return errors.New("group_bindings.group_id must be > 0")
+		}
+		if _, exists := seen[binding.GroupID]; exists {
+			return fmt.Errorf("duplicate group binding: %d", binding.GroupID)
+		}
+		seen[binding.GroupID] = struct{}{}
+		if binding.BillingMultiplier != nil && *binding.BillingMultiplier <= 0 {
+			return fmt.Errorf("group_bindings[%d].billing_multiplier must be > 0", binding.GroupID)
+		}
+	}
+	return nil
+}
+
 var ErrRPMStatusUnavailable = infraerrors.New(http.StatusNotImplemented, "RPM_STATUS_UNAVAILABLE", "RPM cache not available")
 
 // adminServiceImpl implements AdminService
 type adminServiceImpl struct {
-	userRepo                     UserRepository
-	groupRepo                    GroupRepository
-	accountRepo                  AccountRepository
-	proxyRepo                    ProxyRepository
-	apiKeyRepo                   APIKeyRepository
-	redeemCodeRepo               RedeemCodeRepository
-	inviteAdminQueryRepo         InviteAdminQueryRepository
-	inviteRewardRecordRepo       InviteRewardAdminRepository
-	inviteRelationshipEventRepo  InviteRelationshipEventAdminRepository
-	inviteAdminActionRepo        InviteAdminActionRepository
-	inviteQualifyingRechargeRepo InviteQualifyingRechargeRepository
-	userGroupRateRepo            UserGroupRateRepository
-	userRPMCache                 UserRPMCache
-	billingCacheService          *BillingCacheService
-	proxyProber                  ProxyExitInfoProber
-	proxyLatencyCache            ProxyLatencyCache
-	authCacheInvalidator         APIKeyAuthCacheInvalidator
-	entClient                    *dbent.Client // 用于开启数据库事务
-	settingService               *SettingService
-	defaultSubAssigner           DefaultSubscriptionAssigner
-	userSubRepo                  UserSubscriptionRepository
-	privacyClientFactory         PrivacyClientFactory
-	inviteBindingUserRepo        interface {
-		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
-	}
-	runtimeBlocker AccountRuntimeBlocker
+	userRepo             UserRepository
+	groupRepo            GroupRepository
+	accountRepo          AccountRepository
+	proxyRepo            ProxyRepository
+	apiKeyRepo           APIKeyRepository
+	redeemCodeRepo       RedeemCodeRepository
+	userGroupRateRepo    UserGroupRateRepository
+	userRPMCache         UserRPMCache
+	billingCacheService  *BillingCacheService
+	proxyProber          ProxyExitInfoProber
+	proxyLatencyCache    ProxyLatencyCache
+	authCacheInvalidator APIKeyAuthCacheInvalidator
+	entClient            *dbent.Client // 用于开启数据库事务
+	settingService       *SettingService
+	defaultSubAssigner   DefaultSubscriptionAssigner
+	userSubRepo          UserSubscriptionRepository
+	privacyClientFactory PrivacyClientFactory
 }
 
 type userGroupRateBatchReader interface {
@@ -601,11 +579,6 @@ func NewAdminService(
 	proxyRepo ProxyRepository,
 	apiKeyRepo APIKeyRepository,
 	redeemCodeRepo RedeemCodeRepository,
-	inviteAdminQueryRepo InviteAdminQueryRepository,
-	inviteRewardRecordRepo InviteRewardAdminRepository,
-	inviteRelationshipEventRepo InviteRelationshipEventAdminRepository,
-	inviteAdminActionRepo InviteAdminActionRepository,
-	inviteQualifyingRechargeRepo InviteQualifyingRechargeRepository,
 	userGroupRateRepo UserGroupRateRepository,
 	userRPMCache UserRPMCache,
 	billingCacheService *BillingCacheService,
@@ -617,42 +590,25 @@ func NewAdminService(
 	defaultSubAssigner DefaultSubscriptionAssigner,
 	userSubRepo UserSubscriptionRepository,
 	privacyClientFactory PrivacyClientFactory,
-	runtimeBlocker AccountRuntimeBlocker,
 ) AdminService {
-	var inviteBindingUserRepo interface {
-		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
-	}
-	if binder, ok := userRepo.(interface {
-		UpdateInviterBinding(ctx context.Context, inviteeUserID int64, inviterUserID *int64) error
-	}); ok {
-		inviteBindingUserRepo = binder
-	}
-
 	return &adminServiceImpl{
-		userRepo:                     userRepo,
-		groupRepo:                    groupRepo,
-		accountRepo:                  accountRepo,
-		proxyRepo:                    proxyRepo,
-		apiKeyRepo:                   apiKeyRepo,
-		redeemCodeRepo:               redeemCodeRepo,
-		inviteAdminQueryRepo:         inviteAdminQueryRepo,
-		inviteRewardRecordRepo:       inviteRewardRecordRepo,
-		inviteRelationshipEventRepo:  inviteRelationshipEventRepo,
-		inviteAdminActionRepo:        inviteAdminActionRepo,
-		inviteQualifyingRechargeRepo: inviteQualifyingRechargeRepo,
-		userGroupRateRepo:            userGroupRateRepo,
-		userRPMCache:                 userRPMCache,
-		billingCacheService:          billingCacheService,
-		proxyProber:                  proxyProber,
-		proxyLatencyCache:            proxyLatencyCache,
-		authCacheInvalidator:         authCacheInvalidator,
-		entClient:                    entClient,
-		settingService:               settingService,
-		defaultSubAssigner:           defaultSubAssigner,
-		userSubRepo:                  userSubRepo,
-		privacyClientFactory:         privacyClientFactory,
-		inviteBindingUserRepo:        inviteBindingUserRepo,
-		runtimeBlocker:               runtimeBlocker,
+		userRepo:             userRepo,
+		groupRepo:            groupRepo,
+		accountRepo:          accountRepo,
+		proxyRepo:            proxyRepo,
+		apiKeyRepo:           apiKeyRepo,
+		redeemCodeRepo:       redeemCodeRepo,
+		userGroupRateRepo:    userGroupRateRepo,
+		userRPMCache:         userRPMCache,
+		billingCacheService:  billingCacheService,
+		proxyProber:          proxyProber,
+		proxyLatencyCache:    proxyLatencyCache,
+		authCacheInvalidator: authCacheInvalidator,
+		entClient:            entClient,
+		settingService:       settingService,
+		defaultSubAssigner:   defaultSubAssigner,
+		userSubRepo:          userSubRepo,
+		privacyClientFactory: privacyClientFactory,
 	}
 }
 
@@ -739,24 +695,13 @@ func (s *adminServiceImpl) GetUser(ctx context.Context, id int64) (*User, error)
 	return user, nil
 }
 
-func (s *adminServiceImpl) GetUserIncludeDeleted(ctx context.Context, id int64) (*User, error) {
-	return s.userRepo.GetByIDIncludeDeleted(ctx, id)
-}
-
 func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInput) (*User, error) {
-	balance := 0.0
-	if input.Balance != nil {
-		balance = *input.Balance
-	} else if s.settingService != nil {
-		balance = s.settingService.GetDefaultBalance(ctx)
-	}
-
 	user := &User{
 		Email:         input.Email,
 		Username:      input.Username,
 		Notes:         input.Notes,
 		Role:          RoleUser, // Always create as regular user, never admin
-		Balance:       balance,
+		Balance:       input.Balance,
 		Concurrency:   input.Concurrency,
 		RPMLimit:      input.RPMLimit,
 		Status:        StatusActive,
@@ -813,11 +758,6 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	oldStatus := user.Status
 	oldRole := user.Role
 	oldRPMLimit := user.RPMLimit
-	oldFallbackEnabled := user.SubscriptionBalanceFallbackEnabled
-	oldFallbackLimit := user.SubscriptionBalanceFallbackLimitUSD
-	oldFallbackUsed := user.SubscriptionBalanceFallbackUsedUSD
-	oldFallbackGroupID := user.SubscriptionBalanceFallbackGroupID
-	oldAllowedGroups := append([]int64(nil), user.AllowedGroups...)
 
 	if input.Email != "" {
 		user.Email = input.Email
@@ -850,31 +790,6 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if input.AllowedGroups != nil {
 		user.AllowedGroups = *input.AllowedGroups
 	}
-	if input.SubscriptionBalanceFallbackEnabled != nil {
-		user.SubscriptionBalanceFallbackEnabled = *input.SubscriptionBalanceFallbackEnabled
-	}
-	if input.SubscriptionBalanceFallbackLimitUSD != nil {
-		if *input.SubscriptionBalanceFallbackLimitUSD < 0 {
-			return nil, errors.New("subscription balance fallback limit must be >= 0")
-		}
-		user.SubscriptionBalanceFallbackLimitUSD = *input.SubscriptionBalanceFallbackLimitUSD
-	}
-	if input.SubscriptionBalanceFallbackUsedUSD != nil {
-		if *input.SubscriptionBalanceFallbackUsedUSD < 0 {
-			return nil, errors.New("subscription balance fallback used amount must be >= 0")
-		}
-		user.SubscriptionBalanceFallbackUsedUSD = *input.SubscriptionBalanceFallbackUsedUSD
-	}
-	if input.SubscriptionBalanceFallbackGroupID != nil {
-		if *input.SubscriptionBalanceFallbackGroupID <= 0 {
-			user.SubscriptionBalanceFallbackGroupID = nil
-		} else {
-			user.SubscriptionBalanceFallbackGroupID = input.SubscriptionBalanceFallbackGroupID
-		}
-	}
-	if err := validateSubscriptionBalanceFallbackConfig(ctx, s.groupRepo, user); err != nil {
-		return nil, err
-	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
@@ -889,12 +804,8 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 
 	if s.authCacheInvalidator != nil {
 		// RPMLimit 直接参与 billing_cache_service.checkRPM 的三级级联，
-		// allowed_groups 参与 API Key 专属分组授权判断；不失效缓存会让修改在一个 L2 TTL 内失去效果。
-		fallbackChanged := user.SubscriptionBalanceFallbackEnabled != oldFallbackEnabled ||
-			user.SubscriptionBalanceFallbackLimitUSD != oldFallbackLimit ||
-			user.SubscriptionBalanceFallbackUsedUSD != oldFallbackUsed ||
-			int64PtrValue(user.SubscriptionBalanceFallbackGroupID) != int64PtrValue(oldFallbackGroupID)
-		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || !sameInt64Set(user.AllowedGroups, oldAllowedGroups) || fallbackChanged {
+		// 不失效缓存会让修改在一个 L2 TTL 内失去效果。
+		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
 		}
 	}
@@ -923,33 +834,6 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	return user, nil
 }
 
-func int64PtrValue(v *int64) int64 {
-	if v == nil {
-		return 0
-	}
-	return *v
-}
-
-func sameInt64Set(a, b []int64) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	if len(a) == 0 {
-		return true
-	}
-	counts := make(map[int64]int, len(a))
-	for _, v := range a {
-		counts[v]++
-	}
-	for _, v := range b {
-		if counts[v] == 0 {
-			return false
-		}
-		counts[v]--
-	}
-	return true
-}
-
 func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 	// Protect admin users: cannot delete admin accounts
 	user, err := s.userRepo.GetByID(ctx, id)
@@ -959,119 +843,14 @@ func (s *adminServiceImpl) DeleteUser(ctx context.Context, id int64) error {
 	if user.Role == "admin" {
 		return errors.New("cannot delete admin user")
 	}
-
-	apiKeys, err := s.listUserAPIKeysForDeletion(ctx, id)
-	if err != nil {
+	if err := s.userRepo.Delete(ctx, id); err != nil {
+		logger.LegacyPrintf("service.admin", "delete user failed: user_id=%d err=%v", id, err)
 		return err
 	}
-
-	if s.entClient != nil {
-		tx, err := s.entClient.Tx(ctx)
-		if err != nil {
-			return err
-		}
-		defer func() { _ = tx.Rollback() }()
-
-		opCtx := dbent.NewTxContext(ctx, tx)
-		if err := s.deleteUserWithAPIKeys(opCtx, id, apiKeys); err != nil {
-			return err
-		}
-		if err := tx.Commit(); err != nil {
-			return err
-		}
-	} else {
-		if err := s.deleteUserWithAPIKeys(ctx, id, apiKeys); err != nil {
-			return err
-		}
-	}
-
 	if s.authCacheInvalidator != nil {
-		for _, key := range apiKeys {
-			if keyValue := strings.TrimSpace(key.Key); keyValue != "" {
-				s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, keyValue)
-			}
-		}
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, id)
 	}
 	return nil
-}
-
-func (s *adminServiceImpl) listUserAPIKeysForDeletion(ctx context.Context, userID int64) ([]APIKey, error) {
-	if s.apiKeyRepo == nil {
-		return nil, nil
-	}
-
-	const pageSize = 1000
-	keys := make([]APIKey, 0)
-	for page := 1; ; page++ {
-		batch, result, err := s.apiKeyRepo.ListByUserID(ctx, userID, pagination.PaginationParams{
-			Page:      page,
-			PageSize:  pageSize,
-			SortBy:    "id",
-			SortOrder: pagination.SortOrderAsc,
-		}, APIKeyListFilters{})
-		if err != nil {
-			return nil, fmt.Errorf("list user api keys: %w", err)
-		}
-		keys = append(keys, batch...)
-		if len(batch) == 0 || len(batch) < pageSize || result == nil || int64(len(keys)) >= result.Total {
-			break
-		}
-	}
-	return keys, nil
-}
-
-func (s *adminServiceImpl) deleteUserWithAPIKeys(ctx context.Context, userID int64, apiKeys []APIKey) error {
-	if s.apiKeyRepo != nil {
-		for _, key := range apiKeys {
-			if key.ID <= 0 {
-				continue
-			}
-			if err := s.apiKeyRepo.DeleteWithAudit(ctx, key.ID); err != nil {
-				logger.LegacyPrintf("service.admin", "delete user api key failed: user_id=%d api_key_id=%d err=%v", userID, key.ID, err)
-				return fmt.Errorf("delete user api key %d: %w", key.ID, err)
-			}
-		}
-	}
-
-	if err := s.userRepo.Delete(ctx, userID); err != nil {
-		logger.LegacyPrintf("service.admin", "delete user failed: user_id=%d err=%v", userID, err)
-		return err
-	}
-	return nil
-}
-
-func (s *adminServiceImpl) BatchUpdateConcurrency(ctx context.Context, userIDs []int64, value int, mode string) (int, error) {
-	cleaned := make([]int64, 0, len(userIDs))
-	for _, uid := range userIDs {
-		if uid > 0 {
-			cleaned = append(cleaned, uid)
-		}
-	}
-	if len(cleaned) == 0 {
-		return 0, nil
-	}
-
-	var affected int
-	var err error
-	switch mode {
-	case "set":
-		affected, err = s.userRepo.BatchSetConcurrency(ctx, cleaned, value)
-	case "add":
-		affected, err = s.userRepo.BatchAddConcurrency(ctx, cleaned, value)
-	default:
-		return 0, errors.New("invalid mode: must be 'set' or 'add'")
-	}
-	if err != nil {
-		return 0, err
-	}
-
-	if s.authCacheInvalidator != nil {
-		for _, uid := range cleaned {
-			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, uid)
-		}
-	}
-	return affected, nil
 }
 
 func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, balance float64, operation string, notes string) (*User, error) {
@@ -1461,7 +1240,7 @@ func (s *adminServiceImpl) BindUserAuthIdentity(ctx context.Context, userID int6
 	providerKey := strings.TrimSpace(input.ProviderKey)
 	providerSubject := strings.TrimSpace(input.ProviderSubject)
 	if providerType == "" {
-		return nil, infraerrors.BadRequest("INVALID_INPUT", "provider_type must be one of email, linuxdo, oidc, wechat, or dingtalk")
+		return nil, infraerrors.BadRequest("INVALID_INPUT", "provider_type must be one of email, linuxdo, oidc, or wechat")
 	}
 	if providerKey == "" || providerSubject == "" {
 		return nil, infraerrors.BadRequest("INVALID_INPUT", "provider_type, provider_key, and provider_subject are required")
@@ -1716,8 +1495,6 @@ func normalizeAdminAuthIdentityProviderType(input string) string {
 		return "oidc"
 	case "wechat":
 		return "wechat"
-	case "dingtalk":
-		return "dingtalk"
 	default:
 		return ""
 	}
@@ -1794,89 +1571,8 @@ func (s *adminServiceImpl) GetAllGroupsByPlatform(ctx context.Context, platform 
 	return s.groupRepo.ListActiveByPlatform(ctx, platform)
 }
 
-func (s *adminServiceImpl) GetAllGroupsIncludingInactive(ctx context.Context) ([]Group, error) {
-	// ListWithFilters with empty status = no status filter, so active + disabled groups are returned.
-	// PageSize 10000 is intentionally large; group count is O(dozens) in practice.
-	groups, _, err := s.groupRepo.ListWithFilters(ctx, pagination.PaginationParams{Page: 1, PageSize: 10000}, "", "", "", nil)
-	return groups, err
-}
-
 func (s *adminServiceImpl) GetGroup(ctx context.Context, id int64) (*Group, error) {
 	return s.groupRepo.GetByID(ctx, id)
-}
-
-func (s *adminServiceImpl) GetGroupModelsListCandidates(ctx context.Context, id int64, platform string) ([]string, error) {
-	platform = strings.TrimSpace(platform)
-	if id > 0 {
-		group, err := s.groupRepo.GetByIDLite(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		if platform == "" {
-			platform = group.Platform
-		}
-	}
-	if platform == "" {
-		platform = PlatformAnthropic
-	}
-
-	candidates := defaultModelsListCandidateIDs(platform)
-	if id <= 0 || s.accountRepo == nil {
-		return candidates, nil
-	}
-
-	accounts, err := s.accountRepo.ListSchedulableByGroupID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	seen := make(map[string]struct{}, len(candidates))
-	for _, model := range candidates {
-		seen[model] = struct{}{}
-	}
-	for _, acc := range accounts {
-		if acc.Platform != platform {
-			continue
-		}
-		for model := range acc.GetModelMapping() {
-			model = strings.TrimSpace(model)
-			if model == "" {
-				continue
-			}
-			if _, ok := seen[model]; ok {
-				continue
-			}
-			seen[model] = struct{}{}
-			candidates = append(candidates, model)
-		}
-	}
-	return candidates, nil
-}
-
-func defaultModelsListCandidateIDs(platform string) []string {
-	switch platform {
-	case PlatformOpenAI:
-		return openai.DefaultModelIDs()
-	case PlatformGemini:
-		ids := make([]string, 0, len(geminicli.DefaultModels))
-		for _, model := range geminicli.DefaultModels {
-			ids = append(ids, model.ID)
-		}
-		return ids
-	case PlatformAntigravity:
-		models := antigravity.DefaultModels()
-		ids := make([]string, 0, len(models))
-		for _, model := range models {
-			ids = append(ids, model.ID)
-		}
-		return ids
-	default:
-		ids := make([]string, 0, len(claude.DefaultModels))
-		for _, model := range claude.DefaultModels {
-			ids = append(ids, model.ID)
-		}
-		return ids
-	}
 }
 
 func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupInput) (*Group, error) {
@@ -1903,13 +1599,6 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 	imagePrice1K := normalizePrice(input.ImagePrice1K)
 	imagePrice2K := normalizePrice(input.ImagePrice2K)
 	imagePrice4K := normalizePrice(input.ImagePrice4K)
-	imageRateMultiplier := 1.0
-	if input.ImageRateMultiplier != nil {
-		if *input.ImageRateMultiplier < 0 {
-			return nil, errors.New("image_rate_multiplier must be >= 0")
-		}
-		imageRateMultiplier = *input.ImageRateMultiplier
-	}
 
 	// 校验降级分组
 	if input.FallbackGroupID != nil {
@@ -1977,9 +1666,6 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		DailyLimitUSD:                   dailyLimit,
 		WeeklyLimitUSD:                  weeklyLimit,
 		MonthlyLimitUSD:                 monthlyLimit,
-		AllowImageGeneration:            input.AllowImageGeneration,
-		ImageRateIndependent:            input.ImageRateIndependent,
-		ImageRateMultiplier:             imageRateMultiplier,
 		ImagePrice1K:                    imagePrice1K,
 		ImagePrice2K:                    imagePrice2K,
 		ImagePrice4K:                    imagePrice4K,
@@ -1994,7 +1680,6 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		RequirePrivacySet:               input.RequirePrivacySet,
 		DefaultMappedModel:              input.DefaultMappedModel,
 		MessagesDispatchModelConfig:     normalizeOpenAIMessagesDispatchModelConfig(input.MessagesDispatchModelConfig),
-		ModelsListConfig:                normalizeGroupModelsListConfig(input.ModelsListConfig),
 		RPMLimit:                        input.RPMLimit,
 	}
 	sanitizeGroupMessagesDispatchFields(group)
@@ -2128,8 +1813,8 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if input.Name != "" {
 		group.Name = input.Name
 	}
-	if input.Description != nil {
-		group.Description = *input.Description
+	if input.Description != "" {
+		group.Description = input.Description
 	}
 	if input.Platform != "" {
 		group.Platform = input.Platform
@@ -2157,18 +1842,6 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	group.WeeklyLimitUSD = normalizeLimit(input.WeeklyLimitUSD)
 	group.MonthlyLimitUSD = normalizeLimit(input.MonthlyLimitUSD)
 	// 图片生成计费配置：负数表示清除（使用默认价格）
-	if input.AllowImageGeneration != nil {
-		group.AllowImageGeneration = *input.AllowImageGeneration
-	}
-	if input.ImageRateIndependent != nil {
-		group.ImageRateIndependent = *input.ImageRateIndependent
-	}
-	if input.ImageRateMultiplier != nil {
-		if *input.ImageRateMultiplier < 0 {
-			return nil, errors.New("image_rate_multiplier must be >= 0")
-		}
-		group.ImageRateMultiplier = *input.ImageRateMultiplier
-	}
 	if input.ImagePrice1K != nil {
 		group.ImagePrice1K = normalizePrice(input.ImagePrice1K)
 	}
@@ -2241,9 +1914,6 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.MessagesDispatchModelConfig != nil {
 		group.MessagesDispatchModelConfig = normalizeOpenAIMessagesDispatchModelConfig(*input.MessagesDispatchModelConfig)
-	}
-	if input.ModelsListConfig != nil {
-		group.ModelsListConfig = normalizeGroupModelsListConfig(*input.ModelsListConfig)
 	}
 	if input.RPMLimit != nil {
 		group.RPMLimit = *input.RPMLimit
@@ -2659,36 +2329,17 @@ func (s *adminServiceImpl) GetAccountsByIDs(ctx context.Context, ids []int64) ([
 	return accounts, nil
 }
 
-func groupIDsFromBindings(bindings []AccountGroupBindingInput) []int64 {
-	out := make([]int64, 0, len(bindings))
-	seen := make(map[int64]struct{}, len(bindings))
-	for _, binding := range bindings {
-		if binding.GroupID <= 0 {
-			continue
-		}
-		if _, exists := seen[binding.GroupID]; exists {
-			continue
-		}
-		seen[binding.GroupID] = struct{}{}
-		out = append(out, binding.GroupID)
-	}
-	return out
-}
-
-func (s *adminServiceImpl) bindAccountGroups(ctx context.Context, accountID int64, groupIDs []int64, bindings []AccountGroupBindingInput) error {
-	if len(bindings) > 0 {
-		if repo, ok := s.accountRepo.(accountGroupBindingRepository); ok {
-			return repo.BindGroupBindings(ctx, accountID, bindings)
-		}
-	}
-	return s.accountRepo.BindGroups(ctx, accountID, groupIDs)
-}
-
 func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccountInput) (*Account, error) {
+	if len(input.GroupBindings) > 0 {
+		if err := validateAccountGroupBindings(input.GroupBindings); err != nil {
+			return nil, err
+		}
+	}
+
 	// 绑定分组
 	groupIDs := input.GroupIDs
 	if len(input.GroupBindings) > 0 {
-		groupIDs = groupIDsFromBindings(input.GroupBindings)
+		groupIDs = groupIDsFromAccountBindings(input.GroupBindings)
 	}
 	// 如果没有指定分组,自动绑定对应平台的默认分组
 	if len(groupIDs) == 0 && !input.SkipDefaultGroupBind {
@@ -2730,7 +2381,6 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 			return nil, err
 		}
 		ComputeQuotaResetAt(account.Extra)
-		NormalizeFixedQuotaWindows(account.Extra)
 	}
 	if input.ExpiresAt != nil && *input.ExpiresAt > 0 {
 		expiresAt := time.Unix(*input.ExpiresAt, 0)
@@ -2759,7 +2409,15 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 
 	// 绑定分组
 	if len(groupIDs) > 0 {
-		if err := s.bindAccountGroups(ctx, account.ID, groupIDs, input.GroupBindings); err != nil {
+		if len(input.GroupBindings) > 0 {
+			if writer, ok := s.accountRepo.(accountGroupBindingWriter); ok {
+				if err := writer.BindGroupBindings(ctx, account.ID, input.GroupBindings); err != nil {
+					return nil, err
+				}
+			} else if err := s.accountRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
+				return nil, err
+			}
+		} else if err := s.accountRepo.BindGroups(ctx, account.ID, groupIDs); err != nil {
 			return nil, err
 		}
 	}
@@ -2799,6 +2457,12 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 	wasOveragesEnabled := account.IsOveragesEnabled()
 
+	if input.GroupBindings != nil {
+		if err := validateAccountGroupBindings(*input.GroupBindings); err != nil {
+			return nil, err
+		}
+	}
+
 	if input.Name != "" {
 		account.Name = input.Name
 	}
@@ -2809,9 +2473,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		account.Notes = normalizeAccountNotes(input.Notes)
 	}
 	if len(input.Credentials) > 0 {
-		// 敏感子键采用"incoming 没提供就保留"的合并语义：前端响应已脱敏，
-		// 全对象 PUT 编辑时不会再带回 token，避免覆盖时清空已有凭证。
-		account.Credentials = MergePreservingSensitiveCreds(account.Credentials, input.Credentials)
+		account.Credentials = input.Credentials
 	}
 	// Extra 使用 map：需要区分“未提供(nil)”与“显式清空({})”。
 	// 关闭配额限制时前端会删除 quota_* 键并提交 extra:{}，此时也必须落库。
@@ -2839,7 +2501,6 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 			return nil, err
 		}
 		ComputeQuotaResetAt(account.Extra)
-		NormalizeFixedQuotaWindows(account.Extra)
 	}
 	if input.ProxyID != nil {
 		// 0 表示清除代理（前端发送 0 而不是 null 来表达清除意图）
@@ -2888,21 +2549,23 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		account.AutoPauseOnExpired = *input.AutoPauseOnExpired
 	}
 
-	// 先验证分组是否存在（在任何写操作之前）
-	groupIDsForUpdate := input.GroupIDs
+	var targetGroupIDs *[]int64
 	if input.GroupBindings != nil {
-		ids := groupIDsFromBindings(*input.GroupBindings)
-		groupIDsForUpdate = &ids
+		ids := groupIDsFromAccountBindings(*input.GroupBindings)
+		targetGroupIDs = &ids
+	} else if input.GroupIDs != nil {
+		targetGroupIDs = input.GroupIDs
 	}
 
-	if groupIDsForUpdate != nil {
-		if err := s.validateGroupIDsExist(ctx, *groupIDsForUpdate); err != nil {
+	// 先验证分组是否存在（在任何写操作之前）
+	if targetGroupIDs != nil {
+		if err := s.validateGroupIDsExist(ctx, *targetGroupIDs); err != nil {
 			return nil, err
 		}
 
 		// 检查混合渠道风险（除非用户已确认）
 		if !input.SkipMixedChannelCheck {
-			if err := s.checkMixedChannelRisk(ctx, account.ID, account.Platform, *groupIDsForUpdate); err != nil {
+			if err := s.checkMixedChannelRisk(ctx, account.ID, account.Platform, *targetGroupIDs); err != nil {
 				return nil, err
 			}
 		}
@@ -2913,12 +2576,16 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	}
 
 	// 绑定分组
-	if groupIDsForUpdate != nil {
-		bindings := []AccountGroupBindingInput(nil)
+	if targetGroupIDs != nil {
 		if input.GroupBindings != nil {
-			bindings = *input.GroupBindings
-		}
-		if err := s.bindAccountGroups(ctx, account.ID, *groupIDsForUpdate, bindings); err != nil {
+			if writer, ok := s.accountRepo.(accountGroupBindingWriter); ok {
+				if err := writer.BindGroupBindings(ctx, account.ID, *input.GroupBindings); err != nil {
+					return nil, err
+				}
+			} else if err := s.accountRepo.BindGroups(ctx, account.ID, *targetGroupIDs); err != nil {
+				return nil, err
+			}
+		} else if err := s.accountRepo.BindGroups(ctx, account.ID, *targetGroupIDs); err != nil {
 			return nil, err
 		}
 	}
@@ -2929,15 +2596,6 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		return nil, err
 	}
 	return updated, nil
-}
-
-// UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键
-// （如 model_rate_limits / passive_usage_* 等）。
-func (s *adminServiceImpl) UpdateAccountExtra(ctx context.Context, id int64, updates map[string]any) error {
-	if len(updates) == 0 {
-		return nil
-	}
-	return s.accountRepo.UpdateExtra(ctx, id, updates)
 }
 
 // BulkUpdateAccounts updates multiple accounts in one request.
@@ -3147,9 +2805,6 @@ func (s *adminServiceImpl) ClearAccountError(ctx context.Context, id int64) (*Ac
 	if err := s.accountRepo.ClearTempUnschedulable(ctx, id); err != nil {
 		return nil, err
 	}
-	if s.runtimeBlocker != nil {
-		s.runtimeBlocker.ClearAccountSchedulingBlock(id)
-	}
 	return s.accountRepo.GetByID(ctx, id)
 }
 
@@ -3166,10 +2821,6 @@ func (s *adminServiceImpl) SetAccountSchedulable(ctx context.Context, id int64, 
 		return nil, err
 	}
 	return updated, nil
-}
-
-func (s *adminServiceImpl) RevertAccountProxyFallback(ctx context.Context, id int64) error {
-	return s.accountRepo.RevertProxyFallback(ctx, id)
 }
 
 // Proxy management implementations
@@ -3214,31 +2865,14 @@ func (s *adminServiceImpl) GetProxiesByIDs(ctx context.Context, ids []int64) ([]
 }
 
 func (s *adminServiceImpl) CreateProxy(ctx context.Context, input *CreateProxyInput) (*Proxy, error) {
-	// 规范化 fallback_mode
-	mode := input.FallbackMode
-	if mode == "" {
-		mode = FallbackModeNone
-	}
-	// 校验：mode=proxy 必须有 backup
-	if mode == FallbackModeProxy && input.BackupProxyID == nil {
-		return nil, infraerrors.BadRequest("PROXY_BACKUP_REQUIRED", "backup proxy required when fallback_mode=proxy")
-	}
-	if input.ExpiryWarnDays < 0 {
-		return nil, infraerrors.BadRequest("PROXY_WARN_DAYS_INVALID", "expiry_warn_days must be >= 0")
-	}
-
 	proxy := &Proxy{
-		Name:           input.Name,
-		Protocol:       input.Protocol,
-		Host:           input.Host,
-		Port:           input.Port,
-		Username:       input.Username,
-		Password:       input.Password,
-		Status:         StatusActive,
-		ExpiresAt:      input.ExpiresAt,
-		FallbackMode:   mode,
-		BackupProxyID:  input.BackupProxyID,
-		ExpiryWarnDays: input.ExpiryWarnDays,
+		Name:     input.Name,
+		Protocol: input.Protocol,
+		Host:     input.Host,
+		Port:     input.Port,
+		Username: input.Username,
+		Password: input.Password,
+		Status:   StatusActive,
 	}
 	if err := s.proxyRepo.Create(ctx, proxy); err != nil {
 		return nil, err
@@ -3249,23 +2883,6 @@ func (s *adminServiceImpl) CreateProxy(ctx context.Context, input *CreateProxyIn
 }
 
 func (s *adminServiceImpl) UpdateProxy(ctx context.Context, id int64, input *UpdateProxyInput) (*Proxy, error) {
-	// 校验：backup_proxy_id 不能是自身
-	if input.BackupProxyID != nil && *input.BackupProxyID == id {
-		return nil, infraerrors.BadRequest("PROXY_BACKUP_SELF", "backup proxy cannot be itself")
-	}
-	// 规范化 fallback_mode
-	mode := input.FallbackMode
-	if mode == "" {
-		mode = FallbackModeNone
-	}
-	// 校验：mode=proxy 必须有 backup
-	if mode == FallbackModeProxy && input.BackupProxyID == nil {
-		return nil, infraerrors.BadRequest("PROXY_BACKUP_REQUIRED", "backup proxy required when fallback_mode=proxy")
-	}
-	if input.ExpiryWarnDays < 0 {
-		return nil, infraerrors.BadRequest("PROXY_WARN_DAYS_INVALID", "expiry_warn_days must be >= 0")
-	}
-
 	proxy, err := s.proxyRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -3292,11 +2909,6 @@ func (s *adminServiceImpl) UpdateProxy(ctx context.Context, id int64, input *Upd
 	if input.Status != "" {
 		proxy.Status = input.Status
 	}
-	// 透传有效期与回退字段
-	proxy.ExpiresAt = input.ExpiresAt
-	proxy.FallbackMode = mode
-	proxy.BackupProxyID = input.BackupProxyID
-	proxy.ExpiryWarnDays = input.ExpiryWarnDays
 
 	if err := s.proxyRepo.Update(ctx, proxy); err != nil {
 		return nil, err
@@ -3373,23 +2985,19 @@ func (s *adminServiceImpl) GetRedeemCode(ctx context.Context, id int64) (*Redeem
 }
 
 func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *GenerateRedeemCodesInput) ([]RedeemCode, error) {
-	if input.ExpiresAt != nil && !input.ExpiresAt.After(time.Now()) {
-		return nil, ErrRedeemCodeExpired
-	}
-
-	sourceType := NormalizeRedeemSourceType(input.SourceType, RedeemSourceSystemGrant)
-	// 订阅卡密必须显式绑定新产品订阅 product_id，避免用 group_id 猜产品。
-	var productDefaultValidityDays int
+	// 如果是订阅类型，验证必须有 GroupID
 	if input.Type == RedeemTypeSubscription {
-		if input.ProductID == nil {
-			return nil, errors.New("product_id is required for subscription type")
+		if input.GroupID == nil {
+			return nil, errors.New("group_id is required for subscription type")
 		}
-		product, err := s.getRedeemProduct(ctx, *input.ProductID)
+		// 验证分组存在且为订阅类型
+		group, err := s.groupRepo.GetByID(ctx, *input.GroupID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("group not found: %w", err)
 		}
-		productDefaultValidityDays = product.DefaultValidityDays
-		input.GroupID = nil
+		if !group.IsSubscriptionType() {
+			return nil, errors.New("group must be subscription type")
+		}
 	}
 
 	codes := make([]RedeemCode, 0, input.Count)
@@ -3399,23 +3007,17 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 			return nil, err
 		}
 		code := RedeemCode{
-			Code:       codeValue,
-			Type:       input.Type,
-			Value:      input.Value,
-			Status:     StatusUnused,
-			SourceType: sourceType,
-			ExpiresAt:  input.ExpiresAt,
+			Code:   codeValue,
+			Type:   input.Type,
+			Value:  input.Value,
+			Status: StatusUnused,
 		}
 		// 订阅类型专用字段
 		if input.Type == RedeemTypeSubscription {
 			code.GroupID = input.GroupID
-			code.ProductID = input.ProductID
 			code.ValidityDays = input.ValidityDays
 			if code.ValidityDays <= 0 {
-				code.ValidityDays = productDefaultValidityDays
-			}
-			if code.ValidityDays <= 0 {
-				code.ValidityDays = 30 // 兼容旧分组订阅码的默认值
+				code.ValidityDays = 30 // 默认30天
 			}
 		}
 		if err := s.redeemCodeRepo.Create(ctx, &code); err != nil {
@@ -3424,52 +3026,6 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 		codes = append(codes, code)
 	}
 	return codes, nil
-}
-
-func (s *adminServiceImpl) getRedeemProduct(ctx context.Context, productID int64) (*SubscriptionProduct, error) {
-	if productID <= 0 {
-		return nil, errors.New("product_id is required for subscription type")
-	}
-	resolver, ok := s.defaultSubAssigner.(interface {
-		ListProducts(ctx context.Context) ([]SubscriptionProduct, error)
-	})
-	if !ok {
-		return nil, errors.New("subscription product service is not configured")
-	}
-	products, err := resolver.ListProducts(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("validate subscription product: %w", err)
-	}
-	for i := range products {
-		product := products[i]
-		if product.ID == productID {
-			if product.Status != SubscriptionProductStatusActive {
-				return nil, errors.New("subscription product must be active")
-			}
-			return &product, nil
-		}
-	}
-	return nil, ErrSubscriptionNotFound
-}
-
-func (s *adminServiceImpl) validateRedeemProductID(ctx context.Context, productID int64) error {
-	_, err := s.getRedeemProduct(ctx, productID)
-	return err
-}
-
-func (s *adminServiceImpl) resolveProductIDForLegacyGroup(ctx context.Context, groupID int64) (int64, bool, error) {
-	if s == nil || s.defaultSubAssigner == nil {
-		return 0, false, nil
-	}
-	resolver, ok := s.defaultSubAssigner.(LegacyGroupProductResolver)
-	if !ok {
-		return 0, false, nil
-	}
-	productID, mapped, err := resolver.ResolveActiveProductIDByGroupID(ctx, groupID)
-	if err != nil {
-		return 0, false, fmt.Errorf("resolve subscription product for group %d: %w", groupID, err)
-	}
-	return productID, mapped, nil
 }
 
 func (s *adminServiceImpl) DeleteRedeemCode(ctx context.Context, id int64) error {
@@ -3677,13 +3233,12 @@ func runProxyQualityTarget(ctx context.Context, client *http.Client, target prox
 	}
 
 	if _, ok := target.AllowedStatuses[resp.StatusCode]; ok {
-		// 白名单内的状态码均代表目标可达：2xx 表示接口直接可用，
-		// 401/405 等是无鉴权探测的预期结果，同样视为连通正常，不再扣分。
-		item.Status = "pass"
 		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+			item.Status = "pass"
 			item.Message = fmt.Sprintf("HTTP %d", resp.StatusCode)
 		} else {
-			item.Message = fmt.Sprintf("HTTP %d（目标可达）", resp.StatusCode)
+			item.Status = "warn"
+			item.Message = fmt.Sprintf("HTTP %d（目标可达，但鉴权或方法受限）", resp.StatusCode)
 		}
 		return item
 	}

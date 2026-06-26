@@ -13,27 +13,15 @@ export interface UpdateApiKeyGroupResult {
   granted_group_name?: string
 }
 
-export interface UpdateAdminApiKeyGroupPayload {
-  group_id: number | null
-  reset_rate_limit_usage?: boolean
-}
-
 /**
  * Update an API key's group binding
  * @param id - API Key ID
- * @param payload - Group ID (0 to unbind, positive to bind, null/undefined to skip) plus optional reset metadata
+ * @param groupId - Group ID (0 to unbind, positive to bind, null/undefined to skip)
  * @returns Updated API key with auto-grant info
  */
-export async function updateApiKeyGroup(
-  id: number,
-  payload: number | null | UpdateAdminApiKeyGroupPayload
-): Promise<UpdateApiKeyGroupResult> {
-  const body: UpdateAdminApiKeyGroupPayload = payload !== null && typeof payload === 'object'
-    ? payload
-    : { group_id: payload }
+export async function updateApiKeyGroup(id: number, groupId: number | null): Promise<UpdateApiKeyGroupResult> {
   const { data } = await apiClient.put<UpdateApiKeyGroupResult>(`/admin/api-keys/${id}`, {
-    ...body,
-    group_id: body.group_id === null ? 0 : body.group_id
+    group_id: groupId === null ? 0 : groupId
   })
   return data
 }

@@ -17,14 +17,6 @@ func resolveOpenAIForwardModel(account *Account, requestedModel, defaultMappedMo
 	if !matched && defaultMappedModel != "" && claudeMessagesDispatchFamily(requestedModel) != "" {
 		return defaultMappedModel
 	}
-	if !matched {
-		if strings.Contains(strings.ToLower(strings.TrimSpace(mappedModel)), "-openai-compact") {
-			return mappedModel
-		}
-		if normalized := normalizeKnownOpenAICompatAlias(mappedModel); normalized != "" {
-			return normalized
-		}
-	}
 	return mappedModel
 }
 

@@ -22,8 +22,6 @@ const (
 	FieldValue = "value"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldSourceType holds the string denoting the source_type field in the database.
-	FieldSourceType = "source_type"
 	// FieldUsedBy holds the string denoting the used_by field in the database.
 	FieldUsedBy = "used_by"
 	// FieldUsedAt holds the string denoting the used_at field in the database.
@@ -32,12 +30,8 @@ const (
 	FieldNotes = "notes"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
-	// FieldExpiresAt holds the string denoting the expires_at field in the database.
-	FieldExpiresAt = "expires_at"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
-	// FieldProductID holds the string denoting the product_id field in the database.
-	FieldProductID = "product_id"
 	// FieldValidityDays holds the string denoting the validity_days field in the database.
 	FieldValidityDays = "validity_days"
 	// EdgeUser holds the string denoting the user edge name in mutations.
@@ -69,14 +63,11 @@ var Columns = []string{
 	FieldType,
 	FieldValue,
 	FieldStatus,
-	FieldSourceType,
 	FieldUsedBy,
 	FieldUsedAt,
 	FieldNotes,
 	FieldCreatedAt,
-	FieldExpiresAt,
 	FieldGroupID,
-	FieldProductID,
 	FieldValidityDays,
 }
 
@@ -103,10 +94,6 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
-	// DefaultSourceType holds the default value on creation for the "source_type" field.
-	DefaultSourceType string
-	// SourceTypeValidator is a validator for the "source_type" field. It is called by the builders before save.
-	SourceTypeValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultValidityDays holds the default value on creation for the "validity_days" field.
@@ -141,11 +128,6 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
 }
 
-// BySourceType orders the results by the source_type field.
-func BySourceType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSourceType, opts...).ToFunc()
-}
-
 // ByUsedBy orders the results by the used_by field.
 func ByUsedBy(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUsedBy, opts...).ToFunc()
@@ -166,19 +148,9 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
 }
 
-// ByExpiresAt orders the results by the expires_at field.
-func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldExpiresAt, opts...).ToFunc()
-}
-
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
-}
-
-// ByProductID orders the results by the product_id field.
-func ByProductID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldProductID, opts...).ToFunc()
 }
 
 // ByValidityDays orders the results by the validity_days field.

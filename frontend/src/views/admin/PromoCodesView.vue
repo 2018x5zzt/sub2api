@@ -8,7 +8,7 @@
             <input
               v-model="searchQuery"
               type="text"
-              :placeholder="t('admin.promo.searchCodes')"
+              :placeholder="pageText('searchCodes')"
               class="input"
               @input="handleSearch"
             />
@@ -32,7 +32,7 @@
             </button>
             <button @click="showCreateDialog = true" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-1" />
-              {{ t('admin.promo.createCode') }}
+              {{ pageText('createCode') }}
             </button>
           </div>
         </div>
@@ -51,15 +51,15 @@
           <template #cell-code="{ value }">
             <div class="flex items-center space-x-2">
               <code class="font-mono text-sm text-gray-900 dark:text-gray-100">{{ value }}</code>
-              <button
-                @click="copyToClipboard(value)"
+                <button
+                  @click="copyToClipboard(value)"
                 :class="[
                   'flex items-center transition-colors',
                   copiedCode === value
                     ? 'text-green-500'
                     : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
                 ]"
-                :title="copiedCode === value ? t('admin.promo.copied') : t('keys.copyToClipboard')"
+                :title="copiedCode === value ? pageText('copied') : t('keys.copyToClipboard')"
               >
                 <Icon v-if="copiedCode !== value" name="copy" size="sm" :stroke-width="2" />
                 <svg v-else class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -74,10 +74,19 @@
             </div>
           </template>
 
-          <template #cell-bonus_amount="{ value }">
-            <span class="text-sm font-medium text-gray-900 dark:text-white">
-              ${{ value.toFixed(2) }}
-            </span>
+          <template #cell-bonus_amount="{ value, row }">
+            <div>
+              <span class="text-sm font-medium text-gray-900 dark:text-white">
+                ${{ value.toFixed(2) }}
+              </span>
+              <p
+                v-if="isBenefitScene && row.random_bonus_pool_amount > 0"
+                class="mt-1 text-xs text-amber-700 dark:text-amber-300"
+              >
+                {{ pageText('randomPoolAmount') }}:
+                ${{ row.random_bonus_remaining.toFixed(2) }} / ${{ row.random_bonus_pool_amount.toFixed(2) }}
+              </p>
+            </div>
           </template>
 
           <template #cell-usage="{ row }">
@@ -99,7 +108,7 @@
 
           <template #cell-expires_at="{ value }">
             <span class="text-sm text-gray-500 dark:text-dark-400">
-              {{ value ? formatDateTime(value) : t('admin.promo.neverExpires') }}
+              {{ value ? formatDateTime(value) : pageText('neverExpires') }}
             </span>
           </template>
 
@@ -112,16 +121,17 @@
           <template #cell-actions="{ row }">
             <div class="flex items-center space-x-1">
               <button
+                v-if="!isBenefitScene"
                 @click="copyRegisterLink(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
-                :title="t('admin.promo.copyRegisterLink')"
+                :title="pageText('copyRegisterLink')"
               >
                 <Icon name="link" size="sm" />
               </button>
               <button
                 @click="handleViewUsages(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
-                :title="t('admin.promo.viewUsages')"
+                :title="pageText('viewUsages')"
               >
                 <Icon name="eye" size="sm" />
               </button>
@@ -159,25 +169,25 @@
     <!-- Create Dialog -->
     <BaseDialog
       :show="showCreateDialog"
-      :title="t('admin.promo.createCode')"
+      :title="pageText('createCode')"
       width="normal"
       @close="showCreateDialog = false"
     >
       <form id="create-promo-form" @submit.prevent="handleCreate" class="space-y-4">
         <div>
           <label class="input-label">
-            {{ t('admin.promo.code') }}
-            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('admin.promo.autoGenerate') }})</span>
+            {{ pageText('code') }}
+            <span class="ml-1 text-xs font-normal text-gray-400">({{ pageText('autoGenerate') }})</span>
           </label>
           <input
             v-model="createForm.code"
             type="text"
             class="input font-mono uppercase"
-            :placeholder="t('admin.promo.codePlaceholder')"
+            :placeholder="pageText('codePlaceholder')"
           />
         </div>
         <div>
-          <label class="input-label">{{ t('admin.promo.bonusAmount') }}</label>
+          <label class="input-label">{{ pageText('bonusAmount') }}</label>
           <input
             v-model.number="createForm.bonus_amount"
             type="number"
@@ -187,10 +197,20 @@
             class="input"
           />
         </div>
+        <div v-if="isBenefitScene">
+          <label class="input-label">{{ pageText('randomPoolAmount') }}</label>
+          <input
+            v-model.number="createForm.random_bonus_pool_amount"
+            type="number"
+            step="0.01"
+            min="0"
+            class="input"
+          />
+        </div>
         <div>
           <label class="input-label">
-            {{ t('admin.promo.maxUses') }}
-            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('admin.promo.zeroUnlimited') }})</span>
+            {{ pageText('maxUses') }}
+            <span class="ml-1 text-xs font-normal text-gray-400">({{ pageText('zeroUnlimited') }})</span>
           </label>
           <input
             v-model.number="createForm.max_uses"
@@ -201,7 +221,7 @@
         </div>
         <div>
           <label class="input-label">
-            {{ t('admin.promo.expiresAt') }}
+            {{ pageText('expiresAt') }}
             <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
           </label>
           <input
@@ -210,16 +230,38 @@
             class="input"
           />
         </div>
+        <div v-if="isBenefitScene">
+          <label class="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <input
+              v-model="createForm.leaderboard_enabled"
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            {{ pageText('leaderboardEnabled') }}
+          </label>
+        </div>
+        <div v-if="isBenefitScene">
+          <label class="input-label">
+            {{ pageText('successMessage') }}
+            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
+          </label>
+          <textarea
+            v-model="createForm.success_message"
+            rows="3"
+            class="input"
+            :placeholder="pageText('successMessagePlaceholder')"
+          ></textarea>
+        </div>
         <div>
           <label class="input-label">
-            {{ t('admin.promo.notes') }}
+            {{ pageText('notes') }}
             <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
           </label>
           <textarea
             v-model="createForm.notes"
             rows="2"
             class="input"
-            :placeholder="t('admin.promo.notesPlaceholder')"
+            :placeholder="pageText('notesPlaceholder')"
           ></textarea>
         </div>
       </form>
@@ -238,13 +280,13 @@
     <!-- Edit Dialog -->
     <BaseDialog
       :show="showEditDialog"
-      :title="t('admin.promo.editCode')"
+      :title="pageText('editCode')"
       width="normal"
       @close="closeEditDialog"
     >
       <form id="edit-promo-form" @submit.prevent="handleUpdate" class="space-y-4">
         <div>
-          <label class="input-label">{{ t('admin.promo.code') }}</label>
+          <label class="input-label">{{ pageText('code') }}</label>
           <input
             v-model="editForm.code"
             type="text"
@@ -252,7 +294,7 @@
           />
         </div>
         <div>
-          <label class="input-label">{{ t('admin.promo.bonusAmount') }}</label>
+          <label class="input-label">{{ pageText('bonusAmount') }}</label>
           <input
             v-model.number="editForm.bonus_amount"
             type="number"
@@ -262,10 +304,20 @@
             class="input"
           />
         </div>
+        <div v-if="isBenefitScene">
+          <label class="input-label">{{ pageText('randomPoolAmount') }}</label>
+          <input
+            v-model.number="editForm.random_bonus_pool_amount"
+            type="number"
+            step="0.01"
+            min="0"
+            class="input"
+          />
+        </div>
         <div>
           <label class="input-label">
-            {{ t('admin.promo.maxUses') }}
-            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('admin.promo.zeroUnlimited') }})</span>
+            {{ pageText('maxUses') }}
+            <span class="ml-1 text-xs font-normal text-gray-400">({{ pageText('zeroUnlimited') }})</span>
           </label>
           <input
             v-model.number="editForm.max_uses"
@@ -275,12 +327,12 @@
           />
         </div>
         <div>
-          <label class="input-label">{{ t('admin.promo.status') }}</label>
+          <label class="input-label">{{ pageText('status') }}</label>
           <Select v-model="editForm.status" :options="statusOptions" />
         </div>
         <div>
           <label class="input-label">
-            {{ t('admin.promo.expiresAt') }}
+            {{ pageText('expiresAt') }}
             <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
           </label>
           <input
@@ -289,9 +341,31 @@
             class="input"
           />
         </div>
+        <div v-if="isBenefitScene">
+          <label class="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <input
+              v-model="editForm.leaderboard_enabled"
+              type="checkbox"
+              class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            {{ pageText('leaderboardEnabled') }}
+          </label>
+        </div>
+        <div v-if="isBenefitScene">
+          <label class="input-label">
+            {{ pageText('successMessage') }}
+            <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
+          </label>
+          <textarea
+            v-model="editForm.success_message"
+            rows="3"
+            class="input"
+            :placeholder="pageText('successMessagePlaceholder')"
+          ></textarea>
+        </div>
         <div>
           <label class="input-label">
-            {{ t('admin.promo.notes') }}
+            {{ pageText('notes') }}
             <span class="ml-1 text-xs font-normal text-gray-400">({{ t('common.optional') }})</span>
           </label>
           <textarea
@@ -316,7 +390,7 @@
     <!-- Usages Dialog -->
     <BaseDialog
       :show="showUsagesDialog"
-      :title="t('admin.promo.usageRecords')"
+      :title="pageText('usageRecords')"
       width="wide"
       @close="showUsagesDialog = false"
     >
@@ -324,7 +398,7 @@
         <Icon name="refresh" size="lg" class="animate-spin text-gray-400" />
       </div>
       <div v-else-if="usages.length === 0" class="py-8 text-center text-gray-500 dark:text-gray-400">
-        {{ t('admin.promo.noUsages') }}
+        {{ pageText('noUsages') }}
       </div>
       <div v-else class="space-y-3">
         <div
@@ -338,7 +412,7 @@
             </div>
             <div>
               <p class="text-sm font-medium text-gray-900 dark:text-white">
-                {{ usage.user?.email || t('admin.promo.userPrefix', { id: usage.user_id }) }}
+                {{ usage.user?.email || pageText('userPrefix', { id: usage.user_id }) }}
               </p>
               <p class="text-xs text-gray-500 dark:text-gray-400">
                 {{ formatDateTime(usage.used_at) }}
@@ -349,6 +423,14 @@
             <span class="text-sm font-medium text-green-600 dark:text-green-400">
               +${{ usage.bonus_amount.toFixed(2) }}
             </span>
+            <p
+              v-if="usage.random_bonus_amount > 0"
+              class="mt-1 text-xs text-amber-700 dark:text-amber-300"
+            >
+              {{ pageText('fixedAmount') }}: ${{ usage.fixed_bonus_amount.toFixed(2) }}
+              <span class="mx-1">+</span>
+              {{ pageText('randomAmount') }}: ${{ usage.random_bonus_amount.toFixed(2) }}
+            </p>
           </div>
         </div>
         <!-- Usages Pagination -->
@@ -374,8 +456,8 @@
     <!-- Delete Confirmation Dialog -->
     <ConfirmDialog
       :show="showDeleteDialog"
-      :title="t('admin.promo.deleteCode')"
-      :message="t('admin.promo.deleteCodeConfirm')"
+      :title="pageText('deleteCode')"
+      :message="pageText('deleteCodeConfirm')"
       :confirm-text="t('common.delete')"
       :cancel-text="t('common.cancel')"
       danger
@@ -386,14 +468,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useClipboard } from '@/composables/useClipboard'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { adminAPI } from '@/api/admin'
 import { formatDateTime } from '@/utils/format'
-import type { PromoCode, PromoCodeUsage } from '@/types'
+import type { PromoCode, PromoCodeScene, PromoCodeUsage } from '@/types'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -405,8 +488,14 @@ import Select from '@/components/common/Select.vue'
 import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
+const route = useRoute()
 const appStore = useAppStore()
 const { copyToClipboard: clipboardCopy } = useClipboard()
+const isBenefitScene = computed(() => route.meta.promoScene === 'benefit')
+const promoScene = computed<PromoCodeScene>(() => isBenefitScene.value ? 'benefit' : 'register')
+const pageText = (key: string, params: Record<string, unknown> = {}) => (
+  t(`${isBenefitScene.value ? 'admin.benefit' : 'admin.promo'}.${key}`, params)
+)
 
 // State
 const codes = ref<PromoCode[]>([])
@@ -451,40 +540,46 @@ const usagesTotal = ref(0)
 const createForm = reactive({
   code: '',
   bonus_amount: 1,
+  random_bonus_pool_amount: 0,
   max_uses: 0,
+  leaderboard_enabled: false,
   expires_at_str: '',
+  success_message: '',
   notes: ''
 })
 
 const editForm = reactive({
   code: '',
   bonus_amount: 0,
+  random_bonus_pool_amount: 0,
   max_uses: 0,
+  leaderboard_enabled: false,
   status: 'active' as 'active' | 'disabled',
   expires_at_str: '',
+  success_message: '',
   notes: ''
 })
 
 // Options
 const filterStatusOptions = computed(() => [
-  { value: '', label: t('admin.promo.allStatus') },
-  { value: 'active', label: t('admin.promo.statusActive') },
-  { value: 'disabled', label: t('admin.promo.statusDisabled') }
+  { value: '', label: pageText('allStatus') },
+  { value: 'active', label: pageText('statusActive') },
+  { value: 'disabled', label: pageText('statusDisabled') }
 ])
 
 const statusOptions = computed(() => [
-  { value: 'active', label: t('admin.promo.statusActive') },
-  { value: 'disabled', label: t('admin.promo.statusDisabled') }
+  { value: 'active', label: pageText('statusActive') },
+  { value: 'disabled', label: pageText('statusDisabled') }
 ])
 
 const columns = computed<Column[]>(() => [
-  { key: 'code', label: t('admin.promo.columns.code') },
-  { key: 'bonus_amount', label: t('admin.promo.columns.bonusAmount'), sortable: true },
-  { key: 'usage', label: t('admin.promo.columns.usage') },
-  { key: 'status', label: t('admin.promo.columns.status'), sortable: true },
-  { key: 'expires_at', label: t('admin.promo.columns.expiresAt'), sortable: true },
-  { key: 'created_at', label: t('admin.promo.columns.createdAt'), sortable: true },
-  { key: 'actions', label: t('admin.promo.columns.actions') }
+  { key: 'code', label: pageText('columns.code') },
+  { key: 'bonus_amount', label: pageText('columns.bonusAmount'), sortable: true },
+  { key: 'usage', label: pageText('columns.usage') },
+  { key: 'status', label: pageText('columns.status'), sortable: true },
+  { key: 'expires_at', label: pageText('columns.expiresAt'), sortable: true },
+  { key: 'created_at', label: pageText('columns.createdAt'), sortable: true },
+  { key: 'actions', label: pageText('columns.actions') }
 ])
 
 // Helpers
@@ -500,12 +595,12 @@ const getStatusClass = (status: string, row: PromoCode) => {
 
 const getStatusLabel = (status: string, row: PromoCode) => {
   if (row.expires_at && new Date(row.expires_at) < new Date()) {
-    return t('admin.promo.statusExpired')
+    return pageText('statusExpired')
   }
   if (row.max_uses > 0 && row.used_count >= row.max_uses) {
-    return t('admin.promo.statusMaxUsed')
+    return pageText('statusMaxUsed')
   }
-  return status === 'active' ? t('admin.promo.statusActive') : t('admin.promo.statusDisabled')
+  return status === 'active' ? pageText('statusActive') : pageText('statusDisabled')
 }
 
 // API calls
@@ -524,6 +619,7 @@ const loadCodes = async () => {
       pagination.page,
       pagination.page_size,
       {
+        scene: promoScene.value,
         status: filters.status || undefined,
         search: searchQuery.value || undefined,
         sort_by: sortState.sort_by,
@@ -544,7 +640,7 @@ const loadCodes = async () => {
     ) {
       return
     }
-    appStore.showError(t('admin.promo.failedToLoad'))
+    appStore.showError(pageText('failedToLoad'))
     console.error('Error loading promo codes:', error)
   } finally {
     if (abortController === currentController) {
@@ -582,7 +678,7 @@ const handleSort = (key: string, order: 'asc' | 'desc') => {
 }
 
 const copyToClipboard = async (text: string) => {
-  const success = await clipboardCopy(text, t('admin.promo.copied'))
+  const success = await clipboardCopy(text, pageText('copied'))
   if (success) {
     copiedCode.value = text
     setTimeout(() => {
@@ -597,17 +693,21 @@ const handleCreate = async () => {
   try {
     await adminAPI.promo.create({
       code: createForm.code || undefined,
+      scene: promoScene.value,
       bonus_amount: createForm.bonus_amount,
+      random_bonus_pool_amount: createForm.random_bonus_pool_amount || undefined,
       max_uses: createForm.max_uses,
+      leaderboard_enabled: createForm.leaderboard_enabled,
       expires_at: createForm.expires_at_str ? Math.floor(new Date(createForm.expires_at_str).getTime() / 1000) : undefined,
+      success_message: createForm.success_message || undefined,
       notes: createForm.notes || undefined
     })
-    appStore.showSuccess(t('admin.promo.codeCreated'))
+    appStore.showSuccess(pageText('codeCreated'))
     showCreateDialog.value = false
     resetCreateForm()
     loadCodes()
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.promo.failedToCreate'))
+    appStore.showError(error.response?.data?.detail || pageText('failedToCreate'))
   } finally {
     creating.value = false
   }
@@ -616,8 +716,11 @@ const handleCreate = async () => {
 const resetCreateForm = () => {
   createForm.code = ''
   createForm.bonus_amount = 1
+  createForm.random_bonus_pool_amount = 0
   createForm.max_uses = 0
+  createForm.leaderboard_enabled = false
   createForm.expires_at_str = ''
+  createForm.success_message = ''
   createForm.notes = ''
 }
 
@@ -626,9 +729,12 @@ const handleEdit = (code: PromoCode) => {
   editingCode.value = code
   editForm.code = code.code
   editForm.bonus_amount = code.bonus_amount
+  editForm.random_bonus_pool_amount = code.random_bonus_pool_amount
   editForm.max_uses = code.max_uses
+  editForm.leaderboard_enabled = code.leaderboard_enabled
   editForm.status = code.status
   editForm.expires_at_str = code.expires_at ? new Date(code.expires_at).toISOString().slice(0, 16) : ''
+  editForm.success_message = code.success_message || ''
   editForm.notes = code.notes || ''
   showEditDialog.value = true
 }
@@ -636,6 +742,7 @@ const handleEdit = (code: PromoCode) => {
 const closeEditDialog = () => {
   showEditDialog.value = false
   editingCode.value = null
+  editForm.success_message = ''
 }
 
 const handleUpdate = async () => {
@@ -646,16 +753,19 @@ const handleUpdate = async () => {
     await adminAPI.promo.update(editingCode.value.id, {
       code: editForm.code,
       bonus_amount: editForm.bonus_amount,
+      random_bonus_pool_amount: editForm.random_bonus_pool_amount,
       max_uses: editForm.max_uses,
+      leaderboard_enabled: editForm.leaderboard_enabled,
       status: editForm.status,
       expires_at: editForm.expires_at_str ? Math.floor(new Date(editForm.expires_at_str).getTime() / 1000) : 0,
+      success_message: editForm.success_message,
       notes: editForm.notes
     })
-    appStore.showSuccess(t('admin.promo.codeUpdated'))
+    appStore.showSuccess(pageText('codeUpdated'))
     closeEditDialog()
     loadCodes()
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.promo.failedToUpdate'))
+    appStore.showError(error.response?.data?.detail || pageText('failedToUpdate'))
   } finally {
     updating.value = false
   }
@@ -663,12 +773,13 @@ const handleUpdate = async () => {
 
 // Copy Register Link
 const copyRegisterLink = async (code: PromoCode) => {
+  if (isBenefitScene.value) return
   const baseUrl = window.location.origin
   const registerLink = `${baseUrl}/register?promo=${encodeURIComponent(code.code)}`
 
   try {
     await navigator.clipboard.writeText(registerLink)
-    appStore.showSuccess(t('admin.promo.registerLinkCopied'))
+    appStore.showSuccess(pageText('registerLinkCopied'))
   } catch (error) {
     // Fallback for older browsers
     const textArea = document.createElement('textarea')
@@ -677,7 +788,7 @@ const copyRegisterLink = async (code: PromoCode) => {
     textArea.select()
     document.execCommand('copy')
     document.body.removeChild(textArea)
-    appStore.showSuccess(t('admin.promo.registerLinkCopied'))
+    appStore.showSuccess(pageText('registerLinkCopied'))
   }
 }
 
@@ -692,12 +803,12 @@ const confirmDelete = async () => {
 
   try {
     await adminAPI.promo.delete(deletingCode.value.id)
-    appStore.showSuccess(t('admin.promo.codeDeleted'))
+    appStore.showSuccess(pageText('codeDeleted'))
     showDeleteDialog.value = false
     deletingCode.value = null
     loadCodes()
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.promo.failedToDelete'))
+    appStore.showError(error.response?.data?.detail || pageText('failedToDelete'))
   }
 }
 
@@ -723,7 +834,7 @@ const loadUsages = async () => {
     usages.value = response.items
     usagesTotal.value = response.total
   } catch (error: any) {
-    appStore.showError(error.response?.data?.detail || t('admin.promo.failedToLoadUsages'))
+    appStore.showError(error.response?.data?.detail || pageText('failedToLoadUsages'))
   } finally {
     usagesLoading.value = false
   }
@@ -735,6 +846,18 @@ const handleUsagesPageChange = (page: number) => {
 }
 
 onMounted(() => {
+  loadCodes()
+})
+
+watch(promoScene, () => {
+  filters.status = ''
+  searchQuery.value = ''
+  pagination.page = 1
+  showCreateDialog.value = false
+  showDeleteDialog.value = false
+  showUsagesDialog.value = false
+  resetCreateForm()
+  closeEditDialog()
   loadCodes()
 })
 

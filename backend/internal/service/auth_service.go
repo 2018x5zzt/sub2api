@@ -62,34 +62,28 @@ type JWTClaims struct {
 
 // AuthService 认证服务
 type AuthService struct {
-	entClient             *dbent.Client
-	userRepo              UserRepository
-	redeemRepo            RedeemCodeRepository
-	refreshTokenCache     RefreshTokenCache
-	cfg                   *config.Config
-	settingService        *SettingService
-	emailService          *EmailService
-	turnstileService      *TurnstileService
-	emailQueueService     *EmailQueueService
-	promoService          *PromoService
-	affiliateService      *AffiliateService
-	defaultSubAssigner    DefaultSubscriptionAssigner
-	userPlatformQuotaRepo UserPlatformQuotaRepository
+	entClient          *dbent.Client
+	userRepo           UserRepository
+	redeemRepo         RedeemCodeRepository
+	refreshTokenCache  RefreshTokenCache
+	cfg                *config.Config
+	settingService     *SettingService
+	emailService       *EmailService
+	turnstileService   *TurnstileService
+	emailQueueService  *EmailQueueService
+	promoService       *PromoService
+	affiliateService   *AffiliateService
+	defaultSubAssigner DefaultSubscriptionAssigner
 }
 
 type DefaultSubscriptionAssigner interface {
 	AssignOrExtendSubscription(ctx context.Context, input *AssignSubscriptionInput) (*UserSubscription, bool, error)
 }
 
-type LegacyGroupProductResolver interface {
-	ResolveActiveProductIDByGroupID(ctx context.Context, groupID int64) (int64, bool, error)
-}
-
 type signupGrantPlan struct {
-	Balance        float64
-	Concurrency    int
-	Subscriptions  []DefaultSubscriptionSetting
-	PlatformQuotas map[string]*DefaultPlatformQuotaSetting
+	Balance       float64
+	Concurrency   int
+	Subscriptions []DefaultSubscriptionSetting
 }
 
 // NewAuthService 创建认证服务实例
@@ -106,22 +100,20 @@ func NewAuthService(
 	promoService *PromoService,
 	defaultSubAssigner DefaultSubscriptionAssigner,
 	affiliateService *AffiliateService,
-	userPlatformQuotaRepo UserPlatformQuotaRepository,
 ) *AuthService {
 	return &AuthService{
-		entClient:             entClient,
-		userRepo:              userRepo,
-		redeemRepo:            redeemRepo,
-		refreshTokenCache:     refreshTokenCache,
-		cfg:                   cfg,
-		settingService:        settingService,
-		emailService:          emailService,
-		turnstileService:      turnstileService,
-		emailQueueService:     emailQueueService,
-		promoService:          promoService,
-		affiliateService:      affiliateService,
-		defaultSubAssigner:    defaultSubAssigner,
-		userPlatformQuotaRepo: userPlatformQuotaRepo,
+		entClient:          entClient,
+		userRepo:           userRepo,
+		redeemRepo:         redeemRepo,
+		refreshTokenCache:  refreshTokenCache,
+		cfg:                cfg,
+		settingService:     settingService,
+		emailService:       emailService,
+		turnstileService:   turnstileService,
+		emailQueueService:  emailQueueService,
+		promoService:       promoService,
+		affiliateService:   affiliateService,
+		defaultSubAssigner: defaultSubAssigner,
 	}
 }
 
@@ -165,7 +157,7 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 			return "", nil, ErrInvitationCodeInvalid
 		}
 		// 检查类型和状态
-		if redeemCode.Type != RedeemTypeInvitation || !redeemCode.CanUse() {
+		if redeemCode.Type != RedeemTypeInvitation || redeemCode.Status != StatusUnused {
 			logger.LegacyPrintf("service.auth", "[Auth] Invitation code invalid: type=%s, status=%s", redeemCode.Type, redeemCode.Status)
 			return "", nil, ErrInvitationCodeInvalid
 		}
@@ -234,8 +226,6 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	}
 	s.postAuthUserBootstrap(ctx, user, "email", true)
 	s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
-	// snapshot user × platform quota（fail-open）
-	_ = s.snapshotPlatformQuotaDefaults(ctx, user.ID, &grantPlan)
 	if s.affiliateService != nil {
 		if _, err := s.affiliateService.EnsureUserAffiliate(ctx, user.ID); err != nil {
 			logger.LegacyPrintf("service.auth", "[Auth] Failed to initialize affiliate profile for user %d: %v", user.ID, err)
@@ -283,7 +273,7 @@ type SendVerifyCodeResult struct {
 }
 
 // SendVerifyCode 发送邮箱验证码（同步方式）
-func (s *AuthService) SendVerifyCode(ctx context.Context, email string, locale ...string) error {
+func (s *AuthService) SendVerifyCode(ctx context.Context, email string) error {
 	// 检查是否开放注册（默认关闭）
 	if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
 		return ErrRegDisabled
@@ -317,11 +307,11 @@ func (s *AuthService) SendVerifyCode(ctx context.Context, email string, locale .
 		siteName = s.settingService.GetSiteName(ctx)
 	}
 
-	return s.emailService.SendVerifyCode(ctx, email, siteName, firstEmailLocale(locale))
+	return s.emailService.SendVerifyCode(ctx, email, siteName)
 }
 
 // SendVerifyCodeAsync 异步发送邮箱验证码并返回倒计时
-func (s *AuthService) SendVerifyCodeAsync(ctx context.Context, email string, locale ...string) (*SendVerifyCodeResult, error) {
+func (s *AuthService) SendVerifyCodeAsync(ctx context.Context, email string) (*SendVerifyCodeResult, error) {
 	logger.LegacyPrintf("service.auth", "[Auth] SendVerifyCodeAsync called for email: %s", email)
 
 	// 检查是否开放注册（默认关闭）
@@ -362,7 +352,7 @@ func (s *AuthService) SendVerifyCodeAsync(ctx context.Context, email string, loc
 
 	// 异步发送
 	logger.LegacyPrintf("service.auth", "[Auth] Enqueueing verify code for: %s", email)
-	if err := s.emailQueueService.EnqueueVerifyCode(email, siteName, firstEmailLocale(locale)); err != nil {
+	if err := s.emailQueueService.EnqueueVerifyCode(email, siteName); err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Failed to enqueue: %v", err)
 		return nil, fmt.Errorf("enqueue verify code: %w", err)
 	}
@@ -545,8 +535,6 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 				user = newUser
 				s.postAuthUserBootstrap(ctx, user, signupSource, false)
 				s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
-				// snapshot user × platform quota（fail-open）
-				_ = s.snapshotPlatformQuotaDefaults(ctx, user.ID, &grantPlan)
 			}
 		} else {
 			logger.LegacyPrintf("service.auth", "[Auth] Database error during oauth login: %v", err)
@@ -572,36 +560,11 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 	return token, user, nil
 }
 
-// canBypassRegistrationDisabledForOAuth 在钉钉企业模式（internal_only）且
-// dingtalk_connect_bypass_registration=true 时，允许跳过全局 registration_enabled 检查。
-func (s *AuthService) canBypassRegistrationDisabledForOAuth(ctx context.Context, signupSource string) bool {
-	if signupSource != "dingtalk" {
-		return false
-	}
-	cfg, err := s.settingService.GetDingTalkConnectOAuthConfig(ctx)
-	if err != nil || !cfg.Enabled || !cfg.BypassRegistration {
-		return false
-	}
-	return cfg.CorpRestrictionPolicy == "internal_only"
-}
-
 // LoginOrRegisterOAuthWithTokenPair 用于第三方 OAuth/SSO 登录，返回完整的 TokenPair。
 // 与 LoginOrRegisterOAuth 功能相同，但返回 TokenPair 而非单个 token。
 // invitationCode 仅在邀请码注册模式下新用户注册时使用；已有账号登录时忽略。
 // affiliateCode 用于邀请返利绑定，仅在新用户注册时使用。
-// signupSource 标识来源渠道（"dingtalk"/"linuxdo"/"wechat"/"oidc" 等），仅用于豁免检查。
-func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, email, username, invitationCode, affiliateCode, signupSource string) (*TokenPair, *User, error) {
-	return s.loginOrRegisterOAuthWithTokenPair(ctx, email, username, invitationCode, affiliateCode, "", signupSource)
-}
-
-// LoginOrRegisterOAuthWithTokenPairAndPromoCode behaves like
-// LoginOrRegisterOAuthWithTokenPair and applies promoCode only when a new user
-// is created.
-func (s *AuthService) LoginOrRegisterOAuthWithTokenPairAndPromoCode(ctx context.Context, email, username, invitationCode, affiliateCode, promoCode, signupSource string) (*TokenPair, *User, error) {
-	return s.loginOrRegisterOAuthWithTokenPair(ctx, email, username, invitationCode, affiliateCode, promoCode, signupSource)
-}
-
-func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, email, username, invitationCode, affiliateCode, promoCode, signupSource string) (*TokenPair, *User, error) {
+func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, email, username, invitationCode, affiliateCode string) (*TokenPair, *User, error) {
 	// 检查 refreshTokenCache 是否可用
 	if s.refreshTokenCache == nil {
 		return nil, nil, errors.New("refresh token cache not configured")
@@ -621,11 +584,10 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 	}
 
 	user, err := s.userRepo.GetByEmail(ctx, email)
-	created := false
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			// OAuth 首次登录视为注册
-			if s.settingService == nil || (!s.settingService.IsRegistrationEnabled(ctx) && !s.canBypassRegistrationDisabledForOAuth(ctx, signupSource)) {
+			if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
 				return nil, nil, ErrRegDisabled
 			}
 
@@ -639,7 +601,7 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 				if err != nil {
 					return nil, nil, ErrInvitationCodeInvalid
 				}
-				if redeemCode.Type != RedeemTypeInvitation || !redeemCode.CanUse() {
+				if redeemCode.Type != RedeemTypeInvitation || redeemCode.Status != StatusUnused {
 					return nil, nil, ErrInvitationCodeInvalid
 				}
 				invitationRedeemCode = redeemCode
@@ -655,11 +617,7 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 				return nil, nil, fmt.Errorf("hash password: %w", err)
 			}
 
-			// 优先用 caller 显式传入的 signupSource（如 "dingtalk" / "linuxdo" / "oidc" / "wechat"），
-			// 否则才按邮箱后缀推断——避免有真实邮箱的 OAuth 用户被推断为 "email" 渠道，导致渠道授权错读。
-			if strings.TrimSpace(signupSource) == "" {
-				signupSource = inferLegacySignupSource(email)
-			}
+			signupSource := inferLegacySignupSource(email)
 			grantPlan := s.resolveSignupGrantPlan(ctx, signupSource)
 			var defaultRPMLimit int
 			if s.settingService != nil {
@@ -707,11 +665,8 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 						return nil, nil, ErrServiceUnavailable
 					}
 					user = newUser
-					created = true
 					s.postAuthUserBootstrap(ctx, user, signupSource, false)
 					s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
-					// snapshot user × platform quota（fail-open）
-					_ = s.snapshotPlatformQuotaDefaults(ctx, user.ID, &grantPlan)
 					s.bindOAuthAffiliate(ctx, user.ID, affiliateCode)
 				}
 			} else {
@@ -728,11 +683,8 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 					}
 				} else {
 					user = newUser
-					created = true
 					s.postAuthUserBootstrap(ctx, user, signupSource, false)
 					s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
-					// snapshot user × platform quota（fail-open）
-					_ = s.snapshotPlatformQuotaDefaults(ctx, user.ID, &grantPlan)
 					s.bindOAuthAffiliate(ctx, user.ID, affiliateCode)
 					if invitationRedeemCode != nil {
 						if err := s.redeemRepo.Use(ctx, invitationRedeemCode.ID, user.ID); err != nil {
@@ -757,36 +709,11 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 			logger.LegacyPrintf("service.auth", "[Auth] Failed to update username after oauth login: %v", err)
 		}
 	}
-	if created {
-		user = s.applyOAuthSignupPromoCode(ctx, user, promoCode)
-	}
 	tokenPair, err := s.GenerateTokenPair(ctx, user, "")
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate token pair: %w", err)
 	}
 	return tokenPair, user, nil
-}
-
-func (s *AuthService) ApplyOAuthSignupPromoCode(ctx context.Context, userID int64, promoCode string) {
-	if userID <= 0 {
-		return
-	}
-	s.applyOAuthSignupPromoCode(ctx, &User{ID: userID}, promoCode)
-}
-
-func (s *AuthService) applyOAuthSignupPromoCode(ctx context.Context, user *User, promoCode string) *User {
-	promoCode = strings.TrimSpace(promoCode)
-	if user == nil || user.ID <= 0 || promoCode == "" || s.promoService == nil || s.settingService == nil || !s.settingService.IsPromoCodeEnabled(ctx) {
-		return user
-	}
-	if err := s.promoService.ApplyPromoCode(ctx, user.ID, promoCode); err != nil {
-		logger.LegacyPrintf("service.auth", "[Auth] Failed to apply promo code for oauth user %d: %v", user.ID, err)
-		return user
-	}
-	if updatedUser, err := s.userRepo.GetByID(ctx, user.ID); err == nil {
-		return updatedUser
-	}
-	return user
 }
 
 func (s *AuthService) assignSubscriptions(ctx context.Context, userID int64, items []DefaultSubscriptionSetting, notes string) {
@@ -819,39 +746,18 @@ func (s *AuthService) resolveSignupGrantPlan(ctx context.Context, signupSource s
 	plan.Concurrency = s.settingService.GetDefaultConcurrency(ctx)
 	plan.Subscriptions = s.settingService.GetDefaultSubscriptions(ctx)
 
-	// ============ 全局 quota 装载（必须在 ResolveAuthSourceGrantSettings 之前） ============
-	// 无论 auth source 是否 enabled，全局层都要先装载，确保 !enabled 早退路径也携带全局 quota。
-	if quotas, err := s.settingService.GetDefaultPlatformQuotas(ctx); err == nil {
-		plan.PlatformQuotas = quotas
-	} else {
-		logger.LegacyPrintf("service.auth", "[Auth] Warning: load default platform quotas failed: %v (fail-open)", err)
-	}
-	// ============================================================================================
-
 	resolved, enabled, err := s.settingService.ResolveAuthSourceGrantSettings(ctx, signupSource, false)
 	if err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Failed to load auth source signup defaults for %s: %v", signupSource, err)
 		return plan
 	}
 	if !enabled {
-		return plan // plan.PlatformQuotas 已含全局层
+		return plan
 	}
 
 	plan.Balance = resolved.Balance
 	plan.Concurrency = resolved.Concurrency
 	plan.Subscriptions = resolved.Subscriptions
-
-	// ============ auth source quota merge（仅在 enabled 分支内） ============
-	asQuotas := s.settingService.GetAuthSourcePlatformQuotas(ctx, signupSource)
-	if plan.PlatformQuotas != nil {
-		for platform, patch := range asQuotas {
-			if dst := plan.PlatformQuotas[platform]; dst != nil {
-				mergePlatformQuotaDefaults(dst, patch)
-			}
-		}
-	}
-	// ==============================================================================
-
 	return plan
 }
 
@@ -869,12 +775,6 @@ func authSourceSignupSettings(defaults *AuthSourceDefaultSettings, signupSource 
 		return defaults.OIDC, true
 	case "wechat":
 		return defaults.WeChat, true
-	case "github":
-		return defaults.GitHub, true
-	case "google":
-		return defaults.Google, true
-	case "dingtalk":
-		return defaults.DingTalk, true
 	default:
 		return ProviderDefaultGrantSettings{}, false
 	}
@@ -1088,8 +988,6 @@ func (s *AuthService) ensureEmailAuthIdentity(ctx context.Context, user *User, s
 func inferLegacySignupSource(email string) string {
 	normalized := strings.ToLower(strings.TrimSpace(email))
 	switch {
-	case strings.HasSuffix(normalized, DingTalkConnectSyntheticEmailDomain):
-		return "dingtalk"
 	case strings.HasSuffix(normalized, LinuxDoConnectSyntheticEmailDomain):
 		return "linuxdo"
 	case strings.HasSuffix(normalized, OIDCConnectSyntheticEmailDomain):
@@ -1184,8 +1082,7 @@ func isReservedEmail(email string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(email))
 	return strings.HasSuffix(normalized, LinuxDoConnectSyntheticEmailDomain) ||
 		strings.HasSuffix(normalized, OIDCConnectSyntheticEmailDomain) ||
-		strings.HasSuffix(normalized, WeChatConnectSyntheticEmailDomain) ||
-		strings.HasSuffix(normalized, DingTalkConnectSyntheticEmailDomain)
+		strings.HasSuffix(normalized, WeChatConnectSyntheticEmailDomain)
 }
 
 // GenerateToken 生成JWT access token
@@ -1327,7 +1224,7 @@ func (s *AuthService) preparePasswordReset(ctx context.Context, email, frontendB
 
 // RequestPasswordReset 请求密码重置（同步发送）
 // Security: Returns the same response regardless of whether the email exists (prevent user enumeration)
-func (s *AuthService) RequestPasswordReset(ctx context.Context, email, frontendBaseURL string, locale ...string) error {
+func (s *AuthService) RequestPasswordReset(ctx context.Context, email, frontendBaseURL string) error {
 	if !s.IsPasswordResetEnabled(ctx) {
 		return infraerrors.Forbidden("PASSWORD_RESET_DISABLED", "password reset is not enabled")
 	}
@@ -1340,7 +1237,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email, frontendB
 		return nil // Silent success to prevent enumeration
 	}
 
-	if err := s.emailService.SendPasswordResetEmail(ctx, email, siteName, resetURL, firstEmailLocale(locale)); err != nil {
+	if err := s.emailService.SendPasswordResetEmail(ctx, email, siteName, resetURL); err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Failed to send password reset email to %s: %v", email, err)
 		return nil // Silent success to prevent enumeration
 	}
@@ -1351,7 +1248,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email, frontendB
 
 // RequestPasswordResetAsync 异步请求密码重置（队列发送）
 // Security: Returns the same response regardless of whether the email exists (prevent user enumeration)
-func (s *AuthService) RequestPasswordResetAsync(ctx context.Context, email, frontendBaseURL string, locale ...string) error {
+func (s *AuthService) RequestPasswordResetAsync(ctx context.Context, email, frontendBaseURL string) error {
 	if !s.IsPasswordResetEnabled(ctx) {
 		return infraerrors.Forbidden("PASSWORD_RESET_DISABLED", "password reset is not enabled")
 	}
@@ -1364,7 +1261,7 @@ func (s *AuthService) RequestPasswordResetAsync(ctx context.Context, email, fron
 		return nil // Silent success to prevent enumeration
 	}
 
-	if err := s.emailQueueService.EnqueuePasswordReset(email, siteName, resetURL, firstEmailLocale(locale)); err != nil {
+	if err := s.emailQueueService.EnqueuePasswordReset(email, siteName, resetURL); err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Failed to enqueue password reset email for %s: %v", email, err)
 		return nil // Silent success to prevent enumeration
 	}
@@ -1661,30 +1558,4 @@ func resolvedTokenVersion(user *User) int64 {
 	sum := sha256.Sum256([]byte(material))
 	fingerprint := int64(binary.BigEndian.Uint64(sum[:8]) & 0x7fffffffffffffff)
 	return user.TokenVersion ^ fingerprint
-}
-
-// snapshotPlatformQuotaDefaults 把 plan.PlatformQuotas（4 platform × 3 window）以
-// BulkInsertInitial 形式写入 user_platform_quotas 表。失败 fail-open（仅 warn log）。
-func (s *AuthService) snapshotPlatformQuotaDefaults(ctx context.Context, userID int64, plan *signupGrantPlan) error {
-	if s.userPlatformQuotaRepo == nil || plan == nil || len(plan.PlatformQuotas) == 0 {
-		return nil
-	}
-	records := make([]UserPlatformQuotaRecord, 0, len(plan.PlatformQuotas))
-	for platform, q := range plan.PlatformQuotas {
-		rec := UserPlatformQuotaRecord{
-			UserID:   userID,
-			Platform: platform,
-		}
-		if q != nil {
-			rec.DailyLimitUSD = q.DailyLimitUSD
-			rec.WeeklyLimitUSD = q.WeeklyLimitUSD
-			rec.MonthlyLimitUSD = q.MonthlyLimitUSD
-		}
-		records = append(records, rec)
-	}
-	if err := s.userPlatformQuotaRepo.BulkInsertInitial(ctx, records); err != nil {
-		logger.LegacyPrintf("service.auth", "[Auth] Warning: snapshot platform quota failed user=%d: %v (fail-open)", userID, err)
-		return nil // fail-open：返回 nil，让调用方继续
-	}
-	return nil
 }

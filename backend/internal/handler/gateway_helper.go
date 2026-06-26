@@ -18,12 +18,18 @@ import (
 // claudeCodeValidator is a singleton validator for Claude Code client detection
 var claudeCodeValidator = service.NewClaudeCodeValidator()
 
+const claudeCodeParsedRequestContextKey = "claude_code_parsed_request"
+
 // SetClaudeCodeClientContext 检查请求是否来自 Claude Code 客户端，并设置到 context 中
 // 返回更新后的 context
 func SetClaudeCodeClientContext(c *gin.Context, body []byte, parsedReq *service.ParsedRequest) {
 	if c == nil || c.Request == nil {
 		return
 	}
+	if parsedReq != nil {
+		c.Set(claudeCodeParsedRequestContextKey, parsedReq)
+	}
+
 	ua := c.GetHeader("User-Agent")
 	// Fast path：非 Claude CLI UA 直接判定 false，避免热路径二次 JSON 反序列化。
 	if !claudeCodeValidator.ValidateUserAgent(ua) {
@@ -39,6 +45,9 @@ func SetClaudeCodeClientContext(c *gin.Context, body []byte, parsedReq *service.
 	} else {
 		// 仅在确认为 Claude CLI 且 messages 路径时再做 body 解析。
 		bodyMap := claudeCodeBodyMapFromParsedRequest(parsedReq)
+		if bodyMap == nil {
+			bodyMap = claudeCodeBodyMapFromContextCache(c)
+		}
 		if bodyMap == nil && len(body) > 0 {
 			_ = json.Unmarshal(body, &bodyMap)
 		}
@@ -65,17 +74,33 @@ func claudeCodeBodyMapFromParsedRequest(parsedReq *service.ParsedRequest) map[st
 	bodyMap := map[string]any{
 		"model": parsedReq.Model,
 	}
-	if parsedReq.HasSystem {
-		if system, ok := parsedReq.SystemValue(); ok {
-			bodyMap["system"] = system
-		} else {
-			bodyMap["system"] = nil
-		}
+	if parsedReq.System != nil || parsedReq.HasSystem {
+		bodyMap["system"] = parsedReq.System
 	}
 	if parsedReq.MetadataUserID != "" {
 		bodyMap["metadata"] = map[string]any{"user_id": parsedReq.MetadataUserID}
 	}
 	return bodyMap
+}
+
+func claudeCodeBodyMapFromContextCache(c *gin.Context) map[string]any {
+	if c == nil {
+		return nil
+	}
+	if cached, ok := c.Get(service.OpenAIParsedRequestBodyKey); ok {
+		if bodyMap, ok := cached.(map[string]any); ok {
+			return bodyMap
+		}
+	}
+	if cached, ok := c.Get(claudeCodeParsedRequestContextKey); ok {
+		switch v := cached.(type) {
+		case *service.ParsedRequest:
+			return claudeCodeBodyMapFromParsedRequest(v)
+		case service.ParsedRequest:
+			return claudeCodeBodyMapFromParsedRequest(&v)
+		}
+	}
+	return nil
 }
 
 // 并发槽位等待相关常量
@@ -127,19 +152,12 @@ func (e *ConcurrencyError) Error() string {
 	return fmt.Sprintf("%s concurrency limit reached", e.SlotType)
 }
 
-type WaitQueueFullError struct {
-	SlotType string
-}
-
-func (e *WaitQueueFullError) Error() string {
-	return "Too many pending requests, please retry later"
-}
-
 // ConcurrencyHelper provides common concurrency slot management for gateway handlers
 type ConcurrencyHelper struct {
-	concurrencyService *service.ConcurrencyService
-	pingFormat         SSEPingFormat
-	pingInterval       time.Duration
+	concurrencyService  *service.ConcurrencyService
+	pingFormat          SSEPingFormat
+	pingInterval        time.Duration
+	userSlotWaitTimeout time.Duration
 }
 
 // NewConcurrencyHelper creates a new ConcurrencyHelper
@@ -148,10 +166,27 @@ func NewConcurrencyHelper(concurrencyService *service.ConcurrencyService, pingFo
 		pingInterval = defaultPingInterval
 	}
 	return &ConcurrencyHelper{
-		concurrencyService: concurrencyService,
-		pingFormat:         pingFormat,
-		pingInterval:       pingInterval,
+		concurrencyService:  concurrencyService,
+		pingFormat:          pingFormat,
+		pingInterval:        pingInterval,
+		userSlotWaitTimeout: maxConcurrencyWait,
 	}
+}
+
+// SetUserSlotWaitTimeout updates the user slot wait timeout when a positive value is provided.
+func (h *ConcurrencyHelper) SetUserSlotWaitTimeout(timeout time.Duration) {
+	if h == nil || timeout <= 0 {
+		return
+	}
+	h.userSlotWaitTimeout = timeout
+}
+
+// UserSlotWaitTimeout returns the effective user slot wait timeout.
+func (h *ConcurrencyHelper) UserSlotWaitTimeout() time.Duration {
+	if h == nil || h.userSlotWaitTimeout <= 0 {
+		return maxConcurrencyWait
+	}
+	return h.userSlotWaitTimeout
 }
 
 // wrapReleaseOnDone ensures release runs at most once and still triggers on context cancellation.
@@ -228,10 +263,6 @@ func (h *ConcurrencyHelper) TryAcquireAccountSlot(ctx context.Context, accountID
 // For streaming requests, sends ping events during the wait.
 // streamStarted is updated if streaming response has begun.
 func (h *ConcurrencyHelper) AcquireUserSlotWithWait(c *gin.Context, userID int64, maxConcurrency int, isStream bool, streamStarted *bool) (func(), error) {
-	return h.acquireUserSlotWithWaitTimeout(c, userID, maxConcurrency, maxConcurrencyWait, isStream, streamStarted)
-}
-
-func (h *ConcurrencyHelper) acquireUserSlotWithWaitTimeout(c *gin.Context, userID int64, maxConcurrency int, timeout time.Duration, isStream bool, streamStarted *bool) (func(), error) {
 	ctx := c.Request.Context()
 
 	// Try to acquire immediately
@@ -244,21 +275,8 @@ func (h *ConcurrencyHelper) acquireUserSlotWithWaitTimeout(c *gin.Context, userI
 		return releaseFunc, nil
 	}
 
-	queueLimit := service.CalculateMaxWait(maxConcurrency) - maxConcurrency
-	if queueLimit < 1 {
-		queueLimit = 1
-	}
-	canWait, err := h.IncrementWaitCount(ctx, userID, queueLimit)
-	if err != nil {
-		return nil, err
-	}
-	if !canWait {
-		return nil, &WaitQueueFullError{SlotType: "user"}
-	}
-	defer h.DecrementWaitCount(ctx, userID)
-
 	// Need to wait - handle streaming ping if needed
-	return h.waitForSlotWithPingTimeout(c, "user", userID, maxConcurrency, timeout, isStream, streamStarted, false)
+	return h.AcquireUserSlotWithWaitTimeout(c, userID, maxConcurrency, h.UserSlotWaitTimeout(), isStream, streamStarted)
 }
 
 // AcquireAccountSlotWithWait acquires an account concurrency slot, waiting if necessary.
@@ -336,9 +354,6 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 	for {
 		select {
 		case <-ctx.Done():
-			if parentErr := c.Request.Context().Err(); parentErr != nil {
-				return nil, parentErr
-			}
 			return nil, &ConcurrencyError{
 				SlotType:  slotType,
 				IsTimeout: true,
@@ -377,6 +392,11 @@ func (h *ConcurrencyHelper) waitForSlotWithPingTimeout(c *gin.Context, slotType 
 // AcquireAccountSlotWithWaitTimeout acquires an account slot with a custom timeout (keeps SSE ping).
 func (h *ConcurrencyHelper) AcquireAccountSlotWithWaitTimeout(c *gin.Context, accountID int64, maxConcurrency int, timeout time.Duration, isStream bool, streamStarted *bool) (func(), error) {
 	return h.waitForSlotWithPingTimeout(c, "account", accountID, maxConcurrency, timeout, isStream, streamStarted, true)
+}
+
+// AcquireUserSlotWithWaitTimeout acquires a user slot with a custom timeout (keeps SSE ping).
+func (h *ConcurrencyHelper) AcquireUserSlotWithWaitTimeout(c *gin.Context, userID int64, maxConcurrency int, timeout time.Duration, isStream bool, streamStarted *bool) (func(), error) {
+	return h.waitForSlotWithPingTimeout(c, "user", userID, maxConcurrency, timeout, isStream, streamStarted, true)
 }
 
 // nextBackoff 计算下一次退避时间

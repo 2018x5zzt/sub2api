@@ -25,10 +25,15 @@ func (r *promoCodeRepository) Create(ctx context.Context, code *service.PromoCod
 	client := clientFromContext(ctx, r.client)
 	builder := client.PromoCode.Create().
 		SetCode(code.Code).
+		SetScene(code.Scene).
 		SetBonusAmount(code.BonusAmount).
+		SetRandomBonusPoolAmount(code.RandomBonusPoolAmount).
+		SetRandomBonusRemaining(code.RandomBonusRemaining).
 		SetMaxUses(code.MaxUses).
 		SetUsedCount(code.UsedCount).
+		SetLeaderboardEnabled(code.LeaderboardEnabled).
 		SetStatus(code.Status).
+		SetSuccessMessage(code.SuccessMessage).
 		SetNotes(code.Notes)
 
 	if code.ExpiresAt != nil {
@@ -91,16 +96,24 @@ func (r *promoCodeRepository) Update(ctx context.Context, code *service.PromoCod
 	client := clientFromContext(ctx, r.client)
 	builder := client.PromoCode.UpdateOneID(code.ID).
 		SetCode(code.Code).
+		SetScene(code.Scene).
 		SetBonusAmount(code.BonusAmount).
+		SetRandomBonusPoolAmount(code.RandomBonusPoolAmount).
+		SetRandomBonusRemaining(code.RandomBonusRemaining).
 		SetMaxUses(code.MaxUses).
 		SetUsedCount(code.UsedCount).
+		SetLeaderboardEnabled(code.LeaderboardEnabled).
 		SetStatus(code.Status).
+		SetSuccessMessage(code.SuccessMessage).
 		SetNotes(code.Notes)
 
 	if code.ExpiresAt != nil {
 		builder.SetExpiresAt(*code.ExpiresAt)
 	} else {
 		builder.ClearExpiresAt()
+	}
+	if strings.TrimSpace(code.SuccessMessage) == "" {
+		builder.ClearSuccessMessage()
 	}
 
 	updated, err := builder.Save(ctx)
@@ -122,11 +135,12 @@ func (r *promoCodeRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *promoCodeRepository) List(ctx context.Context, params pagination.PaginationParams) ([]service.PromoCode, *pagination.PaginationResult, error) {
-	return r.ListWithFilters(ctx, params, "", "")
+	return r.ListWithFilters(ctx, params, service.PromoCodeSceneRegister, "", "")
 }
 
-func (r *promoCodeRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, status, search string) ([]service.PromoCode, *pagination.PaginationResult, error) {
-	q := r.client.PromoCode.Query()
+func (r *promoCodeRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, scene, status, search string) ([]service.PromoCode, *pagination.PaginationResult, error) {
+	q := r.client.PromoCode.Query().
+		Where(promocode.SceneEQ(scene))
 
 	if status != "" {
 		q = q.Where(promocode.StatusEQ(status))
@@ -189,6 +203,8 @@ func (r *promoCodeRepository) CreateUsage(ctx context.Context, usage *service.Pr
 		SetPromoCodeID(usage.PromoCodeID).
 		SetUserID(usage.UserID).
 		SetBonusAmount(usage.BonusAmount).
+		SetFixedBonusAmount(usage.FixedBonusAmount).
+		SetRandomBonusAmount(usage.RandomBonusAmount).
 		SetUsedAt(usage.UsedAt).
 		Save(ctx)
 	if err != nil {
@@ -200,7 +216,8 @@ func (r *promoCodeRepository) CreateUsage(ctx context.Context, usage *service.Pr
 }
 
 func (r *promoCodeRepository) GetUsageByPromoCodeAndUser(ctx context.Context, promoCodeID, userID int64) (*service.PromoCodeUsage, error) {
-	m, err := r.client.PromoCodeUsage.Query().
+	client := clientFromContext(ctx, r.client)
+	m, err := client.PromoCodeUsage.Query().
 		Where(
 			promocodeusage.PromoCodeIDEQ(promoCodeID),
 			promocodeusage.UserIDEQ(userID),
@@ -215,8 +232,22 @@ func (r *promoCodeRepository) GetUsageByPromoCodeAndUser(ctx context.Context, pr
 	return promoCodeUsageEntityToService(m), nil
 }
 
+func (r *promoCodeRepository) ListAllUsagesByPromoCode(ctx context.Context, promoCodeID int64) ([]service.PromoCodeUsage, error) {
+	client := clientFromContext(ctx, r.client)
+	usages, err := client.PromoCodeUsage.Query().
+		Where(promocodeusage.PromoCodeIDEQ(promoCodeID)).
+		WithUser().
+		Order(dbent.Desc(promocodeusage.FieldID)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return promoCodeUsageEntitiesToService(usages), nil
+}
+
 func (r *promoCodeRepository) ListUsagesByPromoCode(ctx context.Context, promoCodeID int64, params pagination.PaginationParams) ([]service.PromoCodeUsage, *pagination.PaginationResult, error) {
-	q := r.client.PromoCodeUsage.Query().
+	client := clientFromContext(ctx, r.client)
+	q := client.PromoCodeUsage.Query().
 		Where(promocodeusage.PromoCodeIDEQ(promoCodeID))
 
 	total, err := q.Clone().Count(ctx)
@@ -254,16 +285,21 @@ func promoCodeEntityToService(m *dbent.PromoCode) *service.PromoCode {
 		return nil
 	}
 	return &service.PromoCode{
-		ID:          m.ID,
-		Code:        m.Code,
-		BonusAmount: m.BonusAmount,
-		MaxUses:     m.MaxUses,
-		UsedCount:   m.UsedCount,
-		Status:      m.Status,
-		ExpiresAt:   m.ExpiresAt,
-		Notes:       derefString(m.Notes),
-		CreatedAt:   m.CreatedAt,
-		UpdatedAt:   m.UpdatedAt,
+		ID:                    m.ID,
+		Code:                  m.Code,
+		Scene:                 m.Scene,
+		BonusAmount:           m.BonusAmount,
+		RandomBonusPoolAmount: m.RandomBonusPoolAmount,
+		RandomBonusRemaining:  m.RandomBonusRemaining,
+		MaxUses:               m.MaxUses,
+		UsedCount:             m.UsedCount,
+		LeaderboardEnabled:    m.LeaderboardEnabled,
+		Status:                m.Status,
+		ExpiresAt:             m.ExpiresAt,
+		SuccessMessage:        derefString(m.SuccessMessage),
+		Notes:                 derefString(m.Notes),
+		CreatedAt:             m.CreatedAt,
+		UpdatedAt:             m.UpdatedAt,
 	}
 }
 
@@ -282,11 +318,13 @@ func promoCodeUsageEntityToService(m *dbent.PromoCodeUsage) *service.PromoCodeUs
 		return nil
 	}
 	out := &service.PromoCodeUsage{
-		ID:          m.ID,
-		PromoCodeID: m.PromoCodeID,
-		UserID:      m.UserID,
-		BonusAmount: m.BonusAmount,
-		UsedAt:      m.UsedAt,
+		ID:                m.ID,
+		PromoCodeID:       m.PromoCodeID,
+		UserID:            m.UserID,
+		BonusAmount:       m.BonusAmount,
+		FixedBonusAmount:  m.FixedBonusAmount,
+		RandomBonusAmount: m.RandomBonusAmount,
+		UsedAt:            m.UsedAt,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)

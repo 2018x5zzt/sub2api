@@ -4,7 +4,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
@@ -24,7 +23,6 @@ type AccountRepoSuite struct {
 
 type schedulerCacheRecorder struct {
 	setAccounts []*service.Account
-	deleteIDs   []int64
 	accounts    map[int64]*service.Account
 }
 
@@ -55,10 +53,6 @@ func (s *schedulerCacheRecorder) SetAccount(ctx context.Context, account *servic
 }
 
 func (s *schedulerCacheRecorder) DeleteAccount(ctx context.Context, accountID int64) error {
-	s.deleteIDs = append(s.deleteIDs, accountID)
-	if s.accounts != nil {
-		delete(s.accounts, accountID)
-	}
 	return nil
 }
 
@@ -95,34 +89,6 @@ func (s *AccountRepoSuite) SetupTest() {
 
 func TestAccountRepoSuite(t *testing.T) {
 	suite.Run(t, new(AccountRepoSuite))
-}
-
-func mustInsertMinimalGroup(t *testing.T, exec interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}, name string) int64 {
-	t.Helper()
-
-	rows, err := exec.QueryContext(context.Background(), `
-		INSERT INTO groups (name, rate_multiplier, is_exclusive, status, created_at, updated_at)
-		VALUES ($1, 1, false, 'active', NOW(), NOW())
-		RETURNING id
-	`, name)
-	if err != nil {
-		t.Fatalf("insert minimal group: %v", err)
-	}
-	defer rows.Close()
-
-	if !rows.Next() {
-		t.Fatalf("insert minimal group: no id returned")
-	}
-	var id int64
-	if err := rows.Scan(&id); err != nil {
-		t.Fatalf("scan minimal group id: %v", err)
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatalf("insert minimal group rows: %v", err)
-	}
-	return id
 }
 
 // --- Create / GetByID / Update / Delete ---
@@ -219,27 +185,6 @@ func (s *AccountRepoSuite) TestDelete() {
 	s.Require().Error(err, "expected error after delete")
 }
 
-func (s *AccountRepoSuite) TestDelete_RemovesSchedulerAccountSnapshot() {
-	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "to-delete-cache"})
-	cacheRecorder := &schedulerCacheRecorder{
-		accounts: map[int64]*service.Account{
-			account.ID: {
-				ID:          account.ID,
-				Name:        account.Name,
-				Status:      service.StatusActive,
-				Schedulable: true,
-			},
-		},
-	}
-	s.repo.schedulerCache = cacheRecorder
-
-	err := s.repo.Delete(s.ctx, account.ID)
-	s.Require().NoError(err, "Delete")
-
-	s.Require().Equal([]int64{account.ID}, cacheRecorder.deleteIDs)
-	s.Require().NotContains(cacheRecorder.accounts, account.ID)
-}
-
 func (s *AccountRepoSuite) TestDelete_WithGroupBindings() {
 	group := mustCreateGroup(s.T(), s.client, &service.Group{Name: "g-del"})
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-del"})
@@ -251,28 +196,6 @@ func (s *AccountRepoSuite) TestDelete_WithGroupBindings() {
 	count, err := s.client.AccountGroup.Query().Where(accountgroup.AccountIDEQ(account.ID)).Count(s.ctx)
 	s.Require().NoError(err)
 	s.Require().Zero(count, "expected bindings to be removed")
-}
-
-func (s *AccountRepoSuite) TestBindGroupBindings_PersistsBillingMultiplier() {
-	groupAID := mustInsertMinimalGroup(s.T(), s.repo.sql, "binding-a")
-	groupBID := mustInsertMinimalGroup(s.T(), s.repo.sql, "binding-b")
-	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-billing-bindings"})
-
-	multiplierA := 8.5
-	err := s.repo.BindGroupBindings(s.ctx, account.ID, []service.AccountGroupBindingInput{
-		{GroupID: groupAID, BillingMultiplier: &multiplierA},
-		{GroupID: groupBID},
-	})
-	s.Require().NoError(err)
-
-	got, err := s.repo.GetByID(s.ctx, account.ID)
-	s.Require().NoError(err)
-	s.Require().Equal([]int64{groupAID, groupBID}, got.GroupIDs)
-	s.Require().Len(got.AccountGroups, 2)
-	s.Require().Equal(groupAID, got.AccountGroups[0].GroupID)
-	s.Require().InDelta(8.5, got.AccountGroups[0].BillingMultiplier, 0.0001)
-	s.Require().Equal(groupBID, got.AccountGroups[1].GroupID)
-	s.Require().InDelta(1.0, got.AccountGroups[1].BillingMultiplier, 0.0001)
 }
 
 // --- List / ListWithFilters ---
@@ -721,8 +644,6 @@ func (s *AccountRepoSuite) TestBulkUpdate_SyncSchedulerSnapshotOnDisabled() {
 func (s *AccountRepoSuite) TestSetOverloaded() {
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-over"})
 	until := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
-	cacheRecorder := &schedulerCacheRecorder{}
-	s.repo.schedulerCache = cacheRecorder
 
 	s.Require().NoError(s.repo.SetOverloaded(s.ctx, account.ID, until))
 
@@ -730,10 +651,6 @@ func (s *AccountRepoSuite) TestSetOverloaded() {
 	s.Require().NoError(err)
 	s.Require().NotNil(got.OverloadUntil)
 	s.Require().WithinDuration(until, *got.OverloadUntil, time.Second)
-	s.Require().Len(cacheRecorder.setAccounts, 1)
-	s.Require().Equal(account.ID, cacheRecorder.setAccounts[0].ID)
-	s.Require().NotNil(cacheRecorder.setAccounts[0].OverloadUntil)
-	s.Require().WithinDuration(until, *cacheRecorder.setAccounts[0].OverloadUntil, time.Second)
 }
 
 func (s *AccountRepoSuite) TestSetRateLimited() {
@@ -789,73 +706,11 @@ func (s *AccountRepoSuite) TestTempUnschedulableFieldsLoadedByGetByIDAndGetByIDs
 	s.Require().WithinDuration(until, *gotByIDs[1].TempUnschedulableUntil, time.Second)
 	s.Require().Equal(reason, gotByIDs[1].TempUnschedulableReason)
 
-	cacheRecorder := &schedulerCacheRecorder{}
-	s.repo.schedulerCache = cacheRecorder
-
 	s.Require().NoError(s.repo.ClearTempUnschedulable(s.ctx, acc1.ID))
 	cleared, err := s.repo.GetByID(s.ctx, acc1.ID)
 	s.Require().NoError(err)
 	s.Require().Nil(cleared.TempUnschedulableUntil)
 	s.Require().Equal("", cleared.TempUnschedulableReason)
-	s.Require().Len(cacheRecorder.setAccounts, 1)
-	s.Require().Equal(acc1.ID, cacheRecorder.setAccounts[0].ID)
-	s.Require().Nil(cacheRecorder.setAccounts[0].TempUnschedulableUntil)
-	s.Require().Equal("", cacheRecorder.setAccounts[0].TempUnschedulableReason)
-}
-
-func (s *AccountRepoSuite) TestSetTempUnschedulableSkipsOutboxWhenWindowDoesNotExtend() {
-	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-temp-noop"})
-	cacheRecorder := &schedulerCacheRecorder{}
-	s.repo.schedulerCache = cacheRecorder
-
-	_, err := s.repo.sql.ExecContext(s.ctx, "TRUNCATE scheduler_outbox")
-	s.Require().NoError(err)
-
-	until := time.Now().Add(30 * time.Minute).UTC().Truncate(time.Second)
-	s.Require().NoError(s.repo.SetTempUnschedulable(s.ctx, account.ID, until, "first"))
-
-	var count int
-	err = scanSingleRow(s.ctx, s.repo.sql, "SELECT COUNT(*) FROM scheduler_outbox", nil, &count)
-	s.Require().NoError(err)
-	s.Require().Equal(1, count)
-	s.Require().Len(cacheRecorder.setAccounts, 1)
-
-	s.Require().NoError(s.repo.SetTempUnschedulable(s.ctx, account.ID, until.Add(-5*time.Minute), "older"))
-
-	err = scanSingleRow(s.ctx, s.repo.sql, "SELECT COUNT(*) FROM scheduler_outbox", nil, &count)
-	s.Require().NoError(err)
-	s.Require().Equal(1, count)
-	s.Require().Len(cacheRecorder.setAccounts, 1)
-
-	got, err := s.repo.GetByID(s.ctx, account.ID)
-	s.Require().NoError(err)
-	s.Require().Equal("first", got.TempUnschedulableReason)
-	s.Require().NotNil(got.TempUnschedulableUntil)
-	s.Require().WithinDuration(until, *got.TempUnschedulableUntil, time.Second)
-}
-
-func (s *AccountRepoSuite) TestClearModelRateLimits_SyncsSchedulerSnapshot() {
-	account := mustCreateAccount(s.T(), s.client, &service.Account{
-		Name: "acc-clear-model-rate",
-		Extra: map[string]any{
-			"model_rate_limits": map[string]any{
-				"claude-sonnet-4-5": map[string]any{
-					"rate_limit_reset_at": "2026-06-03T10:00:00Z",
-				},
-			},
-		},
-	})
-	cacheRecorder := &schedulerCacheRecorder{}
-	s.repo.schedulerCache = cacheRecorder
-
-	s.Require().NoError(s.repo.ClearModelRateLimits(s.ctx, account.ID))
-
-	got, err := s.repo.GetByID(s.ctx, account.ID)
-	s.Require().NoError(err)
-	s.Require().NotContains(got.Extra, "model_rate_limits")
-	s.Require().Len(cacheRecorder.setAccounts, 1)
-	s.Require().Equal(account.ID, cacheRecorder.setAccounts[0].ID)
-	s.Require().NotContains(cacheRecorder.setAccounts[0].Extra, "model_rate_limits")
 }
 
 // --- UpdateLastUsed ---
@@ -874,7 +729,7 @@ func (s *AccountRepoSuite) TestUpdateLastUsed() {
 // --- SetError ---
 
 func (s *AccountRepoSuite) TestSetError() {
-	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-err", Status: service.StatusActive, Schedulable: true})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-err", Status: service.StatusActive})
 
 	s.Require().NoError(s.repo.SetError(s.ctx, account.ID, "something went wrong"))
 
@@ -882,22 +737,6 @@ func (s *AccountRepoSuite) TestSetError() {
 	s.Require().NoError(err)
 	s.Require().Equal(service.StatusError, got.Status)
 	s.Require().Equal("something went wrong", got.ErrorMessage)
-	s.Require().False(got.Schedulable)
-}
-
-func (s *AccountRepoSuite) TestUpdateErrorStatusUnschedulesAccount() {
-	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-update-err", Status: service.StatusActive, Schedulable: true})
-	account.Status = service.StatusError
-	account.ErrorMessage = "token revoked"
-	account.Schedulable = true
-
-	s.Require().NoError(s.repo.Update(s.ctx, account))
-
-	got, err := s.repo.GetByID(s.ctx, account.ID)
-	s.Require().NoError(err)
-	s.Require().Equal(service.StatusError, got.Status)
-	s.Require().Equal("token revoked", got.ErrorMessage)
-	s.Require().False(got.Schedulable)
 }
 
 func (s *AccountRepoSuite) TestClearError_SyncSchedulerSnapshotOnRecovery() {

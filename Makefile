@@ -1,4 +1,12 @@
-.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-datamanagementd secret-scan
+.PHONY: build build-backend build-frontend build-datamanagementd test test-backend test-frontend test-frontend-critical test-datamanagementd secret-scan
+
+FRONTEND_CRITICAL_VITEST := \
+	src/views/auth/__tests__/LinuxDoCallbackView.spec.ts \
+	src/views/auth/__tests__/WechatCallbackView.spec.ts \
+	src/views/user/__tests__/PaymentView.spec.ts \
+	src/views/user/__tests__/PaymentResultView.spec.ts \
+	src/components/user/profile/__tests__/ProfileInfoCard.spec.ts \
+	src/views/admin/__tests__/SettingsView.spec.ts
 
 # 一键编译前后端
 build: build-backend build-frontend
@@ -7,9 +15,9 @@ build: build-backend build-frontend
 build-backend:
 	@$(MAKE) -C backend build
 
-# 编译前端（当前默认使用 React frontend-v2，旧 Vue frontend 已从默认构建路径下线）
+# 编译前端（需要已安装依赖）
 build-frontend:
-	@npm --prefix frontend-v2 run build
+	@pnpm --dir frontend run build
 
 # 编译 datamanagementd（宿主机数据管理进程）
 build-datamanagementd:
@@ -22,7 +30,12 @@ test-backend:
 	@$(MAKE) -C backend test
 
 test-frontend:
-	@npm --prefix frontend-v2 run typecheck
+	@pnpm --dir frontend run lint:check
+	@pnpm --dir frontend run typecheck
+	@$(MAKE) test-frontend-critical
+
+test-frontend-critical:
+	@pnpm --dir frontend exec vitest run $(FRONTEND_CRITICAL_VITEST)
 
 test-datamanagementd:
 	@cd datamanagement && go test ./...

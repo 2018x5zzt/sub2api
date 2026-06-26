@@ -5,7 +5,6 @@ package middleware
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -124,36 +123,4 @@ func TestAPIKeyAndSubscriptionFromContext(t *testing.T) {
 	gotSub, ok := GetSubscriptionFromContext(c)
 	require.True(t, ok)
 	require.Equal(t, int64(2), gotSub.ID)
-}
-
-func TestAbortWithError_AddsXlabAPIURLForUnauthorizedOnly(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	r := gin.New()
-	r.GET("/unauthorized", func(c *gin.Context) {
-		AbortWithError(c, http.StatusUnauthorized, "INVALID_API_KEY", "Invalid API key")
-	})
-	r.GET("/forbidden", func(c *gin.Context) {
-		AbortWithError(c, http.StatusForbidden, "ACCESS_DENIED", "Access denied")
-	})
-
-	unauthorized := httptest.NewRecorder()
-	r.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/unauthorized", nil))
-	require.Equal(t, http.StatusUnauthorized, unauthorized.Code)
-
-	var unauthorizedBody map[string]any
-	require.NoError(t, json.Unmarshal(unauthorized.Body.Bytes(), &unauthorizedBody))
-	require.Equal(t, "INVALID_API_KEY", unauthorizedBody["code"])
-	require.Equal(t, "Invalid API key", unauthorizedBody["message"])
-	require.Equal(t, "https://xlabapi.com", unauthorizedBody["url"])
-
-	forbidden := httptest.NewRecorder()
-	r.ServeHTTP(forbidden, httptest.NewRequest(http.MethodGet, "/forbidden", nil))
-	require.Equal(t, http.StatusForbidden, forbidden.Code)
-
-	var forbiddenBody map[string]any
-	require.NoError(t, json.Unmarshal(forbidden.Body.Bytes(), &forbiddenBody))
-	require.Equal(t, "ACCESS_DENIED", forbiddenBody["code"])
-	require.Equal(t, "Access denied", forbiddenBody["message"])
-	require.NotContains(t, forbiddenBody, "url")
 }

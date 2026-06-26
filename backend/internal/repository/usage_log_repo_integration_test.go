@@ -4,7 +4,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"sync"
 	"testing"
@@ -86,63 +85,6 @@ func (s *UsageLogRepoSuite) TestCreate() {
 	_, err := s.repo.Create(s.ctx, log)
 	s.Require().NoError(err, "Create")
 	s.Require().NotZero(log.ID)
-}
-
-func (s *UsageLogRepoSuite) TestCreatePersistsProductSubscriptionFields() {
-	user := mustCreateUser(s.T(), s.client, &service.User{Email: "create-product-fields@test.com"})
-	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-create-product-fields", Name: "k"})
-	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-create-product-fields"})
-
-	var productID int64
-	err := scanSingleRow(s.ctx, s.tx.Client(), `
-		INSERT INTO subscription_products (code, name, status, default_validity_days, daily_limit_usd)
-		VALUES ($1, 'Usage Log Product Fields', 'active', 1, 10)
-		RETURNING id
-	`, []any{"usage_log_product_fields_" + uuid.NewString()}, &productID)
-	s.Require().NoError(err)
-
-	var productSubscriptionID int64
-	err = scanSingleRow(s.ctx, s.tx.Client(), `
-		INSERT INTO user_product_subscriptions (user_id, product_id, starts_at, expires_at, status)
-		VALUES ($1, $2, NOW(), NOW() + INTERVAL '1 day', 'active')
-		RETURNING id
-	`, []any{user.ID, productID}, &productSubscriptionID)
-	s.Require().NoError(err)
-
-	productDebitCost := 1.25
-	log := &service.UsageLog{
-		UserID:                user.ID,
-		APIKeyID:              apiKey.ID,
-		AccountID:             account.ID,
-		RequestID:             uuid.NewString(),
-		Model:                 "gpt-5.5",
-		ProductID:             &productID,
-		ProductSubscriptionID: &productSubscriptionID,
-		ProductDebitCost:      &productDebitCost,
-		InputTokens:           10,
-		OutputTokens:          20,
-		TotalCost:             1,
-		ActualCost:            1,
-		BillingType:           service.BillingTypeSubscription,
-	}
-
-	_, err = s.repo.Create(s.ctx, log)
-	s.Require().NoError(err, "Create")
-
-	var gotProductID, gotProductSubscriptionID sql.NullInt64
-	var gotProductDebitCost sql.NullFloat64
-	err = scanSingleRow(s.ctx, s.tx.Client(), `
-		SELECT product_id, product_subscription_id, product_debit_cost
-		FROM usage_logs
-		WHERE id = $1
-	`, []any{log.ID}, &gotProductID, &gotProductSubscriptionID, &gotProductDebitCost)
-	s.Require().NoError(err)
-	s.Require().True(gotProductID.Valid)
-	s.Require().Equal(productID, gotProductID.Int64)
-	s.Require().True(gotProductSubscriptionID.Valid)
-	s.Require().Equal(productSubscriptionID, gotProductSubscriptionID.Int64)
-	s.Require().True(gotProductDebitCost.Valid)
-	s.Require().InDelta(productDebitCost, gotProductDebitCost.Float64, 0.000001)
 }
 
 func TestUsageLogRepositoryCreate_BatchPathConcurrent(t *testing.T) {
@@ -1158,14 +1100,6 @@ func (s *UsageLogRepoSuite) TestGetBatchApiKeyUsageStats() {
 	stats, err := s.repo.GetBatchAPIKeyUsageStats(s.ctx, []int64{apiKey1.ID, apiKey2.ID}, time.Time{}, time.Time{})
 	s.Require().NoError(err, "GetBatchAPIKeyUsageStats")
 	s.Require().Len(stats, 2)
-	s.Require().Equal(int64(1), stats[apiKey1.ID].TodayRequests)
-	s.Require().Equal(int64(30), stats[apiKey1.ID].TodayTokens)
-	s.Require().Equal(int64(1), stats[apiKey1.ID].TotalRequests)
-	s.Require().Equal(int64(30), stats[apiKey1.ID].TotalTokens)
-	s.Require().Equal(int64(1), stats[apiKey2.ID].TodayRequests)
-	s.Require().Equal(int64(40), stats[apiKey2.ID].TodayTokens)
-	s.Require().Equal(int64(1), stats[apiKey2.ID].TotalRequests)
-	s.Require().Equal(int64(40), stats[apiKey2.ID].TotalTokens)
 }
 
 func (s *UsageLogRepoSuite) TestGetBatchApiKeyUsageStats_Empty() {

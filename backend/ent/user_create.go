@@ -22,7 +22,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
-	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -140,48 +139,6 @@ func (_c *UserCreate) SetStatus(v string) *UserCreate {
 func (_c *UserCreate) SetNillableStatus(v *string) *UserCreate {
 	if v != nil {
 		_c.SetStatus(*v)
-	}
-	return _c
-}
-
-// SetInviteCode sets the "invite_code" field.
-func (_c *UserCreate) SetInviteCode(v string) *UserCreate {
-	_c.mutation.SetInviteCode(v)
-	return _c
-}
-
-// SetNillableInviteCode sets the "invite_code" field if the given value is not nil.
-func (_c *UserCreate) SetNillableInviteCode(v *string) *UserCreate {
-	if v != nil {
-		_c.SetInviteCode(*v)
-	}
-	return _c
-}
-
-// SetInvitedByUserID sets the "invited_by_user_id" field.
-func (_c *UserCreate) SetInvitedByUserID(v int64) *UserCreate {
-	_c.mutation.SetInvitedByUserID(v)
-	return _c
-}
-
-// SetNillableInvitedByUserID sets the "invited_by_user_id" field if the given value is not nil.
-func (_c *UserCreate) SetNillableInvitedByUserID(v *int64) *UserCreate {
-	if v != nil {
-		_c.SetInvitedByUserID(*v)
-	}
-	return _c
-}
-
-// SetInviteBoundAt sets the "invite_bound_at" field.
-func (_c *UserCreate) SetInviteBoundAt(v time.Time) *UserCreate {
-	_c.mutation.SetInviteBoundAt(v)
-	return _c
-}
-
-// SetNillableInviteBoundAt sets the "invite_bound_at" field if the given value is not nil.
-func (_c *UserCreate) SetNillableInviteBoundAt(v *time.Time) *UserCreate {
-	if v != nil {
-		_c.SetInviteBoundAt(*v)
 	}
 	return _c
 }
@@ -364,62 +321,6 @@ func (_c *UserCreate) SetTotalRecharged(v float64) *UserCreate {
 func (_c *UserCreate) SetNillableTotalRecharged(v *float64) *UserCreate {
 	if v != nil {
 		_c.SetTotalRecharged(*v)
-	}
-	return _c
-}
-
-// SetSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field.
-func (_c *UserCreate) SetSubscriptionBalanceFallbackEnabled(v bool) *UserCreate {
-	_c.mutation.SetSubscriptionBalanceFallbackEnabled(v)
-	return _c
-}
-
-// SetNillableSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field if the given value is not nil.
-func (_c *UserCreate) SetNillableSubscriptionBalanceFallbackEnabled(v *bool) *UserCreate {
-	if v != nil {
-		_c.SetSubscriptionBalanceFallbackEnabled(*v)
-	}
-	return _c
-}
-
-// SetSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field.
-func (_c *UserCreate) SetSubscriptionBalanceFallbackLimitUsd(v float64) *UserCreate {
-	_c.mutation.SetSubscriptionBalanceFallbackLimitUsd(v)
-	return _c
-}
-
-// SetNillableSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field if the given value is not nil.
-func (_c *UserCreate) SetNillableSubscriptionBalanceFallbackLimitUsd(v *float64) *UserCreate {
-	if v != nil {
-		_c.SetSubscriptionBalanceFallbackLimitUsd(*v)
-	}
-	return _c
-}
-
-// SetSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field.
-func (_c *UserCreate) SetSubscriptionBalanceFallbackUsedUsd(v float64) *UserCreate {
-	_c.mutation.SetSubscriptionBalanceFallbackUsedUsd(v)
-	return _c
-}
-
-// SetNillableSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field if the given value is not nil.
-func (_c *UserCreate) SetNillableSubscriptionBalanceFallbackUsedUsd(v *float64) *UserCreate {
-	if v != nil {
-		_c.SetSubscriptionBalanceFallbackUsedUsd(*v)
-	}
-	return _c
-}
-
-// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
-func (_c *UserCreate) SetSubscriptionBalanceFallbackGroupID(v int64) *UserCreate {
-	_c.mutation.SetSubscriptionBalanceFallbackGroupID(v)
-	return _c
-}
-
-// SetNillableSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field if the given value is not nil.
-func (_c *UserCreate) SetNillableSubscriptionBalanceFallbackGroupID(v *int64) *UserCreate {
-	if v != nil {
-		_c.SetSubscriptionBalanceFallbackGroupID(*v)
 	}
 	return _c
 }
@@ -618,21 +519,6 @@ func (_c *UserCreate) AddPendingAuthSessions(v ...*PendingAuthSession) *UserCrea
 	return _c.AddPendingAuthSessionIDs(ids...)
 }
 
-// AddPlatformQuotaIDs adds the "platform_quotas" edge to the UserPlatformQuota entity by IDs.
-func (_c *UserCreate) AddPlatformQuotaIDs(ids ...int64) *UserCreate {
-	_c.mutation.AddPlatformQuotaIDs(ids...)
-	return _c
-}
-
-// AddPlatformQuotas adds the "platform_quotas" edges to the UserPlatformQuota entity.
-func (_c *UserCreate) AddPlatformQuotas(v ...*UserPlatformQuota) *UserCreate {
-	ids := make([]int64, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddPlatformQuotaIDs(ids...)
-}
-
 // Mutation returns the UserMutation object of the builder.
 func (_c *UserCreate) Mutation() *UserMutation {
 	return _c.mutation
@@ -732,18 +618,6 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultTotalRecharged
 		_c.mutation.SetTotalRecharged(v)
 	}
-	if _, ok := _c.mutation.SubscriptionBalanceFallbackEnabled(); !ok {
-		v := user.DefaultSubscriptionBalanceFallbackEnabled
-		_c.mutation.SetSubscriptionBalanceFallbackEnabled(v)
-	}
-	if _, ok := _c.mutation.SubscriptionBalanceFallbackLimitUsd(); !ok {
-		v := user.DefaultSubscriptionBalanceFallbackLimitUsd
-		_c.mutation.SetSubscriptionBalanceFallbackLimitUsd(v)
-	}
-	if _, ok := _c.mutation.SubscriptionBalanceFallbackUsedUsd(); !ok {
-		v := user.DefaultSubscriptionBalanceFallbackUsedUsd
-		_c.mutation.SetSubscriptionBalanceFallbackUsedUsd(v)
-	}
 	if _, ok := _c.mutation.RpmLimit(); !ok {
 		v := user.DefaultRpmLimit
 		_c.mutation.SetRpmLimit(v)
@@ -797,11 +671,6 @@ func (_c *UserCreate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "User.status": %w`, err)}
 		}
 	}
-	if v, ok := _c.mutation.InviteCode(); ok {
-		if err := user.InviteCodeValidator(v); err != nil {
-			return &ValidationError{Name: "invite_code", err: fmt.Errorf(`ent: validator failed for field "User.invite_code": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.Username(); !ok {
 		return &ValidationError{Name: "username", err: errors.New(`ent: missing required field "User.username"`)}
 	}
@@ -835,15 +704,6 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.TotalRecharged(); !ok {
 		return &ValidationError{Name: "total_recharged", err: errors.New(`ent: missing required field "User.total_recharged"`)}
-	}
-	if _, ok := _c.mutation.SubscriptionBalanceFallbackEnabled(); !ok {
-		return &ValidationError{Name: "subscription_balance_fallback_enabled", err: errors.New(`ent: missing required field "User.subscription_balance_fallback_enabled"`)}
-	}
-	if _, ok := _c.mutation.SubscriptionBalanceFallbackLimitUsd(); !ok {
-		return &ValidationError{Name: "subscription_balance_fallback_limit_usd", err: errors.New(`ent: missing required field "User.subscription_balance_fallback_limit_usd"`)}
-	}
-	if _, ok := _c.mutation.SubscriptionBalanceFallbackUsedUsd(); !ok {
-		return &ValidationError{Name: "subscription_balance_fallback_used_usd", err: errors.New(`ent: missing required field "User.subscription_balance_fallback_used_usd"`)}
 	}
 	if _, ok := _c.mutation.RpmLimit(); !ok {
 		return &ValidationError{Name: "rpm_limit", err: errors.New(`ent: missing required field "User.rpm_limit"`)}
@@ -911,18 +771,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
 		_node.Status = value
 	}
-	if value, ok := _c.mutation.InviteCode(); ok {
-		_spec.SetField(user.FieldInviteCode, field.TypeString, value)
-		_node.InviteCode = &value
-	}
-	if value, ok := _c.mutation.InvitedByUserID(); ok {
-		_spec.SetField(user.FieldInvitedByUserID, field.TypeInt64, value)
-		_node.InvitedByUserID = &value
-	}
-	if value, ok := _c.mutation.InviteBoundAt(); ok {
-		_spec.SetField(user.FieldInviteBoundAt, field.TypeTime, value)
-		_node.InviteBoundAt = &value
-	}
 	if value, ok := _c.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)
 		_node.Username = value
@@ -974,22 +822,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TotalRecharged(); ok {
 		_spec.SetField(user.FieldTotalRecharged, field.TypeFloat64, value)
 		_node.TotalRecharged = value
-	}
-	if value, ok := _c.mutation.SubscriptionBalanceFallbackEnabled(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackEnabled, field.TypeBool, value)
-		_node.SubscriptionBalanceFallbackEnabled = value
-	}
-	if value, ok := _c.mutation.SubscriptionBalanceFallbackLimitUsd(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackLimitUsd, field.TypeFloat64, value)
-		_node.SubscriptionBalanceFallbackLimitUsd = value
-	}
-	if value, ok := _c.mutation.SubscriptionBalanceFallbackUsedUsd(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackUsedUsd, field.TypeFloat64, value)
-		_node.SubscriptionBalanceFallbackUsedUsd = value
-	}
-	if value, ok := _c.mutation.SubscriptionBalanceFallbackGroupID(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64, value)
-		_node.SubscriptionBalanceFallbackGroupID = &value
 	}
 	if value, ok := _c.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
@@ -1191,22 +1023,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := _c.mutation.PlatformQuotasIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.PlatformQuotasTable,
-			Columns: []string{user.PlatformQuotasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
 	return _node, _spec
 }
 
@@ -1370,66 +1186,6 @@ func (u *UserUpsert) SetStatus(v string) *UserUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *UserUpsert) UpdateStatus() *UserUpsert {
 	u.SetExcluded(user.FieldStatus)
-	return u
-}
-
-// SetInviteCode sets the "invite_code" field.
-func (u *UserUpsert) SetInviteCode(v string) *UserUpsert {
-	u.Set(user.FieldInviteCode, v)
-	return u
-}
-
-// UpdateInviteCode sets the "invite_code" field to the value that was provided on create.
-func (u *UserUpsert) UpdateInviteCode() *UserUpsert {
-	u.SetExcluded(user.FieldInviteCode)
-	return u
-}
-
-// ClearInviteCode clears the value of the "invite_code" field.
-func (u *UserUpsert) ClearInviteCode() *UserUpsert {
-	u.SetNull(user.FieldInviteCode)
-	return u
-}
-
-// SetInvitedByUserID sets the "invited_by_user_id" field.
-func (u *UserUpsert) SetInvitedByUserID(v int64) *UserUpsert {
-	u.Set(user.FieldInvitedByUserID, v)
-	return u
-}
-
-// UpdateInvitedByUserID sets the "invited_by_user_id" field to the value that was provided on create.
-func (u *UserUpsert) UpdateInvitedByUserID() *UserUpsert {
-	u.SetExcluded(user.FieldInvitedByUserID)
-	return u
-}
-
-// AddInvitedByUserID adds v to the "invited_by_user_id" field.
-func (u *UserUpsert) AddInvitedByUserID(v int64) *UserUpsert {
-	u.Add(user.FieldInvitedByUserID, v)
-	return u
-}
-
-// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
-func (u *UserUpsert) ClearInvitedByUserID() *UserUpsert {
-	u.SetNull(user.FieldInvitedByUserID)
-	return u
-}
-
-// SetInviteBoundAt sets the "invite_bound_at" field.
-func (u *UserUpsert) SetInviteBoundAt(v time.Time) *UserUpsert {
-	u.Set(user.FieldInviteBoundAt, v)
-	return u
-}
-
-// UpdateInviteBoundAt sets the "invite_bound_at" field to the value that was provided on create.
-func (u *UserUpsert) UpdateInviteBoundAt() *UserUpsert {
-	u.SetExcluded(user.FieldInviteBoundAt)
-	return u
-}
-
-// ClearInviteBoundAt clears the value of the "invite_bound_at" field.
-func (u *UserUpsert) ClearInviteBoundAt() *UserUpsert {
-	u.SetNull(user.FieldInviteBoundAt)
 	return u
 }
 
@@ -1631,78 +1387,6 @@ func (u *UserUpsert) AddTotalRecharged(v float64) *UserUpsert {
 	return u
 }
 
-// SetSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field.
-func (u *UserUpsert) SetSubscriptionBalanceFallbackEnabled(v bool) *UserUpsert {
-	u.Set(user.FieldSubscriptionBalanceFallbackEnabled, v)
-	return u
-}
-
-// UpdateSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field to the value that was provided on create.
-func (u *UserUpsert) UpdateSubscriptionBalanceFallbackEnabled() *UserUpsert {
-	u.SetExcluded(user.FieldSubscriptionBalanceFallbackEnabled)
-	return u
-}
-
-// SetSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field.
-func (u *UserUpsert) SetSubscriptionBalanceFallbackLimitUsd(v float64) *UserUpsert {
-	u.Set(user.FieldSubscriptionBalanceFallbackLimitUsd, v)
-	return u
-}
-
-// UpdateSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field to the value that was provided on create.
-func (u *UserUpsert) UpdateSubscriptionBalanceFallbackLimitUsd() *UserUpsert {
-	u.SetExcluded(user.FieldSubscriptionBalanceFallbackLimitUsd)
-	return u
-}
-
-// AddSubscriptionBalanceFallbackLimitUsd adds v to the "subscription_balance_fallback_limit_usd" field.
-func (u *UserUpsert) AddSubscriptionBalanceFallbackLimitUsd(v float64) *UserUpsert {
-	u.Add(user.FieldSubscriptionBalanceFallbackLimitUsd, v)
-	return u
-}
-
-// SetSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field.
-func (u *UserUpsert) SetSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpsert {
-	u.Set(user.FieldSubscriptionBalanceFallbackUsedUsd, v)
-	return u
-}
-
-// UpdateSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field to the value that was provided on create.
-func (u *UserUpsert) UpdateSubscriptionBalanceFallbackUsedUsd() *UserUpsert {
-	u.SetExcluded(user.FieldSubscriptionBalanceFallbackUsedUsd)
-	return u
-}
-
-// AddSubscriptionBalanceFallbackUsedUsd adds v to the "subscription_balance_fallback_used_usd" field.
-func (u *UserUpsert) AddSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpsert {
-	u.Add(user.FieldSubscriptionBalanceFallbackUsedUsd, v)
-	return u
-}
-
-// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
-func (u *UserUpsert) SetSubscriptionBalanceFallbackGroupID(v int64) *UserUpsert {
-	u.Set(user.FieldSubscriptionBalanceFallbackGroupID, v)
-	return u
-}
-
-// UpdateSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field to the value that was provided on create.
-func (u *UserUpsert) UpdateSubscriptionBalanceFallbackGroupID() *UserUpsert {
-	u.SetExcluded(user.FieldSubscriptionBalanceFallbackGroupID)
-	return u
-}
-
-// AddSubscriptionBalanceFallbackGroupID adds v to the "subscription_balance_fallback_group_id" field.
-func (u *UserUpsert) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpsert {
-	u.Add(user.FieldSubscriptionBalanceFallbackGroupID, v)
-	return u
-}
-
-// ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
-func (u *UserUpsert) ClearSubscriptionBalanceFallbackGroupID() *UserUpsert {
-	u.SetNull(user.FieldSubscriptionBalanceFallbackGroupID)
-	return u
-}
-
 // SetRpmLimit sets the "rpm_limit" field.
 func (u *UserUpsert) SetRpmLimit(v int) *UserUpsert {
 	u.Set(user.FieldRpmLimit, v)
@@ -1896,76 +1580,6 @@ func (u *UserUpsertOne) SetStatus(v string) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateStatus() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateStatus()
-	})
-}
-
-// SetInviteCode sets the "invite_code" field.
-func (u *UserUpsertOne) SetInviteCode(v string) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetInviteCode(v)
-	})
-}
-
-// UpdateInviteCode sets the "invite_code" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateInviteCode() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateInviteCode()
-	})
-}
-
-// ClearInviteCode clears the value of the "invite_code" field.
-func (u *UserUpsertOne) ClearInviteCode() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.ClearInviteCode()
-	})
-}
-
-// SetInvitedByUserID sets the "invited_by_user_id" field.
-func (u *UserUpsertOne) SetInvitedByUserID(v int64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetInvitedByUserID(v)
-	})
-}
-
-// AddInvitedByUserID adds v to the "invited_by_user_id" field.
-func (u *UserUpsertOne) AddInvitedByUserID(v int64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.AddInvitedByUserID(v)
-	})
-}
-
-// UpdateInvitedByUserID sets the "invited_by_user_id" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateInvitedByUserID() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateInvitedByUserID()
-	})
-}
-
-// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
-func (u *UserUpsertOne) ClearInvitedByUserID() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.ClearInvitedByUserID()
-	})
-}
-
-// SetInviteBoundAt sets the "invite_bound_at" field.
-func (u *UserUpsertOne) SetInviteBoundAt(v time.Time) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetInviteBoundAt(v)
-	})
-}
-
-// UpdateInviteBoundAt sets the "invite_bound_at" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateInviteBoundAt() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateInviteBoundAt()
-	})
-}
-
-// ClearInviteBoundAt clears the value of the "invite_bound_at" field.
-func (u *UserUpsertOne) ClearInviteBoundAt() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.ClearInviteBoundAt()
 	})
 }
 
@@ -2197,90 +1811,6 @@ func (u *UserUpsertOne) AddTotalRecharged(v float64) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateTotalRecharged() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateTotalRecharged()
-	})
-}
-
-// SetSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field.
-func (u *UserUpsertOne) SetSubscriptionBalanceFallbackEnabled(v bool) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSubscriptionBalanceFallbackEnabled(v)
-	})
-}
-
-// UpdateSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateSubscriptionBalanceFallbackEnabled() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSubscriptionBalanceFallbackEnabled()
-	})
-}
-
-// SetSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field.
-func (u *UserUpsertOne) SetSubscriptionBalanceFallbackLimitUsd(v float64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSubscriptionBalanceFallbackLimitUsd(v)
-	})
-}
-
-// AddSubscriptionBalanceFallbackLimitUsd adds v to the "subscription_balance_fallback_limit_usd" field.
-func (u *UserUpsertOne) AddSubscriptionBalanceFallbackLimitUsd(v float64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.AddSubscriptionBalanceFallbackLimitUsd(v)
-	})
-}
-
-// UpdateSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateSubscriptionBalanceFallbackLimitUsd() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSubscriptionBalanceFallbackLimitUsd()
-	})
-}
-
-// SetSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field.
-func (u *UserUpsertOne) SetSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSubscriptionBalanceFallbackUsedUsd(v)
-	})
-}
-
-// AddSubscriptionBalanceFallbackUsedUsd adds v to the "subscription_balance_fallback_used_usd" field.
-func (u *UserUpsertOne) AddSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.AddSubscriptionBalanceFallbackUsedUsd(v)
-	})
-}
-
-// UpdateSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateSubscriptionBalanceFallbackUsedUsd() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSubscriptionBalanceFallbackUsedUsd()
-	})
-}
-
-// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
-func (u *UserUpsertOne) SetSubscriptionBalanceFallbackGroupID(v int64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSubscriptionBalanceFallbackGroupID(v)
-	})
-}
-
-// AddSubscriptionBalanceFallbackGroupID adds v to the "subscription_balance_fallback_group_id" field.
-func (u *UserUpsertOne) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.AddSubscriptionBalanceFallbackGroupID(v)
-	})
-}
-
-// UpdateSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateSubscriptionBalanceFallbackGroupID() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSubscriptionBalanceFallbackGroupID()
-	})
-}
-
-// ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
-func (u *UserUpsertOne) ClearSubscriptionBalanceFallbackGroupID() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.ClearSubscriptionBalanceFallbackGroupID()
 	})
 }
 
@@ -2649,76 +2179,6 @@ func (u *UserUpsertBulk) UpdateStatus() *UserUpsertBulk {
 	})
 }
 
-// SetInviteCode sets the "invite_code" field.
-func (u *UserUpsertBulk) SetInviteCode(v string) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetInviteCode(v)
-	})
-}
-
-// UpdateInviteCode sets the "invite_code" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateInviteCode() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateInviteCode()
-	})
-}
-
-// ClearInviteCode clears the value of the "invite_code" field.
-func (u *UserUpsertBulk) ClearInviteCode() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.ClearInviteCode()
-	})
-}
-
-// SetInvitedByUserID sets the "invited_by_user_id" field.
-func (u *UserUpsertBulk) SetInvitedByUserID(v int64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetInvitedByUserID(v)
-	})
-}
-
-// AddInvitedByUserID adds v to the "invited_by_user_id" field.
-func (u *UserUpsertBulk) AddInvitedByUserID(v int64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.AddInvitedByUserID(v)
-	})
-}
-
-// UpdateInvitedByUserID sets the "invited_by_user_id" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateInvitedByUserID() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateInvitedByUserID()
-	})
-}
-
-// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
-func (u *UserUpsertBulk) ClearInvitedByUserID() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.ClearInvitedByUserID()
-	})
-}
-
-// SetInviteBoundAt sets the "invite_bound_at" field.
-func (u *UserUpsertBulk) SetInviteBoundAt(v time.Time) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetInviteBoundAt(v)
-	})
-}
-
-// UpdateInviteBoundAt sets the "invite_bound_at" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateInviteBoundAt() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateInviteBoundAt()
-	})
-}
-
-// ClearInviteBoundAt clears the value of the "invite_bound_at" field.
-func (u *UserUpsertBulk) ClearInviteBoundAt() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.ClearInviteBoundAt()
-	})
-}
-
 // SetUsername sets the "username" field.
 func (u *UserUpsertBulk) SetUsername(v string) *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
@@ -2947,90 +2407,6 @@ func (u *UserUpsertBulk) AddTotalRecharged(v float64) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateTotalRecharged() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateTotalRecharged()
-	})
-}
-
-// SetSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field.
-func (u *UserUpsertBulk) SetSubscriptionBalanceFallbackEnabled(v bool) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSubscriptionBalanceFallbackEnabled(v)
-	})
-}
-
-// UpdateSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateSubscriptionBalanceFallbackEnabled() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSubscriptionBalanceFallbackEnabled()
-	})
-}
-
-// SetSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field.
-func (u *UserUpsertBulk) SetSubscriptionBalanceFallbackLimitUsd(v float64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSubscriptionBalanceFallbackLimitUsd(v)
-	})
-}
-
-// AddSubscriptionBalanceFallbackLimitUsd adds v to the "subscription_balance_fallback_limit_usd" field.
-func (u *UserUpsertBulk) AddSubscriptionBalanceFallbackLimitUsd(v float64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.AddSubscriptionBalanceFallbackLimitUsd(v)
-	})
-}
-
-// UpdateSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateSubscriptionBalanceFallbackLimitUsd() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSubscriptionBalanceFallbackLimitUsd()
-	})
-}
-
-// SetSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field.
-func (u *UserUpsertBulk) SetSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSubscriptionBalanceFallbackUsedUsd(v)
-	})
-}
-
-// AddSubscriptionBalanceFallbackUsedUsd adds v to the "subscription_balance_fallback_used_usd" field.
-func (u *UserUpsertBulk) AddSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.AddSubscriptionBalanceFallbackUsedUsd(v)
-	})
-}
-
-// UpdateSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateSubscriptionBalanceFallbackUsedUsd() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSubscriptionBalanceFallbackUsedUsd()
-	})
-}
-
-// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
-func (u *UserUpsertBulk) SetSubscriptionBalanceFallbackGroupID(v int64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetSubscriptionBalanceFallbackGroupID(v)
-	})
-}
-
-// AddSubscriptionBalanceFallbackGroupID adds v to the "subscription_balance_fallback_group_id" field.
-func (u *UserUpsertBulk) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.AddSubscriptionBalanceFallbackGroupID(v)
-	})
-}
-
-// UpdateSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateSubscriptionBalanceFallbackGroupID() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateSubscriptionBalanceFallbackGroupID()
-	})
-}
-
-// ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
-func (u *UserUpsertBulk) ClearSubscriptionBalanceFallbackGroupID() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.ClearSubscriptionBalanceFallbackGroupID()
 	})
 }
 

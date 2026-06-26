@@ -23,7 +23,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
-	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 )
 
@@ -161,73 +160,6 @@ func (_u *UserUpdate) SetNillableStatus(v *string) *UserUpdate {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
-	return _u
-}
-
-// SetInviteCode sets the "invite_code" field.
-func (_u *UserUpdate) SetInviteCode(v string) *UserUpdate {
-	_u.mutation.SetInviteCode(v)
-	return _u
-}
-
-// SetNillableInviteCode sets the "invite_code" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableInviteCode(v *string) *UserUpdate {
-	if v != nil {
-		_u.SetInviteCode(*v)
-	}
-	return _u
-}
-
-// ClearInviteCode clears the value of the "invite_code" field.
-func (_u *UserUpdate) ClearInviteCode() *UserUpdate {
-	_u.mutation.ClearInviteCode()
-	return _u
-}
-
-// SetInvitedByUserID sets the "invited_by_user_id" field.
-func (_u *UserUpdate) SetInvitedByUserID(v int64) *UserUpdate {
-	_u.mutation.ResetInvitedByUserID()
-	_u.mutation.SetInvitedByUserID(v)
-	return _u
-}
-
-// SetNillableInvitedByUserID sets the "invited_by_user_id" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableInvitedByUserID(v *int64) *UserUpdate {
-	if v != nil {
-		_u.SetInvitedByUserID(*v)
-	}
-	return _u
-}
-
-// AddInvitedByUserID adds value to the "invited_by_user_id" field.
-func (_u *UserUpdate) AddInvitedByUserID(v int64) *UserUpdate {
-	_u.mutation.AddInvitedByUserID(v)
-	return _u
-}
-
-// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
-func (_u *UserUpdate) ClearInvitedByUserID() *UserUpdate {
-	_u.mutation.ClearInvitedByUserID()
-	return _u
-}
-
-// SetInviteBoundAt sets the "invite_bound_at" field.
-func (_u *UserUpdate) SetInviteBoundAt(v time.Time) *UserUpdate {
-	_u.mutation.SetInviteBoundAt(v)
-	return _u
-}
-
-// SetNillableInviteBoundAt sets the "invite_bound_at" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableInviteBoundAt(v *time.Time) *UserUpdate {
-	if v != nil {
-		_u.SetInviteBoundAt(*v)
-	}
-	return _u
-}
-
-// ClearInviteBoundAt clears the value of the "invite_bound_at" field.
-func (_u *UserUpdate) ClearInviteBoundAt() *UserUpdate {
-	_u.mutation.ClearInviteBoundAt()
 	return _u
 }
 
@@ -457,89 +389,6 @@ func (_u *UserUpdate) AddTotalRecharged(v float64) *UserUpdate {
 	return _u
 }
 
-// SetSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field.
-func (_u *UserUpdate) SetSubscriptionBalanceFallbackEnabled(v bool) *UserUpdate {
-	_u.mutation.SetSubscriptionBalanceFallbackEnabled(v)
-	return _u
-}
-
-// SetNillableSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableSubscriptionBalanceFallbackEnabled(v *bool) *UserUpdate {
-	if v != nil {
-		_u.SetSubscriptionBalanceFallbackEnabled(*v)
-	}
-	return _u
-}
-
-// SetSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field.
-func (_u *UserUpdate) SetSubscriptionBalanceFallbackLimitUsd(v float64) *UserUpdate {
-	_u.mutation.ResetSubscriptionBalanceFallbackLimitUsd()
-	_u.mutation.SetSubscriptionBalanceFallbackLimitUsd(v)
-	return _u
-}
-
-// SetNillableSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableSubscriptionBalanceFallbackLimitUsd(v *float64) *UserUpdate {
-	if v != nil {
-		_u.SetSubscriptionBalanceFallbackLimitUsd(*v)
-	}
-	return _u
-}
-
-// AddSubscriptionBalanceFallbackLimitUsd adds value to the "subscription_balance_fallback_limit_usd" field.
-func (_u *UserUpdate) AddSubscriptionBalanceFallbackLimitUsd(v float64) *UserUpdate {
-	_u.mutation.AddSubscriptionBalanceFallbackLimitUsd(v)
-	return _u
-}
-
-// SetSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field.
-func (_u *UserUpdate) SetSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpdate {
-	_u.mutation.ResetSubscriptionBalanceFallbackUsedUsd()
-	_u.mutation.SetSubscriptionBalanceFallbackUsedUsd(v)
-	return _u
-}
-
-// SetNillableSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableSubscriptionBalanceFallbackUsedUsd(v *float64) *UserUpdate {
-	if v != nil {
-		_u.SetSubscriptionBalanceFallbackUsedUsd(*v)
-	}
-	return _u
-}
-
-// AddSubscriptionBalanceFallbackUsedUsd adds value to the "subscription_balance_fallback_used_usd" field.
-func (_u *UserUpdate) AddSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpdate {
-	_u.mutation.AddSubscriptionBalanceFallbackUsedUsd(v)
-	return _u
-}
-
-// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
-func (_u *UserUpdate) SetSubscriptionBalanceFallbackGroupID(v int64) *UserUpdate {
-	_u.mutation.ResetSubscriptionBalanceFallbackGroupID()
-	_u.mutation.SetSubscriptionBalanceFallbackGroupID(v)
-	return _u
-}
-
-// SetNillableSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableSubscriptionBalanceFallbackGroupID(v *int64) *UserUpdate {
-	if v != nil {
-		_u.SetSubscriptionBalanceFallbackGroupID(*v)
-	}
-	return _u
-}
-
-// AddSubscriptionBalanceFallbackGroupID adds value to the "subscription_balance_fallback_group_id" field.
-func (_u *UserUpdate) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpdate {
-	_u.mutation.AddSubscriptionBalanceFallbackGroupID(v)
-	return _u
-}
-
-// ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
-func (_u *UserUpdate) ClearSubscriptionBalanceFallbackGroupID() *UserUpdate {
-	_u.mutation.ClearSubscriptionBalanceFallbackGroupID()
-	return _u
-}
-
 // SetRpmLimit sets the "rpm_limit" field.
 func (_u *UserUpdate) SetRpmLimit(v int) *UserUpdate {
 	_u.mutation.ResetRpmLimit()
@@ -739,21 +588,6 @@ func (_u *UserUpdate) AddPendingAuthSessions(v ...*PendingAuthSession) *UserUpda
 		ids[i] = v[i].ID
 	}
 	return _u.AddPendingAuthSessionIDs(ids...)
-}
-
-// AddPlatformQuotaIDs adds the "platform_quotas" edge to the UserPlatformQuota entity by IDs.
-func (_u *UserUpdate) AddPlatformQuotaIDs(ids ...int64) *UserUpdate {
-	_u.mutation.AddPlatformQuotaIDs(ids...)
-	return _u
-}
-
-// AddPlatformQuotas adds the "platform_quotas" edges to the UserPlatformQuota entity.
-func (_u *UserUpdate) AddPlatformQuotas(v ...*UserPlatformQuota) *UserUpdate {
-	ids := make([]int64, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddPlatformQuotaIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -1013,27 +847,6 @@ func (_u *UserUpdate) RemovePendingAuthSessions(v ...*PendingAuthSession) *UserU
 	return _u.RemovePendingAuthSessionIDs(ids...)
 }
 
-// ClearPlatformQuotas clears all "platform_quotas" edges to the UserPlatformQuota entity.
-func (_u *UserUpdate) ClearPlatformQuotas() *UserUpdate {
-	_u.mutation.ClearPlatformQuotas()
-	return _u
-}
-
-// RemovePlatformQuotaIDs removes the "platform_quotas" edge to UserPlatformQuota entities by IDs.
-func (_u *UserUpdate) RemovePlatformQuotaIDs(ids ...int64) *UserUpdate {
-	_u.mutation.RemovePlatformQuotaIDs(ids...)
-	return _u
-}
-
-// RemovePlatformQuotas removes "platform_quotas" edges to UserPlatformQuota entities.
-func (_u *UserUpdate) RemovePlatformQuotas(v ...*UserPlatformQuota) *UserUpdate {
-	ids := make([]int64, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemovePlatformQuotaIDs(ids...)
-}
-
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *UserUpdate) Save(ctx context.Context) (int, error) {
 	if err := _u.defaults(); err != nil {
@@ -1098,11 +911,6 @@ func (_u *UserUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "User.status": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.InviteCode(); ok {
-		if err := user.InviteCodeValidator(v); err != nil {
-			return &ValidationError{Name: "invite_code", err: fmt.Errorf(`ent: validator failed for field "User.invite_code": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Username(); ok {
 		if err := user.UsernameValidator(v); err != nil {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
@@ -1160,27 +968,6 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.InviteCode(); ok {
-		_spec.SetField(user.FieldInviteCode, field.TypeString, value)
-	}
-	if _u.mutation.InviteCodeCleared() {
-		_spec.ClearField(user.FieldInviteCode, field.TypeString)
-	}
-	if value, ok := _u.mutation.InvitedByUserID(); ok {
-		_spec.SetField(user.FieldInvitedByUserID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedInvitedByUserID(); ok {
-		_spec.AddField(user.FieldInvitedByUserID, field.TypeInt64, value)
-	}
-	if _u.mutation.InvitedByUserIDCleared() {
-		_spec.ClearField(user.FieldInvitedByUserID, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.InviteBoundAt(); ok {
-		_spec.SetField(user.FieldInviteBoundAt, field.TypeTime, value)
-	}
-	if _u.mutation.InviteBoundAtCleared() {
-		_spec.ClearField(user.FieldInviteBoundAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)
@@ -1241,30 +1028,6 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedTotalRecharged(); ok {
 		_spec.AddField(user.FieldTotalRecharged, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.SubscriptionBalanceFallbackEnabled(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackEnabled, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.SubscriptionBalanceFallbackLimitUsd(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackLimitUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedSubscriptionBalanceFallbackLimitUsd(); ok {
-		_spec.AddField(user.FieldSubscriptionBalanceFallbackLimitUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.SubscriptionBalanceFallbackUsedUsd(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackUsedUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedSubscriptionBalanceFallbackUsedUsd(); ok {
-		_spec.AddField(user.FieldSubscriptionBalanceFallbackUsedUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.SubscriptionBalanceFallbackGroupID(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedSubscriptionBalanceFallbackGroupID(); ok {
-		_spec.AddField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if _u.mutation.SubscriptionBalanceFallbackGroupIDCleared() {
-		_spec.ClearField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
@@ -1824,51 +1587,6 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
-	if _u.mutation.PlatformQuotasCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.PlatformQuotasTable,
-			Columns: []string{user.PlatformQuotasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedPlatformQuotasIDs(); len(nodes) > 0 && !_u.mutation.PlatformQuotasCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.PlatformQuotasTable,
-			Columns: []string{user.PlatformQuotasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.PlatformQuotasIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.PlatformQuotasTable,
-			Columns: []string{user.PlatformQuotasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{user.Label}
@@ -2010,73 +1728,6 @@ func (_u *UserUpdateOne) SetNillableStatus(v *string) *UserUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
-	return _u
-}
-
-// SetInviteCode sets the "invite_code" field.
-func (_u *UserUpdateOne) SetInviteCode(v string) *UserUpdateOne {
-	_u.mutation.SetInviteCode(v)
-	return _u
-}
-
-// SetNillableInviteCode sets the "invite_code" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableInviteCode(v *string) *UserUpdateOne {
-	if v != nil {
-		_u.SetInviteCode(*v)
-	}
-	return _u
-}
-
-// ClearInviteCode clears the value of the "invite_code" field.
-func (_u *UserUpdateOne) ClearInviteCode() *UserUpdateOne {
-	_u.mutation.ClearInviteCode()
-	return _u
-}
-
-// SetInvitedByUserID sets the "invited_by_user_id" field.
-func (_u *UserUpdateOne) SetInvitedByUserID(v int64) *UserUpdateOne {
-	_u.mutation.ResetInvitedByUserID()
-	_u.mutation.SetInvitedByUserID(v)
-	return _u
-}
-
-// SetNillableInvitedByUserID sets the "invited_by_user_id" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableInvitedByUserID(v *int64) *UserUpdateOne {
-	if v != nil {
-		_u.SetInvitedByUserID(*v)
-	}
-	return _u
-}
-
-// AddInvitedByUserID adds value to the "invited_by_user_id" field.
-func (_u *UserUpdateOne) AddInvitedByUserID(v int64) *UserUpdateOne {
-	_u.mutation.AddInvitedByUserID(v)
-	return _u
-}
-
-// ClearInvitedByUserID clears the value of the "invited_by_user_id" field.
-func (_u *UserUpdateOne) ClearInvitedByUserID() *UserUpdateOne {
-	_u.mutation.ClearInvitedByUserID()
-	return _u
-}
-
-// SetInviteBoundAt sets the "invite_bound_at" field.
-func (_u *UserUpdateOne) SetInviteBoundAt(v time.Time) *UserUpdateOne {
-	_u.mutation.SetInviteBoundAt(v)
-	return _u
-}
-
-// SetNillableInviteBoundAt sets the "invite_bound_at" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableInviteBoundAt(v *time.Time) *UserUpdateOne {
-	if v != nil {
-		_u.SetInviteBoundAt(*v)
-	}
-	return _u
-}
-
-// ClearInviteBoundAt clears the value of the "invite_bound_at" field.
-func (_u *UserUpdateOne) ClearInviteBoundAt() *UserUpdateOne {
-	_u.mutation.ClearInviteBoundAt()
 	return _u
 }
 
@@ -2306,89 +1957,6 @@ func (_u *UserUpdateOne) AddTotalRecharged(v float64) *UserUpdateOne {
 	return _u
 }
 
-// SetSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field.
-func (_u *UserUpdateOne) SetSubscriptionBalanceFallbackEnabled(v bool) *UserUpdateOne {
-	_u.mutation.SetSubscriptionBalanceFallbackEnabled(v)
-	return _u
-}
-
-// SetNillableSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableSubscriptionBalanceFallbackEnabled(v *bool) *UserUpdateOne {
-	if v != nil {
-		_u.SetSubscriptionBalanceFallbackEnabled(*v)
-	}
-	return _u
-}
-
-// SetSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field.
-func (_u *UserUpdateOne) SetSubscriptionBalanceFallbackLimitUsd(v float64) *UserUpdateOne {
-	_u.mutation.ResetSubscriptionBalanceFallbackLimitUsd()
-	_u.mutation.SetSubscriptionBalanceFallbackLimitUsd(v)
-	return _u
-}
-
-// SetNillableSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableSubscriptionBalanceFallbackLimitUsd(v *float64) *UserUpdateOne {
-	if v != nil {
-		_u.SetSubscriptionBalanceFallbackLimitUsd(*v)
-	}
-	return _u
-}
-
-// AddSubscriptionBalanceFallbackLimitUsd adds value to the "subscription_balance_fallback_limit_usd" field.
-func (_u *UserUpdateOne) AddSubscriptionBalanceFallbackLimitUsd(v float64) *UserUpdateOne {
-	_u.mutation.AddSubscriptionBalanceFallbackLimitUsd(v)
-	return _u
-}
-
-// SetSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field.
-func (_u *UserUpdateOne) SetSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpdateOne {
-	_u.mutation.ResetSubscriptionBalanceFallbackUsedUsd()
-	_u.mutation.SetSubscriptionBalanceFallbackUsedUsd(v)
-	return _u
-}
-
-// SetNillableSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableSubscriptionBalanceFallbackUsedUsd(v *float64) *UserUpdateOne {
-	if v != nil {
-		_u.SetSubscriptionBalanceFallbackUsedUsd(*v)
-	}
-	return _u
-}
-
-// AddSubscriptionBalanceFallbackUsedUsd adds value to the "subscription_balance_fallback_used_usd" field.
-func (_u *UserUpdateOne) AddSubscriptionBalanceFallbackUsedUsd(v float64) *UserUpdateOne {
-	_u.mutation.AddSubscriptionBalanceFallbackUsedUsd(v)
-	return _u
-}
-
-// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
-func (_u *UserUpdateOne) SetSubscriptionBalanceFallbackGroupID(v int64) *UserUpdateOne {
-	_u.mutation.ResetSubscriptionBalanceFallbackGroupID()
-	_u.mutation.SetSubscriptionBalanceFallbackGroupID(v)
-	return _u
-}
-
-// SetNillableSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableSubscriptionBalanceFallbackGroupID(v *int64) *UserUpdateOne {
-	if v != nil {
-		_u.SetSubscriptionBalanceFallbackGroupID(*v)
-	}
-	return _u
-}
-
-// AddSubscriptionBalanceFallbackGroupID adds value to the "subscription_balance_fallback_group_id" field.
-func (_u *UserUpdateOne) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpdateOne {
-	_u.mutation.AddSubscriptionBalanceFallbackGroupID(v)
-	return _u
-}
-
-// ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
-func (_u *UserUpdateOne) ClearSubscriptionBalanceFallbackGroupID() *UserUpdateOne {
-	_u.mutation.ClearSubscriptionBalanceFallbackGroupID()
-	return _u
-}
-
 // SetRpmLimit sets the "rpm_limit" field.
 func (_u *UserUpdateOne) SetRpmLimit(v int) *UserUpdateOne {
 	_u.mutation.ResetRpmLimit()
@@ -2588,21 +2156,6 @@ func (_u *UserUpdateOne) AddPendingAuthSessions(v ...*PendingAuthSession) *UserU
 		ids[i] = v[i].ID
 	}
 	return _u.AddPendingAuthSessionIDs(ids...)
-}
-
-// AddPlatformQuotaIDs adds the "platform_quotas" edge to the UserPlatformQuota entity by IDs.
-func (_u *UserUpdateOne) AddPlatformQuotaIDs(ids ...int64) *UserUpdateOne {
-	_u.mutation.AddPlatformQuotaIDs(ids...)
-	return _u
-}
-
-// AddPlatformQuotas adds the "platform_quotas" edges to the UserPlatformQuota entity.
-func (_u *UserUpdateOne) AddPlatformQuotas(v ...*UserPlatformQuota) *UserUpdateOne {
-	ids := make([]int64, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddPlatformQuotaIDs(ids...)
 }
 
 // Mutation returns the UserMutation object of the builder.
@@ -2862,27 +2415,6 @@ func (_u *UserUpdateOne) RemovePendingAuthSessions(v ...*PendingAuthSession) *Us
 	return _u.RemovePendingAuthSessionIDs(ids...)
 }
 
-// ClearPlatformQuotas clears all "platform_quotas" edges to the UserPlatformQuota entity.
-func (_u *UserUpdateOne) ClearPlatformQuotas() *UserUpdateOne {
-	_u.mutation.ClearPlatformQuotas()
-	return _u
-}
-
-// RemovePlatformQuotaIDs removes the "platform_quotas" edge to UserPlatformQuota entities by IDs.
-func (_u *UserUpdateOne) RemovePlatformQuotaIDs(ids ...int64) *UserUpdateOne {
-	_u.mutation.RemovePlatformQuotaIDs(ids...)
-	return _u
-}
-
-// RemovePlatformQuotas removes "platform_quotas" edges to UserPlatformQuota entities.
-func (_u *UserUpdateOne) RemovePlatformQuotas(v ...*UserPlatformQuota) *UserUpdateOne {
-	ids := make([]int64, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemovePlatformQuotaIDs(ids...)
-}
-
 // Where appends a list predicates to the UserUpdate builder.
 func (_u *UserUpdateOne) Where(ps ...predicate.User) *UserUpdateOne {
 	_u.mutation.Where(ps...)
@@ -2960,11 +2492,6 @@ func (_u *UserUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "User.status": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.InviteCode(); ok {
-		if err := user.InviteCodeValidator(v); err != nil {
-			return &ValidationError{Name: "invite_code", err: fmt.Errorf(`ent: validator failed for field "User.invite_code": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Username(); ok {
 		if err := user.UsernameValidator(v); err != nil {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
@@ -3040,27 +2567,6 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(user.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.InviteCode(); ok {
-		_spec.SetField(user.FieldInviteCode, field.TypeString, value)
-	}
-	if _u.mutation.InviteCodeCleared() {
-		_spec.ClearField(user.FieldInviteCode, field.TypeString)
-	}
-	if value, ok := _u.mutation.InvitedByUserID(); ok {
-		_spec.SetField(user.FieldInvitedByUserID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedInvitedByUserID(); ok {
-		_spec.AddField(user.FieldInvitedByUserID, field.TypeInt64, value)
-	}
-	if _u.mutation.InvitedByUserIDCleared() {
-		_spec.ClearField(user.FieldInvitedByUserID, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.InviteBoundAt(); ok {
-		_spec.SetField(user.FieldInviteBoundAt, field.TypeTime, value)
-	}
-	if _u.mutation.InviteBoundAtCleared() {
-		_spec.ClearField(user.FieldInviteBoundAt, field.TypeTime)
-	}
 	if value, ok := _u.mutation.Username(); ok {
 		_spec.SetField(user.FieldUsername, field.TypeString, value)
 	}
@@ -3120,30 +2626,6 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.AddedTotalRecharged(); ok {
 		_spec.AddField(user.FieldTotalRecharged, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.SubscriptionBalanceFallbackEnabled(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackEnabled, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.SubscriptionBalanceFallbackLimitUsd(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackLimitUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedSubscriptionBalanceFallbackLimitUsd(); ok {
-		_spec.AddField(user.FieldSubscriptionBalanceFallbackLimitUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.SubscriptionBalanceFallbackUsedUsd(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackUsedUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.AddedSubscriptionBalanceFallbackUsedUsd(); ok {
-		_spec.AddField(user.FieldSubscriptionBalanceFallbackUsedUsd, field.TypeFloat64, value)
-	}
-	if value, ok := _u.mutation.SubscriptionBalanceFallbackGroupID(); ok {
-		_spec.SetField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedSubscriptionBalanceFallbackGroupID(); ok {
-		_spec.AddField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if _u.mutation.SubscriptionBalanceFallbackGroupIDCleared() {
-		_spec.ClearField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.RpmLimit(); ok {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
@@ -3696,51 +3178,6 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(pendingauthsession.FieldID, field.TypeInt64),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.PlatformQuotasCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.PlatformQuotasTable,
-			Columns: []string{user.PlatformQuotasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedPlatformQuotasIDs(); len(nodes) > 0 && !_u.mutation.PlatformQuotasCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.PlatformQuotasTable,
-			Columns: []string{user.PlatformQuotasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.PlatformQuotasIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   user.PlatformQuotasTable,
-			Columns: []string{user.PlatformQuotasColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(userplatformquota.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

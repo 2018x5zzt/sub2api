@@ -199,24 +199,6 @@ func (s *subscriptionUserSubRepoStub) GetByID(_ context.Context, id int64) (*Use
 	return &cp, nil
 }
 
-func (s *subscriptionUserSubRepoStub) Update(_ context.Context, sub *UserSubscription) error {
-	if sub == nil {
-		return ErrSubscriptionNilInput
-	}
-	existing := s.byID[sub.ID]
-	if existing == nil {
-		return ErrSubscriptionNotFound
-	}
-	oldKey := s.key(existing.UserID, existing.GroupID)
-	cp := *sub
-	s.byID[cp.ID] = &cp
-	if oldKey != s.key(cp.UserID, cp.GroupID) {
-		delete(s.byUserGroup, oldKey)
-	}
-	s.byUserGroup[s.key(cp.UserID, cp.GroupID)] = &cp
-	return nil
-}
-
 func TestAssignSubscriptionReuseWhenSemanticsMatch(t *testing.T) {
 	start := time.Date(2026, 2, 20, 10, 0, 0, 0, time.UTC)
 	groupRepo := &subscriptionGroupRepoStub{
@@ -228,7 +210,7 @@ func TestAssignSubscriptionReuseWhenSemanticsMatch(t *testing.T) {
 		UserID:    1001,
 		GroupID:   1,
 		StartsAt:  start,
-		ExpiresAt: naturalDayEnd(start, 30),
+		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "init",
 	})
 
@@ -255,7 +237,7 @@ func TestAssignSubscriptionConflictWhenSemanticsMismatch(t *testing.T) {
 		UserID:    2001,
 		GroupID:   1,
 		StartsAt:  start,
-		ExpiresAt: naturalDayEnd(start, 30),
+		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "old-note",
 	})
 
@@ -283,7 +265,7 @@ func TestBulkAssignSubscriptionCreatedReusedAndConflict(t *testing.T) {
 		UserID:    1,
 		GroupID:   1,
 		StartsAt:  start,
-		ExpiresAt: naturalDayEnd(start, 30),
+		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "same-note",
 	})
 	// user 3: 语义冲突（有效期不一致），应 failed
@@ -292,7 +274,7 @@ func TestBulkAssignSubscriptionCreatedReusedAndConflict(t *testing.T) {
 		UserID:    3,
 		GroupID:   1,
 		StartsAt:  start,
-		ExpiresAt: naturalDayEnd(start, 60),
+		ExpiresAt: start.AddDate(0, 0, 60),
 		Notes:     "same-note",
 	})
 
@@ -350,7 +332,7 @@ func TestDetectAssignSemanticConflictCases(t *testing.T) {
 		UserID:    1,
 		GroupID:   1,
 		StartsAt:  start,
-		ExpiresAt: naturalDayEnd(start, 30),
+		ExpiresAt: start.AddDate(0, 0, 30),
 		Notes:     "same",
 	}
 
@@ -396,11 +378,6 @@ func TestAssignSubscriptionGroupTypeValidation(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Equal(t, infraerrors.Code(ErrGroupNotSubscriptionType), infraerrors.Code(err))
-}
-
-func naturalDayEnd(base time.Time, days int) time.Time {
-	target := base.AddDate(0, 0, days)
-	return time.Date(target.Year(), target.Month(), target.Day(), 23, 59, 59, 0, target.Location())
 }
 
 func strconvFormatInt(v int64) string {

@@ -7,17 +7,14 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
-import { useAdminComplianceStore } from '@/stores/adminCompliance'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
-import { getSetupStatus } from '@/api/setup'
-import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveDocumentTitle } from './title'
 
 /**
  * Route definitions with lazy loading
  */
-export const routes: RouteRecordRaw[] = [
+const routes: RouteRecordRaw[] = [
   // ==================== Setup Routes ====================
   {
     path: '/setup',
@@ -46,7 +43,7 @@ export const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: false,
       title: 'Login',
-      titleKey: 'home.login'
+      titleKey: 'common.login'
     }
   },
   {
@@ -71,7 +68,6 @@ export const routes: RouteRecordRaw[] = [
   {
     path: '/auth/callback',
     name: 'OAuthCallback',
-    alias: '/auth/oauth/callback',
     component: () => import('@/views/auth/OAuthCallbackView.vue'),
     meta: {
       requiresAuth: false,
@@ -110,25 +106,6 @@ export const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/auth/dingtalk/callback',
-    name: 'DingTalkOAuthCallback',
-    component: () => import('@/views/auth/DingTalkCallbackView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'DingTalk OAuth Callback',
-      titleKey: 'auth.dingtalkCallbackPageTitle'
-    }
-  },
-  {
-    path: '/auth/dingtalk/email-completion',
-    name: 'dingtalk-email-completion',
-    component: () => import('@/views/auth/DingTalkEmailCompletionView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'DingTalk Email Completion'
-    }
-  },
-  {
     path: '/auth/oidc/callback',
     name: 'OIDCOAuthCallback',
     component: () => import('@/views/auth/OidcCallbackView.vue'),
@@ -136,15 +113,6 @@ export const routes: RouteRecordRaw[] = [
       requiresAuth: false,
       title: 'OIDC OAuth Callback',
       titleKey: 'auth.oidcCallbackPageTitle'
-    }
-  },
-  {
-    path: '/oauth/consent',
-    name: 'XlabOAuthConsent',
-    component: () => import('@/views/auth/XlabOAuthConsentView.vue'),
-    meta: {
-      requiresAuth: true,
-      title: 'Xlab OAuth'
     }
   },
   {
@@ -173,15 +141,6 @@ export const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: false,
       title: 'Key Usage',
-    }
-  },
-  {
-    path: '/legal/:documentId',
-    name: 'LegalDocument',
-    component: () => import('@/views/public/LegalDocumentView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Legal Document'
     }
   },
 
@@ -249,10 +208,6 @@ export const routes: RouteRecordRaw[] = [
       titleKey: 'redeem.title',
       descriptionKey: 'redeem.description'
     }
-  },
-  {
-    path: '/invite',
-    redirect: '/affiliate'
   },
   {
     path: '/affiliate',
@@ -328,16 +283,6 @@ export const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/image-studio',
-    name: 'ImageStudio',
-    component: () => import('@/views/user/ImageStudioView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: false,
-      title: '创作图片'
-    }
-  },
-  {
     path: '/payment/qrcode',
     name: 'PaymentQRCode',
     component: () => import('@/views/user/PaymentQRCodeView.vue'),
@@ -370,18 +315,6 @@ export const routes: RouteRecordRaw[] = [
       requiresAdmin: false,
       title: 'Stripe Payment',
       titleKey: 'payment.stripePay',
-      requiresPayment: false
-    }
-  },
-  {
-    path: '/payment/airwallex',
-    name: 'AirwallexPayment',
-    component: () => import('@/views/user/AirwallexPaymentView.vue'),
-    meta: {
-      requiresAuth: false,
-      requiresAdmin: false,
-      title: 'Airwallex Payment',
-      titleKey: 'payment.airwallexPay',
       requiresPayment: false
     }
   },
@@ -503,29 +436,13 @@ export const routes: RouteRecordRaw[] = [
   {
     path: '/admin/subscriptions',
     name: 'AdminSubscriptions',
-    component: () => import('@/views/admin/SubscriptionProductsView.vue'),
+    component: () => import('@/views/admin/SubscriptionsView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'User Subscriptions',
-      titleKey: 'admin.subscriptionProducts.title',
-      descriptionKey: 'admin.subscriptionProducts.description'
-    }
-  },
-  {
-    path: '/admin/subscription-products',
-    redirect: '/admin/subscriptions'
-  },
-  {
-    path: '/admin/subscription-product-config',
-    name: 'AdminSubscriptionProductConfig',
-    component: () => import('@/views/admin/SubscriptionProductConfigView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Subscription Product Config',
-      titleKey: 'admin.subscriptionProductConfig.title',
-      descriptionKey: 'admin.subscriptionProductConfig.description'
+      title: 'Subscription Management',
+      titleKey: 'admin.subscriptions.title',
+      descriptionKey: 'admin.subscriptions.description'
     }
   },
   {
@@ -577,10 +494,6 @@ export const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/admin/invites',
-    redirect: '/admin/users'
-  },
-  {
     path: '/admin/promo-codes',
     name: 'AdminPromoCodes',
     component: () => import('@/views/admin/PromoCodesView.vue'),
@@ -589,7 +502,21 @@ export const routes: RouteRecordRaw[] = [
       requiresAdmin: true,
       title: 'Promo Code Management',
       titleKey: 'admin.promo.title',
-      descriptionKey: 'admin.promo.description'
+      descriptionKey: 'admin.promo.description',
+      promoScene: 'register'
+    }
+  },
+  {
+    path: '/admin/benefit-codes',
+    name: 'AdminBenefitCodes',
+    component: () => import('@/views/admin/PromoCodesView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Benefit Code Management',
+      titleKey: 'admin.benefit.title',
+      descriptionKey: 'admin.benefit.description',
+      promoScene: 'benefit'
     }
   },
   {
@@ -602,19 +529,6 @@ export const routes: RouteRecordRaw[] = [
       title: 'System Settings',
       titleKey: 'admin.settings.title',
       descriptionKey: 'admin.settings.description'
-    }
-  },
-  {
-    path: '/admin/risk-control',
-    name: 'AdminRiskControl',
-    component: () => import('@/views/admin/RiskControlView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Risk Control',
-      titleKey: 'admin.riskControl.title',
-      descriptionKey: 'admin.riskControl.description',
-      requiresRiskControl: true
     }
   },
   {
@@ -745,12 +659,10 @@ let authInitialized = false
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
-const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup', '/payment/result', '/payment/airwallex', '/legal']
+const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup', '/payment/result']
 const BACKEND_MODE_CALLBACK_PATHS = [
   '/auth/callback',
   '/auth/linuxdo/callback',
-  '/auth/dingtalk/callback',
-  '/auth/dingtalk/email-completion',
   '/auth/oidc/callback',
   '/auth/wechat/callback',
   '/auth/wechat/payment/callback',
@@ -773,7 +685,7 @@ function isBackendModePublicRouteAllowed(path: string, hasPendingAuthSession: bo
   return false
 }
 
-router.beforeEach(async (to, _from, next) => {
+router.beforeEach((to, _from, next) => {
   // 开始导航加载状态
   navigationLoading.startNavigation()
 
@@ -807,18 +719,6 @@ router.beforeEach(async (to, _from, next) => {
   // Check if route requires authentication
   const requiresAuth = to.meta.requiresAuth !== false // Default to true
   const requiresAdmin = to.meta.requiresAdmin === true
-
-  if (to.path === '/setup') {
-    try {
-      const status = await getSetupStatus()
-      if (!status.needs_setup) {
-        next(resolveCompletedSetupRedirectPath(authStore.isAuthenticated, authStore.isAdmin))
-        return
-      }
-    } catch {
-      // If setup status cannot be determined, keep the setup page reachable.
-    }
-  }
 
   // If route doesn't require auth, allow access
   if (!requiresAuth) {
@@ -863,20 +763,6 @@ router.beforeEach(async (to, _from, next) => {
     return
   }
 
-  if (requiresAdmin && authStore.isAdmin) {
-    const adminComplianceStore = useAdminComplianceStore()
-    if (!adminComplianceStore.initialized) {
-      try {
-        await adminComplianceStore.fetchStatus()
-      } catch (error) {
-        const err = error as { status?: number; code?: string; metadata?: Record<string, string> }
-        if (err.status === 423 && err.code === 'ADMIN_COMPLIANCE_ACK_REQUIRED') {
-          adminComplianceStore.requireAcknowledgement(err.metadata)
-        }
-      }
-    }
-  }
-
 
   // Check payment requirement (internal payment system only)
   if (to.meta.requiresPayment) {
@@ -887,21 +773,11 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  if (to.meta.requiresRiskControl) {
-    const riskControlEnabled = appStore.cachedPublicSettings?.risk_control_enabled === true
-    if (!riskControlEnabled) {
-      next(authStore.isAdmin ? '/admin/settings' : '/dashboard')
-      return
-    }
-  }
-
   // 简易模式下限制访问某些页面
   if (authStore.isSimpleMode) {
     const restrictedPaths = [
       '/admin/groups',
       '/admin/subscriptions',
-      '/admin/subscription-products',
-      '/admin/subscription-product-config',
       '/admin/redeem',
       '/subscriptions',
       '/redeem'

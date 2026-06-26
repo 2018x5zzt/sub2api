@@ -32,10 +32,6 @@ const (
 	FieldIsExclusive = "is_exclusive"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldPricingMode holds the string denoting the pricing_mode field in the database.
-	FieldPricingMode = "pricing_mode"
-	// FieldDefaultBudgetMultiplier holds the string denoting the default_budget_multiplier field in the database.
-	FieldDefaultBudgetMultiplier = "default_budget_multiplier"
 	// FieldPlatform holds the string denoting the platform field in the database.
 	FieldPlatform = "platform"
 	// FieldSubscriptionType holds the string denoting the subscription_type field in the database.
@@ -48,12 +44,6 @@ const (
 	FieldMonthlyLimitUsd = "monthly_limit_usd"
 	// FieldDefaultValidityDays holds the string denoting the default_validity_days field in the database.
 	FieldDefaultValidityDays = "default_validity_days"
-	// FieldAllowImageGeneration holds the string denoting the allow_image_generation field in the database.
-	FieldAllowImageGeneration = "allow_image_generation"
-	// FieldImageRateIndependent holds the string denoting the image_rate_independent field in the database.
-	FieldImageRateIndependent = "image_rate_independent"
-	// FieldImageRateMultiplier holds the string denoting the image_rate_multiplier field in the database.
-	FieldImageRateMultiplier = "image_rate_multiplier"
 	// FieldImagePrice1k holds the string denoting the image_price_1k field in the database.
 	FieldImagePrice1k = "image_price_1k"
 	// FieldImagePrice2k holds the string denoting the image_price_2k field in the database.
@@ -66,8 +56,6 @@ const (
 	FieldFallbackGroupID = "fallback_group_id"
 	// FieldFallbackGroupIDOnInvalidRequest holds the string denoting the fallback_group_id_on_invalid_request field in the database.
 	FieldFallbackGroupIDOnInvalidRequest = "fallback_group_id_on_invalid_request"
-	// FieldBalanceFallbackGroupID holds the string denoting the balance_fallback_group_id field in the database.
-	FieldBalanceFallbackGroupID = "balance_fallback_group_id"
 	// FieldModelRouting holds the string denoting the model_routing field in the database.
 	FieldModelRouting = "model_routing"
 	// FieldModelRoutingEnabled holds the string denoting the model_routing_enabled field in the database.
@@ -88,8 +76,6 @@ const (
 	FieldDefaultMappedModel = "default_mapped_model"
 	// FieldMessagesDispatchModelConfig holds the string denoting the messages_dispatch_model_config field in the database.
 	FieldMessagesDispatchModelConfig = "messages_dispatch_model_config"
-	// FieldModelsListConfig holds the string denoting the models_list_config field in the database.
-	FieldModelsListConfig = "models_list_config"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
 	FieldRpmLimit = "rpm_limit"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
@@ -175,24 +161,18 @@ var Columns = []string{
 	FieldRateMultiplier,
 	FieldIsExclusive,
 	FieldStatus,
-	FieldPricingMode,
-	FieldDefaultBudgetMultiplier,
 	FieldPlatform,
 	FieldSubscriptionType,
 	FieldDailyLimitUsd,
 	FieldWeeklyLimitUsd,
 	FieldMonthlyLimitUsd,
 	FieldDefaultValidityDays,
-	FieldAllowImageGeneration,
-	FieldImageRateIndependent,
-	FieldImageRateMultiplier,
 	FieldImagePrice1k,
 	FieldImagePrice2k,
 	FieldImagePrice4k,
 	FieldClaudeCodeOnly,
 	FieldFallbackGroupID,
 	FieldFallbackGroupIDOnInvalidRequest,
-	FieldBalanceFallbackGroupID,
 	FieldModelRouting,
 	FieldModelRoutingEnabled,
 	FieldMcpXMLInject,
@@ -203,7 +183,6 @@ var Columns = []string{
 	FieldRequirePrivacySet,
 	FieldDefaultMappedModel,
 	FieldMessagesDispatchModelConfig,
-	FieldModelsListConfig,
 	FieldRpmLimit,
 }
 
@@ -250,10 +229,6 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
-	// DefaultPricingMode holds the default value on creation for the "pricing_mode" field.
-	DefaultPricingMode string
-	// PricingModeValidator is a validator for the "pricing_mode" field. It is called by the builders before save.
-	PricingModeValidator func(string) error
 	// DefaultPlatform holds the default value on creation for the "platform" field.
 	DefaultPlatform string
 	// PlatformValidator is a validator for the "platform" field. It is called by the builders before save.
@@ -264,12 +239,6 @@ var (
 	SubscriptionTypeValidator func(string) error
 	// DefaultDefaultValidityDays holds the default value on creation for the "default_validity_days" field.
 	DefaultDefaultValidityDays int
-	// DefaultAllowImageGeneration holds the default value on creation for the "allow_image_generation" field.
-	DefaultAllowImageGeneration bool
-	// DefaultImageRateIndependent holds the default value on creation for the "image_rate_independent" field.
-	DefaultImageRateIndependent bool
-	// DefaultImageRateMultiplier holds the default value on creation for the "image_rate_multiplier" field.
-	DefaultImageRateMultiplier float64
 	// DefaultClaudeCodeOnly holds the default value on creation for the "claude_code_only" field.
 	DefaultClaudeCodeOnly bool
 	// DefaultModelRoutingEnabled holds the default value on creation for the "model_routing_enabled" field.
@@ -292,8 +261,6 @@ var (
 	DefaultMappedModelValidator func(string) error
 	// DefaultMessagesDispatchModelConfig holds the default value on creation for the "messages_dispatch_model_config" field.
 	DefaultMessagesDispatchModelConfig domain.OpenAIMessagesDispatchModelConfig
-	// DefaultModelsListConfig holds the default value on creation for the "models_list_config" field.
-	DefaultModelsListConfig domain.GroupModelsListConfig
 	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.
 	DefaultRpmLimit int
 )
@@ -346,16 +313,6 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
 }
 
-// ByPricingMode orders the results by the pricing_mode field.
-func ByPricingMode(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPricingMode, opts...).ToFunc()
-}
-
-// ByDefaultBudgetMultiplier orders the results by the default_budget_multiplier field.
-func ByDefaultBudgetMultiplier(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDefaultBudgetMultiplier, opts...).ToFunc()
-}
-
 // ByPlatform orders the results by the platform field.
 func ByPlatform(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPlatform, opts...).ToFunc()
@@ -386,21 +343,6 @@ func ByDefaultValidityDays(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDefaultValidityDays, opts...).ToFunc()
 }
 
-// ByAllowImageGeneration orders the results by the allow_image_generation field.
-func ByAllowImageGeneration(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAllowImageGeneration, opts...).ToFunc()
-}
-
-// ByImageRateIndependent orders the results by the image_rate_independent field.
-func ByImageRateIndependent(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldImageRateIndependent, opts...).ToFunc()
-}
-
-// ByImageRateMultiplier orders the results by the image_rate_multiplier field.
-func ByImageRateMultiplier(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldImageRateMultiplier, opts...).ToFunc()
-}
-
 // ByImagePrice1k orders the results by the image_price_1k field.
 func ByImagePrice1k(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldImagePrice1k, opts...).ToFunc()
@@ -429,11 +371,6 @@ func ByFallbackGroupID(opts ...sql.OrderTermOption) OrderOption {
 // ByFallbackGroupIDOnInvalidRequest orders the results by the fallback_group_id_on_invalid_request field.
 func ByFallbackGroupIDOnInvalidRequest(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFallbackGroupIDOnInvalidRequest, opts...).ToFunc()
-}
-
-// ByBalanceFallbackGroupID orders the results by the balance_fallback_group_id field.
-func ByBalanceFallbackGroupID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldBalanceFallbackGroupID, opts...).ToFunc()
 }
 
 // ByModelRoutingEnabled orders the results by the model_routing_enabled field.

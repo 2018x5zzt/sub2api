@@ -42,35 +42,6 @@ func TestFilterUserVisibleGroups_IntersectionOnly(t *testing.T) {
 	require.ElementsMatch(t, []int64{1, 3}, ids)
 }
 
-func TestFilterUserVisibleGroups_PreservesDynamicPricingFields(t *testing.T) {
-	defaultBudget := 8.0
-	minMultiplier := 3.0
-	maxMultiplier := 12.0
-	matchedMultiplier := 8.0
-	groups := []service.AvailableGroupRef{{
-		ID:                             1,
-		Name:                           "dynamic",
-		Platform:                       service.PlatformOpenAI,
-		RateMultiplier:                 1,
-		PricingMode:                    service.GroupPricingModeDynamic,
-		DefaultBudgetMultiplier:        &defaultBudget,
-		DynamicMultiplierMin:           &minMultiplier,
-		DynamicMultiplierMax:           &maxMultiplier,
-		DynamicBudgetMultiplier:        defaultBudget,
-		DynamicBudgetMatchedMultiplier: &matchedMultiplier,
-	}}
-
-	visible := filterUserVisibleGroups(groups, map[int64]struct{}{1: {}})
-
-	require.Len(t, visible, 1)
-	require.Equal(t, service.GroupPricingModeDynamic, visible[0].PricingMode)
-	require.Equal(t, &defaultBudget, visible[0].DefaultBudgetMultiplier)
-	require.Equal(t, &minMultiplier, visible[0].DynamicMultiplierMin)
-	require.Equal(t, &maxMultiplier, visible[0].DynamicMultiplierMax)
-	require.Equal(t, &defaultBudget, visible[0].DynamicBudgetMultiplier)
-	require.Equal(t, &matchedMultiplier, visible[0].DynamicBudgetMatchedMultiplier)
-}
-
 func TestToUserSupportedModels_FiltersByAllowedPlatforms(t *testing.T) {
 	// 用户可访问分组只覆盖 anthropic；anthropic 平台的模型保留，openai 模型被剔除。
 	src := []service.SupportedModel{
@@ -136,7 +107,7 @@ func TestUserAvailableChannel_FieldWhitelist(t *testing.T) {
 	require.NoError(t, err)
 	var groupDecoded map[string]any
 	require.NoError(t, json.Unmarshal(rawGroup, &groupDecoded))
-	for _, key := range []string{"id", "name", "platform", "subscription_type", "rate_multiplier", "is_exclusive", "pricing_mode"} {
+	for _, key := range []string{"id", "name", "platform", "subscription_type", "rate_multiplier", "is_exclusive"} {
 		_, exists := groupDecoded[key]
 		require.Truef(t, exists, "group DTO must expose %q", key)
 	}

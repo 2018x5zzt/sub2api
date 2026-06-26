@@ -31,9 +31,6 @@ func (SubscriptionPlan) Annotations() []schema.Annotation {
 func (SubscriptionPlan) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("group_id"),
-		field.Int64("product_id").
-			Optional().
-			Nillable(),
 		field.String("name").
 			MaxLen(100).
 			NotEmpty(),
@@ -75,7 +72,6 @@ func (SubscriptionPlan) Fields() []ent.Field {
 func (SubscriptionPlan) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("group_id"),
-		index.Fields("product_id"),
 		index.Fields("for_sale"),
 	}
 }

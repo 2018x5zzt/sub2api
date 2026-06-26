@@ -99,34 +99,6 @@ func (_c *APIKeyCreate) SetNillableGroupID(v *int64) *APIKeyCreate {
 	return _c
 }
 
-// SetSubscriptionProductFamily sets the "subscription_product_family" field.
-func (_c *APIKeyCreate) SetSubscriptionProductFamily(v string) *APIKeyCreate {
-	_c.mutation.SetSubscriptionProductFamily(v)
-	return _c
-}
-
-// SetNillableSubscriptionProductFamily sets the "subscription_product_family" field if the given value is not nil.
-func (_c *APIKeyCreate) SetNillableSubscriptionProductFamily(v *string) *APIKeyCreate {
-	if v != nil {
-		_c.SetSubscriptionProductFamily(*v)
-	}
-	return _c
-}
-
-// SetBudgetMultiplier sets the "budget_multiplier" field.
-func (_c *APIKeyCreate) SetBudgetMultiplier(v float64) *APIKeyCreate {
-	_c.mutation.SetBudgetMultiplier(v)
-	return _c
-}
-
-// SetNillableBudgetMultiplier sets the "budget_multiplier" field if the given value is not nil.
-func (_c *APIKeyCreate) SetNillableBudgetMultiplier(v *float64) *APIKeyCreate {
-	if v != nil {
-		_c.SetBudgetMultiplier(*v)
-	}
-	return _c
-}
-
 // SetStatus sets the "status" field.
 func (_c *APIKeyCreate) SetStatus(v string) *APIKeyCreate {
 	_c.mutation.SetStatus(v)
@@ -477,11 +449,6 @@ func (_c *APIKeyCreate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "APIKey.name": %w`, err)}
 		}
 	}
-	if v, ok := _c.mutation.SubscriptionProductFamily(); ok {
-		if err := apikey.SubscriptionProductFamilyValidator(v); err != nil {
-			return &ValidationError{Name: "subscription_product_family", err: fmt.Errorf(`ent: validator failed for field "APIKey.subscription_product_family": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "APIKey.status"`)}
 	}
@@ -563,14 +530,6 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
 		_node.Name = value
-	}
-	if value, ok := _c.mutation.SubscriptionProductFamily(); ok {
-		_spec.SetField(apikey.FieldSubscriptionProductFamily, field.TypeString, value)
-		_node.SubscriptionProductFamily = &value
-	}
-	if value, ok := _c.mutation.BudgetMultiplier(); ok {
-		_spec.SetField(apikey.FieldBudgetMultiplier, field.TypeFloat64, value)
-		_node.BudgetMultiplier = &value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
@@ -819,48 +778,6 @@ func (u *APIKeyUpsert) UpdateGroupID() *APIKeyUpsert {
 // ClearGroupID clears the value of the "group_id" field.
 func (u *APIKeyUpsert) ClearGroupID() *APIKeyUpsert {
 	u.SetNull(apikey.FieldGroupID)
-	return u
-}
-
-// SetSubscriptionProductFamily sets the "subscription_product_family" field.
-func (u *APIKeyUpsert) SetSubscriptionProductFamily(v string) *APIKeyUpsert {
-	u.Set(apikey.FieldSubscriptionProductFamily, v)
-	return u
-}
-
-// UpdateSubscriptionProductFamily sets the "subscription_product_family" field to the value that was provided on create.
-func (u *APIKeyUpsert) UpdateSubscriptionProductFamily() *APIKeyUpsert {
-	u.SetExcluded(apikey.FieldSubscriptionProductFamily)
-	return u
-}
-
-// ClearSubscriptionProductFamily clears the value of the "subscription_product_family" field.
-func (u *APIKeyUpsert) ClearSubscriptionProductFamily() *APIKeyUpsert {
-	u.SetNull(apikey.FieldSubscriptionProductFamily)
-	return u
-}
-
-// SetBudgetMultiplier sets the "budget_multiplier" field.
-func (u *APIKeyUpsert) SetBudgetMultiplier(v float64) *APIKeyUpsert {
-	u.Set(apikey.FieldBudgetMultiplier, v)
-	return u
-}
-
-// UpdateBudgetMultiplier sets the "budget_multiplier" field to the value that was provided on create.
-func (u *APIKeyUpsert) UpdateBudgetMultiplier() *APIKeyUpsert {
-	u.SetExcluded(apikey.FieldBudgetMultiplier)
-	return u
-}
-
-// AddBudgetMultiplier adds v to the "budget_multiplier" field.
-func (u *APIKeyUpsert) AddBudgetMultiplier(v float64) *APIKeyUpsert {
-	u.Add(apikey.FieldBudgetMultiplier, v)
-	return u
-}
-
-// ClearBudgetMultiplier clears the value of the "budget_multiplier" field.
-func (u *APIKeyUpsert) ClearBudgetMultiplier() *APIKeyUpsert {
-	u.SetNull(apikey.FieldBudgetMultiplier)
 	return u
 }
 
@@ -1286,55 +1203,6 @@ func (u *APIKeyUpsertOne) UpdateGroupID() *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) ClearGroupID() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
-	})
-}
-
-// SetSubscriptionProductFamily sets the "subscription_product_family" field.
-func (u *APIKeyUpsertOne) SetSubscriptionProductFamily(v string) *APIKeyUpsertOne {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.SetSubscriptionProductFamily(v)
-	})
-}
-
-// UpdateSubscriptionProductFamily sets the "subscription_product_family" field to the value that was provided on create.
-func (u *APIKeyUpsertOne) UpdateSubscriptionProductFamily() *APIKeyUpsertOne {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.UpdateSubscriptionProductFamily()
-	})
-}
-
-// ClearSubscriptionProductFamily clears the value of the "subscription_product_family" field.
-func (u *APIKeyUpsertOne) ClearSubscriptionProductFamily() *APIKeyUpsertOne {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.ClearSubscriptionProductFamily()
-	})
-}
-
-// SetBudgetMultiplier sets the "budget_multiplier" field.
-func (u *APIKeyUpsertOne) SetBudgetMultiplier(v float64) *APIKeyUpsertOne {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.SetBudgetMultiplier(v)
-	})
-}
-
-// AddBudgetMultiplier adds v to the "budget_multiplier" field.
-func (u *APIKeyUpsertOne) AddBudgetMultiplier(v float64) *APIKeyUpsertOne {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.AddBudgetMultiplier(v)
-	})
-}
-
-// UpdateBudgetMultiplier sets the "budget_multiplier" field to the value that was provided on create.
-func (u *APIKeyUpsertOne) UpdateBudgetMultiplier() *APIKeyUpsertOne {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.UpdateBudgetMultiplier()
-	})
-}
-
-// ClearBudgetMultiplier clears the value of the "budget_multiplier" field.
-func (u *APIKeyUpsertOne) ClearBudgetMultiplier() *APIKeyUpsertOne {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.ClearBudgetMultiplier()
 	})
 }
 
@@ -1973,55 +1841,6 @@ func (u *APIKeyUpsertBulk) UpdateGroupID() *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) ClearGroupID() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.ClearGroupID()
-	})
-}
-
-// SetSubscriptionProductFamily sets the "subscription_product_family" field.
-func (u *APIKeyUpsertBulk) SetSubscriptionProductFamily(v string) *APIKeyUpsertBulk {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.SetSubscriptionProductFamily(v)
-	})
-}
-
-// UpdateSubscriptionProductFamily sets the "subscription_product_family" field to the value that was provided on create.
-func (u *APIKeyUpsertBulk) UpdateSubscriptionProductFamily() *APIKeyUpsertBulk {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.UpdateSubscriptionProductFamily()
-	})
-}
-
-// ClearSubscriptionProductFamily clears the value of the "subscription_product_family" field.
-func (u *APIKeyUpsertBulk) ClearSubscriptionProductFamily() *APIKeyUpsertBulk {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.ClearSubscriptionProductFamily()
-	})
-}
-
-// SetBudgetMultiplier sets the "budget_multiplier" field.
-func (u *APIKeyUpsertBulk) SetBudgetMultiplier(v float64) *APIKeyUpsertBulk {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.SetBudgetMultiplier(v)
-	})
-}
-
-// AddBudgetMultiplier adds v to the "budget_multiplier" field.
-func (u *APIKeyUpsertBulk) AddBudgetMultiplier(v float64) *APIKeyUpsertBulk {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.AddBudgetMultiplier(v)
-	})
-}
-
-// UpdateBudgetMultiplier sets the "budget_multiplier" field to the value that was provided on create.
-func (u *APIKeyUpsertBulk) UpdateBudgetMultiplier() *APIKeyUpsertBulk {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.UpdateBudgetMultiplier()
-	})
-}
-
-// ClearBudgetMultiplier clears the value of the "budget_multiplier" field.
-func (u *APIKeyUpsertBulk) ClearBudgetMultiplier() *APIKeyUpsertBulk {
-	return u.Update(func(s *APIKeyUpsert) {
-		s.ClearBudgetMultiplier()
 	})
 }
 

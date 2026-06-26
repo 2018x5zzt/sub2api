@@ -17,7 +17,6 @@ const (
 	TypeCard         PaymentType = "card"
 	TypeLink         PaymentType = "link"
 	TypeEasyPay      PaymentType = "easypay"
-	TypeAirwallex    PaymentType = "airwallex"
 )
 
 // Order status constants shared across payment and service layers.
@@ -83,8 +82,6 @@ func GetBasePaymentType(t string) string {
 	switch {
 	case t == TypeEasyPay:
 		return TypeEasyPay
-	case t == TypeAirwallex:
-		return TypeAirwallex
 	case t == TypeStripe || t == TypeCard || t == TypeLink:
 		return TypeStripe
 	case len(t) >= len(TypeAlipay) && t[:len(TypeAlipay)] == TypeAlipay:
@@ -99,7 +96,7 @@ func GetBasePaymentType(t string) string {
 // CreatePaymentRequest holds the parameters for creating a new payment.
 type CreatePaymentRequest struct {
 	OrderID            string // Internal order ID
-	Amount             string // 支付金额，按服务商实例配置的币种解释
+	Amount             string // Pay amount in CNY (formatted to 2 decimal places)
 	PaymentType        string // e.g. "alipay", "wxpay", "stripe"
 	Subject            string // Product description
 	NotifyURL          string // Webhook callback URL
@@ -144,11 +141,7 @@ type CreatePaymentResponse struct {
 	TradeNo      string                  // Third-party transaction ID
 	PayURL       string                  // H5 payment URL (alipay/wxpay)
 	QRCode       string                  // QR code content for scanning
-	ClientSecret string                  // Stripe PaymentIntent 客户端密钥
-	IntentID     string                  // 前端 SDK 需要的服务商支付意图 ID
-	Currency     string                  // 服务商支付币种
-	CountryCode  string                  // 服务商收银台国家/地区代码
-	PaymentEnv   string                  // 服务商前端环境标识
+	ClientSecret string                  // Stripe PaymentIntent client secret
 	ResultType   CreatePaymentResultType // Typed result contract for frontend flows
 	OAuth        *WechatOAuthInfo        // WeChat OAuth bootstrap payload when required
 	JSAPI        *WechatJSAPIPayload     // WeChat JSAPI invocation payload when ready
@@ -158,7 +151,7 @@ type CreatePaymentResponse struct {
 type QueryOrderResponse struct {
 	TradeNo  string
 	Status   string  // "pending", "paid", "failed", "refunded"
-	Amount   float64 // 按服务商返回币种解释的金额
+	Amount   float64 // Amount in CNY
 	PaidAt   string  // RFC3339 timestamp or empty
 	Metadata map[string]string
 }

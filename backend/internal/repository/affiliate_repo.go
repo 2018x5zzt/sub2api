@@ -180,53 +180,6 @@ func (r *affiliateRepository) GetAccruedRebateFromInvitee(ctx context.Context, i
 	return total, rows.Close()
 }
 
-func (r *affiliateRepository) CountEffectiveInvitees(ctx context.Context, inviterID int64) (int64, error) {
-	client := clientFromContext(ctx, r.client)
-	return countEffectiveInvitees(ctx, client, inviterID)
-}
-
-func countEffectiveInvitees(ctx context.Context, exec affiliateQueryExecer, inviterID int64) (int64, error) {
-	rows, err := exec.QueryContext(ctx, `
-SELECT COUNT(DISTINCT ua.user_id)
-FROM user_affiliates ua
-WHERE ua.inviter_id = $1
-  AND (
-      EXISTS (
-          SELECT 1
-          FROM payment_orders po
-          WHERE po.user_id = ua.user_id
-            AND po.status IN ('COMPLETED', 'PAID', 'RECHARGING')
-            AND (po.paid_at IS NOT NULL OR po.completed_at IS NOT NULL)
-            AND (po.amount > 0 OR po.pay_amount > 0)
-      )
-      OR EXISTS (
-          SELECT 1
-          FROM redeem_codes rc
-          WHERE rc.used_by = ua.user_id
-            AND rc.status = 'used'
-            AND rc.used_at IS NOT NULL
-            AND rc.source_type IN ('commercial', 'system_grant')
-            AND rc.type IN ('balance', 'subscription')
-            AND (rc.value > 0 OR rc.group_id IS NOT NULL OR rc.validity_days > 0)
-      )
-  )`, inviterID)
-	if err != nil {
-		return 0, fmt.Errorf("count effective affiliate invitees: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-
-	var count int64
-	if rows.Next() {
-		if err := rows.Scan(&count); err != nil {
-			return 0, err
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return 0, err
-	}
-	return count, rows.Close()
-}
-
 func (r *affiliateRepository) ThawFrozenQuota(ctx context.Context, userID int64) (float64, error) {
 	var thawed float64
 	err := r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
@@ -515,10 +468,11 @@ func (r *affiliateRepository) ListAffiliateRebateRecords(ctx context.Context, fi
 	})
 	baseJoin := `
 FROM user_affiliate_ledger ual
-LEFT JOIN payment_orders po ON po.id = ual.source_order_id
+JOIN payment_orders po ON po.id = ual.source_order_id
 JOIN users invitee ON invitee.id = ual.source_user_id
 JOIN users inviter ON inviter.id = ual.user_id
-WHERE ual.action = 'accrue'`
+WHERE ual.action = 'accrue'
+  AND ual.source_order_id IS NOT NULL`
 	if where != "" {
 		where = strings.Replace(where, "WHERE ", " AND ", 1)
 	}
@@ -529,31 +483,31 @@ WHERE ual.action = 'accrue'`
 	}
 
 	orderBy := buildAffiliateRecordOrderBy(filter, map[string]string{
-		"order":         "COALESCE(po.id, ual.source_order_id)",
+		"order":         "po.id",
 		"inviter":       "inviter.email",
 		"invitee":       "invitee.email",
-		"order_amount":  "COALESCE(po.amount, 0)",
-		"pay_amount":    "COALESCE(po.pay_amount, 0)",
+		"order_amount":  "po.amount",
+		"pay_amount":    "po.pay_amount",
 		"rebate_amount": "ual.amount",
-		"payment_type":  "COALESCE(po.payment_type, '')",
-		"order_status":  "COALESCE(po.status, '')",
+		"payment_type":  "po.payment_type",
+		"order_status":  "po.status",
 		"created_at":    "ual.created_at",
 	}, "ual.created_at")
 	args = append(args, filter.PageSize, (filter.Page-1)*filter.PageSize)
 	rows, err := client.QueryContext(ctx, `
-SELECT COALESCE(po.id, ual.source_order_id),
-       COALESCE(po.out_trade_no, ''),
+SELECT po.id,
+       po.out_trade_no,
        ual.user_id,
        COALESCE(inviter.email, ''),
        COALESCE(inviter.username, ''),
        ual.source_user_id,
        COALESCE(invitee.email, ''),
        COALESCE(invitee.username, ''),
-       COALESCE(po.amount, 0)::double precision,
-       COALESCE(po.pay_amount, 0)::double precision,
+       po.amount::double precision,
+       po.pay_amount::double precision,
        ual.amount::double precision,
-       COALESCE(po.payment_type, ''),
-       COALESCE(po.status, ''),
+       po.payment_type,
+       po.status,
        ual.created_at
 `+baseJoin+where+`
 `+orderBy+`

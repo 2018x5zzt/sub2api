@@ -30,9 +30,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/sub2api/ent/identityadoptiondecision"
-	"github.com/Wei-Shaw/sub2api/ent/inviteadminaction"
-	"github.com/Wei-Shaw/sub2api/ent/inviterelationshipevent"
-	"github.com/Wei-Shaw/sub2api/ent/inviterewardrecord"
 	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
@@ -51,7 +48,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/userattributedefinition"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
-	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 
 	stdsql "database/sql"
@@ -92,12 +88,6 @@ type Client struct {
 	IdempotencyRecord *IdempotencyRecordClient
 	// IdentityAdoptionDecision is the client for interacting with the IdentityAdoptionDecision builders.
 	IdentityAdoptionDecision *IdentityAdoptionDecisionClient
-	// InviteAdminAction is the client for interacting with the InviteAdminAction builders.
-	InviteAdminAction *InviteAdminActionClient
-	// InviteRelationshipEvent is the client for interacting with the InviteRelationshipEvent builders.
-	InviteRelationshipEvent *InviteRelationshipEventClient
-	// InviteRewardRecord is the client for interacting with the InviteRewardRecord builders.
-	InviteRewardRecord *InviteRewardRecordClient
 	// PaymentAuditLog is the client for interacting with the PaymentAuditLog builders.
 	PaymentAuditLog *PaymentAuditLogClient
 	// PaymentOrder is the client for interacting with the PaymentOrder builders.
@@ -134,8 +124,6 @@ type Client struct {
 	UserAttributeDefinition *UserAttributeDefinitionClient
 	// UserAttributeValue is the client for interacting with the UserAttributeValue builders.
 	UserAttributeValue *UserAttributeValueClient
-	// UserPlatformQuota is the client for interacting with the UserPlatformQuota builders.
-	UserPlatformQuota *UserPlatformQuotaClient
 	// UserSubscription is the client for interacting with the UserSubscription builders.
 	UserSubscription *UserSubscriptionClient
 }
@@ -164,9 +152,6 @@ func (c *Client) init() {
 	c.Group = NewGroupClient(c.config)
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
 	c.IdentityAdoptionDecision = NewIdentityAdoptionDecisionClient(c.config)
-	c.InviteAdminAction = NewInviteAdminActionClient(c.config)
-	c.InviteRelationshipEvent = NewInviteRelationshipEventClient(c.config)
-	c.InviteRewardRecord = NewInviteRewardRecordClient(c.config)
 	c.PaymentAuditLog = NewPaymentAuditLogClient(c.config)
 	c.PaymentOrder = NewPaymentOrderClient(c.config)
 	c.PaymentProviderInstance = NewPaymentProviderInstanceClient(c.config)
@@ -185,7 +170,6 @@ func (c *Client) init() {
 	c.UserAllowedGroup = NewUserAllowedGroupClient(c.config)
 	c.UserAttributeDefinition = NewUserAttributeDefinitionClient(c.config)
 	c.UserAttributeValue = NewUserAttributeValueClient(c.config)
-	c.UserPlatformQuota = NewUserPlatformQuotaClient(c.config)
 	c.UserSubscription = NewUserSubscriptionClient(c.config)
 }
 
@@ -294,9 +278,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Group:                         NewGroupClient(cfg),
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
 		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
-		InviteAdminAction:             NewInviteAdminActionClient(cfg),
-		InviteRelationshipEvent:       NewInviteRelationshipEventClient(cfg),
-		InviteRewardRecord:            NewInviteRewardRecordClient(cfg),
 		PaymentAuditLog:               NewPaymentAuditLogClient(cfg),
 		PaymentOrder:                  NewPaymentOrderClient(cfg),
 		PaymentProviderInstance:       NewPaymentProviderInstanceClient(cfg),
@@ -315,7 +296,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
 		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
-		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
 		UserSubscription:              NewUserSubscriptionClient(cfg),
 	}, nil
 }
@@ -351,9 +331,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Group:                         NewGroupClient(cfg),
 		IdempotencyRecord:             NewIdempotencyRecordClient(cfg),
 		IdentityAdoptionDecision:      NewIdentityAdoptionDecisionClient(cfg),
-		InviteAdminAction:             NewInviteAdminActionClient(cfg),
-		InviteRelationshipEvent:       NewInviteRelationshipEventClient(cfg),
-		InviteRewardRecord:            NewInviteRewardRecordClient(cfg),
 		PaymentAuditLog:               NewPaymentAuditLogClient(cfg),
 		PaymentOrder:                  NewPaymentOrderClient(cfg),
 		PaymentProviderInstance:       NewPaymentProviderInstanceClient(cfg),
@@ -372,7 +349,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		UserAllowedGroup:              NewUserAllowedGroupClient(cfg),
 		UserAttributeDefinition:       NewUserAttributeDefinitionClient(cfg),
 		UserAttributeValue:            NewUserAttributeValueClient(cfg),
-		UserPlatformQuota:             NewUserPlatformQuotaClient(cfg),
 		UserSubscription:              NewUserSubscriptionClient(cfg),
 	}, nil
 }
@@ -407,13 +383,12 @@ func (c *Client) Use(hooks ...Hook) {
 		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.InviteAdminAction,
-		c.InviteRelationshipEvent, c.InviteRewardRecord, c.PaymentAuditLog,
+		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
 		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -427,13 +402,12 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.AuthIdentity, c.AuthIdentityChannel, c.ChannelMonitor,
 		c.ChannelMonitorDailyRollup, c.ChannelMonitorHistory,
 		c.ChannelMonitorRequestTemplate, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.InviteAdminAction,
-		c.InviteRelationshipEvent, c.InviteRewardRecord, c.PaymentAuditLog,
+		c.IdempotencyRecord, c.IdentityAdoptionDecision, c.PaymentAuditLog,
 		c.PaymentOrder, c.PaymentProviderInstance, c.PendingAuthSession, c.PromoCode,
 		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
 		c.SubscriptionPlan, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog,
 		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserPlatformQuota, c.UserSubscription,
+		c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -472,12 +446,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IdempotencyRecord.mutate(ctx, m)
 	case *IdentityAdoptionDecisionMutation:
 		return c.IdentityAdoptionDecision.mutate(ctx, m)
-	case *InviteAdminActionMutation:
-		return c.InviteAdminAction.mutate(ctx, m)
-	case *InviteRelationshipEventMutation:
-		return c.InviteRelationshipEvent.mutate(ctx, m)
-	case *InviteRewardRecordMutation:
-		return c.InviteRewardRecord.mutate(ctx, m)
 	case *PaymentAuditLogMutation:
 		return c.PaymentAuditLog.mutate(ctx, m)
 	case *PaymentOrderMutation:
@@ -514,8 +482,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.UserAttributeDefinition.mutate(ctx, m)
 	case *UserAttributeValueMutation:
 		return c.UserAttributeValue.mutate(ctx, m)
-	case *UserPlatformQuotaMutation:
-		return c.UserPlatformQuota.mutate(ctx, m)
 	case *UserSubscriptionMutation:
 		return c.UserSubscription.mutate(ctx, m)
 	default:
@@ -2987,405 +2953,6 @@ func (c *IdentityAdoptionDecisionClient) mutate(ctx context.Context, m *Identity
 	}
 }
 
-// InviteAdminActionClient is a client for the InviteAdminAction schema.
-type InviteAdminActionClient struct {
-	config
-}
-
-// NewInviteAdminActionClient returns a client for the InviteAdminAction from the given config.
-func NewInviteAdminActionClient(c config) *InviteAdminActionClient {
-	return &InviteAdminActionClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `inviteadminaction.Hooks(f(g(h())))`.
-func (c *InviteAdminActionClient) Use(hooks ...Hook) {
-	c.hooks.InviteAdminAction = append(c.hooks.InviteAdminAction, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `inviteadminaction.Intercept(f(g(h())))`.
-func (c *InviteAdminActionClient) Intercept(interceptors ...Interceptor) {
-	c.inters.InviteAdminAction = append(c.inters.InviteAdminAction, interceptors...)
-}
-
-// Create returns a builder for creating a InviteAdminAction entity.
-func (c *InviteAdminActionClient) Create() *InviteAdminActionCreate {
-	mutation := newInviteAdminActionMutation(c.config, OpCreate)
-	return &InviteAdminActionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of InviteAdminAction entities.
-func (c *InviteAdminActionClient) CreateBulk(builders ...*InviteAdminActionCreate) *InviteAdminActionCreateBulk {
-	return &InviteAdminActionCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *InviteAdminActionClient) MapCreateBulk(slice any, setFunc func(*InviteAdminActionCreate, int)) *InviteAdminActionCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &InviteAdminActionCreateBulk{err: fmt.Errorf("calling to InviteAdminActionClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*InviteAdminActionCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &InviteAdminActionCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for InviteAdminAction.
-func (c *InviteAdminActionClient) Update() *InviteAdminActionUpdate {
-	mutation := newInviteAdminActionMutation(c.config, OpUpdate)
-	return &InviteAdminActionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *InviteAdminActionClient) UpdateOne(_m *InviteAdminAction) *InviteAdminActionUpdateOne {
-	mutation := newInviteAdminActionMutation(c.config, OpUpdateOne, withInviteAdminAction(_m))
-	return &InviteAdminActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *InviteAdminActionClient) UpdateOneID(id int64) *InviteAdminActionUpdateOne {
-	mutation := newInviteAdminActionMutation(c.config, OpUpdateOne, withInviteAdminActionID(id))
-	return &InviteAdminActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for InviteAdminAction.
-func (c *InviteAdminActionClient) Delete() *InviteAdminActionDelete {
-	mutation := newInviteAdminActionMutation(c.config, OpDelete)
-	return &InviteAdminActionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *InviteAdminActionClient) DeleteOne(_m *InviteAdminAction) *InviteAdminActionDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *InviteAdminActionClient) DeleteOneID(id int64) *InviteAdminActionDeleteOne {
-	builder := c.Delete().Where(inviteadminaction.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &InviteAdminActionDeleteOne{builder}
-}
-
-// Query returns a query builder for InviteAdminAction.
-func (c *InviteAdminActionClient) Query() *InviteAdminActionQuery {
-	return &InviteAdminActionQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeInviteAdminAction},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a InviteAdminAction entity by its id.
-func (c *InviteAdminActionClient) Get(ctx context.Context, id int64) (*InviteAdminAction, error) {
-	return c.Query().Where(inviteadminaction.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *InviteAdminActionClient) GetX(ctx context.Context, id int64) *InviteAdminAction {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *InviteAdminActionClient) Hooks() []Hook {
-	return c.hooks.InviteAdminAction
-}
-
-// Interceptors returns the client interceptors.
-func (c *InviteAdminActionClient) Interceptors() []Interceptor {
-	return c.inters.InviteAdminAction
-}
-
-func (c *InviteAdminActionClient) mutate(ctx context.Context, m *InviteAdminActionMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&InviteAdminActionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&InviteAdminActionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&InviteAdminActionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&InviteAdminActionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown InviteAdminAction mutation op: %q", m.Op())
-	}
-}
-
-// InviteRelationshipEventClient is a client for the InviteRelationshipEvent schema.
-type InviteRelationshipEventClient struct {
-	config
-}
-
-// NewInviteRelationshipEventClient returns a client for the InviteRelationshipEvent from the given config.
-func NewInviteRelationshipEventClient(c config) *InviteRelationshipEventClient {
-	return &InviteRelationshipEventClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `inviterelationshipevent.Hooks(f(g(h())))`.
-func (c *InviteRelationshipEventClient) Use(hooks ...Hook) {
-	c.hooks.InviteRelationshipEvent = append(c.hooks.InviteRelationshipEvent, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `inviterelationshipevent.Intercept(f(g(h())))`.
-func (c *InviteRelationshipEventClient) Intercept(interceptors ...Interceptor) {
-	c.inters.InviteRelationshipEvent = append(c.inters.InviteRelationshipEvent, interceptors...)
-}
-
-// Create returns a builder for creating a InviteRelationshipEvent entity.
-func (c *InviteRelationshipEventClient) Create() *InviteRelationshipEventCreate {
-	mutation := newInviteRelationshipEventMutation(c.config, OpCreate)
-	return &InviteRelationshipEventCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of InviteRelationshipEvent entities.
-func (c *InviteRelationshipEventClient) CreateBulk(builders ...*InviteRelationshipEventCreate) *InviteRelationshipEventCreateBulk {
-	return &InviteRelationshipEventCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *InviteRelationshipEventClient) MapCreateBulk(slice any, setFunc func(*InviteRelationshipEventCreate, int)) *InviteRelationshipEventCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &InviteRelationshipEventCreateBulk{err: fmt.Errorf("calling to InviteRelationshipEventClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*InviteRelationshipEventCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &InviteRelationshipEventCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for InviteRelationshipEvent.
-func (c *InviteRelationshipEventClient) Update() *InviteRelationshipEventUpdate {
-	mutation := newInviteRelationshipEventMutation(c.config, OpUpdate)
-	return &InviteRelationshipEventUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *InviteRelationshipEventClient) UpdateOne(_m *InviteRelationshipEvent) *InviteRelationshipEventUpdateOne {
-	mutation := newInviteRelationshipEventMutation(c.config, OpUpdateOne, withInviteRelationshipEvent(_m))
-	return &InviteRelationshipEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *InviteRelationshipEventClient) UpdateOneID(id int64) *InviteRelationshipEventUpdateOne {
-	mutation := newInviteRelationshipEventMutation(c.config, OpUpdateOne, withInviteRelationshipEventID(id))
-	return &InviteRelationshipEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for InviteRelationshipEvent.
-func (c *InviteRelationshipEventClient) Delete() *InviteRelationshipEventDelete {
-	mutation := newInviteRelationshipEventMutation(c.config, OpDelete)
-	return &InviteRelationshipEventDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *InviteRelationshipEventClient) DeleteOne(_m *InviteRelationshipEvent) *InviteRelationshipEventDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *InviteRelationshipEventClient) DeleteOneID(id int64) *InviteRelationshipEventDeleteOne {
-	builder := c.Delete().Where(inviterelationshipevent.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &InviteRelationshipEventDeleteOne{builder}
-}
-
-// Query returns a query builder for InviteRelationshipEvent.
-func (c *InviteRelationshipEventClient) Query() *InviteRelationshipEventQuery {
-	return &InviteRelationshipEventQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeInviteRelationshipEvent},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a InviteRelationshipEvent entity by its id.
-func (c *InviteRelationshipEventClient) Get(ctx context.Context, id int64) (*InviteRelationshipEvent, error) {
-	return c.Query().Where(inviterelationshipevent.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *InviteRelationshipEventClient) GetX(ctx context.Context, id int64) *InviteRelationshipEvent {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *InviteRelationshipEventClient) Hooks() []Hook {
-	return c.hooks.InviteRelationshipEvent
-}
-
-// Interceptors returns the client interceptors.
-func (c *InviteRelationshipEventClient) Interceptors() []Interceptor {
-	return c.inters.InviteRelationshipEvent
-}
-
-func (c *InviteRelationshipEventClient) mutate(ctx context.Context, m *InviteRelationshipEventMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&InviteRelationshipEventCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&InviteRelationshipEventUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&InviteRelationshipEventUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&InviteRelationshipEventDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown InviteRelationshipEvent mutation op: %q", m.Op())
-	}
-}
-
-// InviteRewardRecordClient is a client for the InviteRewardRecord schema.
-type InviteRewardRecordClient struct {
-	config
-}
-
-// NewInviteRewardRecordClient returns a client for the InviteRewardRecord from the given config.
-func NewInviteRewardRecordClient(c config) *InviteRewardRecordClient {
-	return &InviteRewardRecordClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `inviterewardrecord.Hooks(f(g(h())))`.
-func (c *InviteRewardRecordClient) Use(hooks ...Hook) {
-	c.hooks.InviteRewardRecord = append(c.hooks.InviteRewardRecord, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `inviterewardrecord.Intercept(f(g(h())))`.
-func (c *InviteRewardRecordClient) Intercept(interceptors ...Interceptor) {
-	c.inters.InviteRewardRecord = append(c.inters.InviteRewardRecord, interceptors...)
-}
-
-// Create returns a builder for creating a InviteRewardRecord entity.
-func (c *InviteRewardRecordClient) Create() *InviteRewardRecordCreate {
-	mutation := newInviteRewardRecordMutation(c.config, OpCreate)
-	return &InviteRewardRecordCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of InviteRewardRecord entities.
-func (c *InviteRewardRecordClient) CreateBulk(builders ...*InviteRewardRecordCreate) *InviteRewardRecordCreateBulk {
-	return &InviteRewardRecordCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *InviteRewardRecordClient) MapCreateBulk(slice any, setFunc func(*InviteRewardRecordCreate, int)) *InviteRewardRecordCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &InviteRewardRecordCreateBulk{err: fmt.Errorf("calling to InviteRewardRecordClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*InviteRewardRecordCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &InviteRewardRecordCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for InviteRewardRecord.
-func (c *InviteRewardRecordClient) Update() *InviteRewardRecordUpdate {
-	mutation := newInviteRewardRecordMutation(c.config, OpUpdate)
-	return &InviteRewardRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *InviteRewardRecordClient) UpdateOne(_m *InviteRewardRecord) *InviteRewardRecordUpdateOne {
-	mutation := newInviteRewardRecordMutation(c.config, OpUpdateOne, withInviteRewardRecord(_m))
-	return &InviteRewardRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *InviteRewardRecordClient) UpdateOneID(id int64) *InviteRewardRecordUpdateOne {
-	mutation := newInviteRewardRecordMutation(c.config, OpUpdateOne, withInviteRewardRecordID(id))
-	return &InviteRewardRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for InviteRewardRecord.
-func (c *InviteRewardRecordClient) Delete() *InviteRewardRecordDelete {
-	mutation := newInviteRewardRecordMutation(c.config, OpDelete)
-	return &InviteRewardRecordDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *InviteRewardRecordClient) DeleteOne(_m *InviteRewardRecord) *InviteRewardRecordDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *InviteRewardRecordClient) DeleteOneID(id int64) *InviteRewardRecordDeleteOne {
-	builder := c.Delete().Where(inviterewardrecord.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &InviteRewardRecordDeleteOne{builder}
-}
-
-// Query returns a query builder for InviteRewardRecord.
-func (c *InviteRewardRecordClient) Query() *InviteRewardRecordQuery {
-	return &InviteRewardRecordQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeInviteRewardRecord},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a InviteRewardRecord entity by its id.
-func (c *InviteRewardRecordClient) Get(ctx context.Context, id int64) (*InviteRewardRecord, error) {
-	return c.Query().Where(inviterewardrecord.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *InviteRewardRecordClient) GetX(ctx context.Context, id int64) *InviteRewardRecord {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// Hooks returns the client hooks.
-func (c *InviteRewardRecordClient) Hooks() []Hook {
-	return c.hooks.InviteRewardRecord
-}
-
-// Interceptors returns the client interceptors.
-func (c *InviteRewardRecordClient) Interceptors() []Interceptor {
-	return c.inters.InviteRewardRecord
-}
-
-func (c *InviteRewardRecordClient) mutate(ctx context.Context, m *InviteRewardRecordMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&InviteRewardRecordCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&InviteRewardRecordUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&InviteRewardRecordUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&InviteRewardRecordDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown InviteRewardRecord mutation op: %q", m.Op())
-	}
-}
-
 // PaymentAuditLogClient is a client for the PaymentAuditLog schema.
 type PaymentAuditLogClient struct {
 	config
@@ -4397,22 +3964,6 @@ func (c *ProxyClient) QueryAccounts(_m *Proxy) *AccountQuery {
 			sqlgraph.From(proxy.Table, proxy.FieldID, id),
 			sqlgraph.To(account.Table, account.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, true, proxy.AccountsTable, proxy.AccountsColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryBackupProxy queries the backup_proxy edge of a Proxy.
-func (c *ProxyClient) QueryBackupProxy(_m *Proxy) *ProxyQuery {
-	query := (&ProxyClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(proxy.Table, proxy.FieldID, id),
-			sqlgraph.To(proxy.Table, proxy.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, false, proxy.BackupProxyTable, proxy.BackupProxyColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -5790,22 +5341,6 @@ func (c *UserClient) QueryPendingAuthSessions(_m *User) *PendingAuthSessionQuery
 	return query
 }
 
-// QueryPlatformQuotas queries the platform_quotas edge of a User.
-func (c *UserClient) QueryPlatformQuotas(_m *User) *UserPlatformQuotaQuery {
-	query := (&UserPlatformQuotaClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(user.Table, user.FieldID, id),
-			sqlgraph.To(userplatformquota.Table, userplatformquota.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, user.PlatformQuotasTable, user.PlatformQuotasColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryUserAllowedGroups queries the user_allowed_groups edge of a User.
 func (c *UserClient) QueryUserAllowedGroups(_m *User) *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: c.config}).Query()
@@ -6281,157 +5816,6 @@ func (c *UserAttributeValueClient) mutate(ctx context.Context, m *UserAttributeV
 	}
 }
 
-// UserPlatformQuotaClient is a client for the UserPlatformQuota schema.
-type UserPlatformQuotaClient struct {
-	config
-}
-
-// NewUserPlatformQuotaClient returns a client for the UserPlatformQuota from the given config.
-func NewUserPlatformQuotaClient(c config) *UserPlatformQuotaClient {
-	return &UserPlatformQuotaClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `userplatformquota.Hooks(f(g(h())))`.
-func (c *UserPlatformQuotaClient) Use(hooks ...Hook) {
-	c.hooks.UserPlatformQuota = append(c.hooks.UserPlatformQuota, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `userplatformquota.Intercept(f(g(h())))`.
-func (c *UserPlatformQuotaClient) Intercept(interceptors ...Interceptor) {
-	c.inters.UserPlatformQuota = append(c.inters.UserPlatformQuota, interceptors...)
-}
-
-// Create returns a builder for creating a UserPlatformQuota entity.
-func (c *UserPlatformQuotaClient) Create() *UserPlatformQuotaCreate {
-	mutation := newUserPlatformQuotaMutation(c.config, OpCreate)
-	return &UserPlatformQuotaCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of UserPlatformQuota entities.
-func (c *UserPlatformQuotaClient) CreateBulk(builders ...*UserPlatformQuotaCreate) *UserPlatformQuotaCreateBulk {
-	return &UserPlatformQuotaCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *UserPlatformQuotaClient) MapCreateBulk(slice any, setFunc func(*UserPlatformQuotaCreate, int)) *UserPlatformQuotaCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &UserPlatformQuotaCreateBulk{err: fmt.Errorf("calling to UserPlatformQuotaClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*UserPlatformQuotaCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &UserPlatformQuotaCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for UserPlatformQuota.
-func (c *UserPlatformQuotaClient) Update() *UserPlatformQuotaUpdate {
-	mutation := newUserPlatformQuotaMutation(c.config, OpUpdate)
-	return &UserPlatformQuotaUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *UserPlatformQuotaClient) UpdateOne(_m *UserPlatformQuota) *UserPlatformQuotaUpdateOne {
-	mutation := newUserPlatformQuotaMutation(c.config, OpUpdateOne, withUserPlatformQuota(_m))
-	return &UserPlatformQuotaUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *UserPlatformQuotaClient) UpdateOneID(id int64) *UserPlatformQuotaUpdateOne {
-	mutation := newUserPlatformQuotaMutation(c.config, OpUpdateOne, withUserPlatformQuotaID(id))
-	return &UserPlatformQuotaUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for UserPlatformQuota.
-func (c *UserPlatformQuotaClient) Delete() *UserPlatformQuotaDelete {
-	mutation := newUserPlatformQuotaMutation(c.config, OpDelete)
-	return &UserPlatformQuotaDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *UserPlatformQuotaClient) DeleteOne(_m *UserPlatformQuota) *UserPlatformQuotaDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *UserPlatformQuotaClient) DeleteOneID(id int64) *UserPlatformQuotaDeleteOne {
-	builder := c.Delete().Where(userplatformquota.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &UserPlatformQuotaDeleteOne{builder}
-}
-
-// Query returns a query builder for UserPlatformQuota.
-func (c *UserPlatformQuotaClient) Query() *UserPlatformQuotaQuery {
-	return &UserPlatformQuotaQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeUserPlatformQuota},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a UserPlatformQuota entity by its id.
-func (c *UserPlatformQuotaClient) Get(ctx context.Context, id int64) (*UserPlatformQuota, error) {
-	return c.Query().Where(userplatformquota.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *UserPlatformQuotaClient) GetX(ctx context.Context, id int64) *UserPlatformQuota {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryUser queries the user edge of a UserPlatformQuota.
-func (c *UserPlatformQuotaClient) QueryUser(_m *UserPlatformQuota) *UserQuery {
-	query := (&UserClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(userplatformquota.Table, userplatformquota.FieldID, id),
-			sqlgraph.To(user.Table, user.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, userplatformquota.UserTable, userplatformquota.UserColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *UserPlatformQuotaClient) Hooks() []Hook {
-	hooks := c.hooks.UserPlatformQuota
-	return append(hooks[:len(hooks):len(hooks)], userplatformquota.Hooks[:]...)
-}
-
-// Interceptors returns the client interceptors.
-func (c *UserPlatformQuotaClient) Interceptors() []Interceptor {
-	inters := c.inters.UserPlatformQuota
-	return append(inters[:len(inters):len(inters)], userplatformquota.Interceptors[:]...)
-}
-
-func (c *UserPlatformQuotaClient) mutate(ctx context.Context, m *UserPlatformQuotaMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&UserPlatformQuotaCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&UserPlatformQuotaUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&UserPlatformQuotaUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&UserPlatformQuotaDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown UserPlatformQuota mutation op: %q", m.Op())
-	}
-}
-
 // UserSubscriptionClient is a client for the UserSubscription schema.
 type UserSubscriptionClient struct {
 	config
@@ -6637,23 +6021,21 @@ type (
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, InviteAdminAction,
-		InviteRelationshipEvent, InviteRewardRecord, PaymentAuditLog, PaymentOrder,
-		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Hook
+		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
+		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
+		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead, AuthIdentity,
 		AuthIdentityChannel, ChannelMonitor, ChannelMonitorDailyRollup,
 		ChannelMonitorHistory, ChannelMonitorRequestTemplate, ErrorPassthroughRule,
-		Group, IdempotencyRecord, IdentityAdoptionDecision, InviteAdminAction,
-		InviteRelationshipEvent, InviteRewardRecord, PaymentAuditLog, PaymentOrder,
-		PaymentProviderInstance, PendingAuthSession, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, SecuritySecret, Setting, SubscriptionPlan, TLSFingerprintProfile,
-		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
-		UserAttributeValue, UserPlatformQuota, UserSubscription []ent.Interceptor
+		Group, IdempotencyRecord, IdentityAdoptionDecision, PaymentAuditLog,
+		PaymentOrder, PaymentProviderInstance, PendingAuthSession, PromoCode,
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, SubscriptionPlan,
+		TLSFingerprintProfile, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
+		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Interceptor
 	}
 )
 

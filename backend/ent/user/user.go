@@ -33,12 +33,6 @@ const (
 	FieldConcurrency = "concurrency"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldInviteCode holds the string denoting the invite_code field in the database.
-	FieldInviteCode = "invite_code"
-	// FieldInvitedByUserID holds the string denoting the invited_by_user_id field in the database.
-	FieldInvitedByUserID = "invited_by_user_id"
-	// FieldInviteBoundAt holds the string denoting the invite_bound_at field in the database.
-	FieldInviteBoundAt = "invite_bound_at"
 	// FieldUsername holds the string denoting the username field in the database.
 	FieldUsername = "username"
 	// FieldNotes holds the string denoting the notes field in the database.
@@ -65,14 +59,6 @@ const (
 	FieldBalanceNotifyExtraEmails = "balance_notify_extra_emails"
 	// FieldTotalRecharged holds the string denoting the total_recharged field in the database.
 	FieldTotalRecharged = "total_recharged"
-	// FieldSubscriptionBalanceFallbackEnabled holds the string denoting the subscription_balance_fallback_enabled field in the database.
-	FieldSubscriptionBalanceFallbackEnabled = "subscription_balance_fallback_enabled"
-	// FieldSubscriptionBalanceFallbackLimitUsd holds the string denoting the subscription_balance_fallback_limit_usd field in the database.
-	FieldSubscriptionBalanceFallbackLimitUsd = "subscription_balance_fallback_limit_usd"
-	// FieldSubscriptionBalanceFallbackUsedUsd holds the string denoting the subscription_balance_fallback_used_usd field in the database.
-	FieldSubscriptionBalanceFallbackUsedUsd = "subscription_balance_fallback_used_usd"
-	// FieldSubscriptionBalanceFallbackGroupID holds the string denoting the subscription_balance_fallback_group_id field in the database.
-	FieldSubscriptionBalanceFallbackGroupID = "subscription_balance_fallback_group_id"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
 	FieldRpmLimit = "rpm_limit"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
@@ -99,8 +85,6 @@ const (
 	EdgeAuthIdentities = "auth_identities"
 	// EdgePendingAuthSessions holds the string denoting the pending_auth_sessions edge name in mutations.
 	EdgePendingAuthSessions = "pending_auth_sessions"
-	// EdgePlatformQuotas holds the string denoting the platform_quotas edge name in mutations.
-	EdgePlatformQuotas = "platform_quotas"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -187,13 +171,6 @@ const (
 	PendingAuthSessionsInverseTable = "pending_auth_sessions"
 	// PendingAuthSessionsColumn is the table column denoting the pending_auth_sessions relation/edge.
 	PendingAuthSessionsColumn = "target_user_id"
-	// PlatformQuotasTable is the table that holds the platform_quotas relation/edge.
-	PlatformQuotasTable = "user_platform_quotas"
-	// PlatformQuotasInverseTable is the table name for the UserPlatformQuota entity.
-	// It exists in this package in order to avoid circular dependency with the "userplatformquota" package.
-	PlatformQuotasInverseTable = "user_platform_quotas"
-	// PlatformQuotasColumn is the table column denoting the platform_quotas relation/edge.
-	PlatformQuotasColumn = "user_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -215,9 +192,6 @@ var Columns = []string{
 	FieldBalance,
 	FieldConcurrency,
 	FieldStatus,
-	FieldInviteCode,
-	FieldInvitedByUserID,
-	FieldInviteBoundAt,
 	FieldUsername,
 	FieldNotes,
 	FieldTotpSecretEncrypted,
@@ -231,10 +205,6 @@ var Columns = []string{
 	FieldBalanceNotifyThreshold,
 	FieldBalanceNotifyExtraEmails,
 	FieldTotalRecharged,
-	FieldSubscriptionBalanceFallbackEnabled,
-	FieldSubscriptionBalanceFallbackLimitUsd,
-	FieldSubscriptionBalanceFallbackUsedUsd,
-	FieldSubscriptionBalanceFallbackGroupID,
 	FieldRpmLimit,
 }
 
@@ -284,8 +254,6 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
-	// InviteCodeValidator is a validator for the "invite_code" field. It is called by the builders before save.
-	InviteCodeValidator func(string) error
 	// DefaultUsername holds the default value on creation for the "username" field.
 	DefaultUsername string
 	// UsernameValidator is a validator for the "username" field. It is called by the builders before save.
@@ -306,12 +274,6 @@ var (
 	DefaultBalanceNotifyExtraEmails string
 	// DefaultTotalRecharged holds the default value on creation for the "total_recharged" field.
 	DefaultTotalRecharged float64
-	// DefaultSubscriptionBalanceFallbackEnabled holds the default value on creation for the "subscription_balance_fallback_enabled" field.
-	DefaultSubscriptionBalanceFallbackEnabled bool
-	// DefaultSubscriptionBalanceFallbackLimitUsd holds the default value on creation for the "subscription_balance_fallback_limit_usd" field.
-	DefaultSubscriptionBalanceFallbackLimitUsd float64
-	// DefaultSubscriptionBalanceFallbackUsedUsd holds the default value on creation for the "subscription_balance_fallback_used_usd" field.
-	DefaultSubscriptionBalanceFallbackUsedUsd float64
 	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.
 	DefaultRpmLimit int
 )
@@ -367,21 +329,6 @@ func ByConcurrency(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
-}
-
-// ByInviteCode orders the results by the invite_code field.
-func ByInviteCode(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldInviteCode, opts...).ToFunc()
-}
-
-// ByInvitedByUserID orders the results by the invited_by_user_id field.
-func ByInvitedByUserID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldInvitedByUserID, opts...).ToFunc()
-}
-
-// ByInviteBoundAt orders the results by the invite_bound_at field.
-func ByInviteBoundAt(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldInviteBoundAt, opts...).ToFunc()
 }
 
 // ByUsername orders the results by the username field.
@@ -447,26 +394,6 @@ func ByBalanceNotifyExtraEmails(opts ...sql.OrderTermOption) OrderOption {
 // ByTotalRecharged orders the results by the total_recharged field.
 func ByTotalRecharged(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotalRecharged, opts...).ToFunc()
-}
-
-// BySubscriptionBalanceFallbackEnabled orders the results by the subscription_balance_fallback_enabled field.
-func BySubscriptionBalanceFallbackEnabled(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSubscriptionBalanceFallbackEnabled, opts...).ToFunc()
-}
-
-// BySubscriptionBalanceFallbackLimitUsd orders the results by the subscription_balance_fallback_limit_usd field.
-func BySubscriptionBalanceFallbackLimitUsd(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSubscriptionBalanceFallbackLimitUsd, opts...).ToFunc()
-}
-
-// BySubscriptionBalanceFallbackUsedUsd orders the results by the subscription_balance_fallback_used_usd field.
-func BySubscriptionBalanceFallbackUsedUsd(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSubscriptionBalanceFallbackUsedUsd, opts...).ToFunc()
-}
-
-// BySubscriptionBalanceFallbackGroupID orders the results by the subscription_balance_fallback_group_id field.
-func BySubscriptionBalanceFallbackGroupID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldSubscriptionBalanceFallbackGroupID, opts...).ToFunc()
 }
 
 // ByRpmLimit orders the results by the rpm_limit field.
@@ -642,20 +569,6 @@ func ByPendingAuthSessions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOpti
 	}
 }
 
-// ByPlatformQuotasCount orders the results by platform_quotas count.
-func ByPlatformQuotasCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newPlatformQuotasStep(), opts...)
-	}
-}
-
-// ByPlatformQuotas orders the results by platform_quotas terms.
-func ByPlatformQuotas(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newPlatformQuotasStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -751,13 +664,6 @@ func newPendingAuthSessionsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PendingAuthSessionsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PendingAuthSessionsTable, PendingAuthSessionsColumn),
-	)
-}
-func newPlatformQuotasStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(PlatformQuotasInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, PlatformQuotasTable, PlatformQuotasColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {
