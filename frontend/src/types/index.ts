@@ -2012,3 +2012,141 @@ export type {
   PlatformQuotaWindow,
   PlatformQuotasResponse,
 } from '@/api/admin/users'
+
+// ==================== xlab 产品订阅类型 ====================
+export interface SubscriptionProductGroup {
+  group_id: number
+  group_name: string
+  group_platform: string
+  balance_fallback_group_id?: number | null
+  balance_fallback_group_name?: string | null
+  debit_multiplier: number
+  status: string
+  sort_order: number
+}
+
+export interface ActiveSubscriptionProduct {
+  product_id: number
+  subscription_id: number
+  code: string
+  name: string
+  description: string
+  status: 'active' | 'expired' | 'revoked' | string
+  expires_at: string | null
+  daily_usage_usd: number
+  weekly_usage_usd: number
+  monthly_usage_usd: number
+  daily_limit_usd: number
+  weekly_limit_usd: number
+  monthly_limit_usd: number
+  daily_carryover_in_usd: number
+  daily_carryover_remaining_usd: number
+  groups: SubscriptionProductGroup[]
+}
+
+export interface SubscriptionProductSummary {
+  active_count: number
+  total_monthly_usage_usd: number
+  total_monthly_limit_usd: number
+  products: ActiveSubscriptionProduct[]
+}
+
+export interface AdminSubscriptionProduct {
+  id: number
+  code: string
+  name: string
+  description: string
+  status: 'draft' | 'active' | 'disabled' | string
+  product_family: string
+  default_validity_days: number
+  daily_limit_usd: number
+  weekly_limit_usd: number
+  monthly_limit_usd: number
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminSubscriptionProductBinding {
+  product_id: number
+  group_id: number
+  group_name: string
+  debit_multiplier: number
+  status: 'active' | 'inactive' | string
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminUserProductSubscription {
+  id: number
+  user_id: number
+  product_id: number
+  starts_at: string
+  expires_at: string
+  status: 'active' | 'expired' | 'revoked' | string
+  daily_window_start: string | null
+  weekly_window_start: string | null
+  monthly_window_start: string | null
+  daily_usage_usd: number
+  weekly_usage_usd: number
+  monthly_usage_usd: number
+  daily_carryover_in_usd: number
+  daily_carryover_remaining_usd: number
+  assigned_by: number | null
+  assigned_at: string
+  notes: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AdminProductSubscriptionListItem extends AdminUserProductSubscription {
+  user_email: string
+  user_username: string
+  product_code: string
+  product_name: string
+  daily_limit_usd: number
+  weekly_limit_usd: number
+  monthly_limit_usd: number
+  carryover_used_usd: number
+  fresh_daily_usage_usd: number
+}
+
+export interface CreateSubscriptionProductRequest {
+  code: string
+  name: string
+  description?: string
+  status?: string
+  product_family?: string
+  default_validity_days?: number
+  daily_limit_usd?: number
+  weekly_limit_usd?: number
+  monthly_limit_usd?: number
+  sort_order?: number
+}
+
+export interface UpdateSubscriptionProductRequest {
+  code?: string
+  name?: string
+  description?: string
+  status?: string
+  product_family?: string
+  default_validity_days?: number
+  daily_limit_usd?: number
+  weekly_limit_usd?: number
+  monthly_limit_usd?: number
+  sort_order?: number
+}
+
+export interface SyncSubscriptionProductBindingRequest {
+  group_id: number
+  debit_multiplier?: number
+  status?: string
+  sort_order?: number
+}
+
+export interface AssignProductSubscriptionRequest {
+  user_id: number
+  validity_days?: number
+  notes?: string
+}

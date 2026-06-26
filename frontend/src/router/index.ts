@@ -490,6 +490,30 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/subscription-products',
+    name: 'AdminSubscriptionProducts',
+    component: () => import('@/views/admin/SubscriptionProductsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Product Subscriptions',
+      titleKey: 'admin.subscriptionProducts.title',
+      descriptionKey: 'admin.subscriptionProducts.description'
+    }
+  },
+  {
+    path: '/admin/subscription-product-config',
+    name: 'AdminSubscriptionProductConfig',
+    component: () => import('@/views/admin/SubscriptionProductConfigView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Product Subscription Config',
+      titleKey: 'admin.subscriptionProducts.title',
+      descriptionKey: 'admin.subscriptionProducts.description'
+    }
+  },
+  {
     path: '/admin/accounts',
     name: 'AdminAccounts',
     component: () => import('@/views/admin/AccountsView.vue'),

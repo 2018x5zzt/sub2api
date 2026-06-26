@@ -45,7 +45,7 @@
             "
           />
           <p class="input-hint">{{ baseUrlHint }}</p>
-          <template v-if="account.platform !== 'sora'">
+          <template>
             <label class="mt-3 flex cursor-pointer items-start gap-3">
               <input
                 v-model="editAppendApiPath"
@@ -3814,7 +3814,7 @@ const handleSubmit = async () => {
     // For apikey type, handle credentials update
     if (props.account.type === 'apikey') {
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
-      if (props.account.platform !== 'sora' && !editAppendApiPath.value && !editBaseUrl.value.trim()) {
+      if (!editAppendApiPath.value && !editBaseUrl.value.trim()) {
         appStore.showError(t('admin.accounts.pleaseEnterBaseUrl'))
         return
       }

@@ -4740,7 +4740,7 @@ const handleSubmit = async () => {
     appStore.showError(t('admin.accounts.pleaseEnterApiKey'))
     return
   }
-  if (form.platform !== 'sora' && !apiKeyAppendApiPath.value && !apiKeyBaseUrl.value.trim()) {
+  if (!apiKeyAppendApiPath.value && !apiKeyBaseUrl.value.trim()) {
     appStore.showError(t('admin.accounts.pleaseEnterBaseUrl'))
     return
   }
