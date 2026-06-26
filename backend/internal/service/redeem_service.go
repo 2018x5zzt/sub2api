@@ -131,11 +131,18 @@ type RedeemCodeBatchUpdateResult struct {
 	Updated int64 `json:"updated"`
 }
 
+// ProductSubscriptionAssigner 分配/续期产品订阅（用于产品兑换码）。
+type ProductSubscriptionAssigner interface {
+	AssignOrExtendProductSubscription(ctx context.Context, input *AssignProductSubscriptionInput) (*UserProductSubscription, bool, error)
+}
+
 // RedeemService 兑换码服务
 type RedeemService struct {
 	redeemRepo           RedeemCodeRepository
 	userRepo             UserRepository
 	subscriptionService  *SubscriptionService
+	subscriptionAssigner DefaultSubscriptionAssigner
+	productSubAssigner   ProductSubscriptionAssigner
 	cache                RedeemCache
 	billingCacheService  *BillingCacheService
 	entClient            *dbent.Client
@@ -148,16 +155,24 @@ func NewRedeemService(
 	redeemRepo RedeemCodeRepository,
 	userRepo UserRepository,
 	subscriptionService *SubscriptionService,
+	subscriptionAssigner DefaultSubscriptionAssigner,
+	productSubAssigner ProductSubscriptionAssigner,
 	cache RedeemCache,
 	billingCacheService *BillingCacheService,
 	entClient *dbent.Client,
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
 	affiliateService *AffiliateService,
 ) *RedeemService {
+	// 产品感知分配器不可用时回退到 legacy 订阅服务，保证分组兑换码仍可分配。
+	if subscriptionAssigner == nil {
+		subscriptionAssigner = subscriptionService
+	}
 	return &RedeemService{
 		redeemRepo:           redeemRepo,
 		userRepo:             userRepo,
 		subscriptionService:  subscriptionService,
+		subscriptionAssigner: subscriptionAssigner,
+		productSubAssigner:   productSubAssigner,
 		cache:                cache,
 		billingCacheService:  billingCacheService,
 		entClient:            entClient,
@@ -407,9 +422,9 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		return nil, ErrRedeemCodeUsed
 	}
 
-	// 验证兑换码类型的前置条件
-	if redeemCode.Type == RedeemTypeSubscription && redeemCode.GroupID == nil {
-		return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing group_id")
+	// 验证兑换码类型的前置条件：订阅兑换码须绑定分组或产品之一。
+	if redeemCode.Type == RedeemTypeSubscription && redeemCode.GroupID == nil && redeemCode.ProductID == nil {
+		return nil, infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing group_id or product_id")
 	}
 
 	// 获取用户信息
@@ -460,6 +475,13 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		}
 
 	case RedeemTypeSubscription:
+		// 产品兑换码：分配/续期产品订阅（xlab 语义）。
+		if redeemCode.ProductID != nil {
+			if err := s.assignProductSubscriptionFromRedeem(txCtx, userID, redeemCode); err != nil {
+				return nil, fmt.Errorf("assign or extend product subscription: %w", err)
+			}
+			break
+		}
 		validityDays := redeemCode.ValidityDays
 		if validityDays < 0 {
 			// 负数天数：缩短订阅，减到 0 则取消订阅
@@ -470,7 +492,8 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 			if validityDays == 0 {
 				validityDays = 30
 			}
-			_, _, err := s.subscriptionService.AssignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
+			// 走产品感知分配器：分组若有活跃产品则分配产品订阅，否则回退 legacy。
+			_, _, err := s.subscriptionAssigner.AssignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
 				UserID:       userID,
 				GroupID:      *redeemCode.GroupID,
 				ValidityDays: validityDays,
@@ -506,6 +529,31 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 	}
 
 	return redeemCode, nil
+}
+
+// assignProductSubscriptionFromRedeem 根据产品兑换码分配/续期产品订阅。
+func (s *RedeemService) assignProductSubscriptionFromRedeem(ctx context.Context, userID int64, redeemCode *RedeemCode) error {
+	if redeemCode == nil || redeemCode.ProductID == nil {
+		return infraerrors.BadRequest("REDEEM_CODE_INVALID", "invalid subscription redeem code: missing product_id")
+	}
+	if s.productSubAssigner == nil {
+		return ErrProductSubscriptionAssignerUnavailable
+	}
+	validityDays := redeemCode.ValidityDays
+	if validityDays == 0 {
+		validityDays = 30
+	}
+	if validityDays < 0 {
+		return infraerrors.BadRequest("REDEEM_CODE_INVALID", "product subscription redeem code cannot use negative validity_days")
+	}
+	_, _, err := s.productSubAssigner.AssignOrExtendProductSubscription(ctx, &AssignProductSubscriptionInput{
+		UserID:       userID,
+		ProductID:    *redeemCode.ProductID,
+		ValidityDays: validityDays,
+		AssignedBy:   0,
+		Notes:        fmt.Sprintf("通过兑换码 %s 兑换", redeemCode.Code),
+	})
+	return err
 }
 
 // invalidateRedeemCaches 失效兑换相关的缓存

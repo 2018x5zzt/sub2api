@@ -611,6 +611,7 @@ var ProviderSet = wire.NewSet(
 	NewSubscriptionProductService,
 	ProvideProductAwareSubscriptionAssigner,
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*ProductAwareSubscriptionAssigner)),
+	wire.Bind(new(ProductSubscriptionAssigner), new(*SubscriptionProductService)),
 	ProvideConcurrencyService,
 	ProvideUserMessageQueueService,
 	NewUsageRecordWorkerPool,

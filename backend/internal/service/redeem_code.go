@@ -19,6 +19,7 @@ type RedeemCode struct {
 	ExpiresAt *time.Time
 
 	GroupID      *int64
+	ProductID    *int64
 	ValidityDays int
 
 	User  *User
