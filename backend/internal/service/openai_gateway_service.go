@@ -5962,6 +5962,7 @@ type OpenAIRecordUsageInput struct {
 	User               *User
 	Account            *Account
 	Subscription       *UserSubscription
+	ProductSettlement  *ProductSettlementContext // 可选：xlab 产品订阅结算上下文（缺省时从 ctx 解析）
 	InboundEndpoint    string
 	UpstreamEndpoint   string
 	UserAgent          string // 请求的 User-Agent
@@ -6051,6 +6052,13 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
+	// xlab 产品订阅：优先用显式传入的结算上下文，否则从 ctx 解析（中间件鉴权阶段写入）。
+	productSettlement := input.ProductSettlement
+	if productSettlement == nil {
+		if settlement, ok := ProductSettlementFromContext(ctx); ok {
+			productSettlement = settlement
+		}
+	}
 	ApplyOpenAIImageBillingResolution(result)
 
 	// 计算实际的新输入token（减去缓存读取的token）
@@ -6127,8 +6135,8 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		cost = &CostBreakdown{BillingMode: string(BillingModeToken)}
 	}
 
-	// Determine billing type
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	// Determine billing type（产品订阅命中时也走订阅计费路径）
+	isSubscriptionBilling := (subscription != nil || productSettlement != nil) && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription
@@ -6251,6 +6259,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 			APIKey:                apiKey,
 			Account:               account,
 			Subscription:          subscription,
+			ProductSettlement:     productSettlement,
 			RequestPayloadHash:    resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
 			IsSubscriptionBill:    isSubscriptionBilling,
 			AccountRateMultiplier: accountRateMultiplier,

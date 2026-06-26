@@ -8815,8 +8815,9 @@ type RecordUsageInput struct {
 	APIKey             *APIKey
 	User               *User
 	Account            *Account
-	Subscription       *UserSubscription  // 可选：订阅信息
-	InboundEndpoint    string             // 入站端点（客户端请求路径）
+	Subscription       *UserSubscription          // 可选：订阅信息
+	ProductSettlement  *ProductSettlementContext  // 可选：xlab 产品订阅结算上下文（缺省时从 ctx 解析）
+	InboundEndpoint    string                     // 入站端点（客户端请求路径）
 	UpstreamEndpoint   string             // 上游端点（标准化后的上游路径）
 	UserAgent          string             // 请求的 User-Agent
 	IPAddress          string             // 请求的客户端 IP 地址
@@ -8849,6 +8850,7 @@ type postUsageBillingParams struct {
 	APIKey                *APIKey
 	Account               *Account
 	Subscription          *UserSubscription
+	ProductSettlement     *ProductSettlementContext
 	RequestPayloadHash    string
 	IsSubscriptionBill    bool
 	AccountRateMultiplier float64
@@ -9022,15 +9024,28 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		if usageLog.SubscriptionID != nil {
 			cmd.SubscriptionID = usageLog.SubscriptionID
 		}
+		if usageLog.ProductSubscriptionID != nil {
+			cmd.ProductSubscriptionID = usageLog.ProductSubscriptionID
+		}
 	}
 
 	// Record subscription / balance cost using ActualCost so the group (and any
 	// user-specific) rate multiplier consumes subscription quota at the expected
 	// speed. TotalCost remains the raw (pre-multiplier) value; downstream guards
 	// on "> 0" still correctly skip free subscriptions (RateMultiplier == 0).
-	if p.IsSubscriptionBill && p.Subscription != nil && p.Cost.TotalCost > 0 {
-		cmd.SubscriptionID = &p.Subscription.ID
-		cmd.SubscriptionCost = p.Cost.ActualCost
+	if p.IsSubscriptionBill {
+		// xlab 产品订阅：命中产品结算时改走产品订阅额度扣减（清空普通订阅命令字段）。
+		if fields, ok := productSettlementBilling(p.ProductSettlement, p.Cost.TotalCost); ok {
+			applyProductSettlementUsageLog(usageLog, p.ProductSettlement, p.Cost.TotalCost)
+			cmd.SubscriptionID = nil
+			cmd.SubscriptionCost = 0
+			cmd.ProductSubscriptionID = &fields.productSubscriptionID
+			cmd.ProductGroupID = fields.groupID
+			cmd.ProductDebitCost = fields.productDebitCost
+		} else if p.Subscription != nil && p.Cost.TotalCost > 0 {
+			cmd.SubscriptionID = &p.Subscription.ID
+			cmd.SubscriptionCost = p.Cost.ActualCost
+		}
 	} else if p.Cost.ActualCost > 0 {
 		cmd.BalanceCost = p.Cost.ActualCost
 	}
@@ -9304,6 +9319,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		User:               input.User,
 		Account:            input.Account,
 		Subscription:       input.Subscription,
+		ProductSettlement:  input.ProductSettlement,
 		InboundEndpoint:    input.InboundEndpoint,
 		UpstreamEndpoint:   input.UpstreamEndpoint,
 		UserAgent:          input.UserAgent,
@@ -9367,6 +9383,7 @@ type recordUsageCoreInput struct {
 	User               *User
 	Account            *Account
 	Subscription       *UserSubscription
+	ProductSettlement  *ProductSettlementContext
 	InboundEndpoint    string
 	UpstreamEndpoint   string
 	UserAgent          string
@@ -9386,6 +9403,13 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	user := input.User
 	account := input.Account
 	subscription := input.Subscription
+	// xlab 产品订阅：优先用显式传入的结算上下文，否则从 ctx 解析（中间件鉴权阶段写入）。
+	productSettlement := input.ProductSettlement
+	if productSettlement == nil {
+		if settlement, ok := ProductSettlementFromContext(ctx); ok {
+			productSettlement = settlement
+		}
+	}
 	ApplyForwardImageBillingResolution(result)
 
 	// 强制缓存计费：将 input_tokens 转为 cache_read_input_tokens
@@ -9437,8 +9461,8 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	// 计算费用
 	cost := s.calculateRecordUsageCost(ctx, result, apiKey, billingModel, multiplier, imageMultiplier, opts)
 
-	// 判断计费方式：订阅模式 vs 余额模式
-	isSubscriptionBilling := subscription != nil && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
+	// 判断计费方式：订阅模式 vs 余额模式（产品订阅命中时也走订阅计费路径）
+	isSubscriptionBilling := (subscription != nil || productSettlement != nil) && apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 	billingType := BillingTypeBalance
 	if isSubscriptionBilling {
 		billingType = BillingTypeSubscription
@@ -9487,6 +9511,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		APIKey:                apiKey,
 		Account:               account,
 		Subscription:          subscription,
+		ProductSettlement:     productSettlement,
 		RequestPayloadHash:    resolveUsageBillingPayloadFingerprint(ctx, input.RequestPayloadHash),
 		IsSubscriptionBill:    isSubscriptionBilling,
 		AccountRateMultiplier: accountRateMultiplier,
