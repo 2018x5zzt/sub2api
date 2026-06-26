@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
 // APIKeyRateLimitCacheData holds rate limit usage data cached in Redis.
@@ -65,26 +64,6 @@ const (
 	openAIGPT54LongContextInputMultiplier  = 2.0
 	openAIGPT54LongContextOutputMultiplier = 1.5
 )
-
-func newOpenAIFallbackPricing(inputPerMTok, outputPerMTok float64) *ModelPricing {
-	inputPerToken := inputPerMTok * 1e-6
-	outputPerToken := outputPerMTok * 1e-6
-	inputPriorityPerToken := inputPerToken * 2
-	outputPriorityPerToken := outputPerToken * 2
-	cacheReadPerToken := inputPerToken / 10
-	cacheReadPriorityPerToken := inputPriorityPerToken / 10
-
-	return &ModelPricing{
-		InputPricePerToken:             inputPerToken,
-		InputPricePerTokenPriority:     inputPriorityPerToken,
-		OutputPricePerToken:            outputPerToken,
-		OutputPricePerTokenPriority:    outputPriorityPerToken,
-		CacheCreationPricePerToken:     inputPerToken,
-		CacheReadPricePerToken:         cacheReadPerToken,
-		CacheReadPricePerTokenPriority: cacheReadPriorityPerToken,
-		SupportsCacheBreakdown:         false,
-	}
-}
 
 func normalizeBillingServiceTier(serviceTier string) string {
 	return strings.ToLower(strings.TrimSpace(serviceTier))
@@ -224,13 +203,48 @@ func (s *BillingService) initFallbackPricing() {
 		SupportsCacheBreakdown:     false,
 	}
 
-	// OpenAI GPT-5 / Codex 族兜底价格直接复用静态展示目录，避免目录和计费表漂移。
-	for _, model := range openai.DefaultModels {
-		s.fallbackPrices[model.ID] = newOpenAIFallbackPricing(model.InputPricePerMTok, model.OutputPricePerMTok)
+	// OpenAI GPT-5.4（业务指定价格）
+	s.fallbackPrices["gpt-5.4"] = &ModelPricing{
+		InputPricePerToken:             2.5e-6,  // $2.5 per MTok
+		InputPricePerTokenPriority:     5e-6,    // $5 per MTok
+		OutputPricePerToken:            15e-6,   // $15 per MTok
+		OutputPricePerTokenPriority:    30e-6,   // $30 per MTok
+		CacheCreationPricePerToken:     2.5e-6,  // $2.5 per MTok
+		CacheReadPricePerToken:         0.25e-6, // $0.25 per MTok
+		CacheReadPricePerTokenPriority: 0.5e-6,  // $0.5 per MTok
+		SupportsCacheBreakdown:         false,
+		LongContextInputThreshold:      openAIGPT54LongContextInputThreshold,
+		LongContextInputMultiplier:     openAIGPT54LongContextInputMultiplier,
+		LongContextOutputMultiplier:    openAIGPT54LongContextOutputMultiplier,
 	}
-	s.fallbackPrices["gpt-5.4"].LongContextInputThreshold = openAIGPT54LongContextInputThreshold
-	s.fallbackPrices["gpt-5.4"].LongContextInputMultiplier = openAIGPT54LongContextInputMultiplier
-	s.fallbackPrices["gpt-5.4"].LongContextOutputMultiplier = openAIGPT54LongContextOutputMultiplier
+	s.fallbackPrices["gpt-5.4-mini"] = &ModelPricing{
+		InputPricePerToken:     7.5e-7,
+		OutputPricePerToken:    4.5e-6,
+		CacheReadPricePerToken: 7.5e-8,
+		SupportsCacheBreakdown: false,
+	}
+	// OpenAI GPT-5.2（本地兜底）
+	s.fallbackPrices["gpt-5.2"] = &ModelPricing{
+		InputPricePerToken:             1.75e-6,
+		InputPricePerTokenPriority:     3.5e-6,
+		OutputPricePerToken:            14e-6,
+		OutputPricePerTokenPriority:    28e-6,
+		CacheCreationPricePerToken:     1.75e-6,
+		CacheReadPricePerToken:         0.175e-6,
+		CacheReadPricePerTokenPriority: 0.35e-6,
+		SupportsCacheBreakdown:         false,
+	}
+	// Codex 族兜底统一按 GPT-5.3 Codex 价格计费
+	s.fallbackPrices["gpt-5.3-codex"] = &ModelPricing{
+		InputPricePerToken:             1.5e-6, // $1.5 per MTok
+		InputPricePerTokenPriority:     3e-6,   // $3 per MTok
+		OutputPricePerToken:            12e-6,  // $12 per MTok
+		OutputPricePerTokenPriority:    24e-6,  // $24 per MTok
+		CacheCreationPricePerToken:     1.5e-6, // $1.5 per MTok
+		CacheReadPricePerToken:         0.15e-6,
+		CacheReadPricePerTokenPriority: 0.3e-6,
+		SupportsCacheBreakdown:         false,
+	}
 }
 
 // getFallbackPricing 根据模型系列获取回退价格
@@ -274,32 +288,14 @@ func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	if strings.Contains(modelLower, "gpt-5") || strings.Contains(modelLower, "codex") {
 		normalized := normalizeCodexModel(modelLower)
 		switch normalized {
-		case "gpt-5":
-			return s.fallbackPrices["gpt-5"]
-		case "gpt-5-codex":
-			return s.fallbackPrices["gpt-5-codex"]
-		case "gpt-5-codex-mini":
-			return s.fallbackPrices["gpt-5-codex-mini"]
-		case "gpt-5.1":
-			return s.fallbackPrices["gpt-5.1"]
-		case "gpt-5.1-codex":
-			return s.fallbackPrices["gpt-5.1-codex"]
-		case "gpt-5.1-codex-max":
-			return s.fallbackPrices["gpt-5.1-codex-max"]
-		case "gpt-5.1-codex-mini":
-			return s.fallbackPrices["gpt-5.1-codex-mini"]
-		case "gpt-5.2":
-			return s.fallbackPrices["gpt-5.2"]
-		case "gpt-5.2-codex":
-			return s.fallbackPrices["gpt-5.2-codex"]
-		case "gpt-5.3-codex":
-			return s.fallbackPrices["gpt-5.3-codex"]
-		case "gpt-5.4":
-			return s.fallbackPrices["gpt-5.4"]
 		case "gpt-5.4-mini":
 			return s.fallbackPrices["gpt-5.4-mini"]
-		case "gpt-5.4-nano":
-			return s.fallbackPrices["gpt-5.4-nano"]
+		case "gpt-5.4":
+			return s.fallbackPrices["gpt-5.4"]
+		case "gpt-5.2":
+			return s.fallbackPrices["gpt-5.2"]
+		case "gpt-5.3-codex", "gpt-5.3-codex-spark":
+			return s.fallbackPrices["gpt-5.3-codex"]
 		}
 	}
 
@@ -416,8 +412,9 @@ func (s *BillingService) CalculateCostUnified(input CostInput) (*CostBreakdown, 
 		})
 	}
 
-	if input.RateMultiplier <= 0 {
-		input.RateMultiplier = 1.0
+	// 保存时强制 > 0；若仍有负数泄漏（缓存/迁移残留），按 0 处理避免按 1x 误扣。
+	if input.RateMultiplier < 0 {
+		input.RateMultiplier = 0
 	}
 
 	var breakdown *CostBreakdown
@@ -461,8 +458,9 @@ func (s *BillingService) computeTokenBreakdown(
 	rateMultiplier float64, serviceTier string,
 	applyLongCtx bool,
 ) *CostBreakdown {
-	if rateMultiplier <= 0 {
-		rateMultiplier = 1.0
+	// 保存时强制 > 0；若仍有负数泄漏，按 0 处理避免按 1x 误扣。
+	if rateMultiplier < 0 {
+		rateMultiplier = 0
 	}
 
 	inputPrice := pricing.InputPricePerToken
@@ -633,8 +631,13 @@ func (s *BillingService) shouldApplySessionLongContextPricing(tokens UsageTokens
 }
 
 func isOpenAIGPT54Model(model string) bool {
-	normalized := normalizeCodexModel(strings.TrimSpace(strings.ToLower(model)))
-	return normalized == "gpt-5.4"
+	trimmed := strings.TrimSpace(strings.ToLower(model))
+	// 仅当模型字符串实际属于 GPT-5/Codex 族时才做归一判定，避免 normalizeCodexModel
+	// 的默认兜底把非 OpenAI 模型（claude-*、gemini-*、gpt-4o）误识别为 gpt-5.4。
+	if !strings.Contains(trimmed, "gpt-5") && !strings.Contains(trimmed, "codex") {
+		return false
+	}
+	return normalizeCodexModel(trimmed) == "gpt-5.4"
 }
 
 // CalculateCostWithConfig 使用配置中的默认倍率计算费用
@@ -799,9 +802,9 @@ func (s *BillingService) CalculateImageCost(model string, imageSize string, imag
 	// 计算总费用
 	totalCost := unitPrice * float64(imageCount)
 
-	// 应用倍率
-	if rateMultiplier <= 0 {
-		rateMultiplier = 1.0
+	// 应用倍率（保存时强制 > 0；负数按 0 处理避免按 1x 误扣）
+	if rateMultiplier < 0 {
+		rateMultiplier = 0
 	}
 	actualCost := totalCost * rateMultiplier
 

@@ -828,6 +828,10 @@ func (s *PricingService) generateOpenAIModelVariants(model string, normalizedMod
 	addVariant(normalizedWithoutDate)
 
 	// 2. 业务兼容 alias。
+	// fork: gpt-5-codex-mini 以原始模型名为准做定价回退，避免上游 codex 归一化把它折叠后丢失回退。
+	if model == "gpt-5-codex-mini" {
+		addVariant("gpt-5.1-codex-mini")
+	}
 	switch normalizedModel {
 	case "gpt-5-codex-mini":
 		addVariant("gpt-5.1-codex-mini")

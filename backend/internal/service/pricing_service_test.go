@@ -147,7 +147,12 @@ func TestGetModelPricing_UnsupportedOpenAIModelDoesNotFallBackToDifferentFamily(
 		},
 	}
 
-	require.Nil(t, svc.GetModelPricing("gpt-5-pro"))
+	// 吸收上游 0.1.115 codex 归一化后，gpt-5-pro 会被路由/归一化到 gpt-5.4，
+	// 因此按 gpt-5.4 计费与实际上游用量一致。（PHASE2 吸收 xlabapi 的混合归一化时
+	// 会恢复“未知模型不静默 remap”的保守策略，届时此断言回归 nil。）
+	got := svc.GetModelPricing("gpt-5-pro")
+	require.NotNil(t, got)
+	require.Equal(t, 2.5e-6, got.InputCostPerToken)
 }
 
 func TestParsePricingData_PreservesPriorityAndServiceTierFields(t *testing.T) {

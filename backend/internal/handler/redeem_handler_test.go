@@ -425,6 +425,38 @@ func (r *testRedeemUserRepo) Delete(ctx context.Context, id int64) error {
 	return errors.New("not implemented")
 }
 
+func (r *testRedeemUserRepo) DeleteUserAvatar(ctx context.Context, userID int64) error {
+	return nil
+}
+
+func (r *testRedeemUserRepo) GetLatestUsedAtByUserID(ctx context.Context, userID int64) (*time.Time, error) {
+	return nil, nil
+}
+
+func (r *testRedeemUserRepo) GetLatestUsedAtByUserIDs(ctx context.Context, userIDs []int64) (map[int64]*time.Time, error) {
+	return map[int64]*time.Time{}, nil
+}
+
+func (r *testRedeemUserRepo) GetUserAvatar(ctx context.Context, userID int64) (*service.UserAvatar, error) {
+	return nil, nil
+}
+
+func (r *testRedeemUserRepo) UpsertUserAvatar(ctx context.Context, userID int64, input service.UpsertUserAvatarInput) (*service.UserAvatar, error) {
+	return nil, nil
+}
+
+func (r *testRedeemUserRepo) UpdateUserLastActiveAt(ctx context.Context, userID int64, activeAt time.Time) error {
+	return nil
+}
+
+func (r *testRedeemUserRepo) ListUserAuthIdentities(ctx context.Context, userID int64) ([]service.UserAuthIdentityRecord, error) {
+	return nil, nil
+}
+
+func (r *testRedeemUserRepo) UnbindUserAuthProvider(ctx context.Context, userID int64, provider string) error {
+	return nil
+}
+
 func (r *testRedeemUserRepo) List(ctx context.Context, params pagination.PaginationParams) ([]service.User, *pagination.PaginationResult, error) {
 	return nil, nil, errors.New("not implemented")
 }

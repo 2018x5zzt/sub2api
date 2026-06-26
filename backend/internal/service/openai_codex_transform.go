@@ -3,44 +3,17 @@ package service
 import (
 	"fmt"
 	"strings"
-
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 )
 
 var codexModelMap = map[string]string{
-	"gpt-5":                      "gpt-5",
-	"gpt-5-codex":                "gpt-5-codex",
-	"gpt-5-codex-mini":           "gpt-5-codex-mini",
-	"gpt-5.1":                    "gpt-5.1",
-	"gpt-5.1-none":               "gpt-5.1",
-	"gpt-5.1-low":                "gpt-5.1",
-	"gpt-5.1-medium":             "gpt-5.1",
-	"gpt-5.1-high":               "gpt-5.1",
-	"gpt-5.1-chat-latest":        "gpt-5.1",
-	"gpt-5.1-codex":              "gpt-5.1-codex",
-	"gpt-5.1-codex-low":          "gpt-5.1-codex",
-	"gpt-5.1-codex-medium":       "gpt-5.1-codex",
-	"gpt-5.1-codex-high":         "gpt-5.1-codex",
-	"gpt-5.1-codex-max":          "gpt-5.1-codex-max",
-	"gpt-5.1-codex-max-low":      "gpt-5.1-codex-max",
-	"gpt-5.1-codex-max-medium":   "gpt-5.1-codex-max",
-	"gpt-5.1-codex-max-high":     "gpt-5.1-codex-max",
-	"gpt-5.1-codex-max-xhigh":    "gpt-5.1-codex-max",
-	"gpt-5.1-codex-mini":         "gpt-5.1-codex-mini",
-	"gpt-5.1-codex-mini-medium":  "gpt-5.1-codex-mini",
-	"gpt-5.1-codex-mini-high":    "gpt-5.1-codex-mini",
-	"codex-mini-latest":          "gpt-5.1-codex-mini",
-	"gpt-5.2":                    "gpt-5.2",
-	"gpt-5.2-none":               "gpt-5.2",
-	"gpt-5.2-low":                "gpt-5.2",
-	"gpt-5.2-medium":             "gpt-5.2",
-	"gpt-5.2-high":               "gpt-5.2",
-	"gpt-5.2-xhigh":              "gpt-5.2",
-	"gpt-5.2-codex":              "gpt-5.2-codex",
-	"gpt-5.2-codex-low":          "gpt-5.2-codex",
-	"gpt-5.2-codex-medium":       "gpt-5.2-codex",
-	"gpt-5.2-codex-high":         "gpt-5.2-codex",
-	"gpt-5.2-codex-xhigh":        "gpt-5.2-codex",
+	"gpt-5.4":                    "gpt-5.4",
+	"gpt-5.4-mini":               "gpt-5.4-mini",
+	"gpt-5.4-none":               "gpt-5.4",
+	"gpt-5.4-low":                "gpt-5.4",
+	"gpt-5.4-medium":             "gpt-5.4",
+	"gpt-5.4-high":               "gpt-5.4",
+	"gpt-5.4-xhigh":              "gpt-5.4",
+	"gpt-5.4-chat-latest":        "gpt-5.4",
 	"gpt-5.3":                    "gpt-5.3-codex",
 	"gpt-5.3-none":               "gpt-5.3-codex",
 	"gpt-5.3-low":                "gpt-5.3-codex",
@@ -48,24 +21,21 @@ var codexModelMap = map[string]string{
 	"gpt-5.3-high":               "gpt-5.3-codex",
 	"gpt-5.3-xhigh":              "gpt-5.3-codex",
 	"gpt-5.3-codex":              "gpt-5.3-codex",
+	"gpt-5.3-codex-spark":        "gpt-5.3-codex-spark",
+	"gpt-5.3-codex-spark-low":    "gpt-5.3-codex-spark",
+	"gpt-5.3-codex-spark-medium": "gpt-5.3-codex-spark",
+	"gpt-5.3-codex-spark-high":   "gpt-5.3-codex-spark",
+	"gpt-5.3-codex-spark-xhigh":  "gpt-5.3-codex-spark",
 	"gpt-5.3-codex-low":          "gpt-5.3-codex",
 	"gpt-5.3-codex-medium":       "gpt-5.3-codex",
 	"gpt-5.3-codex-high":         "gpt-5.3-codex",
 	"gpt-5.3-codex-xhigh":        "gpt-5.3-codex",
-	"gpt-5.3-codex-spark":        "gpt-5.3-codex",
-	"gpt-5.3-codex-spark-low":    "gpt-5.3-codex",
-	"gpt-5.3-codex-spark-medium": "gpt-5.3-codex",
-	"gpt-5.3-codex-spark-high":   "gpt-5.3-codex",
-	"gpt-5.3-codex-spark-xhigh":  "gpt-5.3-codex",
-	"gpt-5.4":                    "gpt-5.4",
-	"gpt-5.4-none":               "gpt-5.4",
-	"gpt-5.4-low":                "gpt-5.4",
-	"gpt-5.4-medium":             "gpt-5.4",
-	"gpt-5.4-high":               "gpt-5.4",
-	"gpt-5.4-xhigh":              "gpt-5.4",
-	"gpt-5.4-chat-latest":        "gpt-5.4",
-	"gpt-5.4-mini":               "gpt-5.4-mini",
-	"gpt-5.4-nano":               "gpt-5.4-nano",
+	"gpt-5.2":                    "gpt-5.2",
+	"gpt-5.2-none":               "gpt-5.2",
+	"gpt-5.2-low":                "gpt-5.2",
+	"gpt-5.2-medium":             "gpt-5.2",
+	"gpt-5.2-high":               "gpt-5.2",
+	"gpt-5.2-xhigh":              "gpt-5.2",
 }
 
 type codexTransformResult struct {
@@ -218,7 +188,7 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 
 func normalizeCodexModel(model string) string {
 	if model == "" {
-		return openai.DefaultTestModel
+		return "gpt-5.4"
 	}
 
 	modelID := model
@@ -236,53 +206,29 @@ func normalizeCodexModel(model string) string {
 	if strings.Contains(normalized, "gpt-5.4-mini") || strings.Contains(normalized, "gpt 5.4 mini") {
 		return "gpt-5.4-mini"
 	}
-	if strings.Contains(normalized, "gpt-5.4-nano") || strings.Contains(normalized, "gpt 5.4 nano") {
-		return "gpt-5.4-nano"
-	}
 	if strings.Contains(normalized, "gpt-5.4") || strings.Contains(normalized, "gpt 5.4") {
 		return "gpt-5.4"
-	}
-	if strings.Contains(normalized, "gpt-5.3-codex-spark") || strings.Contains(normalized, "gpt 5.3 codex spark") {
-		return "gpt-5.3-codex"
-	}
-	if strings.Contains(normalized, "gpt-5.3-codex") || strings.Contains(normalized, "gpt 5.3 codex") {
-		return "gpt-5.3-codex"
-	}
-	if strings.Contains(normalized, "gpt-5.2-codex") || strings.Contains(normalized, "gpt 5.2 codex") {
-		return "gpt-5.2-codex"
 	}
 	if strings.Contains(normalized, "gpt-5.2") || strings.Contains(normalized, "gpt 5.2") {
 		return "gpt-5.2"
 	}
-	if strings.Contains(normalized, "gpt-5.1-codex-max") || strings.Contains(normalized, "gpt 5.1 codex max") {
-		return "gpt-5.1-codex-max"
+	if strings.Contains(normalized, "gpt-5.3-codex-spark") || strings.Contains(normalized, "gpt 5.3 codex spark") {
+		return "gpt-5.3-codex-spark"
 	}
-	if strings.Contains(normalized, "gpt-5.1-codex-mini") || strings.Contains(normalized, "gpt 5.1 codex mini") {
-		return "gpt-5.1-codex-mini"
+	if strings.Contains(normalized, "gpt-5.3-codex") || strings.Contains(normalized, "gpt 5.3 codex") {
+		return "gpt-5.3-codex"
 	}
-	if strings.Contains(normalized, "gpt-5-codex-mini") || strings.Contains(normalized, "gpt 5 codex mini") {
-		return "gpt-5-codex-mini"
+	if strings.Contains(normalized, "gpt-5.3") || strings.Contains(normalized, "gpt 5.3") {
+		return "gpt-5.3-codex"
 	}
-	if strings.Contains(normalized, "gpt-5.1-codex") || strings.Contains(normalized, "gpt 5.1 codex") {
-		return "gpt-5.1-codex"
+	if strings.Contains(normalized, "codex") {
+		return "gpt-5.3-codex"
 	}
-	if strings.Contains(normalized, "gpt-5-codex") || strings.Contains(normalized, "gpt 5 codex") {
-		return "gpt-5-codex"
-	}
-	if strings.Contains(normalized, "gpt-5.1") || strings.Contains(normalized, "gpt 5.1") {
-		return "gpt-5.1"
-	}
-	if normalized == "gpt-5" || normalized == "gpt 5" {
-		return "gpt-5"
-	}
-	// 非 OpenAI 家族模型（不含 gpt/codex 标识，如 claude-*）回落到 gpt-5.1，
-	// 避免把外部模型原样透传到 codex 上游而报错；
-	// 未识别的 gpt/codex 变体（如 gpt-5-pro/gpt-4o）保持原样，不做静默 remap。
-	if !strings.Contains(normalized, "gpt") && !strings.Contains(normalized, "codex") {
-		return "gpt-5.1"
+	if strings.Contains(normalized, "gpt-5") || strings.Contains(normalized, "gpt 5") {
+		return "gpt-5.4"
 	}
 
-	return normalized
+	return "gpt-5.4"
 }
 
 func normalizeOpenAIModelForUpstream(account *Account, model string) string {
