@@ -37,6 +37,16 @@ type OpenAIGatewayHandler struct {
 	cfg                     *config.Config
 }
 
+func resolveOpenAIForwardDefaultMappedModel(apiKey *service.APIKey, fallbackModel string) string {
+	if fallbackModel = strings.TrimSpace(fallbackModel); fallbackModel != "" {
+		return fallbackModel
+	}
+	if apiKey == nil || apiKey.Group == nil {
+		return ""
+	}
+	return strings.TrimSpace(apiKey.Group.DefaultMappedModel)
+}
+
 // NewOpenAIGatewayHandler creates a new OpenAIGatewayHandler
 func NewOpenAIGatewayHandler(
 	gatewayService *service.OpenAIGatewayService,
@@ -179,6 +189,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	}
 
 	setOpsRequestContext(c, reqModel, reqStream, body)
+	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
 
 	sessionHash := h.gatewayService.GenerateSessionHash(c, sessionHashBody)
 
@@ -228,6 +239,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
+	var rateLimitFailoverState openAI429SilentFailoverState
 
 	for {
 		// Select account supporting the requested model
@@ -249,6 +261,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			if len(failedAccountIDs) == 0 {
 				h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable", streamStarted)
 				return
+			}
+			if isOpenAI429Failover(lastFailoverErr) && h.waitForOpenAI429SilentFailover(c.Request.Context(), reqLog, &rateLimitFailoverState, failedAccountIDs, "account_select_failed") {
+				continue
 			}
 			if lastFailoverErr != nil {
 				h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
@@ -281,6 +296,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		allowQueueWait := h.shouldAllowOpenAIAccountQueueWait(lastFailoverErr)
 		accountReleaseFunc, acquired, waitSkipped := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, allowQueueWait, reqLog)
 		if !acquired {
+			if waitSkipped && isOpenAI429Failover(lastFailoverErr) && h.waitForOpenAI429SilentFailover(c.Request.Context(), reqLog, &rateLimitFailoverState, failedAccountIDs, "account_slot_wait_skipped") {
+				continue
+			}
 			if waitSkipped && lastFailoverErr != nil {
 				h.handleFailoverExhausted(c, lastFailoverErr, streamStarted)
 			}
@@ -309,7 +327,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			if errors.As(err, &failoverErr) {
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				// 池模式：同账号重试
-				if failoverErr.RetryableOnSameAccount {
+				if shouldRetrySameOpenAIAccount(failoverErr) {
 					retryLimit := account.GetPoolModeRetryCount()
 					if sameAccountRetryCount[account.ID] < retryLimit {
 						sameAccountRetryCount[account.ID]++
@@ -330,6 +348,22 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				h.gatewayService.RecordOpenAIAccountSwitch()
 				failedAccountIDs[account.ID] = struct{}{}
 				lastFailoverErr = failoverErr
+				if rateLimitFailoverState.noteSwitch(failoverErr, time.Now()) {
+					remaining := rateLimitFailoverState.remaining(time.Now())
+					if remaining <= 0 {
+						h.handleFailoverExhausted(c, failoverErr, streamStarted)
+						return
+					}
+					reqLog.Warn("openai.upstream_failover_switching",
+						zap.Int64("account_id", account.ID),
+						zap.Int("upstream_status", failoverErr.StatusCode),
+						zap.Int("switch_count", switchCount+rateLimitFailoverState.switchCount()),
+						zap.Bool("silent_rate_limit_failover", true),
+						zap.Int("rate_limit_switch_count", rateLimitFailoverState.switchCount()),
+						zap.Int64("rate_limit_budget_remaining_ms", remaining.Milliseconds()),
+					)
+					continue
+				}
 				if switchCount >= maxAccountSwitches {
 					h.handleFailoverExhausted(c, failoverErr, streamStarted)
 					return
@@ -338,7 +372,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				reqLog.Warn("openai.upstream_failover_switching",
 					zap.Int64("account_id", account.ID),
 					zap.Int("upstream_status", failoverErr.StatusCode),
-					zap.Int("switch_count", switchCount),
+					zap.Int("switch_count", switchCount+rateLimitFailoverState.switchCount()),
 					zap.Int("max_switches", maxAccountSwitches),
 				)
 				continue
@@ -398,7 +432,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		})
 		reqLog.Debug("openai.request_completed",
 			zap.Int64("account_id", account.ID),
-			zap.Int("switch_count", switchCount),
+			zap.Int("switch_count", switchCount+rateLimitFailoverState.switchCount()),
 		)
 		return
 	}
@@ -547,11 +581,13 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		return
 	}
 	reqModel := modelResult.String()
+	routingModel := service.NormalizeOpenAICompatRequestedModel(reqModel)
 	reqStream := gjson.GetBytes(body, "stream").Bool()
 
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
 	setOpsRequestContext(c, reqModel, reqStream, body)
+	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
 
 	// 绑定错误透传服务，允许 service 层在非 failover 错误场景复用规则。
 	if h.errorPassthroughService != nil {
@@ -601,6 +637,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
+	var rateLimitFailoverState openAI429SilentFailoverState
 
 	for {
 		// 清除上一次迭代的降级模型标记，避免残留影响本次迭代
@@ -611,7 +648,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			apiKey.GroupID,
 			"", // no previous_response_id
 			sessionHash,
-			reqModel,
+			routingModel,
 			failedAccountIDs,
 			service.OpenAIUpstreamTransportAny,
 		)
@@ -626,7 +663,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				if apiKey.Group != nil {
 					defaultModel = apiKey.Group.DefaultMappedModel
 				}
-				if defaultModel != "" && defaultModel != reqModel {
+				if defaultModel != "" && defaultModel != routingModel {
 					reqLog.Info("openai_messages.fallback_to_default_model",
 						zap.String("default_mapped_model", defaultModel),
 					)
@@ -648,6 +685,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					return
 				}
 			} else {
+				if isOpenAI429Failover(lastFailoverErr) && h.waitForOpenAI429SilentFailover(c.Request.Context(), reqLog, &rateLimitFailoverState, failedAccountIDs, "messages_account_select_failed") {
+					continue
+				}
 				if lastFailoverErr != nil {
 					h.handleAnthropicFailoverExhausted(c, lastFailoverErr, streamStarted)
 				} else {
@@ -669,6 +709,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		allowQueueWait := h.shouldAllowOpenAIAccountQueueWait(lastFailoverErr)
 		accountReleaseFunc, acquired, waitSkipped := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, allowQueueWait, reqLog)
 		if !acquired {
+			if waitSkipped && isOpenAI429Failover(lastFailoverErr) && h.waitForOpenAI429SilentFailover(c.Request.Context(), reqLog, &rateLimitFailoverState, failedAccountIDs, "messages_account_slot_wait_skipped") {
+				continue
+			}
 			if waitSkipped && lastFailoverErr != nil {
 				h.handleAnthropicFailoverExhausted(c, lastFailoverErr, streamStarted)
 			}
@@ -678,9 +721,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
 
-		// 仅在调度时实际触发了降级（原模型无可用账号、改用默认模型重试成功）时，
-		// 才将降级模型传给 Forward 层做模型替换；否则保持用户请求的原始模型。
-		defaultMappedModel := c.GetString("openai_messages_fallback_model")
+		// Forward 层需要始终拿到 group 默认映射模型，这样未命中账号级映射的
+		// Claude 兼容模型才不会在后续 Codex 规范化中意外退化到 gpt-5.1。
+		defaultMappedModel := resolveOpenAIForwardDefaultMappedModel(apiKey, c.GetString("openai_messages_fallback_model"))
 		result, err := h.gatewayService.ForwardAsAnthropic(c.Request.Context(), c, account, body, promptCacheKey, defaultMappedModel)
 
 		forwardDurationMs := time.Since(forwardStart).Milliseconds()
@@ -701,7 +744,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			if errors.As(err, &failoverErr) {
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				// 池模式：同账号重试
-				if failoverErr.RetryableOnSameAccount {
+				if shouldRetrySameOpenAIAccount(failoverErr) {
 					retryLimit := account.GetPoolModeRetryCount()
 					if sameAccountRetryCount[account.ID] < retryLimit {
 						sameAccountRetryCount[account.ID]++
@@ -722,6 +765,22 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				h.gatewayService.RecordOpenAIAccountSwitch()
 				failedAccountIDs[account.ID] = struct{}{}
 				lastFailoverErr = failoverErr
+				if rateLimitFailoverState.noteSwitch(failoverErr, time.Now()) {
+					remaining := rateLimitFailoverState.remaining(time.Now())
+					if remaining <= 0 {
+						h.handleAnthropicFailoverExhausted(c, failoverErr, streamStarted)
+						return
+					}
+					reqLog.Warn("openai_messages.upstream_failover_switching",
+						zap.Int64("account_id", account.ID),
+						zap.Int("upstream_status", failoverErr.StatusCode),
+						zap.Int("switch_count", switchCount+rateLimitFailoverState.switchCount()),
+						zap.Bool("silent_rate_limit_failover", true),
+						zap.Int("rate_limit_switch_count", rateLimitFailoverState.switchCount()),
+						zap.Int64("rate_limit_budget_remaining_ms", remaining.Milliseconds()),
+					)
+					continue
+				}
 				if switchCount >= maxAccountSwitches {
 					h.handleAnthropicFailoverExhausted(c, failoverErr, streamStarted)
 					return
@@ -730,7 +789,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				reqLog.Warn("openai_messages.upstream_failover_switching",
 					zap.Int64("account_id", account.ID),
 					zap.Int("upstream_status", failoverErr.StatusCode),
-					zap.Int("switch_count", switchCount),
+					zap.Int("switch_count", switchCount+rateLimitFailoverState.switchCount()),
 					zap.Int("max_switches", maxAccountSwitches),
 				)
 				continue
@@ -780,7 +839,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		})
 		reqLog.Debug("openai_messages.request_completed",
 			zap.Int64("account_id", account.ID),
-			zap.Int("switch_count", switchCount),
+			zap.Int("switch_count", switchCount+rateLimitFailoverState.switchCount()),
 		)
 		return
 	}
@@ -1126,6 +1185,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		zap.String("previous_response_id_kind", previousResponseIDKind),
 	)
 	setOpsRequestContext(c, reqModel, true, firstMessage)
+	setOpsEndpointContext(c, "", int16(service.RequestTypeWSV2))
 
 	var currentUserRelease func()
 	var currentAccountRelease func()

@@ -41,6 +41,12 @@ var codexModelMap = map[string]string{
 	"gpt-5.2-codex-medium":       "gpt-5.2-codex",
 	"gpt-5.2-codex-high":         "gpt-5.2-codex",
 	"gpt-5.2-codex-xhigh":        "gpt-5.2-codex",
+	"gpt-5.3":                    "gpt-5.3-codex",
+	"gpt-5.3-none":               "gpt-5.3-codex",
+	"gpt-5.3-low":                "gpt-5.3-codex",
+	"gpt-5.3-medium":             "gpt-5.3-codex",
+	"gpt-5.3-high":               "gpt-5.3-codex",
+	"gpt-5.3-xhigh":              "gpt-5.3-codex",
 	"gpt-5.3-codex":              "gpt-5.3-codex",
 	"gpt-5.3-codex-low":          "gpt-5.3-codex",
 	"gpt-5.3-codex-medium":       "gpt-5.3-codex",
@@ -59,6 +65,7 @@ var codexModelMap = map[string]string{
 	"gpt-5.4-xhigh":              "gpt-5.4",
 	"gpt-5.4-chat-latest":        "gpt-5.4",
 	"gpt-5.4-mini":               "gpt-5.4-mini",
+	"gpt-5.4-nano":               "gpt-5.4-nano",
 }
 
 type codexTransformResult struct {
@@ -221,7 +228,9 @@ func normalizeCodexModel(model string) string {
 	if strings.Contains(normalized, "gpt-5.4-mini") || strings.Contains(normalized, "gpt 5.4 mini") {
 		return "gpt-5.4-mini"
 	}
-
+	if strings.Contains(normalized, "gpt-5.4-nano") || strings.Contains(normalized, "gpt 5.4 nano") {
+		return "gpt-5.4-nano"
+	}
 	if strings.Contains(normalized, "gpt-5.4") || strings.Contains(normalized, "gpt 5.4") {
 		return "gpt-5.4"
 	}
@@ -257,6 +266,12 @@ func normalizeCodexModel(model string) string {
 	}
 	if normalized == "gpt-5" || normalized == "gpt 5" {
 		return "gpt-5"
+	}
+	// 非 OpenAI 家族模型（不含 gpt/codex 标识，如 claude-*）回落到 gpt-5.1，
+	// 避免把外部模型原样透传到 codex 上游而报错；
+	// 未识别的 gpt/codex 变体（如 gpt-5-pro/gpt-4o）保持原样，不做静默 remap。
+	if !strings.Contains(normalized, "gpt") && !strings.Contains(normalized, "codex") {
+		return "gpt-5.1"
 	}
 
 	return normalized

@@ -55,4 +55,13 @@ describe('useModelWhitelist', () => {
       'gpt-5.4-mini': 'gpt-5.4-mini'
     })
   })
+
+  it('whitelist keeps GPT-5.4 mini and nano exact mappings', () => {
+    const mapping = buildModelMappingObject('whitelist', ['gpt-5.4-mini', 'gpt-5.4-nano'], [])
+
+    expect(mapping).toEqual({
+      'gpt-5.4-mini': 'gpt-5.4-mini',
+      'gpt-5.4-nano': 'gpt-5.4-nano'
+    })
+  })
 })

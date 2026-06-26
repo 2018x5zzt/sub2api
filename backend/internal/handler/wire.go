@@ -30,33 +30,35 @@ func ProvideAdminHandlers(
 	usageHandler *admin.UsageHandler,
 	userAttributeHandler *admin.UserAttributeHandler,
 	errorPassthroughHandler *admin.ErrorPassthroughHandler,
+	tlsFingerprintProfileHandler *admin.TLSFingerprintProfileHandler,
 	apiKeyHandler *admin.AdminAPIKeyHandler,
 	scheduledTestHandler *admin.ScheduledTestHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
-		Dashboard:        dashboardHandler,
-		User:             userHandler,
-		Group:            groupHandler,
-		Account:          accountHandler,
-		Announcement:     announcementHandler,
-		DataManagement:   dataManagementHandler,
-		Backup:           backupHandler,
-		OAuth:            oauthHandler,
-		OpenAIOAuth:      openaiOAuthHandler,
-		GeminiOAuth:      geminiOAuthHandler,
-		AntigravityOAuth: antigravityOAuthHandler,
-		Proxy:            proxyHandler,
-		Redeem:           redeemHandler,
-		Promo:            promoHandler,
-		Setting:          settingHandler,
-		Ops:              opsHandler,
-		System:           systemHandler,
-		Subscription:     subscriptionHandler,
-		Usage:            usageHandler,
-		UserAttribute:    userAttributeHandler,
-		ErrorPassthrough: errorPassthroughHandler,
-		APIKey:           apiKeyHandler,
-		ScheduledTest:    scheduledTestHandler,
+		Dashboard:             dashboardHandler,
+		User:                  userHandler,
+		Group:                 groupHandler,
+		Account:               accountHandler,
+		Announcement:          announcementHandler,
+		DataManagement:        dataManagementHandler,
+		Backup:                backupHandler,
+		OAuth:                 oauthHandler,
+		OpenAIOAuth:           openaiOAuthHandler,
+		GeminiOAuth:           geminiOAuthHandler,
+		AntigravityOAuth:      antigravityOAuthHandler,
+		Proxy:                 proxyHandler,
+		Redeem:                redeemHandler,
+		Promo:                 promoHandler,
+		Setting:               settingHandler,
+		Ops:                   opsHandler,
+		System:                systemHandler,
+		Subscription:          subscriptionHandler,
+		Usage:                 usageHandler,
+		UserAttribute:         userAttributeHandler,
+		ErrorPassthrough:      errorPassthroughHandler,
+		TLSFingerprintProfile: tlsFingerprintProfileHandler,
+		APIKey:                apiKeyHandler,
+		ScheduledTest:         scheduledTestHandler,
 	}
 }
 
@@ -68,6 +70,17 @@ func ProvideSystemHandler(updateService *service.UpdateService, lockService *ser
 // ProvideSettingHandler creates SettingHandler with version from BuildInfo
 func ProvideSettingHandler(settingService *service.SettingService, buildInfo BuildInfo) *SettingHandler {
 	return NewSettingHandler(settingService, buildInfo.Version)
+}
+
+// ProvideAPIKeyHandler wires BillingService into APIKeyHandler for user-facing model pricing.
+func ProvideAPIKeyHandler(
+	apiKeyService *service.APIKeyService,
+	accountRepo service.AccountRepository,
+	billingService *service.BillingService,
+) *APIKeyHandler {
+	h := NewAPIKeyHandler(apiKeyService, accountRepo)
+	h.SetBillingService(billingService)
+	return h
 }
 
 // ProvideHandlers creates the Handlers struct
@@ -112,7 +125,7 @@ var ProviderSet = wire.NewSet(
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,
-	NewAPIKeyHandler,
+	ProvideAPIKeyHandler,
 	NewUsageHandler,
 	NewRedeemHandler,
 	NewSubscriptionHandler,
@@ -145,6 +158,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewUsageHandler,
 	admin.NewUserAttributeHandler,
 	admin.NewErrorPassthroughHandler,
+	admin.NewTLSFingerprintProfileHandler,
 	admin.NewAdminAPIKeyHandler,
 	admin.NewScheduledTestHandler,
 

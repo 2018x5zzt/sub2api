@@ -23,8 +23,9 @@ import (
 
 // APIKeyHandler handles API key-related requests
 type APIKeyHandler struct {
-	apiKeyService *service.APIKeyService
-	accountRepo   service.AccountRepository
+	apiKeyService  *service.APIKeyService
+	accountRepo    service.AccountRepository
+	billingService *service.BillingService
 }
 
 // NewAPIKeyHandler creates a new APIKeyHandler
@@ -33,6 +34,13 @@ func NewAPIKeyHandler(apiKeyService *service.APIKeyService, accountRepo service.
 		apiKeyService: apiKeyService,
 		accountRepo:   accountRepo,
 	}
+}
+
+func (h *APIKeyHandler) SetBillingService(billingService *service.BillingService) {
+	if h == nil {
+		return
+	}
+	h.billingService = billingService
 }
 
 // CreateAPIKeyRequest represents the create API key request payload
@@ -309,6 +317,13 @@ func (h *APIKeyHandler) GetAvailableGroupModels(c *gin.Context) {
 		return
 	}
 
+	userRates, err := h.apiKeyService.GetUserGroupRates(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	pricingCache := make(map[string]cachedModelPricing)
 	out := make([]dto.GroupModelCatalog, 0, len(groups))
 	for i := range groups {
 		models, source, err := h.getGroupSupportedModels(c.Request.Context(), &groups[i])
@@ -316,13 +331,108 @@ func (h *APIKeyHandler) GetAvailableGroupModels(c *gin.Context) {
 			response.ErrorFrom(c, err)
 			return
 		}
+		effectiveRateMultiplier, userRateMultiplier := resolveGroupRateMultiplier(&groups[i], userRates)
 		out = append(out, dto.GroupModelCatalog{
-			Group:  *dto.GroupFromService(&groups[i]),
-			Models: models,
-			Source: source,
+			Group:                   *dto.GroupFromService(&groups[i]),
+			Models:                  h.attachSupportedModelPricing(models, effectiveRateMultiplier, pricingCache),
+			Source:                  source,
+			EffectiveRateMultiplier: effectiveRateMultiplier,
+			UserRateMultiplier:      userRateMultiplier,
 		})
 	}
 	response.Success(c, out)
+}
+
+type cachedModelPricing struct {
+	pricing *service.ModelPricing
+	loaded  bool
+}
+
+func resolveGroupRateMultiplier(group *service.Group, userRates map[int64]float64) (float64, *float64) {
+	if group == nil {
+		return 1, nil
+	}
+
+	effective := group.RateMultiplier
+	if len(userRates) == 0 {
+		return effective, nil
+	}
+
+	userRate, ok := userRates[group.ID]
+	if !ok {
+		return effective, nil
+	}
+
+	rateCopy := userRate
+	return userRate, &rateCopy
+}
+
+func (h *APIKeyHandler) attachSupportedModelPricing(
+	models []dto.SupportedModel,
+	effectiveRateMultiplier float64,
+	pricingCache map[string]cachedModelPricing,
+) []dto.SupportedModel {
+	if len(models) == 0 {
+		return models
+	}
+
+	out := make([]dto.SupportedModel, 0, len(models))
+	for _, model := range models {
+		modelCopy := model
+		modelCopy.Pricing = h.buildSupportedModelPricing(model.ID, effectiveRateMultiplier, pricingCache)
+		out = append(out, modelCopy)
+	}
+	return out
+}
+
+func (h *APIKeyHandler) buildSupportedModelPricing(
+	modelID string,
+	effectiveRateMultiplier float64,
+	pricingCache map[string]cachedModelPricing,
+) *dto.SupportedModelPricing {
+	if h == nil || h.billingService == nil || modelID == "" {
+		return nil
+	}
+
+	entry, ok := pricingCache[modelID]
+	if !ok || !entry.loaded {
+		pricing, err := h.billingService.GetModelPricing(modelID)
+		if err == nil {
+			entry.pricing = pricing
+		}
+		entry.loaded = true
+		pricingCache[modelID] = entry
+	}
+
+	return supportedModelPricingFromService(entry.pricing, effectiveRateMultiplier)
+}
+
+func supportedModelPricingFromService(
+	pricing *service.ModelPricing,
+	effectiveRateMultiplier float64,
+) *dto.SupportedModelPricing {
+	if pricing == nil {
+		return nil
+	}
+
+	hasInput := pricing.InputPricePerToken > 0
+	hasOutput := pricing.OutputPricePerToken > 0
+	if !hasInput && !hasOutput {
+		return nil
+	}
+
+	const tokensPerMillion = 1_000_000.0
+
+	out := &dto.SupportedModelPricing{Currency: "USD"}
+	if hasInput {
+		v := pricing.InputPricePerToken * effectiveRateMultiplier * tokensPerMillion
+		out.InputPricePerMillionTokens = &v
+	}
+	if hasOutput {
+		v := pricing.OutputPricePerToken * effectiveRateMultiplier * tokensPerMillion
+		out.OutputPricePerMillionTokens = &v
+	}
+	return out
 }
 
 // GetUserGroupRates 获取当前用户的专属分组倍率配置
@@ -345,11 +455,12 @@ func (h *APIKeyHandler) GetUserGroupRates(c *gin.Context) {
 
 func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *service.Group) ([]dto.SupportedModel, string, error) {
 	if group == nil {
-		return nil, "mapping", nil
+		return nil, "default", nil
 	}
 
-	if h.accountRepo == nil {
-		return nil, "mapping", nil
+	defaultModels := defaultModelsForGroup(group)
+	if group.Platform == service.PlatformAntigravity || group.Platform == service.PlatformSora || h.accountRepo == nil {
+		return defaultModels, "default", nil
 	}
 
 	accounts, err := h.accountRepo.ListSchedulableByGroupID(ctx, group.ID)
@@ -357,57 +468,58 @@ func (h *APIKeyHandler) getGroupSupportedModels(ctx context.Context, group *serv
 		return nil, "", err
 	}
 
-	mappedModelIDs := collectGroupModelIDs(group.Platform, accounts)
-	catalog := staticCatalogModelsForPlatform(group.Platform)
-	mappedModelIDs = filterMappedModelIDsByCatalog(group.Platform, mappedModelIDs)
-	return buildMappedModels(mappedModelIDs, catalog), "mapping", nil
+	mappedModelIDs, hasAnyMapping, includeDefaults := collectGroupModelIDs(group.Platform, accounts, defaultModels)
+	if !hasAnyMapping {
+		return defaultModels, "default", nil
+	}
+
+	if includeDefaults {
+		return mergeDefaultAndMappedModels(defaultModels, mappedModelIDs), "mixed", nil
+	}
+
+	return buildMappedModels(mappedModelIDs, defaultModels), "mapping", nil
 }
 
-func staticCatalogModelsForPlatform(platform string) []dto.SupportedModel {
-	switch platform {
+func defaultModelsForGroup(group *service.Group) []dto.SupportedModel {
+	if group == nil {
+		return nil
+	}
+
+	switch group.Platform {
 	case service.PlatformOpenAI:
 		return supportedModelsFromOpenAI(openai.DefaultModels)
+	case service.PlatformGemini:
+		return supportedModelsFromGemini(geminicli.DefaultModels)
+	case service.PlatformAntigravity:
+		return filterAntigravityModelsByScopes(
+			supportedModelsFromAntigravity(antigravity.DefaultModels()),
+			group.SupportedModelScopes,
+		)
+	case service.PlatformSora:
+		return supportedModelsFromOpenAI(service.DefaultSoraModels(nil))
 	default:
-		return nil
+		return supportedModelsFromClaude(claude.DefaultModels)
 	}
 }
 
-func filterMappedModelIDsByCatalog(platform string, modelIDs []string) []string {
-	if len(modelIDs) == 0 {
-		return nil
-	}
-
-	switch platform {
-	case service.PlatformOpenAI:
-		filtered := make([]string, 0, len(modelIDs))
-		for _, modelID := range modelIDs {
-			if openai.IsDefaultModel(modelID) {
-				filtered = append(filtered, modelID)
-			}
-		}
-		if len(filtered) == 0 {
-			return nil
-		}
-		return filtered
-	default:
-		return modelIDs
-	}
-}
-
-func collectGroupModelIDs(platform string, accounts []service.Account) []string {
+func collectGroupModelIDs(platform string, accounts []service.Account, defaults []dto.SupportedModel) ([]string, bool, bool) {
 	modelSet := make(map[string]struct{})
+	hasAnyMapping := false
+	includeDefaults := false
 
 	for i := range accounts {
 		account := &accounts[i]
-		mapping := configuredModelMapping(account)
-		if accountUsesImplicitModelCatalog(platform, account, mapping) {
+		mapping := account.GetModelMapping()
+		if accountUsesDefaultModels(platform, account, mapping) {
+			includeDefaults = true
 			continue
 		}
-		addConcreteMappedModelIDs(modelSet, mapping)
+		hasAnyMapping = true
+		addMappedModelIDs(modelSet, mapping, defaults)
 	}
 
-	if len(modelSet) == 0 {
-		return nil
+	if !hasAnyMapping {
+		return nil, false, includeDefaults
 	}
 
 	models := make([]string, 0, len(modelSet))
@@ -415,34 +527,10 @@ func collectGroupModelIDs(platform string, accounts []service.Account) []string 
 		models = append(models, modelID)
 	}
 	sort.Strings(models)
-	return models
+	return models, true, includeDefaults
 }
 
-func configuredModelMapping(account *service.Account) map[string]string {
-	if account == nil || account.Credentials == nil {
-		return nil
-	}
-
-	rawMapping, _ := account.Credentials["model_mapping"].(map[string]any)
-	if len(rawMapping) == 0 {
-		return nil
-	}
-
-	mapping := make(map[string]string, len(rawMapping))
-	for selector, target := range rawMapping {
-		targetModel, ok := target.(string)
-		if !ok {
-			continue
-		}
-		mapping[selector] = targetModel
-	}
-	if len(mapping) == 0 {
-		return nil
-	}
-	return mapping
-}
-
-func accountUsesImplicitModelCatalog(platform string, account *service.Account, mapping map[string]string) bool {
+func accountUsesDefaultModels(platform string, account *service.Account, mapping map[string]string) bool {
 	if account == nil {
 		return false
 	}
@@ -460,14 +548,45 @@ func accountUsesImplicitModelCatalog(platform string, account *service.Account, 
 	}
 }
 
-func addConcreteMappedModelIDs(modelSet map[string]struct{}, mapping map[string]string) {
-	for selector := range mapping {
-		modelID := strings.TrimSpace(selector)
-		if modelID == "" || strings.Contains(modelID, "*") {
+func addMappedModelIDs(modelSet map[string]struct{}, mapping map[string]string, defaults []dto.SupportedModel) {
+	for modelID := range mapping {
+		expanded := expandMappedModelSelector(modelID, defaults)
+		if len(expanded) == 0 {
+			modelSet[modelID] = struct{}{}
 			continue
 		}
-		modelSet[modelID] = struct{}{}
+		for _, expandedID := range expanded {
+			modelSet[expandedID] = struct{}{}
+		}
 	}
+}
+
+func expandMappedModelSelector(selector string, defaults []dto.SupportedModel) []string {
+	selector = strings.TrimSpace(selector)
+	if selector == "" {
+		return nil
+	}
+	if !strings.Contains(selector, "*") {
+		return []string{selector}
+	}
+
+	expanded := make([]string, 0, len(defaults))
+	for _, model := range defaults {
+		if matchModelSelector(selector, model.ID) {
+			expanded = append(expanded, model.ID)
+		}
+	}
+	if len(expanded) == 0 {
+		return nil
+	}
+	return expanded
+}
+
+func matchModelSelector(selector, modelID string) bool {
+	if strings.HasSuffix(selector, "*") {
+		return strings.HasPrefix(modelID, strings.TrimSuffix(selector, "*"))
+	}
+	return selector == modelID
 }
 
 func buildMappedModels(mappedModelIDs []string, defaults []dto.SupportedModel) []dto.SupportedModel {
@@ -551,10 +670,8 @@ func supportedModelsFromOpenAI(models []openai.Model) []dto.SupportedModel {
 			displayName = model.ID
 		}
 		out = append(out, dto.SupportedModel{
-			ID:                 model.ID,
-			DisplayName:        displayName,
-			InputPricePerMTok:  model.InputPricePerMTok,
-			OutputPricePerMTok: model.OutputPricePerMTok,
+			ID:          model.ID,
+			DisplayName: displayName,
 		})
 	}
 	return out

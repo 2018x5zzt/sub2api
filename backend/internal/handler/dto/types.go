@@ -107,16 +107,23 @@ type Group struct {
 }
 
 type SupportedModel struct {
-	ID                 string  `json:"id"`
-	DisplayName        string  `json:"display_name"`
-	InputPricePerMTok  float64 `json:"input_price_per_mtoken,omitempty"`
-	OutputPricePerMTok float64 `json:"output_price_per_mtoken,omitempty"`
+	ID          string                 `json:"id"`
+	DisplayName string                 `json:"display_name"`
+	Pricing     *SupportedModelPricing `json:"pricing,omitempty"`
+}
+
+type SupportedModelPricing struct {
+	Currency                    string   `json:"currency"`
+	InputPricePerMillionTokens  *float64 `json:"input_price_per_million_tokens,omitempty"`
+	OutputPricePerMillionTokens *float64 `json:"output_price_per_million_tokens,omitempty"`
 }
 
 type GroupModelCatalog struct {
-	Group  Group            `json:"group"`
-	Models []SupportedModel `json:"models"`
-	Source string           `json:"source"`
+	Group                   Group            `json:"group"`
+	Models                  []SupportedModel `json:"models"`
+	Source                  string           `json:"source"`
+	EffectiveRateMultiplier float64          `json:"effective_rate_multiplier"`
+	UserRateMultiplier      *float64         `json:"user_rate_multiplier,omitempty"`
 }
 
 // AdminGroup 是管理员接口使用的 group DTO（包含敏感/内部字段）。
@@ -198,7 +205,8 @@ type Account struct {
 
 	// TLS指纹伪装（仅 Anthropic OAuth/SetupToken 账号有效）
 	// 从 extra 字段提取，方便前端显示和编辑
-	EnableTLSFingerprint *bool `json:"enable_tls_fingerprint,omitempty"`
+	EnableTLSFingerprint    *bool  `json:"enable_tls_fingerprint,omitempty"`
+	TLSFingerprintProfileID *int64 `json:"tls_fingerprint_profile_id,omitempty"`
 
 	// 会话ID伪装（仅 Anthropic OAuth/SetupToken 账号有效）
 	// 启用后将在15分钟内固定 metadata.user_id 中的 session ID
@@ -209,6 +217,10 @@ type Account struct {
 	// 启用后将所有 cache creation tokens 归入指定的 TTL 类型计费
 	CacheTTLOverrideEnabled *bool   `json:"cache_ttl_override_enabled,omitempty"`
 	CacheTTLOverrideTarget  *string `json:"cache_ttl_override_target,omitempty"`
+
+	// 自定义 Base URL 中继转发（仅 Anthropic OAuth/SetupToken 账号有效）
+	CustomBaseURLEnabled *bool   `json:"custom_base_url_enabled,omitempty"`
+	CustomBaseURL        *string `json:"custom_base_url,omitempty"`
 
 	// API Key 账号配额限制
 	QuotaLimit       *float64 `json:"quota_limit,omitempty"`
@@ -348,9 +360,6 @@ type UsageLog struct {
 	AccountID int64  `json:"account_id"`
 	RequestID string `json:"request_id"`
 	Model     string `json:"model"`
-	// UpstreamModel is the actual model sent to the upstream provider after mapping.
-	// Omitted when no mapping was applied (requested model was used as-is).
-	UpstreamModel *string `json:"upstream_model,omitempty"`
 	// ServiceTier records the OpenAI service tier used for billing, e.g. "priority" / "flex".
 	ServiceTier *string `json:"service_tier,omitempty"`
 	// ReasoningEffort is the request's reasoning effort level.
@@ -409,6 +418,10 @@ type UsageLog struct {
 // AdminUsageLog 是管理员接口使用的 usage log DTO（包含管理员字段）。
 type AdminUsageLog struct {
 	UsageLog
+
+	// UpstreamModel is the actual model sent to the upstream provider after mapping.
+	// Omitted when no mapping was applied (requested model was used as-is).
+	UpstreamModel *string `json:"upstream_model,omitempty"`
 
 	// AccountRateMultiplier 账号计费倍率快照（nil 表示按 1.0 处理）
 	AccountRateMultiplier *float64 `json:"account_rate_multiplier"`

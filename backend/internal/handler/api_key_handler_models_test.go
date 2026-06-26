@@ -2,12 +2,18 @@ package handler
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/stretchr/testify/require"
 )
 
-func TestCollectGroupModelIDs_IgnoresWildcardMappingSelectors(t *testing.T) {
+func TestCollectGroupModelIDs_ExpandsWildcardMappingSelectors(t *testing.T) {
+	defaults := supportedModelsFromOpenAI(openai.DefaultModels)
 	accounts := []service.Account{
 		{
 			Platform: service.PlatformOpenAI,
@@ -20,14 +26,26 @@ func TestCollectGroupModelIDs_IgnoresWildcardMappingSelectors(t *testing.T) {
 		},
 	}
 
-	modelIDs := collectGroupModelIDs(service.PlatformOpenAI, accounts)
-	var want []string
+	modelIDs, hasAnyMapping, includeDefaults := collectGroupModelIDs(service.PlatformOpenAI, accounts, defaults)
+	if !hasAnyMapping {
+		t.Fatal("expected wildcard mapping to be detected")
+	}
+	if includeDefaults {
+		t.Fatal("did not expect wildcard-only API key account to force default models")
+	}
+
+	want := make([]string, 0, len(defaults))
+	for _, model := range defaults {
+		want = append(want, model.ID)
+	}
+	sort.Strings(want)
 	if !reflect.DeepEqual(modelIDs, want) {
 		t.Fatalf("collectGroupModelIDs() = %v, want %v", modelIDs, want)
 	}
 }
 
 func TestCollectGroupModelIDs_OpenAIPassthroughIgnoresStaleMappings(t *testing.T) {
+	defaults := supportedModelsFromOpenAI(openai.DefaultModels)
 	accounts := []service.Account{
 		{
 			Platform: service.PlatformOpenAI,
@@ -43,13 +61,20 @@ func TestCollectGroupModelIDs_OpenAIPassthroughIgnoresStaleMappings(t *testing.T
 		},
 	}
 
-	modelIDs := collectGroupModelIDs(service.PlatformOpenAI, accounts)
-	if len(modelIDs) != 0 {
+	modelIDs, hasAnyMapping, includeDefaults := collectGroupModelIDs(service.PlatformOpenAI, accounts, defaults)
+	if hasAnyMapping {
 		t.Fatalf("expected passthrough account mappings to be ignored, got %v", modelIDs)
+	}
+	if !includeDefaults {
+		t.Fatal("expected passthrough account to fall back to default models")
+	}
+	if len(modelIDs) != 0 {
+		t.Fatalf("expected no explicit mapped IDs, got %v", modelIDs)
 	}
 }
 
-func TestCollectGroupModelIDs_OnlyKeepsConcreteModelsFromExplicitAPIKeyMappings(t *testing.T) {
+func TestCollectGroupModelIDs_DefaultAccountsKeepDefaultsAlongsideMappedModels(t *testing.T) {
+	defaults := supportedModelsFromClaude(claude.DefaultModels)
 	accounts := []service.Account{
 		{
 			Platform: service.PlatformAnthropic,
@@ -65,27 +90,72 @@ func TestCollectGroupModelIDs_OnlyKeepsConcreteModelsFromExplicitAPIKeyMappings(
 			Type:     service.AccountTypeAPIKey,
 			Credentials: map[string]any{
 				"model_mapping": map[string]any{
-					"claude-*":              "wildcard-ignored",
 					"claude-preview-custom": "upstream-preview",
 				},
 			},
 		},
 	}
 
-	modelIDs := collectGroupModelIDs(service.PlatformAnthropic, accounts)
-	want := []string{"claude-preview-custom"}
-	if !reflect.DeepEqual(modelIDs, want) {
-		t.Fatalf("collectGroupModelIDs() = %v, want %v", modelIDs, want)
+	modelIDs, hasAnyMapping, includeDefaults := collectGroupModelIDs(service.PlatformAnthropic, accounts, defaults)
+	if !hasAnyMapping {
+		t.Fatal("expected API key mapping to be detected")
+	}
+	if !includeDefaults {
+		t.Fatal("expected OAuth account to keep default models visible")
+	}
+
+	merged := mergeDefaultAndMappedModels(defaults, modelIDs)
+	got := make([]string, 0, len(merged))
+	for _, model := range merged {
+		got = append(got, model.ID)
+	}
+
+	want := make([]string, 0, len(defaults)+1)
+	for _, model := range defaults {
+		want = append(want, model.ID)
+	}
+	want = append(want, "claude-preview-custom")
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("mergeDefaultAndMappedModels() = %v, want %v", got, want)
 	}
 }
 
-func TestFilterMappedModelIDsByCatalog_OpenAIOnlyKeepsCatalogModels(t *testing.T) {
-	modelIDs := []string{"gpt-5.4", "legacy-gpt-5-preview"}
-
-	got := filterMappedModelIDsByCatalog(service.PlatformOpenAI, modelIDs)
-	want := []string{"gpt-5.4"}
-
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("filterMappedModelIDsByCatalog() = %v, want %v", got, want)
+func TestResolveGroupRateMultiplier_UsesUserOverride(t *testing.T) {
+	group := &service.Group{
+		ID:             42,
+		RateMultiplier: 1.8,
 	}
+
+	effective, userRate := resolveGroupRateMultiplier(group, map[int64]float64{
+		42: 1.25,
+	})
+
+	require.InDelta(t, 1.25, effective, 1e-12)
+	require.NotNil(t, userRate)
+	require.InDelta(t, 1.25, *userRate, 1e-12)
+}
+
+func TestSupportedModelPricingFromService_UsesEffectiveRateMultiplier(t *testing.T) {
+	h := NewAPIKeyHandler(nil, nil)
+	h.SetBillingService(service.NewBillingService(&config.Config{}, nil))
+
+	pricing := h.buildSupportedModelPricing("gpt-5.4", 1.5, map[string]cachedModelPricing{})
+	require.NotNil(t, pricing)
+	require.Equal(t, "USD", pricing.Currency)
+	require.NotNil(t, pricing.InputPricePerMillionTokens)
+	require.NotNil(t, pricing.OutputPricePerMillionTokens)
+	require.InDelta(t, 3.75, *pricing.InputPricePerMillionTokens, 1e-9)
+	require.InDelta(t, 22.5, *pricing.OutputPricePerMillionTokens, 1e-9)
+}
+
+func TestSupportedModelPricingFromService_ZeroMultiplierShowsZeroEffectivePrice(t *testing.T) {
+	h := NewAPIKeyHandler(nil, nil)
+	h.SetBillingService(service.NewBillingService(&config.Config{}, nil))
+
+	pricing := h.buildSupportedModelPricing("gpt-5.4-mini", 0, map[string]cachedModelPricing{})
+	require.NotNil(t, pricing)
+	require.NotNil(t, pricing.InputPricePerMillionTokens)
+	require.NotNil(t, pricing.OutputPricePerMillionTokens)
+	require.InDelta(t, 0, *pricing.InputPricePerMillionTokens, 1e-12)
+	require.InDelta(t, 0, *pricing.OutputPricePerMillionTokens, 1e-12)
 }
