@@ -3844,15 +3844,14 @@ func collectOpenAIPassthroughTimeoutHeaders(h http.Header) []string {
 }
 
 func buildSyntheticOpenAIErrorResponseBody(message, code string) []byte {
-	payload := map[string]any{
-		"error": map[string]any{
-			"type":    "upstream_error",
-			"message": message,
-		},
+	errObj := map[string]any{
+		"type":    "upstream_error",
+		"message": message,
 	}
 	if strings.TrimSpace(code) != "" {
-		payload["error"].(map[string]any)["code"] = code
+		errObj["code"] = code
 	}
+	payload := map[string]any{"error": errObj}
 	raw, err := json.Marshal(payload)
 	if err != nil {
 		return []byte(message)
@@ -3912,18 +3911,6 @@ func wrapRecoverableOpenAIPassthroughError(c *gin.Context, account *Account, res
 		ResponseHeaders:        responseHeaders,
 		RetryableOnSameAccount: account != nil && account.IsPoolMode(),
 	}
-}
-
-func shouldDelayOpenAIPassthroughPrelude(line string) bool {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" {
-		return true
-	}
-	lower := strings.ToLower(trimmed)
-	return strings.HasPrefix(lower, ":") ||
-		strings.HasPrefix(lower, "event:") ||
-		strings.HasPrefix(lower, "id:") ||
-		strings.HasPrefix(lower, "retry:")
 }
 
 type openaiStreamingResultPassthrough struct {

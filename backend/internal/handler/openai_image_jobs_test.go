@@ -388,7 +388,9 @@ func TestOpenAIGatewayHandlerImageJobStatusReturnsSucceededResponse(t *testing.T
 	data, ok := response["data"].([]any)
 	require.True(t, ok)
 	require.Len(t, data, 1)
-	require.Equal(t, "https://example.test/a.png", data[0].(map[string]any)["url"])
+	first, ok := data[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "https://example.test/a.png", first["url"])
 }
 
 func TestOpenAIGatewayHandlerImageJobStatusHidesOtherOwnersJobs(t *testing.T) {

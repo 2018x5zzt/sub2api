@@ -314,19 +314,19 @@ func isOpenAIImageJobRetryableStatus(status int) bool {
 }
 
 func (s *openAIImageJobStore) setRunning(id string) bool {
-	now := s.now()
 	if s == nil || s.persistence == nil {
 		return false
 	}
+	now := s.now()
 	ok, err := s.persistence.SetRunning(context.Background(), id, now, s.ttl)
 	return err == nil && ok
 }
 
 func (s *openAIImageJobStore) complete(id string, result openAIImageJobResult) {
-	now := s.now()
 	if s == nil || s.persistence == nil {
 		return
 	}
+	now := s.now()
 	status := openAIImageJobStatusFailed
 	if result.StatusCode >= 200 && result.StatusCode < 300 {
 		status = openAIImageJobStatusSucceeded
