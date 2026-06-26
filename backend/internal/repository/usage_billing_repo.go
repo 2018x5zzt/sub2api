@@ -112,6 +112,34 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		}
 	}
 
+	// xlab 产品订阅：从产品订阅额度扣减；溢出部分按比例回退到用户余额。
+	if cmd.ProductDebitCost > 0 && cmd.ProductSubscriptionID != nil {
+		productDebitApplied := cmd.ProductDebitCost
+		var err error
+		if cmd.ProductGroupID > 0 {
+			productDebitApplied, err = splitAndIncrementProductSubscriptionUsage(ctx, tx, cmd.UserID, *cmd.ProductSubscriptionID, cmd.ProductGroupID, cmd.ProductDebitCost)
+		} else {
+			err = advanceAndIncrementProductSubscriptionUsage(ctx, tx, *cmd.ProductSubscriptionID, cmd.ProductDebitCost)
+		}
+		result.ProductDebitApplied = &productDebitApplied
+		if err != nil {
+			if cmd.ProductBalanceFallbackCost <= 0 || !errors.Is(err, service.ErrDailyLimitExceeded) {
+				return err
+			}
+		}
+		if cmd.ProductBalanceFallbackCost > 0 && productDebitApplied < cmd.ProductDebitCost {
+			fallbackCost := proportionalProductBalanceFallbackCost(cmd.ProductBalanceFallbackCost, cmd.ProductDebitCost, productDebitApplied)
+			if fallbackCost > 0 {
+				newBalance, derr := deductUsageBillingBalance(ctx, tx, cmd.UserID, fallbackCost)
+				if derr != nil {
+					return derr
+				}
+				result.NewBalance = &newBalance
+				result.ProductBalanceCost = fallbackCost
+			}
+		}
+	}
+
 	if cmd.BalanceCost > 0 {
 		newBalance, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
 		if err != nil {
@@ -143,6 +171,14 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	return nil
+}
+
+// proportionalProductBalanceFallbackCost 按未被产品额度覆盖的比例，计算应回退到余额的费用。
+func proportionalProductBalanceFallbackCost(fallbackCost, productDebitCost, productDebitApplied float64) float64 {
+	if fallbackCost <= 0 || productDebitCost <= 0 || productDebitApplied >= productDebitCost {
+		return 0
+	}
+	return fallbackCost * ((productDebitCost - productDebitApplied) / productDebitCost)
 }
 
 func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {
