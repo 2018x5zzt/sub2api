@@ -36,17 +36,12 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		// Business layer ProviderSets
 		repository.ProviderSet,
 		service.ProviderSet,
+		payment.ProviderSet,
 		middleware.ProviderSet,
 		handler.ProviderSet,
 
 		// Server layer ProviderSet
 		server.ProviderSet,
-
-		// Payment providers（ProvidePaymentConfigService/ProvidePaymentOrderExpiryService 已在 service.ProviderSet 中提供，此处不再重复）
-		payment.ProvideRegistry,
-		payment.ProvideEncryptionKey,
-		payment.ProvideDefaultLoadBalancer,
-		wire.Bind(new(payment.LoadBalancer), new(*payment.DefaultLoadBalancer)),
 
 		// OAuthRefreshAPI 的可变参数 lockTTL（...time.Duration）需要一个 []time.Duration provider；
 		// 传 nil 表示使用其内部默认锁 TTL。
