@@ -8815,16 +8815,16 @@ type RecordUsageInput struct {
 	APIKey             *APIKey
 	User               *User
 	Account            *Account
-	Subscription       *UserSubscription          // 可选：订阅信息
-	ProductSettlement  *ProductSettlementContext  // 可选：xlab 产品订阅结算上下文（缺省时从 ctx 解析）
-	InboundEndpoint    string                     // 入站端点（客户端请求路径）
-	UpstreamEndpoint   string             // 上游端点（标准化后的上游路径）
-	UserAgent          string             // 请求的 User-Agent
-	IPAddress          string             // 请求的客户端 IP 地址
-	RequestPayloadHash string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
-	ForceCacheBilling  bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
-	APIKeyService      APIKeyQuotaUpdater // 可选：用于更新API Key配额
-	QuotaPlatform      string             // user×platform 配额计量平台：handler 在请求 ctx 内经 QuotaPlatform() 算定后传入（后扣运行在 worker 池 background ctx 上，取不到 ForcePlatform）
+	Subscription       *UserSubscription         // 可选：订阅信息
+	ProductSettlement  *ProductSettlementContext // 可选：xlab 产品订阅结算上下文（缺省时从 ctx 解析）
+	InboundEndpoint    string                    // 入站端点（客户端请求路径）
+	UpstreamEndpoint   string                    // 上游端点（标准化后的上游路径）
+	UserAgent          string                    // 请求的 User-Agent
+	IPAddress          string                    // 请求的客户端 IP 地址
+	RequestPayloadHash string                    // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
+	ForceCacheBilling  bool                      // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
+	APIKeyService      APIKeyQuotaUpdater        // 可选：用于更新API Key配额
+	QuotaPlatform      string                    // user×platform 配额计量平台：handler 在请求 ctx 内经 QuotaPlatform() 算定后传入（后扣运行在 worker 池 background ctx 上，取不到 ForcePlatform）
 
 	ChannelUsageFields // 渠道映射信息（由 handler 在 Forward 前解析）
 }
