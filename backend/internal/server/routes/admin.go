@@ -73,6 +73,7 @@ func RegisterAdminRoutes(
 
 		// 订阅管理
 		registerSubscriptionRoutes(admin, h)
+		registerSubscriptionProductRoutes(admin, h)
 
 		// 使用记录管理
 		registerUsageRoutes(admin, h)
@@ -548,6 +549,25 @@ func registerSubscriptionRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 	// 用户下的订阅列表
 	admin.GET("/users/:id/subscriptions", h.Admin.Subscription.ListByUser)
+}
+
+// registerSubscriptionProductRoutes 注册 xlab 产品订阅的管理端路由。
+func registerSubscriptionProductRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	admin.GET("/product-subscriptions", h.Admin.SubscriptionProduct.ListAllSubscriptions)
+	admin.PUT("/product-subscriptions/:id/adjust", h.Admin.SubscriptionProduct.AdjustSubscription)
+	admin.POST("/product-subscriptions/:id/reset-quota", h.Admin.SubscriptionProduct.ResetSubscriptionQuota)
+	admin.DELETE("/product-subscriptions/:id", h.Admin.SubscriptionProduct.RevokeSubscription)
+
+	products := admin.Group("/subscription-products")
+	{
+		products.GET("", h.Admin.SubscriptionProduct.List)
+		products.POST("", h.Admin.SubscriptionProduct.Create)
+		products.PUT("/:id", h.Admin.SubscriptionProduct.Update)
+		products.GET("/:id/bindings", h.Admin.SubscriptionProduct.ListBindings)
+		products.PUT("/:id/bindings", h.Admin.SubscriptionProduct.SyncBindings)
+		products.GET("/:id/subscriptions", h.Admin.SubscriptionProduct.ListSubscriptions)
+		products.POST("/:id/assign", h.Admin.SubscriptionProduct.Assign)
+	}
 }
 
 func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
