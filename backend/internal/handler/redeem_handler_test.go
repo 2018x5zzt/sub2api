@@ -402,6 +402,10 @@ func (r *testRedeemUserRepo) BatchAddConcurrency(ctx context.Context, userIDs []
 	return 0, errors.New("not implemented")
 }
 
+func (r *testRedeemUserRepo) GetByIDIncludeDeleted(ctx context.Context, id int64) (*service.User, error) {
+	return r.GetByID(ctx, id)
+}
+
 func (r *testRedeemUserRepo) GetByID(ctx context.Context, id int64) (*service.User, error) {
 	user, ok := r.users[id]
 	if !ok {
