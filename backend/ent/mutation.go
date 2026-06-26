@@ -4811,19 +4811,21 @@ func (m *AccountMutation) ResetEdge(name string) error {
 // AccountGroupMutation represents an operation that mutates the AccountGroup nodes in the graph.
 type AccountGroupMutation struct {
 	config
-	op             Op
-	typ            string
-	priority       *int
-	addpriority    *int
-	created_at     *time.Time
-	clearedFields  map[string]struct{}
-	account        *int64
-	clearedaccount bool
-	group          *int64
-	clearedgroup   bool
-	done           bool
-	oldValue       func(context.Context) (*AccountGroup, error)
-	predicates     []predicate.AccountGroup
+	op                    Op
+	typ                   string
+	priority              *int
+	addpriority           *int
+	billing_multiplier    *float64
+	addbilling_multiplier *float64
+	created_at            *time.Time
+	clearedFields         map[string]struct{}
+	account               *int64
+	clearedaccount        bool
+	group                 *int64
+	clearedgroup          bool
+	done                  bool
+	oldValue              func(context.Context) (*AccountGroup, error)
+	predicates            []predicate.AccountGroup
 }
 
 var _ ent.Mutation = (*AccountGroupMutation)(nil)
@@ -4941,6 +4943,45 @@ func (m *AccountGroupMutation) ResetPriority() {
 	m.addpriority = nil
 }
 
+// SetBillingMultiplier sets the "billing_multiplier" field.
+func (m *AccountGroupMutation) SetBillingMultiplier(f float64) {
+	m.billing_multiplier = &f
+	m.addbilling_multiplier = nil
+}
+
+// BillingMultiplier returns the value of the "billing_multiplier" field in the mutation.
+func (m *AccountGroupMutation) BillingMultiplier() (r float64, exists bool) {
+	v := m.billing_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// AddBillingMultiplier adds f to the "billing_multiplier" field.
+func (m *AccountGroupMutation) AddBillingMultiplier(f float64) {
+	if m.addbilling_multiplier != nil {
+		*m.addbilling_multiplier += f
+	} else {
+		m.addbilling_multiplier = &f
+	}
+}
+
+// AddedBillingMultiplier returns the value that was added to the "billing_multiplier" field in this mutation.
+func (m *AccountGroupMutation) AddedBillingMultiplier() (r float64, exists bool) {
+	v := m.addbilling_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBillingMultiplier resets all changes to the "billing_multiplier" field.
+func (m *AccountGroupMutation) ResetBillingMultiplier() {
+	m.billing_multiplier = nil
+	m.addbilling_multiplier = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *AccountGroupMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -5048,7 +5089,7 @@ func (m *AccountGroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountGroupMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
 	if m.account != nil {
 		fields = append(fields, accountgroup.FieldAccountID)
 	}
@@ -5057,6 +5098,9 @@ func (m *AccountGroupMutation) Fields() []string {
 	}
 	if m.priority != nil {
 		fields = append(fields, accountgroup.FieldPriority)
+	}
+	if m.billing_multiplier != nil {
+		fields = append(fields, accountgroup.FieldBillingMultiplier)
 	}
 	if m.created_at != nil {
 		fields = append(fields, accountgroup.FieldCreatedAt)
@@ -5075,6 +5119,8 @@ func (m *AccountGroupMutation) Field(name string) (ent.Value, bool) {
 		return m.GroupID()
 	case accountgroup.FieldPriority:
 		return m.Priority()
+	case accountgroup.FieldBillingMultiplier:
+		return m.BillingMultiplier()
 	case accountgroup.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -5114,6 +5160,13 @@ func (m *AccountGroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPriority(v)
 		return nil
+	case accountgroup.FieldBillingMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingMultiplier(v)
+		return nil
 	case accountgroup.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -5132,6 +5185,9 @@ func (m *AccountGroupMutation) AddedFields() []string {
 	if m.addpriority != nil {
 		fields = append(fields, accountgroup.FieldPriority)
 	}
+	if m.addbilling_multiplier != nil {
+		fields = append(fields, accountgroup.FieldBillingMultiplier)
+	}
 	return fields
 }
 
@@ -5142,6 +5198,8 @@ func (m *AccountGroupMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case accountgroup.FieldPriority:
 		return m.AddedPriority()
+	case accountgroup.FieldBillingMultiplier:
+		return m.AddedBillingMultiplier()
 	}
 	return nil, false
 }
@@ -5157,6 +5215,13 @@ func (m *AccountGroupMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddPriority(v)
+		return nil
+	case accountgroup.FieldBillingMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBillingMultiplier(v)
 		return nil
 	}
 	return fmt.Errorf("unknown AccountGroup numeric field %s", name)
@@ -5193,6 +5258,9 @@ func (m *AccountGroupMutation) ResetField(name string) error {
 		return nil
 	case accountgroup.FieldPriority:
 		m.ResetPriority()
+		return nil
+	case accountgroup.FieldBillingMultiplier:
+		m.ResetBillingMultiplier()
 		return nil
 	case accountgroup.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -8871,6 +8939,8 @@ type ChannelMonitorMutation struct {
 	enabled                 *bool
 	interval_seconds        *int
 	addinterval_seconds     *int
+	jitter_seconds          *int
+	addjitter_seconds       *int
 	last_checked_at         *time.Time
 	created_by              *int64
 	addcreated_by           *int64
@@ -9469,6 +9539,62 @@ func (m *ChannelMonitorMutation) ResetIntervalSeconds() {
 	m.addinterval_seconds = nil
 }
 
+// SetJitterSeconds sets the "jitter_seconds" field.
+func (m *ChannelMonitorMutation) SetJitterSeconds(i int) {
+	m.jitter_seconds = &i
+	m.addjitter_seconds = nil
+}
+
+// JitterSeconds returns the value of the "jitter_seconds" field in the mutation.
+func (m *ChannelMonitorMutation) JitterSeconds() (r int, exists bool) {
+	v := m.jitter_seconds
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldJitterSeconds returns the old "jitter_seconds" field's value of the ChannelMonitor entity.
+// If the ChannelMonitor object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChannelMonitorMutation) OldJitterSeconds(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldJitterSeconds is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldJitterSeconds requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldJitterSeconds: %w", err)
+	}
+	return oldValue.JitterSeconds, nil
+}
+
+// AddJitterSeconds adds i to the "jitter_seconds" field.
+func (m *ChannelMonitorMutation) AddJitterSeconds(i int) {
+	if m.addjitter_seconds != nil {
+		*m.addjitter_seconds += i
+	} else {
+		m.addjitter_seconds = &i
+	}
+}
+
+// AddedJitterSeconds returns the value that was added to the "jitter_seconds" field in this mutation.
+func (m *ChannelMonitorMutation) AddedJitterSeconds() (r int, exists bool) {
+	v := m.addjitter_seconds
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetJitterSeconds resets all changes to the "jitter_seconds" field.
+func (m *ChannelMonitorMutation) ResetJitterSeconds() {
+	m.jitter_seconds = nil
+	m.addjitter_seconds = nil
+}
+
 // SetLastCheckedAt sets the "last_checked_at" field.
 func (m *ChannelMonitorMutation) SetLastCheckedAt(t time.Time) {
 	m.last_checked_at = &t
@@ -9926,7 +10052,7 @@ func (m *ChannelMonitorMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChannelMonitorMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 19)
 	if m.created_at != nil {
 		fields = append(fields, channelmonitor.FieldCreatedAt)
 	}
@@ -9962,6 +10088,9 @@ func (m *ChannelMonitorMutation) Fields() []string {
 	}
 	if m.interval_seconds != nil {
 		fields = append(fields, channelmonitor.FieldIntervalSeconds)
+	}
+	if m.jitter_seconds != nil {
+		fields = append(fields, channelmonitor.FieldJitterSeconds)
 	}
 	if m.last_checked_at != nil {
 		fields = append(fields, channelmonitor.FieldLastCheckedAt)
@@ -10013,6 +10142,8 @@ func (m *ChannelMonitorMutation) Field(name string) (ent.Value, bool) {
 		return m.Enabled()
 	case channelmonitor.FieldIntervalSeconds:
 		return m.IntervalSeconds()
+	case channelmonitor.FieldJitterSeconds:
+		return m.JitterSeconds()
 	case channelmonitor.FieldLastCheckedAt:
 		return m.LastCheckedAt()
 	case channelmonitor.FieldCreatedBy:
@@ -10058,6 +10189,8 @@ func (m *ChannelMonitorMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldEnabled(ctx)
 	case channelmonitor.FieldIntervalSeconds:
 		return m.OldIntervalSeconds(ctx)
+	case channelmonitor.FieldJitterSeconds:
+		return m.OldJitterSeconds(ctx)
 	case channelmonitor.FieldLastCheckedAt:
 		return m.OldLastCheckedAt(ctx)
 	case channelmonitor.FieldCreatedBy:
@@ -10163,6 +10296,13 @@ func (m *ChannelMonitorMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetIntervalSeconds(v)
 		return nil
+	case channelmonitor.FieldJitterSeconds:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetJitterSeconds(v)
+		return nil
 	case channelmonitor.FieldLastCheckedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -10216,6 +10356,9 @@ func (m *ChannelMonitorMutation) AddedFields() []string {
 	if m.addinterval_seconds != nil {
 		fields = append(fields, channelmonitor.FieldIntervalSeconds)
 	}
+	if m.addjitter_seconds != nil {
+		fields = append(fields, channelmonitor.FieldJitterSeconds)
+	}
 	if m.addcreated_by != nil {
 		fields = append(fields, channelmonitor.FieldCreatedBy)
 	}
@@ -10229,6 +10372,8 @@ func (m *ChannelMonitorMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case channelmonitor.FieldIntervalSeconds:
 		return m.AddedIntervalSeconds()
+	case channelmonitor.FieldJitterSeconds:
+		return m.AddedJitterSeconds()
 	case channelmonitor.FieldCreatedBy:
 		return m.AddedCreatedBy()
 	}
@@ -10246,6 +10391,13 @@ func (m *ChannelMonitorMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddIntervalSeconds(v)
+		return nil
+	case channelmonitor.FieldJitterSeconds:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddJitterSeconds(v)
 		return nil
 	case channelmonitor.FieldCreatedBy:
 		v, ok := value.(int64)
@@ -10343,6 +10495,9 @@ func (m *ChannelMonitorMutation) ResetField(name string) error {
 		return nil
 	case channelmonitor.FieldIntervalSeconds:
 		m.ResetIntervalSeconds()
+		return nil
+	case channelmonitor.FieldJitterSeconds:
+		m.ResetJitterSeconds()
 		return nil
 	case channelmonitor.FieldLastCheckedAt:
 		m.ResetLastCheckedAt()
