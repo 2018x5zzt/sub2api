@@ -317,7 +317,7 @@ func newRedeemHandlerTestEnv(t *testing.T) *redeemHandlerTestEnv {
 	}
 	settingRepo := &testSettingRepo{all: make(map[string]string)}
 
-	redeemService := service.NewRedeemService(redeemRepo, userRepo, nil, nil, nil, client, nil, nil)
+	redeemService := service.NewRedeemService(redeemRepo, userRepo, nil, nil, nil, nil, nil, client, nil, nil)
 	promoService := service.NewPromoService(promoRepo, userRepo, nil, client, nil)
 	settingService := service.NewSettingService(settingRepo, &config.Config{})
 
