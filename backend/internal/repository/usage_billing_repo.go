@@ -112,12 +112,42 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		}
 	}
 
+	// xlab 产品订阅：从产品订阅额度扣减；溢出部分按比例回退到用户余额。
+	if cmd.ProductDebitCost > 0 && cmd.ProductSubscriptionID != nil {
+		productDebitApplied := cmd.ProductDebitCost
+		var err error
+		if cmd.ProductGroupID > 0 {
+			productDebitApplied, err = splitAndIncrementProductSubscriptionUsage(ctx, tx, cmd.UserID, *cmd.ProductSubscriptionID, cmd.ProductGroupID, cmd.ProductDebitCost)
+		} else {
+			err = advanceAndIncrementProductSubscriptionUsage(ctx, tx, *cmd.ProductSubscriptionID, cmd.ProductDebitCost)
+		}
+		result.ProductDebitApplied = &productDebitApplied
+		if err != nil {
+			if cmd.ProductBalanceFallbackCost <= 0 || !errors.Is(err, service.ErrDailyLimitExceeded) {
+				return err
+			}
+		}
+		if cmd.ProductBalanceFallbackCost > 0 && productDebitApplied < cmd.ProductDebitCost {
+			fallbackCost := proportionalProductBalanceFallbackCost(cmd.ProductBalanceFallbackCost, cmd.ProductDebitCost, productDebitApplied)
+			if fallbackCost > 0 {
+				newBalance, sufficient, derr := deductUsageBillingBalance(ctx, tx, cmd.UserID, fallbackCost)
+				if derr != nil {
+					return derr
+				}
+				result.NewBalance = &newBalance
+				result.ProductBalanceCost = fallbackCost
+				result.BalanceOverdrafted = !sufficient
+			}
+		}
+	}
+
 	if cmd.BalanceCost > 0 {
-		newBalance, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
+		newBalance, sufficient, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
 		if err != nil {
 			return err
 		}
 		result.NewBalance = &newBalance
+		result.BalanceOverdrafted = !sufficient
 	}
 
 	if cmd.APIKeyQuotaCost > 0 {
@@ -143,6 +173,14 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	return nil
+}
+
+// proportionalProductBalanceFallbackCost 按未被产品额度覆盖的比例，计算应回退到余额的费用。
+func proportionalProductBalanceFallbackCost(fallbackCost, productDebitCost, productDebitApplied float64) float64 {
+	if fallbackCost <= 0 || productDebitCost <= 0 || productDebitApplied >= productDebitCost {
+		return 0
+	}
+	return fallbackCost * ((productDebitCost - productDebitApplied) / productDebitCost)
 }
 
 func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {
@@ -173,9 +211,23 @@ func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscrip
 	return service.ErrSubscriptionNotFound
 }
 
-func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) (float64, error) {
+func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) (float64, bool, error) {
 	var newBalance float64
 	err := tx.QueryRowContext(ctx, `
+		UPDATE users
+		SET balance = balance - $1,
+			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL AND balance >= $1
+		RETURNING balance
+	`, amount, userID).Scan(&newBalance)
+	if err == nil {
+		return newBalance, true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, false, err
+	}
+
+	err = tx.QueryRowContext(ctx, `
 		UPDATE users
 		SET balance = balance - $1,
 			updated_at = NOW()
@@ -183,12 +235,12 @@ func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, am
 		RETURNING balance
 	`, amount, userID).Scan(&newBalance)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, service.ErrUserNotFound
+		return 0, false, service.ErrUserNotFound
 	}
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
-	return newBalance, nil
+	return newBalance, false, nil
 }
 
 func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID int64, amount float64) (bool, error) {

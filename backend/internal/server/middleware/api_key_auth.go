@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -14,8 +15,8 @@ import (
 )
 
 // NewAPIKeyAuthMiddleware 创建 API Key 认证中间件
-func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) APIKeyAuthMiddleware {
-	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, cfg))
+func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, productSubscriptionService *service.SubscriptionProductService, cfg *config.Config) APIKeyAuthMiddleware {
+	return APIKeyAuthMiddleware(apiKeyAuthWithSubscription(apiKeyService, subscriptionService, productSubscriptionService, cfg))
 }
 
 // apiKeyAuthWithSubscription API Key认证中间件（支持订阅验证）
@@ -25,7 +26,7 @@ func NewAPIKeyAuthMiddleware(apiKeyService *service.APIKeyService, subscriptionS
 //   - 计费执行（Billing Enforcement）：过期/配额/订阅/余额检查 —— skipBilling 时整块跳过
 //
 // /v1/usage 端点只需鉴权，不需要计费执行（允许过期/配额耗尽的 Key 查询自身用量）。
-func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
+func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, productSubscriptionService *service.SubscriptionProductService, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// ── 1. 提取 API Key ──────────────────────────────────────────
 
@@ -76,6 +77,10 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 			return
 		}
 
+		// apiKey 已加载（含 User/Group）。即便后续因分组停用/Key 停用/用户停用/
+		// IP 限制等早退中断，也让 Ops 错误日志能回退取到 user/group/platform。
+		SetOpsFallbackAPIKey(c, apiKey)
+
 		// ── 3. 基础鉴权（始终执行） ─────────────────────────────────
 
 		// disabled / 未知状态 → 无条件拦截（expired 和 quota_exhausted 留给计费阶段）
@@ -90,9 +95,16 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		// 注意：错误信息故意模糊，避免暴露具体的 IP 限制机制
 		if len(apiKey.IPWhitelist) > 0 || len(apiKey.IPBlacklist) > 0 {
 			clientIP := ip.GetTrustedClientIP(c)
+			if cfg.TrustForwardedIPForAPIKeyACL() {
+				clientIP = ip.GetClientIP(c)
+			}
 			allowed, _ := ip.CheckIPRestrictionWithCompiledRules(clientIP, apiKey.CompiledIPWhitelist, apiKey.CompiledIPBlacklist)
 			if !allowed {
-				AbortWithError(c, 403, "ACCESS_DENIED", "Access denied")
+				if clientIP == "" {
+					clientIP = "unknown"
+				}
+				service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonIPRestriction)
+				AbortWithError(c, 403, "ACCESS_DENIED", fmt.Sprintf("Access denied. Your IP is %s", clientIP))
 				return
 			}
 		}
@@ -106,6 +118,12 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		// 检查用户状态
 		if !apiKey.User.IsActive() {
 			AbortWithError(c, 401, "USER_INACTIVE", "User account is not active")
+			return
+		}
+		if abortIfAPIKeyGroupUnavailable(c, apiKey) {
+			return
+		}
+		if abortIfAPIKeyGroupNotAllowed(c, apiKey) {
 			return
 		}
 
@@ -127,12 +145,31 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		// ── 5. 加载订阅（订阅模式时始终加载） ───────────────────────
 
 		// skipBilling: /v1/usage 只需鉴权，跳过所有计费执行
-		skipBilling := c.Request.URL.Path == "/v1/usage"
+		// 图片 job 轮询 GET 只需鉴权，结果在扣费后仍可读取，跳过计费执行。
+		skipBilling := c.Request.URL.Path == "/v1/usage" ||
+			isOpenAIImageJobPollRequest(c.Request.Method, c.Request.URL.Path)
 
 		var subscription *service.UserSubscription
+		var productSettlement *service.ProductSettlementContext
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 
-		if isSubscriptionType && subscriptionService != nil {
+		// xlab 产品订阅优先：分组绑定了产品订阅时走产品额度结算；
+		// 未命中（无产品订阅）则回退到常规订阅，保证既有订阅分组不受影响。
+		if isSubscriptionType && productSubscriptionService != nil {
+			settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
+				c.Request.Context(),
+				apiKey.User.ID,
+				apiKey.Group.ID,
+			)
+			if productErr == nil {
+				productSettlement = settlement
+			} else if !errors.Is(productErr, service.ErrSubscriptionNotFound) && !skipBilling {
+				AbortWithError(c, 403, "SUBSCRIPTION_INVALID", productErr.Error())
+				return
+			}
+		}
+
+		if isSubscriptionType && productSettlement == nil && subscriptionService != nil {
 			sub, subErr := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,
@@ -193,8 +230,9 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 					maintenanceCopy := *subscription
 					subscriptionService.DoWindowMaintenance(&maintenanceCopy)
 				}
-			} else {
-				// 非订阅模式 或 订阅模式但 subscriptionService 未注入：回退到余额检查
+			} else if productSettlement == nil {
+				// 非订阅模式 或 订阅模式但 subscriptionService 未注入：回退到余额检查。
+				// 产品订阅命中时由产品额度结算（溢出再回退余额），此处不做余额拦截。
 				if apiKey.User.Balance <= 0 {
 					AbortWithError(c, 403, "INSUFFICIENT_BALANCE", "Insufficient account balance")
 					return
@@ -206,6 +244,10 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		if subscription != nil {
 			c.Set(string(ContextKeySubscription), subscription)
+		}
+		if productSettlement != nil {
+			c.Set(string(ContextKeyProductSettlement), productSettlement)
+			c.Request = c.Request.WithContext(service.ContextWithProductSettlement(c.Request.Context(), productSettlement))
 		}
 		c.Set(string(ContextKeyAPIKey), apiKey)
 		c.Set(string(ContextKeyUser), AuthSubject{
@@ -230,6 +272,26 @@ func GetAPIKeyFromContext(c *gin.Context) (*service.APIKey, bool) {
 	return apiKey, ok
 }
 
+// SetOpsFallbackAPIKey 记录已加载的 API Key，供 Ops 错误日志在鉴权早退时回退使用。
+// 与 ContextKeyAPIKey 区分：写入它不代表请求已通过鉴权，因此不影响 handler、
+// 审计日志等对“已鉴权”的判断。
+func SetOpsFallbackAPIKey(c *gin.Context, apiKey *service.APIKey) {
+	if c == nil || apiKey == nil {
+		return
+	}
+	c.Set(string(ContextKeyOpsFallbackAPIKey), apiKey)
+}
+
+// GetOpsFallbackAPIKey 读取 Ops 错误日志专用的回退 API Key。
+func GetOpsFallbackAPIKey(c *gin.Context) (*service.APIKey, bool) {
+	value, exists := c.Get(string(ContextKeyOpsFallbackAPIKey))
+	if !exists {
+		return nil, false
+	}
+	apiKey, ok := value.(*service.APIKey)
+	return apiKey, ok
+}
+
 // GetSubscriptionFromContext 从上下文中获取订阅信息
 func GetSubscriptionFromContext(c *gin.Context) (*service.UserSubscription, bool) {
 	value, exists := c.Get(string(ContextKeySubscription))
@@ -238,6 +300,22 @@ func GetSubscriptionFromContext(c *gin.Context) (*service.UserSubscription, bool
 	}
 	subscription, ok := value.(*service.UserSubscription)
 	return subscription, ok
+}
+
+// GetProductSettlementFromContext 从上下文获取 xlab 产品订阅结算上下文。
+func GetProductSettlementFromContext(c *gin.Context) (*service.ProductSettlementContext, bool) {
+	value, exists := c.Get(string(ContextKeyProductSettlement))
+	if !exists {
+		return nil, false
+	}
+	settlement, ok := value.(*service.ProductSettlementContext)
+	return settlement, ok && settlement != nil
+}
+
+// isOpenAIImageJobPollRequest 判断是否为图片 job 状态轮询（GET /images/jobs/:id）。
+func isOpenAIImageJobPollRequest(method string, path string) bool {
+	return strings.EqualFold(strings.TrimSpace(method), "GET") &&
+		strings.Contains(strings.TrimSpace(path), "/images/jobs/")
 }
 
 func setGroupContext(c *gin.Context, group *service.Group) {
@@ -249,4 +327,48 @@ func setGroupContext(c *gin.Context, group *service.Group) {
 	}
 	ctx := context.WithValue(c.Request.Context(), ctxkey.Group, group)
 	c.Request = c.Request.WithContext(ctx)
+}
+
+func abortIfAPIKeyGroupUnavailable(c *gin.Context, apiKey *service.APIKey) bool {
+	code, message, ok := validateAPIKeyGroupAvailable(apiKey)
+	if ok {
+		return false
+	}
+	service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
+	AbortWithError(c, 403, code, message)
+	return true
+}
+
+func abortIfAPIKeyGroupNotAllowed(c *gin.Context, apiKey *service.APIKey) bool {
+	if validateAPIKeyGroupAllowed(apiKey) {
+		return false
+	}
+	service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
+	AbortWithError(c, 403, "GROUP_NOT_ALLOWED", "API Key 所属专属分组不再允许当前用户使用")
+	return true
+}
+
+func validateAPIKeyGroupAllowed(apiKey *service.APIKey) bool {
+	if apiKey == nil || apiKey.GroupID == nil || apiKey.User == nil || apiKey.Group == nil {
+		return true
+	}
+	group := apiKey.Group
+	if group.IsSubscriptionType() {
+		return true
+	}
+	return apiKey.User.CanBindGroup(group.ID, group.IsExclusive)
+}
+
+func validateAPIKeyGroupAvailable(apiKey *service.APIKey) (string, string, bool) {
+	if apiKey == nil || apiKey.GroupID == nil {
+		return "", "", true
+	}
+	group := apiKey.Group
+	if group == nil || strings.EqualFold(group.Status, "deleted") {
+		return "GROUP_DELETED", "API Key 所属分组已删除", false
+	}
+	if !group.IsActive() {
+		return "GROUP_DISABLED", "API Key 所属分组已停用", false
+	}
+	return "", "", true
 }

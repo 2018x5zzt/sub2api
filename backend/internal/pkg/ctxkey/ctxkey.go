@@ -34,8 +34,21 @@ const (
 
 	// ThinkingEnabled 标识当前请求是否开启 thinking（用于 Antigravity 最终模型名推导与模型维度限流）
 	ThinkingEnabled Key = "ctx_thinking_enabled"
+
+	// OpenAIImageGenerationIntent 标识 OpenAI 请求会触发生图能力（用于图片能力维度限流）
+	OpenAIImageGenerationIntent Key = "ctx_openai_image_generation_intent"
+
 	// Group 认证后的分组信息，由 API Key 认证中间件设置
 	Group Key = "ctx_group"
+
+	// APIKey 认证后的 API Key 信息，由 API Key 认证中间件设置。
+	APIKey Key = "ctx_api_key"
+
+	// ProductSettlement 认证后的产品订阅共享额度池信息（xlab 产品订阅）。
+	ProductSettlement Key = "ctx_product_settlement"
+
+	// SubscriptionBalanceFallback 表示本次请求由订阅额度耗尽降级为余额计费（xlab 产品订阅）。
+	SubscriptionBalanceFallback Key = "ctx_subscription_balance_fallback"
 
 	// IsMaxTokensOneHaikuRequest 标识当前请求是否为 max_tokens=1 + haiku 模型的探测请求
 	// 用于 ClaudeCodeOnly 验证绕过（绕过 system prompt 检查，但仍需验证 User-Agent）

@@ -32,6 +32,10 @@ func (AccountGroup) Fields() []ent.Field {
 		field.Int64("group_id"),
 		field.Int("priority").
 			Default(50),
+		// fork: 账号在该分组下的扣费乘数，默认 1.0，乘入用户实际扣费链路（migration 078）。
+		field.Float("billing_multiplier").
+			Default(1).
+			SchemaType(map[string]string{dialect.Postgres: "decimal(10,4)"}),
 		field.Time("created_at").
 			Immutable().
 			Default(time.Now).

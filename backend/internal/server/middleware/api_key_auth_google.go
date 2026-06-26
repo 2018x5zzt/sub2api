@@ -13,14 +13,14 @@ import (
 
 // APIKeyAuthGoogle is a Google-style error wrapper for API key auth.
 func APIKeyAuthGoogle(apiKeyService *service.APIKeyService, cfg *config.Config) gin.HandlerFunc {
-	return APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg)
+	return APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, cfg)
 }
 
 // APIKeyAuthWithSubscriptionGoogle behaves like ApiKeyAuthWithSubscription but returns Google-style errors:
 // {"error":{"code":401,"message":"...","status":"UNAUTHENTICATED"}}
 //
 // It is intended for Gemini native endpoints (/v1beta) to match Gemini SDK expectations.
-func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, cfg *config.Config) gin.HandlerFunc {
+func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subscriptionService *service.SubscriptionService, productSubscriptionService *service.SubscriptionProductService, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if v := strings.TrimSpace(c.Query("api_key")); v != "" {
 			abortWithGoogleError(c, 400, "Query parameter api_key is deprecated. Use Authorization header or key instead.")
@@ -42,6 +42,10 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 			return
 		}
 
+		// 同 api_key_auth.go：早退中断前也写入 Ops 回退 key，便于错误日志展示
+		// user/group/platform。
+		SetOpsFallbackAPIKey(c, apiKey)
+
 		if !apiKey.IsActive() {
 			abortWithGoogleError(c, 401, "API key is disabled")
 			return
@@ -52,6 +56,11 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 		if !apiKey.User.IsActive() {
 			abortWithGoogleError(c, 401, "User account is not active")
+			return
+		}
+		if _, message, ok := validateAPIKeyGroupAvailable(apiKey); !ok {
+			service.MarkOpsClientBusinessLimited(c, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable)
+			abortWithGoogleError(c, 403, message)
 			return
 		}
 
@@ -70,7 +79,26 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 		}
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
-		if isSubscriptionType && subscriptionService != nil {
+
+		// xlab 产品订阅优先：命中则结算上下文写入，未命中回退常规订阅。
+		var productSettlement *service.ProductSettlementContext
+		if isSubscriptionType && productSubscriptionService != nil {
+			settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
+				c.Request.Context(),
+				apiKey.User.ID,
+				apiKey.Group.ID,
+			)
+			if productErr == nil {
+				productSettlement = settlement
+			} else if !errors.Is(productErr, service.ErrSubscriptionNotFound) {
+				abortWithGoogleError(c, 403, productErr.Error())
+				return
+			}
+		}
+		if productSettlement != nil {
+			c.Set(string(ContextKeyProductSettlement), productSettlement)
+			c.Request = c.Request.WithContext(service.ContextWithProductSettlement(c.Request.Context(), productSettlement))
+		} else if isSubscriptionType && subscriptionService != nil {
 			subscription, err := subscriptionService.GetActiveSubscription(
 				c.Request.Context(),
 				apiKey.User.ID,

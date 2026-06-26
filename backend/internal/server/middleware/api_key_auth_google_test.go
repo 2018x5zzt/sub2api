@@ -56,6 +56,9 @@ func (f fakeAPIKeyRepo) Update(ctx context.Context, key *service.APIKey) error {
 func (f fakeAPIKeyRepo) Delete(ctx context.Context, id int64) error {
 	return errors.New("not implemented")
 }
+func (f fakeAPIKeyRepo) DeleteWithAudit(ctx context.Context, id int64) error {
+	return errors.New("not implemented")
+}
 func (f fakeAPIKeyRepo) ListByUserID(ctx context.Context, userID int64, params pagination.PaginationParams, _ service.APIKeyListFilters) ([]service.APIKey, *pagination.PaginationResult, error) {
 	return nil, nil, errors.New("not implemented")
 }
@@ -216,7 +219,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_MissingKey(t *testing.T) {
 			return nil, errors.New("should not be called")
 		},
 	})
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, &config.Config{}))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, &config.Config{}))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
@@ -240,7 +243,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_QueryApiKeyRejected(t *testing.T) {
 			return nil, errors.New("should not be called")
 		},
 	})
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, &config.Config{}))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, &config.Config{}))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test?api_key=legacy", nil)
@@ -302,7 +305,7 @@ func TestApiKeyAuthWithSubscriptionGoogleSetsGroupContext(t *testing.T) {
 
 	cfg := &config.Config{RunMode: config.RunModeSimple}
 	r := gin.New()
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, cfg))
 	r.GET("/v1beta/test", func(c *gin.Context) {
 		groupFromCtx, ok := c.Request.Context().Value(ctxkey.Group).(*service.Group)
 		if !ok || groupFromCtx == nil || groupFromCtx.ID != group.ID {
@@ -338,7 +341,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_QueryKeyAllowedOnV1Beta(t *testing.T) 
 		},
 	})
 	cfg := &config.Config{RunMode: config.RunModeSimple}
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, cfg))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test?key=valid", nil)
@@ -357,7 +360,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_InvalidKey(t *testing.T) {
 			return nil, service.ErrAPIKeyNotFound
 		},
 	})
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, &config.Config{}))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, &config.Config{}))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
@@ -373,6 +376,68 @@ func TestApiKeyAuthWithSubscriptionGoogle_InvalidKey(t *testing.T) {
 	require.Equal(t, "UNAUTHENTICATED", resp.Error.Status)
 }
 
+func TestApiKeyAuthWithSubscriptionGoogle_MarksUnavailableGroupBusinessLimited(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	groupID := int64(101)
+	user := &service.User{
+		ID:          7,
+		Role:        service.RoleUser,
+		Status:      service.StatusActive,
+		Balance:     10,
+		Concurrency: 3,
+	}
+	apiKey := &service.APIKey{
+		ID:      100,
+		UserID:  user.ID,
+		GroupID: &groupID,
+		Key:     "google-group-deleted",
+		Status:  service.StatusActive,
+		User:    user,
+		Group: &service.Group{
+			ID:       groupID,
+			Name:     "deleted",
+			Status:   "deleted",
+			Platform: service.PlatformGemini,
+			Hydrated: true,
+		},
+	}
+
+	r := gin.New()
+	var markedBusinessLimited bool
+	var businessLimitedReason string
+	r.Use(func(c *gin.Context) {
+		c.Next()
+		markedBusinessLimited = service.HasOpsClientBusinessLimited(c)
+		if v, ok := c.Get(service.OpsClientBusinessLimitedReasonKey); ok {
+			businessLimitedReason, _ = v.(string)
+		}
+	})
+	apiKeyService := newTestAPIKeyService(fakeAPIKeyRepo{
+		getByKey: func(ctx context.Context, key string) (*service.APIKey, error) {
+			if key != apiKey.Key {
+				return nil, service.ErrAPIKeyNotFound
+			}
+			clone := *apiKey
+			return &clone, nil
+		},
+	})
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, &config.Config{RunMode: config.RunModeSimple}))
+	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
+
+	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
+	req.Header.Set("x-goog-api-key", apiKey.Key)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	var resp googleErrorResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, "API Key 所属分组已删除", resp.Error.Message)
+	require.True(t, markedBusinessLimited)
+	require.Equal(t, service.OpsClientBusinessLimitedReasonAPIKeyGroupUnavailable, businessLimitedReason)
+}
+
 func TestApiKeyAuthWithSubscriptionGoogle_RepoError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -382,7 +447,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_RepoError(t *testing.T) {
 			return nil, errors.New("db down")
 		},
 	})
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, &config.Config{}))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, &config.Config{}))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
@@ -415,7 +480,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_DisabledKey(t *testing.T) {
 			}, nil
 		},
 	})
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, &config.Config{}))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, &config.Config{}))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
@@ -449,7 +514,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_InsufficientBalance(t *testing.T) {
 			}, nil
 		},
 	})
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, &config.Config{}))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, &config.Config{}))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
@@ -501,7 +566,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_TouchesLastUsedOnSuccess(t *testing.T)
 		},
 	})
 	cfg := &config.Config{RunMode: config.RunModeSimple}
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, cfg))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
@@ -548,7 +613,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_TouchFailureDoesNotBlock(t *testing.T)
 		},
 	})
 	cfg := &config.Config{RunMode: config.RunModeSimple}
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, cfg))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
@@ -594,7 +659,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_TouchesLastUsedInStandardMode(t *testi
 		},
 	})
 	cfg := &config.Config{RunMode: config.RunModeStandard}
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, cfg))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, nil, nil, cfg))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
@@ -672,7 +737,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 	}, nil, nil, &config.Config{RunMode: config.RunModeStandard})
 
 	r := gin.New()
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, &config.Config{RunMode: config.RunModeStandard}))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, nil, &config.Config{RunMode: config.RunModeStandard}))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)

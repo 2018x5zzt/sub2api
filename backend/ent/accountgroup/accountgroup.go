@@ -18,6 +18,8 @@ const (
 	FieldGroupID = "group_id"
 	// FieldPriority holds the string denoting the priority field in the database.
 	FieldPriority = "priority"
+	// FieldBillingMultiplier holds the string denoting the billing_multiplier field in the database.
+	FieldBillingMultiplier = "billing_multiplier"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// EdgeAccount holds the string denoting the account edge name in mutations.
@@ -51,6 +53,7 @@ var Columns = []string{
 	FieldAccountID,
 	FieldGroupID,
 	FieldPriority,
+	FieldBillingMultiplier,
 	FieldCreatedAt,
 }
 
@@ -67,6 +70,8 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultPriority holds the default value on creation for the "priority" field.
 	DefaultPriority int
+	// DefaultBillingMultiplier holds the default value on creation for the "billing_multiplier" field.
+	DefaultBillingMultiplier float64
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -87,6 +92,11 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 // ByPriority orders the results by the priority field.
 func ByPriority(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPriority, opts...).ToFunc()
+}
+
+// ByBillingMultiplier orders the results by the billing_multiplier field.
+func ByBillingMultiplier(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingMultiplier, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.
