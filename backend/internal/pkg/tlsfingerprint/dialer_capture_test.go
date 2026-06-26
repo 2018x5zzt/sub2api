@@ -211,7 +211,10 @@ func fetchCapturedFingerprint(t *testing.T, captureURL string, profile *Profile)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		t.Fatalf("request failed: %v", err)
+		// 外部キャプチャサーバー（既定 tls.sub2api.org）が到達不可・証明書失効・
+		// ネットワーク遮断などの場合は失敗ではなく skip する。フィンガープリント検証は
+		// 有効なキャプチャサーバーが利用できる環境（TLSFINGERPRINT_CAPTURE_URL 指定時）でのみ実行する。
+		t.Skipf("capture server %s unreachable, skipping TLS fingerprint check: %v", captureURL, err)
 		return nil
 	}
 	defer resp.Body.Close()
