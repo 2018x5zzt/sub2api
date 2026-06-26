@@ -17,6 +17,7 @@ type Model struct {
 
 // DefaultModels OpenAI models list
 var DefaultModels = []Model{
+	{ID: "gpt-5.5", Object: "model", Created: 1776873600, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5.5", InputPricePerMTok: 2.50, OutputPricePerMTok: 15.00},
 	{ID: "gpt-5", Object: "model", Created: 1722988800, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5", InputPricePerMTok: 1.25, OutputPricePerMTok: 10.00},
 	{ID: "gpt-5-codex", Object: "model", Created: 1722988800, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5 Codex", InputPricePerMTok: 1.25, OutputPricePerMTok: 10.00},
 	{ID: "gpt-5-codex-mini", Object: "model", Created: 1722988800, OwnedBy: "openai", Type: "model", DisplayName: "GPT-5 Codex Mini", InputPricePerMTok: 0.25, OutputPricePerMTok: 2.00},
