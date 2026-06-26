@@ -253,6 +253,7 @@ func TestNormalizeCodexModel_SupportedAliases(t *testing.T) {
 		"gpt-5.3-codex-medium":      "gpt-5.3-codex",
 		"gpt-5.3-codex-xhigh":       "gpt-5.3-codex",
 		"gpt-5.3-codex-spark":       "gpt-5.3-codex",
+		"gpt 5.3 codex spark":       "gpt-5.3-codex",
 		"gpt-5.3-codex-spark-high":  "gpt-5.3-codex",
 		"gpt-5.3-codex-spark-xhigh": "gpt-5.3-codex",
 		"gpt-5.4":                   "gpt-5.4",
@@ -282,6 +283,34 @@ func TestNormalizeCodexModel_SupportedAliases(t *testing.T) {
 func TestNormalizeCodexModel_UnsupportedModelsDoNotSilentlyRemap(t *testing.T) {
 	require.Equal(t, "gpt-5-pro", normalizeCodexModel("gpt-5-pro"))
 	require.Equal(t, "gpt-4o", normalizeCodexModel("gpt-4o"))
+}
+
+func TestApplyCodexOAuthTransform_PreservesBareSparkModel(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.3-codex-spark",
+		"input": []any{},
+	}
+
+	result := applyCodexOAuthTransform(reqBody, false, false)
+
+	require.Equal(t, "gpt-5.3-codex-spark", reqBody["model"])
+	require.Equal(t, "gpt-5.3-codex-spark", result.NormalizedModel)
+	store, ok := reqBody["store"].(bool)
+	require.True(t, ok)
+	require.False(t, store)
+}
+
+func TestApplyCodexOAuthTransform_TrimmedModelWithoutPolicyRewrite(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "  gpt-5.3-codex-spark  ",
+		"input": []any{},
+	}
+
+	result := applyCodexOAuthTransform(reqBody, false, false)
+
+	require.Equal(t, "gpt-5.3-codex-spark", reqBody["model"])
+	require.Equal(t, "gpt-5.3-codex-spark", result.NormalizedModel)
+	require.True(t, result.Modified)
 }
 
 func TestApplyCodexOAuthTransform_CodexCLI_PreservesExistingInstructions(t *testing.T) {
