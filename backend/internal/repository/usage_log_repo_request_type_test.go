@@ -91,6 +91,9 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // billing_mode
 			sqlmock.AnyArg(), // account_stats_cost
 			createdAt,
+			sqlmock.AnyArg(), // product_id
+			sqlmock.AnyArg(), // product_subscription_id
+			sqlmock.AnyArg(), // product_debit_cost
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(99), createdAt))
 
@@ -174,6 +177,9 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(), // billing_mode
 			sqlmock.AnyArg(), // account_stats_cost
 			createdAt,
+			sqlmock.AnyArg(), // product_id
+			sqlmock.AnyArg(), // product_subscription_id
+			sqlmock.AnyArg(), // product_debit_cost
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(100), createdAt))
 
@@ -641,6 +647,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			sql.NullFloat64{},
 			now,
+			sql.NullInt64{},   // product_id
+			sql.NullInt64{},   // product_subscription_id
+			sql.NullFloat64{}, // product_debit_cost
 		}})
 		require.NoError(t, err)
 		require.Equal(t, 2, log.ImageCount)
@@ -709,6 +718,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // billing_mode
 			sql.NullFloat64{}, // account_stats_cost
 			now,
+			sql.NullInt64{},   // product_id
+			sql.NullInt64{},   // product_subscription_id
+			sql.NullFloat64{}, // product_debit_cost
 		}})
 		require.NoError(t, err)
 		require.NotNil(t, log.ServiceTier)
@@ -761,6 +773,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // billing_mode
 			sql.NullFloat64{}, // account_stats_cost
 			now,
+			sql.NullInt64{},   // product_id
+			sql.NullInt64{},   // product_subscription_id
+			sql.NullFloat64{}, // product_debit_cost
 		}})
 		require.NoError(t, err)
 		require.NotNil(t, log.ServiceTier)
@@ -813,6 +828,9 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},  // billing_mode
 			sql.NullFloat64{}, // account_stats_cost
 			now,
+			sql.NullInt64{},   // product_id
+			sql.NullInt64{},   // product_subscription_id
+			sql.NullFloat64{}, // product_debit_cost
 		}})
 		require.NoError(t, err)
 		require.NotNil(t, log.ServiceTier)
