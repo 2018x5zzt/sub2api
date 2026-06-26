@@ -21,6 +21,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -561,9 +562,17 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}
+		// 上游守卫：账号被探测为不支持 Responses（DeepSeek/Kimi 等）时明确提示。
+		if !openai_compat.ShouldUseResponsesAPI(account.Extra) {
+			return s.sendErrorAndEnd(c,
+				"账号已被探测为不支持 OpenAI Responses API（如 DeepSeek/Kimi 等三方兼容上游），"+
+					"账号本身可正常使用，但当前测试接口仅支持 Responses API 路径。请直接通过实际 API 调用验证。",
+			)
+		}
+		// fork: 仅在 ShouldAppendAPIPath 时补齐 /responses 路径。
 		apiURL = normalizedBaseURL
 		if account.ShouldAppendAPIPath() {
-			apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/responses"
+			apiURL = buildOpenAIResponsesURL(normalizedBaseURL)
 		}
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
