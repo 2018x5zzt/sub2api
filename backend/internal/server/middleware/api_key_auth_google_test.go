@@ -1,3 +1,5 @@
+//go:build unit
+
 package middleware
 
 import (
@@ -671,7 +673,7 @@ func TestApiKeyAuthWithSubscriptionGoogle_TouchesLastUsedInStandardMode(t *testi
 	require.Equal(t, 1, touchCalls)
 }
 
-func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t *testing.T) {
+func TestApiKeyAuthWithSubscriptionGoogle_RejectsLegacySubscriptionFallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	limit := 1.0
@@ -711,23 +713,17 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 		},
 	})
 
-	now := time.Now()
-	sub := &service.UserSubscription{
-		ID:               601,
-		UserID:           user.ID,
-		GroupID:          group.ID,
-		Status:           service.SubscriptionStatusActive,
-		ExpiresAt:        now.Add(24 * time.Hour),
-		DailyWindowStart: &now,
-		DailyUsageUSD:    10,
-	}
+	legacyQueried := false
 	subscriptionService := service.NewSubscriptionService(nil, fakeGoogleSubscriptionRepo{
 		getActive: func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
-			if userID != user.ID || groupID != group.ID {
-				return nil, service.ErrSubscriptionNotFound
-			}
-			clone := *sub
-			return &clone, nil
+			legacyQueried = true
+			return &service.UserSubscription{
+				ID:        601,
+				UserID:    userID,
+				GroupID:   groupID,
+				Status:    service.SubscriptionStatusActive,
+				ExpiresAt: time.Now().Add(24 * time.Hour),
+			}, nil
 		},
 		updateStatus:   func(ctx context.Context, subscriptionID int64, status string) error { return nil },
 		activateWindow: func(ctx context.Context, id int64, start time.Time) error { return nil },
@@ -735,9 +731,14 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 		resetWeekly:    func(ctx context.Context, id int64, start time.Time) error { return nil },
 		resetMonthly:   func(ctx context.Context, id int64, start time.Time) error { return nil },
 	}, nil, nil, &config.Config{RunMode: config.RunModeStandard})
+	productSubscriptionService := service.NewSubscriptionProductService(stubProductSubscriptionRepo{
+		getActive: func(ctx context.Context, userID, groupID int64, productFamily *string) (*service.SubscriptionProductBinding, *service.UserProductSubscription, error) {
+			return nil, nil, service.ErrSubscriptionNotFound
+		},
+	})
 
 	r := gin.New()
-	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, nil, &config.Config{RunMode: config.RunModeStandard}))
+	r.Use(APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, productSubscriptionService, &config.Config{RunMode: config.RunModeStandard}))
 	r.GET("/v1beta/test", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	req := httptest.NewRequest(http.MethodGet, "/v1beta/test", nil)
@@ -745,10 +746,11 @@ func TestApiKeyAuthWithSubscriptionGoogle_SubscriptionLimitExceededReturns429(t 
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
 
-	require.Equal(t, http.StatusTooManyRequests, rec.Code)
+	require.Equal(t, http.StatusForbidden, rec.Code)
 	var resp googleErrorResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Equal(t, http.StatusTooManyRequests, resp.Error.Code)
-	require.Equal(t, "RESOURCE_EXHAUSTED", resp.Error.Status)
-	require.Contains(t, resp.Error.Message, "daily usage limit exceeded")
+	require.Equal(t, http.StatusForbidden, resp.Error.Code)
+	require.Equal(t, "PERMISSION_DENIED", resp.Error.Status)
+	require.Contains(t, resp.Error.Message, "No active product subscription found for this group")
+	require.False(t, legacyQueried, "legacy user_subscriptions must not be queried by Google auth")
 }

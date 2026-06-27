@@ -63,6 +63,35 @@ func TestCheckBillingEligibility_AllowsBalanceAtMinimumReserve(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestCheckBillingEligibility_ProductSubscriptionBypassesBalanceReserve(t *testing.T) {
+	cache := &balanceEligibilityCacheStub{balance: 0}
+	cfg := &config.Config{}
+	cfg.Billing.MinimumBalanceReserve = 0.01
+	svc := NewBillingCacheService(cache, nil, nil, nil, nil, nil, cfg, nil)
+	t.Cleanup(svc.Stop)
+
+	ctx := ContextWithProductSettlement(context.Background(), &ProductSettlementContext{
+		Binding: &SubscriptionProductBinding{
+			ProductID:       11,
+			ProductStatus:   SubscriptionProductStatusActive,
+			BindingStatus:   SubscriptionProductBindingStatusActive,
+			GroupID:         7,
+			DebitMultiplier: 1,
+		},
+		Subscription: &UserProductSubscription{
+			ID:        21,
+			UserID:    1,
+			ProductID: 11,
+			Status:    SubscriptionStatusActive,
+			ExpiresAt: time.Now().Add(24 * time.Hour),
+		},
+	})
+	group := &Group{ID: 7, SubscriptionType: SubscriptionTypeSubscription, Status: StatusActive}
+
+	err := svc.CheckBillingEligibility(ctx, &User{ID: 1}, nil, group, nil, "openai")
+	require.NoError(t, err)
+}
+
 func TestSyncBalanceCacheAfterDeduction_InvalidatesExhaustedBalance(t *testing.T) {
 	cache := &balanceEligibilityCacheStub{
 		balance:                  0.50,

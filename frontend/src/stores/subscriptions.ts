@@ -5,8 +5,8 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import subscriptionsAPI from '@/api/subscriptions'
-import type { UserSubscription } from '@/types'
+import { subscriptionProductsAPI } from '@/api/subscriptionProducts'
+import type { ActiveSubscriptionProduct } from '@/types'
 
 // Cache TTL: 60 seconds
 const CACHE_TTL_MS = 60_000
@@ -16,13 +16,13 @@ let requestGeneration = 0
 
 export const useSubscriptionStore = defineStore('subscriptions', () => {
   // State
-  const activeSubscriptions = ref<UserSubscription[]>([])
+  const activeSubscriptions = ref<ActiveSubscriptionProduct[]>([])
   const loading = ref(false)
   const loaded = ref(false)
   const lastFetchedAt = ref<number | null>(null)
 
   // In-flight request deduplication
-  let activePromise: Promise<UserSubscription[]> | null = null
+  let activePromise: Promise<ActiveSubscriptionProduct[]> | null = null
 
   // Auto-refresh interval
   let pollerInterval: ReturnType<typeof setInterval> | null = null
@@ -34,7 +34,7 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
    * Fetch active subscriptions with caching and deduplication
    * @param force - Force refresh even if cache is valid
    */
-  async function fetchActiveSubscriptions(force = false): Promise<UserSubscription[]> {
+  async function fetchActiveSubscriptions(force = false): Promise<ActiveSubscriptionProduct[]> {
     const now = Date.now()
 
     // Return cached data if valid
@@ -56,8 +56,8 @@ export const useSubscriptionStore = defineStore('subscriptions', () => {
 
     // Start new request
     loading.value = true
-    const requestPromise = subscriptionsAPI
-      .getActiveSubscriptions()
+    const requestPromise = subscriptionProductsAPI
+      .getActive()
       .then((data) => {
         if (currentGeneration === requestGeneration) {
           activeSubscriptions.value = data

@@ -6,55 +6,49 @@ import (
 )
 
 type ProductAwareSubscriptionAssigner struct {
-	legacy  DefaultSubscriptionAssigner
 	product *SubscriptionProductService
 }
 
-func NewProductAwareSubscriptionAssigner(legacy DefaultSubscriptionAssigner, product *SubscriptionProductService) *ProductAwareSubscriptionAssigner {
-	return &ProductAwareSubscriptionAssigner{legacy: legacy, product: product}
+func NewProductAwareSubscriptionAssigner(product *SubscriptionProductService) *ProductAwareSubscriptionAssigner {
+	return &ProductAwareSubscriptionAssigner{product: product}
 }
 
-// ProvideProductAwareSubscriptionAssigner 以具体的 *SubscriptionService 作为 legacy 回退，
-// 避免 wire 在绑定 DefaultSubscriptionAssigner -> *ProductAwareSubscriptionAssigner 时形成循环依赖。
 func ProvideProductAwareSubscriptionAssigner(
-	subscriptionService *SubscriptionService,
 	subscriptionProductService *SubscriptionProductService,
 ) *ProductAwareSubscriptionAssigner {
-	return NewProductAwareSubscriptionAssigner(subscriptionService, subscriptionProductService)
+	return NewProductAwareSubscriptionAssigner(subscriptionProductService)
 }
 
 func (a *ProductAwareSubscriptionAssigner) AssignOrExtendSubscription(ctx context.Context, input *AssignSubscriptionInput) (*UserSubscription, bool, error) {
 	if input == nil {
 		return nil, false, ErrSubscriptionNilInput
 	}
-	if a != nil && a.product != nil {
-		productID := input.ProductID
-		ok := productID > 0
-		var err error
-		if !ok {
-			productID, ok, err = a.ResolveActiveProductIDByGroupID(ctx, input.GroupID)
-		}
-		if err == nil && ok {
-			productSub, reused, assignErr := a.product.AssignOrExtendProductSubscription(ctx, &AssignProductSubscriptionInput{
-				UserID:       input.UserID,
-				ProductID:    productID,
-				ValidityDays: input.ValidityDays,
-				AssignedBy:   input.AssignedBy,
-				Notes:        input.Notes,
-			})
-			if assignErr != nil {
-				return nil, false, assignErr
-			}
-			return userSubscriptionFromProductAssignment(productSub, input.GroupID), reused, nil
-		}
-		if err != nil && !errors.Is(err, ErrSubscriptionNotFound) {
-			return nil, false, err
-		}
-	}
-	if a == nil || a.legacy == nil {
+	if a == nil || a.product == nil {
 		return nil, false, ErrProductSubscriptionAssignerUnavailable
 	}
-	return a.legacy.AssignOrExtendSubscription(ctx, input)
+	productID := input.ProductID
+	ok := productID > 0
+	var err error
+	if !ok {
+		productID, ok, err = a.ResolveActiveProductIDByGroupID(ctx, input.GroupID)
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, ErrSubscriptionNotFound
+	}
+	productSub, reused, assignErr := a.product.AssignOrExtendProductSubscription(ctx, &AssignProductSubscriptionInput{
+		UserID:       input.UserID,
+		ProductID:    productID,
+		ValidityDays: input.ValidityDays,
+		AssignedBy:   input.AssignedBy,
+		Notes:        input.Notes,
+	})
+	if assignErr != nil {
+		return nil, false, assignErr
+	}
+	return userSubscriptionFromProductAssignment(productSub, input.GroupID), reused, nil
 }
 
 func (a *ProductAwareSubscriptionAssigner) ResolveActiveProductIDByGroupID(ctx context.Context, groupID int64) (int64, bool, error) {

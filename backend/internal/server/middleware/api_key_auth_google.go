@@ -80,58 +80,38 @@ func APIKeyAuthWithSubscriptionGoogle(apiKeyService *service.APIKeyService, subs
 
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 
-		// xlab 产品订阅优先：命中则结算上下文写入，未命中回退常规订阅。
+		// xlab 产品订阅为唯一生效订阅来源；legacy user_subscriptions 不再作为运行时兜底。
 		var productSettlement *service.ProductSettlementContext
-		if isSubscriptionType && productSubscriptionService != nil {
-			settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
-				c.Request.Context(),
-				apiKey.User.ID,
-				apiKey.Group.ID,
-			)
-			if productErr == nil {
-				productSettlement = settlement
-			} else if !errors.Is(productErr, service.ErrSubscriptionNotFound) {
-				abortWithGoogleError(c, 403, productErr.Error())
+		if isSubscriptionType {
+			if productSubscriptionService == nil {
+				abortWithGoogleError(c, 403, "No active product subscription found for this group")
 				return
-			}
-		}
-		if productSettlement != nil {
-			c.Set(string(ContextKeyProductSettlement), productSettlement)
-			c.Request = c.Request.WithContext(service.ContextWithProductSettlement(c.Request.Context(), productSettlement))
-		} else if isSubscriptionType && subscriptionService != nil {
-			subscription, err := subscriptionService.GetActiveSubscription(
-				c.Request.Context(),
-				apiKey.User.ID,
-				apiKey.Group.ID,
-			)
-			if err != nil {
-				abortWithGoogleError(c, 403, "No active subscription found for this group")
-				return
-			}
-
-			needsMaintenance, err := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-			if err != nil {
-				status := 403
-				if errors.Is(err, service.ErrDailyLimitExceeded) ||
-					errors.Is(err, service.ErrWeeklyLimitExceeded) ||
-					errors.Is(err, service.ErrMonthlyLimitExceeded) {
-					status = 429
+			} else {
+				settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
+					c.Request.Context(),
+					apiKey.User.ID,
+					apiKey.Group.ID,
+				)
+				if productErr == nil {
+					productSettlement = settlement
+				} else {
+					if errors.Is(productErr, service.ErrSubscriptionNotFound) {
+						abortWithGoogleError(c, 403, "No active product subscription found for this group")
+						return
+					}
+					abortWithGoogleError(c, 403, productErr.Error())
+					return
 				}
-				abortWithGoogleError(c, status, err.Error())
-				return
-			}
-
-			c.Set(string(ContextKeySubscription), subscription)
-
-			if needsMaintenance {
-				maintenanceCopy := *subscription
-				subscriptionService.DoWindowMaintenance(&maintenanceCopy)
 			}
 		} else {
 			if apiKey.User.Balance <= 0 {
 				abortWithGoogleError(c, 403, "Insufficient account balance")
 				return
 			}
+		}
+		if productSettlement != nil {
+			c.Set(string(ContextKeyProductSettlement), productSettlement)
+			c.Request = c.Request.WithContext(service.ContextWithProductSettlement(c.Request.Context(), productSettlement))
 		}
 
 		c.Set(string(ContextKeyAPIKey), apiKey)

@@ -1411,6 +1411,21 @@ func (h *GatewayHandler) usageQuotaLimited(c *gin.Context, ctx context.Context, 
 func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, usageData gin.H, dailyUsage any, modelStats any) {
 	// 订阅模式
 	if apiKey.Group != nil && apiKey.Group.IsSubscriptionType() {
+		if settlement, ok := middleware2.GetProductSettlementFromContext(c); ok {
+			resp := h.usageProductSubscriptionResponse(apiKey.Group, settlement)
+			if usageData != nil {
+				resp["usage"] = usageData
+			}
+			if dailyUsage != nil {
+				resp["daily_usage"] = dailyUsage
+			}
+			if modelStats != nil {
+				resp["model_stats"] = modelStats
+			}
+			c.JSON(http.StatusOK, resp)
+			return
+		}
+
 		resp := gin.H{
 			"mode":     "unrestricted",
 			"isValid":  true,
@@ -1472,6 +1487,86 @@ func (h *GatewayHandler) usageUnrestricted(c *gin.Context, ctx context.Context, 
 		resp["model_stats"] = modelStats
 	}
 	c.JSON(http.StatusOK, resp)
+}
+
+func (h *GatewayHandler) usageProductSubscriptionResponse(group *service.Group, settlement *service.ProductSettlementContext) gin.H {
+	resp := gin.H{
+		"mode":    "unrestricted",
+		"isValid": true,
+		"unit":    "USD",
+	}
+	planName := ""
+	if group != nil {
+		planName = group.Name
+	}
+	if settlement == nil || settlement.Binding == nil || settlement.Subscription == nil {
+		resp["planName"] = planName
+		return resp
+	}
+
+	product := settlement.Binding.Product()
+	if product != nil && strings.TrimSpace(product.Name) != "" {
+		planName = product.Name
+	}
+	subscription := settlement.Subscription
+	resp["planName"] = planName
+	resp["remaining"] = h.calculateProductSubscriptionRemaining(product, subscription)
+	resp["subscription"] = gin.H{
+		"source":                    "product",
+		"subscription_id":           subscription.ID,
+		"product_id":                settlement.Binding.ProductID,
+		"product_code":              settlement.Binding.ProductCode,
+		"product_name":              settlement.Binding.ProductName,
+		"daily_usage_usd":           subscription.DailyUsageUSD,
+		"weekly_usage_usd":          subscription.WeeklyUsageUSD,
+		"monthly_usage_usd":         subscription.MonthlyUsageUSD,
+		"daily_limit_usd":           settlement.Binding.DailyLimitUSD,
+		"daily_effective_limit_usd": subscription.DailyEffectiveLimit(product),
+		"weekly_limit_usd":          settlement.Binding.WeeklyLimitUSD,
+		"monthly_limit_usd":         settlement.Binding.MonthlyLimitUSD,
+		"expires_at":                subscription.ExpiresAt,
+	}
+	return resp
+}
+
+func (h *GatewayHandler) calculateProductSubscriptionRemaining(product *service.SubscriptionProduct, sub *service.UserProductSubscription) float64 {
+	if product == nil || sub == nil {
+		return -1
+	}
+
+	var remainingValues []float64
+	if product.HasDailyLimit() {
+		remaining := sub.DailyEffectiveLimit(product) - sub.DailyUsageUSD
+		if remaining <= 0 {
+			return 0
+		}
+		remainingValues = append(remainingValues, remaining)
+	}
+	if product.HasWeeklyLimit() {
+		remaining := product.WeeklyLimitUSD - sub.WeeklyUsageUSD
+		if remaining <= 0 {
+			return 0
+		}
+		remainingValues = append(remainingValues, remaining)
+	}
+	if product.HasMonthlyLimit() {
+		remaining := product.MonthlyLimitUSD - sub.MonthlyUsageUSD
+		if remaining <= 0 {
+			return 0
+		}
+		remainingValues = append(remainingValues, remaining)
+	}
+	if len(remainingValues) == 0 {
+		return -1
+	}
+
+	min := remainingValues[0]
+	for _, v := range remainingValues[1:] {
+		if v < min {
+			min = v
+		}
+	}
+	return min
 }
 
 // calculateSubscriptionRemaining 计算订阅剩余可用额度

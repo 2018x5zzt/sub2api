@@ -480,26 +480,18 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/admin/subscriptions',
     name: 'AdminSubscriptions',
-    component: () => import('@/views/admin/SubscriptionsView.vue'),
-    meta: {
-      requiresAuth: true,
-      requiresAdmin: true,
-      title: 'Subscription Management',
-      titleKey: 'admin.subscriptions.title',
-      descriptionKey: 'admin.subscriptions.description'
-    }
-  },
-  {
-    path: '/admin/subscription-products',
-    name: 'AdminSubscriptionProducts',
     component: () => import('@/views/admin/SubscriptionProductsView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Product Subscriptions',
+      title: 'User Subscriptions',
       titleKey: 'admin.subscriptionProducts.title',
       descriptionKey: 'admin.subscriptionProducts.description'
     }
+  },
+  {
+    path: '/admin/subscription-products',
+    redirect: '/admin/subscriptions'
   },
   {
     path: '/admin/subscription-product-config',
@@ -508,9 +500,9 @@ const routes: RouteRecordRaw[] = [
     meta: {
       requiresAuth: true,
       requiresAdmin: true,
-      title: 'Product Subscription Config',
-      titleKey: 'admin.subscriptionProducts.title',
-      descriptionKey: 'admin.subscriptionProducts.description'
+      title: 'Subscription Product Config',
+      titleKey: 'admin.subscriptionProductConfig.title',
+      descriptionKey: 'admin.subscriptionProductConfig.description'
     }
   },
   {
@@ -885,6 +877,8 @@ router.beforeEach(async (to, _from, next) => {
     const restrictedPaths = [
       '/admin/groups',
       '/admin/subscriptions',
+      '/admin/subscription-products',
+      '/admin/subscription-product-config',
       '/admin/redeem',
       '/subscriptions',
       '/redeem'

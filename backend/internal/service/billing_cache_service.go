@@ -714,14 +714,19 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 		return ErrBillingServiceUnavailable
 	}
 
-	// 判断计费模式
-	isSubscriptionMode := group != nil && group.IsSubscriptionType() && subscription != nil
+	// 判断计费模式。xlab 产品订阅在 API key middleware 阶段写入 ctx，不再设置 legacy subscription。
+	productSettlement := (*ProductSettlementContext)(nil)
+	if settlement, ok := ProductSettlementFromContext(ctx); ok {
+		productSettlement = settlement
+	}
+	isSubscriptionGroup := group != nil && group.IsSubscriptionType()
+	isSubscriptionMode := isSubscriptionGroup && (subscription != nil || hasProductSettlement(productSettlement))
 
-	if isSubscriptionMode {
+	if subscription != nil {
 		if err := s.checkSubscriptionEligibility(ctx, user.ID, group, subscription); err != nil {
 			return err
 		}
-	} else {
+	} else if !hasProductSettlement(productSettlement) {
 		if err := s.checkBalanceEligibility(ctx, user.ID); err != nil {
 			return err
 		}

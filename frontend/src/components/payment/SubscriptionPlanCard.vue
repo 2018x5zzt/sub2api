@@ -98,7 +98,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SubscriptionPlan } from '@/types/payment'
-import type { UserSubscription } from '@/types'
+import type { ActiveSubscriptionProduct } from '@/types'
 import {
   platformAccentBarClass,
   platformBadgeLightClass,
@@ -110,13 +110,15 @@ import {
   platformLabel,
 } from '@/utils/platformColors'
 
-const props = defineProps<{ plan: SubscriptionPlan; activeSubscriptions?: UserSubscription[] }>()
+const props = defineProps<{ plan: SubscriptionPlan; activeSubscriptions?: ActiveSubscriptionProduct[] }>()
 const emit = defineEmits<{ select: [plan: SubscriptionPlan] }>()
 const { t } = useI18n()
 
 const platform = computed(() => props.plan.group_platform || '')
 const isRenewal = computed(() =>
-  props.activeSubscriptions?.some(s => s.group_id === props.plan.group_id && s.status === 'active') ?? false
+  props.activeSubscriptions?.some(s =>
+    s.status === 'active' && s.groups.some(group => group.group_id === props.plan.group_id)
+  ) ?? false
 )
 
 // Derived color classes from central config

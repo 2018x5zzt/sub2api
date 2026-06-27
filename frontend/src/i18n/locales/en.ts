@@ -417,6 +417,8 @@ export default {
     channelPricing: 'Channel Pricing',
     channelMonitor: 'Channel Monitor',
     channelStatus: 'Channel Status',
+    subscriptionManagement: 'Product Subscriptions',
+    subscriptionProductConfig: 'Product Subscription Config',
     riskControl: 'Risk Control',
   },
 
@@ -3065,6 +3067,10 @@ export default {
       revoked: 'Subscription revoked',
       revokeConfirm: 'Are you sure you want to revoke this subscription? This action cannot be undone.',
       revokeError: 'Failed to revoke subscription'
+    },
+    subscriptionProductConfig: {
+      title: 'Product Subscription Config',
+      description: 'Configure subscription products, product families, quotas, and group bindings'
     },
     subscriptions: {
       title: 'Subscription Management',

@@ -163,10 +163,6 @@ func NewRedeemService(
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
 	affiliateService *AffiliateService,
 ) *RedeemService {
-	// 产品感知分配器不可用时回退到 legacy 订阅服务，保证分组兑换码仍可分配。
-	if subscriptionAssigner == nil {
-		subscriptionAssigner = subscriptionService
-	}
 	return &RedeemService{
 		redeemRepo:           redeemRepo,
 		userRepo:             userRepo,
@@ -484,15 +480,15 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		}
 		validityDays := redeemCode.ValidityDays
 		if validityDays < 0 {
-			// 负数天数：缩短订阅，减到 0 则取消订阅
-			if err := s.reduceOrCancelSubscription(txCtx, userID, *redeemCode.GroupID, -validityDays, redeemCode.Code); err != nil {
-				return nil, fmt.Errorf("reduce or cancel subscription: %w", err)
-			}
+			return nil, infraerrors.BadRequest("LEGACY_SUBSCRIPTION_DISABLED", "legacy group subscription deduction is disabled")
 		} else {
 			if validityDays == 0 {
 				validityDays = 30
 			}
-			// 走产品感知分配器：分组若有活跃产品则分配产品订阅，否则回退 legacy。
+			if s.subscriptionAssigner == nil {
+				return nil, ErrProductSubscriptionAssignerUnavailable
+			}
+			// 走产品感知分配器：分组必须绑定活跃产品订阅。
 			_, _, err := s.subscriptionAssigner.AssignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
 				UserID:       userID,
 				GroupID:      *redeemCode.GroupID,

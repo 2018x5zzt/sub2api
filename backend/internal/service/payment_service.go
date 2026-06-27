@@ -182,6 +182,7 @@ type PaymentService struct {
 	loadBalancer             payment.LoadBalancer
 	redeemService            *RedeemService
 	subscriptionSvc          *SubscriptionService
+	subscriptionAssigner     DefaultSubscriptionAssigner
 	configService            *PaymentConfigService
 	userRepo                 UserRepository
 	groupRepo                GroupRepository
@@ -198,6 +199,10 @@ func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, load
 
 func (s *PaymentService) SetNotificationEmailService(notificationEmailService *NotificationEmailService) {
 	s.notificationEmailService = notificationEmailService
+}
+
+func (s *PaymentService) SetSubscriptionAssigner(subscriptionAssigner DefaultSubscriptionAssigner) {
+	s.subscriptionAssigner = subscriptionAssigner
 }
 
 // --- Provider Registry ---

@@ -149,40 +149,32 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 		skipBilling := c.Request.URL.Path == "/v1/usage" ||
 			isOpenAIImageJobPollRequest(c.Request.Method, c.Request.URL.Path)
 
-		var subscription *service.UserSubscription
 		var productSettlement *service.ProductSettlementContext
 		isSubscriptionType := apiKey.Group != nil && apiKey.Group.IsSubscriptionType()
 
-		// xlab 产品订阅优先：分组绑定了产品订阅时走产品额度结算；
-		// 未命中（无产品订阅）则回退到常规订阅，保证既有订阅分组不受影响。
-		if isSubscriptionType && productSubscriptionService != nil {
-			settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
-				c.Request.Context(),
-				apiKey.User.ID,
-				apiKey.Group.ID,
-			)
-			if productErr == nil {
-				productSettlement = settlement
-			} else if !errors.Is(productErr, service.ErrSubscriptionNotFound) && !skipBilling {
-				AbortWithError(c, 403, "SUBSCRIPTION_INVALID", productErr.Error())
-				return
-			}
-		}
-
-		if isSubscriptionType && productSettlement == nil && subscriptionService != nil {
-			sub, subErr := subscriptionService.GetActiveSubscription(
-				c.Request.Context(),
-				apiKey.User.ID,
-				apiKey.Group.ID,
-			)
-			if subErr != nil {
+		// xlab 产品订阅为唯一生效订阅来源；legacy user_subscriptions 不再作为运行时兜底。
+		if isSubscriptionType {
+			if productSubscriptionService == nil {
 				if !skipBilling {
-					AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active subscription found for this group")
+					AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active product subscription found for this group")
 					return
 				}
-				// skipBilling: 订阅不存在也放行，handler 会返回可用的数据
 			} else {
-				subscription = sub
+				settlement, productErr := productSubscriptionService.GetActiveProductSubscription(
+					c.Request.Context(),
+					apiKey.User.ID,
+					apiKey.Group.ID,
+				)
+				if productErr == nil {
+					productSettlement = settlement
+				} else if !skipBilling {
+					if errors.Is(productErr, service.ErrSubscriptionNotFound) {
+						AbortWithError(c, 403, "SUBSCRIPTION_NOT_FOUND", "No active product subscription found for this group")
+						return
+					}
+					AbortWithError(c, 403, "SUBSCRIPTION_INVALID", productErr.Error())
+					return
+				}
 			}
 		}
 
@@ -209,28 +201,7 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 				return
 			}
 
-			// 订阅模式：验证订阅限额
-			if subscription != nil {
-				needsMaintenance, validateErr := subscriptionService.ValidateAndCheckLimits(subscription, apiKey.Group)
-				if validateErr != nil {
-					code := "SUBSCRIPTION_INVALID"
-					status := 403
-					if errors.Is(validateErr, service.ErrDailyLimitExceeded) ||
-						errors.Is(validateErr, service.ErrWeeklyLimitExceeded) ||
-						errors.Is(validateErr, service.ErrMonthlyLimitExceeded) {
-						code = "USAGE_LIMIT_EXCEEDED"
-						status = 429
-					}
-					AbortWithError(c, status, code, validateErr.Error())
-					return
-				}
-
-				// 窗口维护异步化（不阻塞请求）
-				if needsMaintenance {
-					maintenanceCopy := *subscription
-					subscriptionService.DoWindowMaintenance(&maintenanceCopy)
-				}
-			} else if productSettlement == nil {
+			if productSettlement == nil {
 				// 非订阅模式 或 订阅模式但 subscriptionService 未注入：回退到余额检查。
 				// 产品订阅命中时由产品额度结算（溢出再回退余额），此处不做余额拦截。
 				if apiKey.User.Balance <= 0 {
@@ -242,9 +213,6 @@ func apiKeyAuthWithSubscription(apiKeyService *service.APIKeyService, subscripti
 
 		// ── 7. 设置上下文 → Next ─────────────────────────────────────
 
-		if subscription != nil {
-			c.Set(string(ContextKeySubscription), subscription)
-		}
 		if productSettlement != nil {
 			c.Set(string(ContextKeyProductSettlement), productSettlement)
 			c.Request = c.Request.WithContext(service.ContextWithProductSettlement(c.Request.Context(), productSettlement))

@@ -644,10 +644,11 @@ func TestExecuteSubscriptionFulfillmentAppliesAffiliateRebate(t *testing.T) {
 		group: &Group{ID: 7, Status: payment.EntityStatusActive, SubscriptionType: SubscriptionTypeSubscription},
 	}, subRepo, nil, nil, nil)
 	svc := &PaymentService{
-		entClient:        client,
-		groupRepo:        &subscriptionGroupRepoStub{group: &Group{ID: 7, Status: payment.EntityStatusActive, SubscriptionType: SubscriptionTypeSubscription}},
-		subscriptionSvc:  subscriptionSvc,
-		affiliateService: NewAffiliateService(affiliateRepo, settingSvc, nil, nil),
+		entClient:            client,
+		groupRepo:            &subscriptionGroupRepoStub{group: &Group{ID: 7, Status: payment.EntityStatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		subscriptionSvc:      subscriptionSvc,
+		subscriptionAssigner: subscriptionSvc,
+		affiliateService:     NewAffiliateService(affiliateRepo, settingSvc, nil, nil),
 	}
 
 	err = svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
@@ -743,10 +744,11 @@ func TestExecuteSubscriptionFulfillmentDoesNotDuplicateWorkAfterLegacySuccessAud
 		group: &Group{ID: 7, Status: payment.EntityStatusActive, SubscriptionType: SubscriptionTypeSubscription},
 	}, subRepo, nil, nil, nil)
 	svc := &PaymentService{
-		entClient:        client,
-		groupRepo:        &subscriptionGroupRepoStub{group: &Group{ID: 7, Status: payment.EntityStatusActive, SubscriptionType: SubscriptionTypeSubscription}},
-		subscriptionSvc:  subscriptionSvc,
-		affiliateService: NewAffiliateService(affiliateRepo, settingSvc, nil, nil),
+		entClient:            client,
+		groupRepo:            &subscriptionGroupRepoStub{group: &Group{ID: 7, Status: payment.EntityStatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		subscriptionSvc:      subscriptionSvc,
+		subscriptionAssigner: subscriptionSvc,
+		affiliateService:     NewAffiliateService(affiliateRepo, settingSvc, nil, nil),
 	}
 
 	err = svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
@@ -757,6 +759,98 @@ func TestExecuteSubscriptionFulfillmentDoesNotDuplicateWorkAfterLegacySuccessAud
 	require.Equal(t, OrderStatusCompleted, reloaded.Status)
 	require.Empty(t, affiliateRepo.accrueCalls)
 	require.Zero(t, subRepo.createCalls)
+}
+
+func TestNewPaymentServiceDoesNotDefaultSubscriptionAssignerToLegacyService(t *testing.T) {
+	legacySvc := NewSubscriptionService(&subscriptionGroupRepoStub{
+		group: &Group{ID: 7, SubscriptionType: SubscriptionTypeSubscription},
+	}, newSubscriptionUserSubRepoStub(), nil, nil, nil)
+
+	svc := NewPaymentService(nil, nil, nil, nil, legacySvc, nil, nil, nil, nil)
+
+	require.Same(t, legacySvc, svc.subscriptionSvc)
+	require.Nil(t, svc.subscriptionAssigner, "payment fulfillment must require explicit product-aware subscription assigner injection")
+}
+
+type paymentFulfillmentSubscriptionAssignerStub struct {
+	calls  int
+	inputs []AssignSubscriptionInput
+}
+
+func (s *paymentFulfillmentSubscriptionAssignerStub) AssignOrExtendSubscription(_ context.Context, input *AssignSubscriptionInput) (*UserSubscription, bool, error) {
+	if input == nil {
+		return nil, false, ErrSubscriptionNilInput
+	}
+	s.calls++
+	cp := *input
+	s.inputs = append(s.inputs, cp)
+	return &UserSubscription{
+		ID:        99,
+		UserID:    input.UserID,
+		GroupID:   input.GroupID,
+		Status:    SubscriptionStatusActive,
+		StartsAt:  time.Now(),
+		ExpiresAt: time.Now().AddDate(0, 0, input.ValidityDays),
+		Notes:     input.Notes,
+	}, false, nil
+}
+
+func TestExecuteSubscriptionFulfillmentUsesInjectedSubscriptionAssigner(t *testing.T) {
+	ctx := context.Background()
+	client := newPaymentConfigServiceTestClient(t)
+	ensurePaymentAuditOrderActionUniqueIndex(t, ctx, client)
+
+	user, err := client.User.Create().
+		SetEmail("subscription-product-aware@example.com").
+		SetPasswordHash("hash").
+		SetUsername("subscription-product-aware-user").
+		Save(ctx)
+	require.NoError(t, err)
+
+	order, err := client.PaymentOrder.Create().
+		SetUserID(user.ID).
+		SetUserEmail(user.Email).
+		SetUserName(user.Username).
+		SetAmount(80).
+		SetPayAmount(80).
+		SetFeeRate(0).
+		SetRechargeCode("PAY-SUB-PRODUCT-AWARE").
+		SetOutTradeNo("sub2_subscription_product_aware").
+		SetPaymentType(payment.TypeAlipay).
+		SetPaymentTradeNo("trade-sub-product-aware").
+		SetOrderType(payment.OrderTypeSubscription).
+		SetPlanID(100).
+		SetSubscriptionGroupID(7).
+		SetSubscriptionDays(30).
+		SetStatus(OrderStatusPaid).
+		SetExpiresAt(time.Now().Add(time.Hour)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("api.example.com").
+		Save(ctx)
+	require.NoError(t, err)
+
+	legacyRepo := newSubscriptionUserSubRepoStub()
+	legacySvc := NewSubscriptionService(&subscriptionGroupRepoStub{
+		group: &Group{ID: 7, Status: payment.EntityStatusActive, SubscriptionType: SubscriptionTypeSubscription},
+	}, legacyRepo, nil, nil, nil)
+	assigner := &paymentFulfillmentSubscriptionAssignerStub{}
+	svc := &PaymentService{
+		entClient:       client,
+		groupRepo:       &subscriptionGroupRepoStub{group: &Group{ID: 7, Status: payment.EntityStatusActive, SubscriptionType: SubscriptionTypeSubscription}},
+		subscriptionSvc: legacySvc,
+	}
+	svc.SetSubscriptionAssigner(assigner)
+
+	err = svc.ExecuteSubscriptionFulfillment(ctx, order.ID)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, assigner.calls)
+	require.Len(t, assigner.inputs, 1)
+	require.Equal(t, user.ID, assigner.inputs[0].UserID)
+	require.Equal(t, int64(7), assigner.inputs[0].GroupID)
+	require.Equal(t, 30, assigner.inputs[0].ValidityDays)
+	require.Equal(t, "payment order "+strconv.FormatInt(order.ID, 10), assigner.inputs[0].Notes)
+	require.Zero(t, legacyRepo.createCalls, "payment fulfillment must not write legacy user_subscriptions when a product-aware assigner is injected")
 }
 
 var _ AffiliateRepository = (*paymentFulfillmentAffiliateRepoStub)(nil)

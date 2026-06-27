@@ -417,6 +417,8 @@ export default {
     channelPricing: '渠道定价',
     channelMonitor: '渠道监控',
     channelStatus: '渠道状态',
+    subscriptionManagement: '产品订阅',
+    subscriptionProductConfig: '产品订阅配置',
     riskControl: '风控中心',
   },
 
@@ -3141,6 +3143,10 @@ export default {
       revoked: '订阅已撤销',
       revokeConfirm: '确定要撤销这个订阅吗？此操作无法撤销。',
       revokeError: '撤销订阅失败',
+    },
+    subscriptionProductConfig: {
+      title: '产品订阅配置',
+      description: '配置订阅产品、产品族、额度和分组绑定'
     },
     subscriptions: {
       title: '订阅管理',
