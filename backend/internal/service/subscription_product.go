@@ -156,9 +156,11 @@ type AdminProductSubscriptionListItem struct {
 	UserEmail    string
 	UserUsername string
 
-	ProductCode   string
-	ProductName   string
-	DailyLimitUSD float64
+	ProductCode     string
+	ProductName     string
+	DailyLimitUSD   float64
+	WeeklyLimitUSD  float64
+	MonthlyLimitUSD float64
 
 	CarryoverUsedUSD   float64
 	FreshDailyUsageUSD float64

@@ -106,9 +106,11 @@ type AdminProductSubscriptionListItem struct {
 	UserEmail    string `json:"user_email"`
 	UserUsername string `json:"user_username"`
 
-	ProductCode   string  `json:"product_code"`
-	ProductName   string  `json:"product_name"`
-	DailyLimitUSD float64 `json:"daily_limit_usd"`
+	ProductCode     string  `json:"product_code"`
+	ProductName     string  `json:"product_name"`
+	DailyLimitUSD   float64 `json:"daily_limit_usd"`
+	WeeklyLimitUSD  float64 `json:"weekly_limit_usd"`
+	MonthlyLimitUSD float64 `json:"monthly_limit_usd"`
 
 	CarryoverUsedUSD   float64 `json:"carryover_used_usd"`
 	FreshDailyUsageUSD float64 `json:"fresh_daily_usage_usd"`
@@ -257,6 +259,8 @@ func AdminProductSubscriptionListItemsFromService(items []service.AdminProductSu
 			ProductCode:                  item.ProductCode,
 			ProductName:                  item.ProductName,
 			DailyLimitUSD:                item.DailyLimitUSD,
+			WeeklyLimitUSD:               item.WeeklyLimitUSD,
+			MonthlyLimitUSD:              item.MonthlyLimitUSD,
 			CarryoverUsedUSD:             item.CarryoverUsedUSD,
 			FreshDailyUsageUSD:           item.FreshDailyUsageUSD,
 		})

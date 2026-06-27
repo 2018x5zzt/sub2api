@@ -322,11 +322,9 @@ function avatarColor(email: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 }
 
-function inferLimit(limit: number | null | undefined, dailyLimit: number | null | undefined, multiplier: number): number {
-  const l = Number(limit || 0)
-  if (l > 0) return l
-  const d = Number(dailyLimit || 0)
-  return d > 0 ? d * multiplier : 0
+function inferLimit(limit: number | null | undefined, _dailyLimit: number | null | undefined, _multiplier: number): number {
+  // 未设置即不限制，不再用日限额×倍数编造周/月额度（与后端独立限额语义一致）
+  return Number(limit || 0)
 }
 
 function usagePercent(usage: number | null | undefined, limit: number | null | undefined): number {

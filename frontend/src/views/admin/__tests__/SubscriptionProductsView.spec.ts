@@ -113,6 +113,8 @@ describe('admin SubscriptionProductsView', () => {
           product_code: 'gpt_daily_45',
           product_name: 'GPT 订阅每天45刀',
           daily_limit_usd: 45,
+          weekly_limit_usd: 315,
+          monthly_limit_usd: 1350,
           daily_usage_usd: 0,
           weekly_usage_usd: 0,
           monthly_usage_usd: 0,
