@@ -7041,6 +7041,8 @@ export default {
     noExpiration: 'No expiration',
     unlimited: 'Unlimited',
     unlimitedDesc: 'No usage limits on this subscription',
+    carryover: 'Carry',
+    dailyQuotaBreakdown: 'Daily ${base} + carryover ${carryover}, carryover left ${remaining}',
     daily: 'Daily',
     weekly: 'Weekly',
     monthly: 'Monthly',

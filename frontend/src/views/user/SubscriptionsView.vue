@@ -181,8 +181,14 @@
             <!-- Daily Usage -->
             <div v-if="dailyEffectiveLimit(subscription)" class="space-y-2">
               <div class="flex items-center justify-between">
-                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                <span class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.daily') }}
+                  <span
+                    v-if="subscription.daily_carryover_in_usd > 0"
+                    class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                  >
+                    {{ t('userSubscriptions.carryover') }} ${{ (subscription.daily_carryover_in_usd || 0).toFixed(2) }}
+                  </span>
                 </span>
                 <span class="text-sm text-gray-500 dark:text-dark-400">
                   ${{ (subscription.daily_usage_usd || 0).toFixed(2) }} / ${{
@@ -211,7 +217,11 @@
                 v-if="subscription.daily_carryover_in_usd > 0"
                 class="text-xs text-gray-500 dark:text-dark-400"
               >
-                {{ t('userSubscriptions.balanceFallback.usage', { used: (subscription.daily_carryover_in_usd - subscription.daily_carryover_remaining_usd).toFixed(2), remaining: subscription.daily_carryover_remaining_usd.toFixed(2) }) }}
+                {{ t('userSubscriptions.dailyQuotaBreakdown', {
+                  base: (subscription.daily_limit_usd || 0).toFixed(2),
+                  carryover: (subscription.daily_carryover_in_usd || 0).toFixed(2),
+                  remaining: (subscription.daily_carryover_remaining_usd || 0).toFixed(2),
+                }) }}
               </p>
             </div>
 

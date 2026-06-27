@@ -7194,6 +7194,8 @@ export default {
     noExpiration: '无到期时间',
     unlimited: '无限制',
     unlimitedDesc: '该订阅无用量限制',
+    carryover: '结转',
+    dailyQuotaBreakdown: '日额 ${base} + 结转 ${carryover}，结转剩余 ${remaining}',
     daily: '每日',
     weekly: '每周',
     monthly: '每月',
