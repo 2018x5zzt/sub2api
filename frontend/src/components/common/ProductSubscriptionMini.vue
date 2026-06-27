@@ -151,12 +151,14 @@ async function loadSummary() {
 }
 
 function dailyEffectiveLimit(product: ActiveSubscriptionProduct): number {
-  return (product.daily_limit_usd || 0) + (product.daily_carryover_in_usd || 0)
+  // 后端仅在设置了日限额时才叠加结转额度（见 DailyEffectiveLimit）
+  if (!product.daily_limit_usd) return 0
+  return product.daily_limit_usd + (product.daily_carryover_in_usd || 0)
 }
 
-function effectiveLimit(limit: number, dailyLimit: number, multiplier: number): number {
-  if (limit > 0) return limit
-  return dailyLimit > 0 ? dailyLimit * multiplier : 0
+function effectiveLimit(limit: number, _dailyLimit: number, _multiplier: number): number {
+  // 未设置即不限制，不再用日限额×倍数编造周/月额度
+  return limit || 0
 }
 
 function barWidth(used: number | undefined, limit: number): string {

@@ -205,15 +205,19 @@ const displaySubscriptions = computed(() => {
 })
 
 function dailyEffectiveLimit(sub: ActiveSubscriptionProduct): number {
-  return (sub.daily_limit_usd || 0) + (sub.daily_carryover_in_usd || 0)
+  // 后端仅在设置了日限额时才叠加结转额度（见 DailyEffectiveLimit）
+  if (!sub.daily_limit_usd) return 0
+  return sub.daily_limit_usd + (sub.daily_carryover_in_usd || 0)
 }
 
 function weeklyEffectiveLimit(sub: ActiveSubscriptionProduct): number {
-  return sub.weekly_limit_usd || (sub.daily_limit_usd ? sub.daily_limit_usd * 7 : 0)
+  // 未设置周限额即不限制，不再用日限额×7 编造
+  return sub.weekly_limit_usd || 0
 }
 
 function monthlyEffectiveLimit(sub: ActiveSubscriptionProduct): number {
-  return sub.monthly_limit_usd || (sub.daily_limit_usd ? sub.daily_limit_usd * 30 : 0)
+  // 未设置月限额即不限制，不再用日限额×30 编造
+  return sub.monthly_limit_usd || 0
 }
 
 function getMaxUsagePercentage(sub: ActiveSubscriptionProduct): number {
