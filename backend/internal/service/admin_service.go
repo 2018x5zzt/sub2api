@@ -152,6 +152,11 @@ type UpdateUserInput struct {
 	RPMLimit      *int     // 使用指针区分"未提供"和"设置为0"
 	Status        string
 	AllowedGroups *[]int64 // 使用指针区分"未提供"和"设置为空数组"
+	// 订阅余额兜底配置（xlab 产品订阅）
+	SubscriptionBalanceFallbackEnabled  *bool
+	SubscriptionBalanceFallbackLimitUSD *float64
+	SubscriptionBalanceFallbackUsedUSD  *float64
+	SubscriptionBalanceFallbackGroupID  *int64
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]*rate，nil 表示删除该分组的专属倍率
 	GroupRates map[int64]*float64
@@ -808,6 +813,10 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	oldRole := user.Role
 	oldRPMLimit := user.RPMLimit
 	oldAllowedGroups := append([]int64(nil), user.AllowedGroups...)
+	oldFallbackEnabled := user.SubscriptionBalanceFallbackEnabled
+	oldFallbackLimit := user.SubscriptionBalanceFallbackLimitUSD
+	oldFallbackUsed := user.SubscriptionBalanceFallbackUsedUSD
+	oldFallbackGroupID := int64PtrOrZero(user.SubscriptionBalanceFallbackGroupID)
 
 	if input.Email != "" {
 		user.Email = input.Email
@@ -841,6 +850,32 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		user.AllowedGroups = *input.AllowedGroups
 	}
 
+	if input.SubscriptionBalanceFallbackEnabled != nil {
+		user.SubscriptionBalanceFallbackEnabled = *input.SubscriptionBalanceFallbackEnabled
+	}
+	if input.SubscriptionBalanceFallbackLimitUSD != nil {
+		if *input.SubscriptionBalanceFallbackLimitUSD < 0 {
+			return nil, errors.New("subscription balance fallback limit must be >= 0")
+		}
+		user.SubscriptionBalanceFallbackLimitUSD = *input.SubscriptionBalanceFallbackLimitUSD
+	}
+	if input.SubscriptionBalanceFallbackUsedUSD != nil {
+		if *input.SubscriptionBalanceFallbackUsedUSD < 0 {
+			return nil, errors.New("subscription balance fallback used amount must be >= 0")
+		}
+		user.SubscriptionBalanceFallbackUsedUSD = *input.SubscriptionBalanceFallbackUsedUSD
+	}
+	if input.SubscriptionBalanceFallbackGroupID != nil {
+		if *input.SubscriptionBalanceFallbackGroupID <= 0 {
+			user.SubscriptionBalanceFallbackGroupID = nil
+		} else {
+			user.SubscriptionBalanceFallbackGroupID = input.SubscriptionBalanceFallbackGroupID
+		}
+	}
+	if err := validateSubscriptionBalanceFallbackConfig(ctx, s.groupRepo, user); err != nil {
+		return nil, err
+	}
+
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}
@@ -854,8 +889,13 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 
 	if s.authCacheInvalidator != nil {
 		// RPMLimit 直接参与 billing_cache_service.checkRPM 的三级级联，
-		// allowed_groups 参与 API Key 专属分组授权判断；不失效缓存会让修改在一个 L2 TTL 内失去效果。
-		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || !sameInt64Set(user.AllowedGroups, oldAllowedGroups) {
+		// allowed_groups 参与 API Key 专属分组授权判断；订阅余额兜底配置参与计费回退判断；
+		// 不失效缓存会让修改在一个 L2 TTL 内失去效果。
+		fallbackChanged := user.SubscriptionBalanceFallbackEnabled != oldFallbackEnabled ||
+			user.SubscriptionBalanceFallbackLimitUSD != oldFallbackLimit ||
+			user.SubscriptionBalanceFallbackUsedUSD != oldFallbackUsed ||
+			int64PtrOrZero(user.SubscriptionBalanceFallbackGroupID) != oldFallbackGroupID
+		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || !sameInt64Set(user.AllowedGroups, oldAllowedGroups) || fallbackChanged {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
 		}
 	}
@@ -882,6 +922,13 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	}
 
 	return user, nil
+}
+
+func int64PtrOrZero(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }
 
 func sameInt64Set(a, b []int64) bool {

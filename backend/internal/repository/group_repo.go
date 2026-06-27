@@ -59,6 +59,7 @@ func (r *groupRepository) Create(ctx context.Context, groupIn *service.Group) er
 		SetClaudeCodeOnly(groupIn.ClaudeCodeOnly).
 		SetNillableFallbackGroupID(groupIn.FallbackGroupID).
 		SetNillableFallbackGroupIDOnInvalidRequest(groupIn.FallbackGroupIDOnInvalidRequest).
+		SetNillableBalanceFallbackGroupID(groupIn.BalanceFallbackGroupID).
 		SetModelRoutingEnabled(groupIn.ModelRoutingEnabled).
 		SetMcpXMLInject(groupIn.MCPXMLInject).
 		SetAllowMessagesDispatch(groupIn.AllowMessagesDispatch).
@@ -188,6 +189,12 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 		builder = builder.SetFallbackGroupIDOnInvalidRequest(*groupIn.FallbackGroupIDOnInvalidRequest)
 	} else {
 		builder = builder.ClearFallbackGroupIDOnInvalidRequest()
+	}
+	// 处理 BalanceFallbackGroupID：nil 时清除，否则设置
+	if groupIn.BalanceFallbackGroupID != nil {
+		builder = builder.SetBalanceFallbackGroupID(*groupIn.BalanceFallbackGroupID)
+	} else {
+		builder = builder.ClearBalanceFallbackGroupID()
 	}
 
 	// 处理 ModelRouting：nil 时清除，否则设置

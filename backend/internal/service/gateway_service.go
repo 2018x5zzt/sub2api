@@ -9046,6 +9046,10 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 			cmd.ProductSubscriptionID = &fields.productSubscriptionID
 			cmd.ProductGroupID = fields.groupID
 			cmd.ProductDebitCost = fields.productDebitCost
+			// 用户开启订阅余额兜底时，产品额度溢出部分按比例回退到余额扣费。
+			if p.User != nil && p.User.SubscriptionBalanceFallbackEnabled {
+				cmd.ProductBalanceFallbackCost = p.Cost.ActualCost
+			}
 		} else if p.Subscription != nil && p.Cost.TotalCost > 0 {
 			cmd.SubscriptionID = &p.Subscription.ID
 			cmd.SubscriptionCost = p.Cost.ActualCost

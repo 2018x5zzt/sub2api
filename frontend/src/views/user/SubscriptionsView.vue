@@ -8,8 +8,83 @@
         ></div>
       </div>
 
+      <template v-else>
+      <!-- Balance Fallback Card -->
+      <div class="card overflow-hidden p-0">
+        <div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-start gap-3">
+            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
+              <Icon name="creditCard" size="sm" class="text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div class="min-w-0">
+              <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
+                {{ t('userSubscriptions.balanceFallback.title') }}
+              </h2>
+              <p class="mt-0.5 text-xs leading-relaxed text-gray-500 dark:text-dark-400">
+                {{ t('userSubscriptions.balanceFallback.description') }}
+              </p>
+            </div>
+          </div>
+          <label class="inline-flex shrink-0 cursor-pointer items-center gap-2.5">
+            <div class="relative">
+              <input
+                v-model="fallbackEnabled"
+                type="checkbox"
+                class="peer sr-only"
+                :disabled="savingFallback"
+              />
+              <div class="h-6 w-11 rounded-full bg-gray-200 transition-colors after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow-sm after:transition-all peer-checked:bg-emerald-500 peer-checked:after:translate-x-full peer-disabled:opacity-50 dark:bg-dark-600 dark:after:bg-dark-300 dark:peer-checked:bg-emerald-600" />
+            </div>
+            <span class="text-xs font-medium" :class="fallbackEnabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-gray-500'">
+              {{ fallbackEnabled ? t('common.enabled') : t('common.disabled') }}
+            </span>
+          </label>
+        </div>
+        <div v-if="fallbackEnabled" class="border-t border-gray-100 bg-gray-50/50 px-5 py-4 dark:border-dark-700 dark:bg-dark-800/50">
+          <div class="flex flex-wrap items-end gap-4">
+            <label class="block w-56">
+              <span class="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                {{ t('userSubscriptions.balanceFallback.group') }}
+              </span>
+              <select v-model.number="fallbackGroupId" class="input" :disabled="savingFallback">
+                <option :value="null">{{ t('userSubscriptions.balanceFallback.selectGroup') }}</option>
+                <option v-for="option in fallbackGroupOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </option>
+              </select>
+            </label>
+            <label class="block w-48">
+              <span class="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                {{ t('userSubscriptions.balanceFallback.limit') }}
+              </span>
+              <div class="relative">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                <input v-model.number="fallbackLimit" type="number" min="0" step="0.01" class="input pl-7" :disabled="savingFallback" />
+              </div>
+            </label>
+            <span v-if="fallbackLimit > 0" class="pb-2 text-xs tabular-nums text-gray-500 dark:text-dark-400">
+              {{ t('userSubscriptions.balanceFallback.usage', { used: fallbackUsed.toFixed(2), remaining: fallbackRemaining.toFixed(2) }) }}
+            </span>
+            <span v-else class="pb-2 text-xs text-gray-400 dark:text-gray-500">
+              {{ t('userSubscriptions.balanceFallback.setLimitHint') }}
+            </span>
+          </div>
+          <p class="mt-3 text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+            {{ t('userSubscriptions.balanceFallback.negativeBalanceHint') }}
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 border-t border-gray-100 px-5 py-4 dark:border-dark-700">
+          <button type="button" class="btn btn-primary btn-sm" :disabled="savingFallback" @click="saveBalanceFallbackSettings">
+            {{ savingFallback ? t('common.saving') : t('common.save') }}
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" :disabled="savingFallback" @click="resetBalanceFallbackForm">
+            {{ t('common.cancel') }}
+          </button>
+        </div>
+      </div>
+
       <!-- Empty State -->
-      <div v-else-if="subscriptions.length === 0" class="card p-12 text-center">
+      <div v-if="subscriptions.length === 0" class="card p-12 text-center">
         <div
           class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
         >
@@ -237,17 +312,21 @@
           </div>
         </div>
       </div>
+      </template>
     </div>
   </AppLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import subscriptionsAPI from '@/api/subscriptions'
-import type { UserSubscription } from '@/types'
+import userGroupsAPI from '@/api/groups'
+import { updateProfile } from '@/api/user'
+import type { Group, UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { formatDateOnly } from '@/utils/format'
@@ -267,19 +346,83 @@ function platformAccentDotClass(p: string): string {
 const { t } = useI18n()
 const router = useRouter()
 const appStore = useAppStore()
+const authStore = useAuthStore()
 
 const subscriptions = ref<UserSubscription[]>([])
 const loading = ref(true)
+const selectableGroups = ref<Group[]>([])
+const savingFallback = ref(false)
+const fallbackEnabled = ref(false)
+const fallbackLimit = ref(0)
+const fallbackGroupId = ref<number | null>(null)
+
+const fallbackUsed = computed(() => authStore.user?.subscription_balance_fallback_used_usd || 0)
+const fallbackRemaining = computed(() => Math.max((fallbackLimit.value || 0) - fallbackUsed.value, 0))
+const fallbackGroupOptions = computed(() =>
+  selectableGroups.value
+    .filter((group) => group.status === 'active' && group.subscription_type === 'standard')
+    .map((group) => ({ value: group.id, label: group.name || `Group #${group.id}` }))
+)
 
 async function loadSubscriptions() {
   try {
     loading.value = true
-    subscriptions.value = await subscriptionsAPI.getMySubscriptions()
+    const [subs, profile, groups] = await Promise.all([
+      subscriptionsAPI.getMySubscriptions(),
+      authStore.refreshUser(),
+      userGroupsAPI.getAvailable()
+    ])
+    subscriptions.value = subs
+    selectableGroups.value = groups
+    fallbackEnabled.value = Boolean(profile.subscription_balance_fallback_enabled)
+    fallbackLimit.value = profile.subscription_balance_fallback_limit_usd || 0
+    fallbackGroupId.value = profile.subscription_balance_fallback_group_id || null
   } catch (error) {
     console.error('Failed to load subscriptions:', error)
     appStore.showError(t('userSubscriptions.failedToLoad'))
   } finally {
     loading.value = false
+  }
+}
+
+function resetBalanceFallbackForm() {
+  fallbackEnabled.value = Boolean(authStore.user?.subscription_balance_fallback_enabled)
+  fallbackLimit.value = authStore.user?.subscription_balance_fallback_limit_usd || 0
+  fallbackGroupId.value = authStore.user?.subscription_balance_fallback_group_id || null
+}
+
+async function saveBalanceFallbackSettings() {
+  const hasPositiveLimit = (fallbackLimit.value || 0) > 0
+  const hasSelectableFallbackGroup = fallbackGroupOptions.value.some(
+    (option) => option.value === fallbackGroupId.value
+  )
+
+  if (fallbackEnabled.value && !hasSelectableFallbackGroup) {
+    appStore.showError(t('userSubscriptions.balanceFallback.groupRequired'))
+    return
+  }
+  if (fallbackEnabled.value && !hasPositiveLimit) {
+    appStore.showError(t('userSubscriptions.balanceFallback.limitRequired'))
+    return
+  }
+  savingFallback.value = true
+  try {
+    const updated = await updateProfile({
+      subscription_balance_fallback_enabled: fallbackEnabled.value,
+      subscription_balance_fallback_limit_usd: Math.max(fallbackLimit.value || 0, 0),
+      subscription_balance_fallback_group_id: fallbackEnabled.value ? fallbackGroupId.value : null
+    })
+    authStore.user = updated
+    fallbackEnabled.value = Boolean(updated.subscription_balance_fallback_enabled)
+    fallbackLimit.value = updated.subscription_balance_fallback_limit_usd || 0
+    fallbackGroupId.value = updated.subscription_balance_fallback_group_id || null
+    appStore.showSuccess(t('common.saved'))
+  } catch (error) {
+    console.error('Failed to save subscription balance fallback:', error)
+    appStore.showError(t('common.error'))
+    resetBalanceFallbackForm()
+  } finally {
+    savingFallback.value = false
   }
 }
 

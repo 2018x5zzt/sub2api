@@ -45,6 +45,7 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 		SetName(key.Name).
 		SetStatus(key.Status).
 		SetNillableGroupID(key.GroupID).
+		SetNillableSubscriptionProductFamily(key.SubscriptionProductFamily).
 		SetNillableLastUsedAt(key.LastUsedAt).
 		SetQuota(key.Quota).
 		SetQuotaUsed(key.QuotaUsed).
@@ -130,6 +131,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldID,
 			apikey.FieldUserID,
 			apikey.FieldGroupID,
+			apikey.FieldSubscriptionProductFamily,
 			apikey.FieldName,
 			apikey.FieldStatus,
 			apikey.FieldIPWhitelist,
@@ -155,6 +157,10 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				user.FieldBalanceNotifyThreshold,
 				user.FieldBalanceNotifyExtraEmails,
 				user.FieldTotalRecharged,
+				user.FieldSubscriptionBalanceFallbackEnabled,
+				user.FieldSubscriptionBalanceFallbackLimitUsd,
+				user.FieldSubscriptionBalanceFallbackUsedUsd,
+				user.FieldSubscriptionBalanceFallbackGroupID,
 				user.FieldSignupSource,
 				user.FieldLastLoginAt,
 				user.FieldLastActiveAt,
@@ -185,6 +191,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldClaudeCodeOnly,
 				group.FieldFallbackGroupID,
 				group.FieldFallbackGroupIDOnInvalidRequest,
+				group.FieldBalanceFallbackGroupID,
 				group.FieldModelRoutingEnabled,
 				group.FieldModelRouting,
 				group.FieldMcpXMLInject,
@@ -231,6 +238,11 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey) erro
 		builder.SetGroupID(*key.GroupID)
 	} else {
 		builder.ClearGroupID()
+	}
+	if key.SubscriptionProductFamily != nil && strings.TrimSpace(*key.SubscriptionProductFamily) != "" {
+		builder.SetSubscriptionProductFamily(strings.TrimSpace(*key.SubscriptionProductFamily))
+	} else {
+		builder.ClearSubscriptionProductFamily()
 	}
 
 	// Expiration time
@@ -698,29 +710,30 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		return nil
 	}
 	out := &service.APIKey{
-		ID:            m.ID,
-		UserID:        m.UserID,
-		Key:           m.Key,
-		Name:          m.Name,
-		Status:        m.Status,
-		IPWhitelist:   m.IPWhitelist,
-		IPBlacklist:   m.IPBlacklist,
-		LastUsedAt:    m.LastUsedAt,
-		CreatedAt:     m.CreatedAt,
-		UpdatedAt:     m.UpdatedAt,
-		GroupID:       m.GroupID,
-		Quota:         m.Quota,
-		QuotaUsed:     m.QuotaUsed,
-		ExpiresAt:     m.ExpiresAt,
-		RateLimit5h:   m.RateLimit5h,
-		RateLimit1d:   m.RateLimit1d,
-		RateLimit7d:   m.RateLimit7d,
-		Usage5h:       m.Usage5h,
-		Usage1d:       m.Usage1d,
-		Usage7d:       m.Usage7d,
-		Window5hStart: m.Window5hStart,
-		Window1dStart: m.Window1dStart,
-		Window7dStart: m.Window7dStart,
+		ID:                        m.ID,
+		UserID:                    m.UserID,
+		Key:                       m.Key,
+		Name:                      m.Name,
+		Status:                    m.Status,
+		IPWhitelist:               m.IPWhitelist,
+		IPBlacklist:               m.IPBlacklist,
+		LastUsedAt:                m.LastUsedAt,
+		CreatedAt:                 m.CreatedAt,
+		UpdatedAt:                 m.UpdatedAt,
+		GroupID:                   m.GroupID,
+		SubscriptionProductFamily: m.SubscriptionProductFamily,
+		Quota:                     m.Quota,
+		QuotaUsed:                 m.QuotaUsed,
+		ExpiresAt:                 m.ExpiresAt,
+		RateLimit5h:               m.RateLimit5h,
+		RateLimit1d:               m.RateLimit1d,
+		RateLimit7d:               m.RateLimit7d,
+		Usage5h:                   m.Usage5h,
+		Usage1d:                   m.Usage1d,
+		Usage7d:                   m.Usage7d,
+		Window5hStart:             m.Window5hStart,
+		Window1dStart:             m.Window1dStart,
+		Window7dStart:             m.Window7dStart,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
@@ -744,29 +757,33 @@ func userEntityToService(u *dbent.User) *service.User {
 		return nil
 	}
 	out := &service.User{
-		ID:                         u.ID,
-		Email:                      u.Email,
-		Username:                   u.Username,
-		Notes:                      u.Notes,
-		PasswordHash:               u.PasswordHash,
-		Role:                       u.Role,
-		Balance:                    u.Balance,
-		Concurrency:                u.Concurrency,
-		Status:                     u.Status,
-		SignupSource:               u.SignupSource,
-		LastLoginAt:                u.LastLoginAt,
-		LastActiveAt:               u.LastActiveAt,
-		TotpSecretEncrypted:        u.TotpSecretEncrypted,
-		TotpEnabled:                u.TotpEnabled,
-		TotpEnabledAt:              u.TotpEnabledAt,
-		BalanceNotifyEnabled:       u.BalanceNotifyEnabled,
-		BalanceNotifyThresholdType: u.BalanceNotifyThresholdType,
-		BalanceNotifyThreshold:     u.BalanceNotifyThreshold,
-		TotalRecharged:             u.TotalRecharged,
-		RPMLimit:                   u.RpmLimit,
-		CreatedAt:                  u.CreatedAt,
-		UpdatedAt:                  u.UpdatedAt,
-		DeletedAt:                  u.DeletedAt,
+		ID:                                  u.ID,
+		Email:                               u.Email,
+		Username:                            u.Username,
+		Notes:                               u.Notes,
+		PasswordHash:                        u.PasswordHash,
+		Role:                                u.Role,
+		Balance:                             u.Balance,
+		Concurrency:                         u.Concurrency,
+		Status:                              u.Status,
+		SignupSource:                        u.SignupSource,
+		LastLoginAt:                         u.LastLoginAt,
+		LastActiveAt:                        u.LastActiveAt,
+		TotpSecretEncrypted:                 u.TotpSecretEncrypted,
+		TotpEnabled:                         u.TotpEnabled,
+		TotpEnabledAt:                       u.TotpEnabledAt,
+		BalanceNotifyEnabled:                u.BalanceNotifyEnabled,
+		BalanceNotifyThresholdType:          u.BalanceNotifyThresholdType,
+		BalanceNotifyThreshold:              u.BalanceNotifyThreshold,
+		TotalRecharged:                      u.TotalRecharged,
+		SubscriptionBalanceFallbackEnabled:  u.SubscriptionBalanceFallbackEnabled,
+		SubscriptionBalanceFallbackLimitUSD: u.SubscriptionBalanceFallbackLimitUsd,
+		SubscriptionBalanceFallbackUsedUSD:  u.SubscriptionBalanceFallbackUsedUsd,
+		SubscriptionBalanceFallbackGroupID:  u.SubscriptionBalanceFallbackGroupID,
+		RPMLimit:                            u.RpmLimit,
+		CreatedAt:                           u.CreatedAt,
+		UpdatedAt:                           u.UpdatedAt,
+		DeletedAt:                           u.DeletedAt,
 	}
 	// Parse extra emails JSON (supports both old []string and new []NotifyEmailEntry format)
 	if u.BalanceNotifyExtraEmails != "" && u.BalanceNotifyExtraEmails != "[]" {
@@ -802,6 +819,7 @@ func groupEntityToService(g *dbent.Group) *service.Group {
 		ClaudeCodeOnly:                  g.ClaudeCodeOnly,
 		FallbackGroupID:                 g.FallbackGroupID,
 		FallbackGroupIDOnInvalidRequest: g.FallbackGroupIDOnInvalidRequest,
+		BalanceFallbackGroupID:          g.BalanceFallbackGroupID,
 		ModelRouting:                    g.ModelRouting,
 		ModelRoutingEnabled:             g.ModelRoutingEnabled,
 		MCPXMLInject:                    g.McpXMLInject,

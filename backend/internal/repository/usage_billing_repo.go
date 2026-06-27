@@ -130,7 +130,7 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 		if cmd.ProductBalanceFallbackCost > 0 && productDebitApplied < cmd.ProductDebitCost {
 			fallbackCost := proportionalProductBalanceFallbackCost(cmd.ProductBalanceFallbackCost, cmd.ProductDebitCost, productDebitApplied)
 			if fallbackCost > 0 {
-				newBalance, sufficient, derr := deductUsageBillingBalance(ctx, tx, cmd.UserID, fallbackCost)
+				newBalance, sufficient, derr := deductUsageBillingBalance(ctx, tx, cmd.UserID, fallbackCost, fallbackCost)
 				if derr != nil {
 					return derr
 				}
@@ -142,7 +142,7 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	if cmd.BalanceCost > 0 {
-		newBalance, sufficient, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost)
+		newBalance, sufficient, err := deductUsageBillingBalance(ctx, tx, cmd.UserID, cmd.BalanceCost, cmd.SubscriptionBalanceFallbackCost)
 		if err != nil {
 			return err
 		}
@@ -211,7 +211,16 @@ func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscrip
 	return service.ErrSubscriptionNotFound
 }
 
-func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount float64) (float64, bool, error) {
+// deductUsageBillingBalance 从用户余额扣减 amount。
+// 当 subscriptionBalanceFallbackCost > 0 时，本次扣减是订阅余额兜底：除扣余额外，
+// 还累加 subscription_balance_fallback_used_usd，并在 SQL 守卫中强制累计不超过
+// subscription_balance_fallback_limit_usd，超限返回 ErrSubscriptionBalanceFallbackLimitExceeded。
+// 返回值 sufficient 表示扣减前余额是否足够（false = 透支）。
+func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, amount, subscriptionBalanceFallbackCost float64) (float64, bool, error) {
+	if subscriptionBalanceFallbackCost > 0 {
+		return deductUsageBillingBalanceWithFallback(ctx, tx, userID, amount, subscriptionBalanceFallbackCost)
+	}
+
 	var newBalance float64
 	err := tx.QueryRowContext(ctx, `
 		UPDATE users
@@ -241,6 +250,58 @@ func deductUsageBillingBalance(ctx context.Context, tx *sql.Tx, userID int64, am
 		return 0, false, err
 	}
 	return newBalance, false, nil
+}
+
+// deductUsageBillingBalanceWithFallback 在订阅余额兜底语义下扣余额：先优先非透支扣减，
+// 余额不足时允许透支，两者都受 subscription_balance_fallback_limit_usd 上限约束。
+func deductUsageBillingBalanceWithFallback(ctx context.Context, tx *sql.Tx, userID int64, amount, fallbackCost float64) (float64, bool, error) {
+	const guard = `
+			AND subscription_balance_fallback_enabled = TRUE
+			AND subscription_balance_fallback_limit_usd > 0
+			AND subscription_balance_fallback_used_usd + $3 <= subscription_balance_fallback_limit_usd`
+
+	var newBalance float64
+	// 优先非透支扣减（余额充足）。
+	err := tx.QueryRowContext(ctx, `
+		UPDATE users
+		SET balance = balance - $1,
+			subscription_balance_fallback_used_usd = subscription_balance_fallback_used_usd + $3,
+			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL AND balance >= $1`+guard+`
+		RETURNING balance
+	`, amount, userID, fallbackCost).Scan(&newBalance)
+	if err == nil {
+		return newBalance, true, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, false, err
+	}
+
+	// 余额不足或上限可能已达：允许透支再试（仍受兜底上限约束）。
+	err = tx.QueryRowContext(ctx, `
+		UPDATE users
+		SET balance = balance - $1,
+			subscription_balance_fallback_used_usd = subscription_balance_fallback_used_usd + $3,
+			updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL`+guard+`
+		RETURNING balance
+	`, amount, userID, fallbackCost).Scan(&newBalance)
+	if err == nil {
+		return newBalance, false, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, false, err
+	}
+
+	// 守卫失败：区分用户不存在与兜底上限已达。
+	var exists bool
+	if existsErr := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL)`, userID).Scan(&exists); existsErr != nil {
+		return 0, false, existsErr
+	}
+	if !exists {
+		return 0, false, service.ErrUserNotFound
+	}
+	return 0, false, service.ErrSubscriptionBalanceFallbackLimitExceeded
 }
 
 func incrementUsageBillingAPIKeyQuota(ctx context.Context, tx *sql.Tx, apiKeyID int64, amount float64) (bool, error) {

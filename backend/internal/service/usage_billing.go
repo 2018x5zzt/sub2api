@@ -12,6 +12,9 @@ import (
 var ErrUsageBillingRequestIDRequired = errors.New("usage billing request_id is required")
 var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerprint conflict")
 
+// ErrSubscriptionBalanceFallbackLimitExceeded 表示用户订阅余额兜底累计已达上限，无法继续从余额回退扣费。
+var ErrSubscriptionBalanceFallbackLimitExceeded = errors.New("subscription balance fallback limit exceeded")
+
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
 	RequestID          string

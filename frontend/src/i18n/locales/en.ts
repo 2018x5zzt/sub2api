@@ -1920,6 +1920,17 @@ export default {
         rpmLimitPlaceholder: '0 = unlimited',
         rpmLimitHint: 'Max requests per minute for this user; 0 = unlimited. Acts as a fallback only when the group has no rpm_limit set.'
       },
+      fallback: {
+        enabled: 'Use balance fallback when subscription quota runs out',
+        enabledHint: 'Admins can enable, disable, and set the balance fallback limit on behalf of the user.',
+        group: 'Balance fallback group',
+        selectGroup: 'Select a standard group',
+        limit: 'Cumulative limit (USD)',
+        used: 'Used (USD)',
+        usedHint: 'Admins can reset the fallback amount this user has consumed.',
+        groupRequired: 'Please select a balance fallback group',
+        limitRequired: 'The balance fallback limit must be greater than 0'
+      },
       columns: {
         user: 'User',
         id: 'ID',
@@ -7032,7 +7043,19 @@ export default {
     resetIn: 'Resets in {time}',
     quotaEndsIn: 'Quota ends in {time}',
     windowNotActive: 'Awaiting first use',
-    usageOf: '{used} of {limit}'
+    usageOf: '{used} of {limit}',
+    balanceFallback: {
+      title: 'Automatically use balance when subscription runs out',
+      description: 'When enabled, once a product subscription quota is exhausted and the group has a balance fallback mapping, requests will automatically draw from your balance up to the limit you set.',
+      group: 'Balance group',
+      selectGroup: 'Select balance group',
+      limit: 'Balance fallback limit',
+      usage: 'Used ${used}, remaining ${remaining}',
+      setLimitHint: 'Set a limit greater than 0 to enable balance fallback',
+      negativeBalanceHint: 'If your balance becomes negative, future requests will be blocked until you recharge.',
+      groupRequired: 'Please select a balance group',
+      limitRequired: 'Please set a positive fallback limit'
+    }
   },
 
   // Onboarding Tour

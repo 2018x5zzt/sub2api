@@ -177,12 +177,15 @@ const (
 
 // UpdateProfileRequest 更新用户资料请求
 type UpdateProfileRequest struct {
-	Email                  *string  `json:"email"`
-	Username               *string  `json:"username"`
-	AvatarURL              *string  `json:"avatar_url"`
-	Concurrency            *int     `json:"concurrency"`
-	BalanceNotifyEnabled   *bool    `json:"balance_notify_enabled"`
-	BalanceNotifyThreshold *float64 `json:"balance_notify_threshold"`
+	Email                               *string  `json:"email"`
+	Username                            *string  `json:"username"`
+	AvatarURL                           *string  `json:"avatar_url"`
+	Concurrency                         *int     `json:"concurrency"`
+	BalanceNotifyEnabled                *bool    `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold              *float64 `json:"balance_notify_threshold"`
+	SubscriptionBalanceFallbackEnabled  *bool    `json:"subscription_balance_fallback_enabled"`
+	SubscriptionBalanceFallbackLimitUSD *float64 `json:"subscription_balance_fallback_limit_usd"`
+	SubscriptionBalanceFallbackGroupID  *int64   `json:"subscription_balance_fallback_group_id"`
 }
 
 type UserAvatar struct {
@@ -219,18 +222,30 @@ type UserService struct {
 	settingRepo          SettingRepository
 	authCacheInvalidator APIKeyAuthCacheInvalidator
 	billingCache         BillingCache
+	groupRepo            GroupRepository
 	lastActiveTouchL1    sync.Map
 	lastActiveTouchSF    singleflight.Group
 }
 
-// NewUserService 创建用户服务实例
-func NewUserService(userRepo UserRepository, settingRepo SettingRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache) *UserService {
+// NewUserService 创建用户服务实例。groupRepo 为可选变参（用于订阅余额兜底分组校验），
+// 省略时兜底配置校验将拒绝设置兜底分组；既有测试可继续以 4 参调用。
+func NewUserService(userRepo UserRepository, settingRepo SettingRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache, groupRepo ...GroupRepository) *UserService {
+	var fallbackGroupRepo GroupRepository
+	if len(groupRepo) > 0 {
+		fallbackGroupRepo = groupRepo[0]
+	}
 	return &UserService{
 		userRepo:             userRepo,
 		settingRepo:          settingRepo,
 		authCacheInvalidator: authCacheInvalidator,
 		billingCache:         billingCache,
+		groupRepo:            fallbackGroupRepo,
 	}
+}
+
+// ProvideUserService 是 wire 使用的非变参构造器，显式注入 groupRepo。
+func ProvideUserService(userRepo UserRepository, settingRepo SettingRepository, authCacheInvalidator APIKeyAuthCacheInvalidator, billingCache BillingCache, groupRepo GroupRepository) *UserService {
+	return NewUserService(userRepo, settingRepo, authCacheInvalidator, billingCache, groupRepo)
 }
 
 // GetFirstAdmin 获取首个管理员用户（用于 Admin API Key 认证）
@@ -391,6 +406,10 @@ func (s *UserService) UnbindUserAuthProviderWithResult(ctx context.Context, user
 
 // UpdateProfile 更新用户资料
 func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req UpdateProfileRequest) (*User, error) {
+	// 订阅余额兜底配置参与计费回退判断，修改时需失效认证缓存，否则一个 L2 TTL 内不生效。
+	fallbackTouched := req.SubscriptionBalanceFallbackEnabled != nil ||
+		req.SubscriptionBalanceFallbackLimitUSD != nil ||
+		req.SubscriptionBalanceFallbackGroupID != nil
 	if txRunner, ok := s.userRepo.(userProfileIdentityTxRunner); ok {
 		var (
 			updated        *User
@@ -403,7 +422,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req Updat
 		}); err != nil {
 			return nil, err
 		}
-		if s.authCacheInvalidator != nil && updated != nil && updated.Concurrency != oldConcurrency {
+		if s.authCacheInvalidator != nil && updated != nil && (updated.Concurrency != oldConcurrency || fallbackTouched) {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 		}
 		return updated, nil
@@ -413,7 +432,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req Updat
 	if err != nil {
 		return nil, err
 	}
-	if s.authCacheInvalidator != nil && updated.Concurrency != oldConcurrency {
+	if s.authCacheInvalidator != nil && (updated.Concurrency != oldConcurrency || fallbackTouched) {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}
 	return updated, nil
@@ -464,6 +483,26 @@ func (s *UserService) updateProfile(ctx context.Context, userID int64, req Updat
 		} else {
 			user.BalanceNotifyThreshold = req.BalanceNotifyThreshold
 		}
+	}
+	if req.SubscriptionBalanceFallbackEnabled != nil {
+		user.SubscriptionBalanceFallbackEnabled = *req.SubscriptionBalanceFallbackEnabled
+	}
+	if req.SubscriptionBalanceFallbackLimitUSD != nil {
+		if *req.SubscriptionBalanceFallbackLimitUSD <= 0 {
+			user.SubscriptionBalanceFallbackLimitUSD = 0
+		} else {
+			user.SubscriptionBalanceFallbackLimitUSD = *req.SubscriptionBalanceFallbackLimitUSD
+		}
+	}
+	if req.SubscriptionBalanceFallbackGroupID != nil {
+		if *req.SubscriptionBalanceFallbackGroupID <= 0 {
+			user.SubscriptionBalanceFallbackGroupID = nil
+		} else {
+			user.SubscriptionBalanceFallbackGroupID = req.SubscriptionBalanceFallbackGroupID
+		}
+	}
+	if err := validateSubscriptionBalanceFallbackConfig(ctx, s.groupRepo, user); err != nil {
+		return nil, oldConcurrency, err
 	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {

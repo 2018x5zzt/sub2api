@@ -2026,6 +2026,17 @@ export default {
         rpmLimitPlaceholder: '0 表示不限制',
         rpmLimitHint: '该用户每分钟最大请求数，0 = 不限制；仅在所用分组未设置 rpm_limit 时作为兜底生效'
       },
+      fallback: {
+        enabled: '订阅额度不足时用余额兜底',
+        enabledHint: '管理员可代用户开启、关闭并设置余额兜底额度。',
+        group: '余额兜底分组',
+        selectGroup: '选择标准分组',
+        limit: '累计上限 USD',
+        used: '已用 USD',
+        usedHint: '管理员可重置该用户已使用的兜底额度。',
+        groupRequired: '请选择余额兜底分组',
+        limitRequired: '余额兜底上限必须大于 0'
+      },
       adjustBalance: '调整余额',
       adjustConcurrency: '调整并发数',
       adjustmentAmount: '调整金额',
@@ -7185,7 +7196,19 @@ export default {
     resetIn: '{time} 后重置',
     quotaEndsIn: '额度将在 {time} 后结束',
     windowNotActive: '等待首次使用',
-    usageOf: '已用 {used} / {limit}'
+    usageOf: '已用 {used} / {limit}',
+    balanceFallback: {
+      title: '订阅消耗完时，自动消耗余额',
+      description: '开启后，产品订阅额度耗尽且分组存在余额兜底映射时，会在你设置的上限内自动改用余额。',
+      group: '余额兜底分组',
+      selectGroup: '选择余额兜底分组',
+      limit: '余额兜底上限',
+      usage: '已用 ${used}，剩余 ${remaining}',
+      setLimitHint: '请设置一个大于 0 的上限以启用余额兜底',
+      negativeBalanceHint: '若余额变为负数，后续请求将被拦截，直至你充值。',
+      groupRequired: '请选择余额兜底分组',
+      limitRequired: '请设置一个大于 0 的兜底上限'
+    }
   },
 
   // Onboarding Tour

@@ -29,6 +29,12 @@ type User struct {
 	BalanceNotifyExtraEmails   []NotifyEmailEntry `json:"balance_notify_extra_emails"`
 	TotalRecharged             float64            `json:"total_recharged"`
 
+	// 订阅余额兜底配置（xlab 产品订阅）
+	SubscriptionBalanceFallbackEnabled  bool    `json:"subscription_balance_fallback_enabled"`
+	SubscriptionBalanceFallbackLimitUSD float64 `json:"subscription_balance_fallback_limit_usd"`
+	SubscriptionBalanceFallbackUsedUSD  float64 `json:"subscription_balance_fallback_used_usd"`
+	SubscriptionBalanceFallbackGroupID  *int64  `json:"subscription_balance_fallback_group_id"`
+
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制），仅在所用分组未设置 rpm_limit 时作为兜底生效。
 	RPMLimit int `json:"rpm_limit"`
 

@@ -100,51 +100,52 @@ const (
 // APIKeyMutation represents an operation that mutates the APIKey nodes in the graph.
 type APIKeyMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *int64
-	created_at         *time.Time
-	updated_at         *time.Time
-	deleted_at         *time.Time
-	key                *string
-	name               *string
-	status             *string
-	last_used_at       *time.Time
-	ip_whitelist       *[]string
-	appendip_whitelist []string
-	ip_blacklist       *[]string
-	appendip_blacklist []string
-	quota              *float64
-	addquota           *float64
-	quota_used         *float64
-	addquota_used      *float64
-	expires_at         *time.Time
-	rate_limit_5h      *float64
-	addrate_limit_5h   *float64
-	rate_limit_1d      *float64
-	addrate_limit_1d   *float64
-	rate_limit_7d      *float64
-	addrate_limit_7d   *float64
-	usage_5h           *float64
-	addusage_5h        *float64
-	usage_1d           *float64
-	addusage_1d        *float64
-	usage_7d           *float64
-	addusage_7d        *float64
-	window_5h_start    *time.Time
-	window_1d_start    *time.Time
-	window_7d_start    *time.Time
-	clearedFields      map[string]struct{}
-	user               *int64
-	cleareduser        bool
-	group              *int64
-	clearedgroup       bool
-	usage_logs         map[int64]struct{}
-	removedusage_logs  map[int64]struct{}
-	clearedusage_logs  bool
-	done               bool
-	oldValue           func(context.Context) (*APIKey, error)
-	predicates         []predicate.APIKey
+	op                          Op
+	typ                         string
+	id                          *int64
+	created_at                  *time.Time
+	updated_at                  *time.Time
+	deleted_at                  *time.Time
+	key                         *string
+	name                        *string
+	subscription_product_family *string
+	status                      *string
+	last_used_at                *time.Time
+	ip_whitelist                *[]string
+	appendip_whitelist          []string
+	ip_blacklist                *[]string
+	appendip_blacklist          []string
+	quota                       *float64
+	addquota                    *float64
+	quota_used                  *float64
+	addquota_used               *float64
+	expires_at                  *time.Time
+	rate_limit_5h               *float64
+	addrate_limit_5h            *float64
+	rate_limit_1d               *float64
+	addrate_limit_1d            *float64
+	rate_limit_7d               *float64
+	addrate_limit_7d            *float64
+	usage_5h                    *float64
+	addusage_5h                 *float64
+	usage_1d                    *float64
+	addusage_1d                 *float64
+	usage_7d                    *float64
+	addusage_7d                 *float64
+	window_5h_start             *time.Time
+	window_1d_start             *time.Time
+	window_7d_start             *time.Time
+	clearedFields               map[string]struct{}
+	user                        *int64
+	cleareduser                 bool
+	group                       *int64
+	clearedgroup                bool
+	usage_logs                  map[int64]struct{}
+	removedusage_logs           map[int64]struct{}
+	clearedusage_logs           bool
+	done                        bool
+	oldValue                    func(context.Context) (*APIKey, error)
+	predicates                  []predicate.APIKey
 }
 
 var _ ent.Mutation = (*APIKeyMutation)(nil)
@@ -521,6 +522,55 @@ func (m *APIKeyMutation) GroupIDCleared() bool {
 func (m *APIKeyMutation) ResetGroupID() {
 	m.group = nil
 	delete(m.clearedFields, apikey.FieldGroupID)
+}
+
+// SetSubscriptionProductFamily sets the "subscription_product_family" field.
+func (m *APIKeyMutation) SetSubscriptionProductFamily(s string) {
+	m.subscription_product_family = &s
+}
+
+// SubscriptionProductFamily returns the value of the "subscription_product_family" field in the mutation.
+func (m *APIKeyMutation) SubscriptionProductFamily() (r string, exists bool) {
+	v := m.subscription_product_family
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionProductFamily returns the old "subscription_product_family" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldSubscriptionProductFamily(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionProductFamily is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionProductFamily requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionProductFamily: %w", err)
+	}
+	return oldValue.SubscriptionProductFamily, nil
+}
+
+// ClearSubscriptionProductFamily clears the value of the "subscription_product_family" field.
+func (m *APIKeyMutation) ClearSubscriptionProductFamily() {
+	m.subscription_product_family = nil
+	m.clearedFields[apikey.FieldSubscriptionProductFamily] = struct{}{}
+}
+
+// SubscriptionProductFamilyCleared returns if the "subscription_product_family" field was cleared in this mutation.
+func (m *APIKeyMutation) SubscriptionProductFamilyCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldSubscriptionProductFamily]
+	return ok
+}
+
+// ResetSubscriptionProductFamily resets all changes to the "subscription_product_family" field.
+func (m *APIKeyMutation) ResetSubscriptionProductFamily() {
+	m.subscription_product_family = nil
+	delete(m.clearedFields, apikey.FieldSubscriptionProductFamily)
 }
 
 // SetStatus sets the "status" field.
@@ -1524,7 +1574,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 24)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1545,6 +1595,9 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.group != nil {
 		fields = append(fields, apikey.FieldGroupID)
+	}
+	if m.subscription_product_family != nil {
+		fields = append(fields, apikey.FieldSubscriptionProductFamily)
 	}
 	if m.status != nil {
 		fields = append(fields, apikey.FieldStatus)
@@ -1616,6 +1669,8 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case apikey.FieldGroupID:
 		return m.GroupID()
+	case apikey.FieldSubscriptionProductFamily:
+		return m.SubscriptionProductFamily()
 	case apikey.FieldStatus:
 		return m.Status()
 	case apikey.FieldLastUsedAt:
@@ -1671,6 +1726,8 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldName(ctx)
 	case apikey.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case apikey.FieldSubscriptionProductFamily:
+		return m.OldSubscriptionProductFamily(ctx)
 	case apikey.FieldStatus:
 		return m.OldStatus(ctx)
 	case apikey.FieldLastUsedAt:
@@ -1760,6 +1817,13 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetGroupID(v)
+		return nil
+	case apikey.FieldSubscriptionProductFamily:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionProductFamily(v)
 		return nil
 	case apikey.FieldStatus:
 		v, ok := value.(string)
@@ -2008,6 +2072,9 @@ func (m *APIKeyMutation) ClearedFields() []string {
 	if m.FieldCleared(apikey.FieldGroupID) {
 		fields = append(fields, apikey.FieldGroupID)
 	}
+	if m.FieldCleared(apikey.FieldSubscriptionProductFamily) {
+		fields = append(fields, apikey.FieldSubscriptionProductFamily)
+	}
 	if m.FieldCleared(apikey.FieldLastUsedAt) {
 		fields = append(fields, apikey.FieldLastUsedAt)
 	}
@@ -2048,6 +2115,9 @@ func (m *APIKeyMutation) ClearField(name string) error {
 		return nil
 	case apikey.FieldGroupID:
 		m.ClearGroupID()
+		return nil
+	case apikey.FieldSubscriptionProductFamily:
+		m.ClearSubscriptionProductFamily()
 		return nil
 	case apikey.FieldLastUsedAt:
 		m.ClearLastUsedAt()
@@ -2098,6 +2168,9 @@ func (m *APIKeyMutation) ResetField(name string) error {
 		return nil
 	case apikey.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case apikey.FieldSubscriptionProductFamily:
+		m.ResetSubscriptionProductFamily()
 		return nil
 	case apikey.FieldStatus:
 		m.ResetStatus()
@@ -15151,6 +15224,8 @@ type GroupMutation struct {
 	addfallback_group_id                    *int64
 	fallback_group_id_on_invalid_request    *int64
 	addfallback_group_id_on_invalid_request *int64
+	balance_fallback_group_id               *int64
+	addbalance_fallback_group_id            *int64
 	model_routing                           *map[string][]int64
 	model_routing_enabled                   *bool
 	mcp_xml_inject                          *bool
@@ -16474,6 +16549,76 @@ func (m *GroupMutation) ResetFallbackGroupIDOnInvalidRequest() {
 	delete(m.clearedFields, group.FieldFallbackGroupIDOnInvalidRequest)
 }
 
+// SetBalanceFallbackGroupID sets the "balance_fallback_group_id" field.
+func (m *GroupMutation) SetBalanceFallbackGroupID(i int64) {
+	m.balance_fallback_group_id = &i
+	m.addbalance_fallback_group_id = nil
+}
+
+// BalanceFallbackGroupID returns the value of the "balance_fallback_group_id" field in the mutation.
+func (m *GroupMutation) BalanceFallbackGroupID() (r int64, exists bool) {
+	v := m.balance_fallback_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBalanceFallbackGroupID returns the old "balance_fallback_group_id" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldBalanceFallbackGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBalanceFallbackGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBalanceFallbackGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBalanceFallbackGroupID: %w", err)
+	}
+	return oldValue.BalanceFallbackGroupID, nil
+}
+
+// AddBalanceFallbackGroupID adds i to the "balance_fallback_group_id" field.
+func (m *GroupMutation) AddBalanceFallbackGroupID(i int64) {
+	if m.addbalance_fallback_group_id != nil {
+		*m.addbalance_fallback_group_id += i
+	} else {
+		m.addbalance_fallback_group_id = &i
+	}
+}
+
+// AddedBalanceFallbackGroupID returns the value that was added to the "balance_fallback_group_id" field in this mutation.
+func (m *GroupMutation) AddedBalanceFallbackGroupID() (r int64, exists bool) {
+	v := m.addbalance_fallback_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBalanceFallbackGroupID clears the value of the "balance_fallback_group_id" field.
+func (m *GroupMutation) ClearBalanceFallbackGroupID() {
+	m.balance_fallback_group_id = nil
+	m.addbalance_fallback_group_id = nil
+	m.clearedFields[group.FieldBalanceFallbackGroupID] = struct{}{}
+}
+
+// BalanceFallbackGroupIDCleared returns if the "balance_fallback_group_id" field was cleared in this mutation.
+func (m *GroupMutation) BalanceFallbackGroupIDCleared() bool {
+	_, ok := m.clearedFields[group.FieldBalanceFallbackGroupID]
+	return ok
+}
+
+// ResetBalanceFallbackGroupID resets all changes to the "balance_fallback_group_id" field.
+func (m *GroupMutation) ResetBalanceFallbackGroupID() {
+	m.balance_fallback_group_id = nil
+	m.addbalance_fallback_group_id = nil
+	delete(m.clearedFields, group.FieldBalanceFallbackGroupID)
+}
+
 // SetModelRouting sets the "model_routing" field.
 func (m *GroupMutation) SetModelRouting(value map[string][]int64) {
 	m.model_routing = &value
@@ -17332,7 +17477,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 35)
+	fields := make([]string, 0, 36)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -17401,6 +17546,9 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.fallback_group_id_on_invalid_request != nil {
 		fields = append(fields, group.FieldFallbackGroupIDOnInvalidRequest)
+	}
+	if m.balance_fallback_group_id != nil {
+		fields = append(fields, group.FieldBalanceFallbackGroupID)
 	}
 	if m.model_routing != nil {
 		fields = append(fields, group.FieldModelRouting)
@@ -17492,6 +17640,8 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.FallbackGroupID()
 	case group.FieldFallbackGroupIDOnInvalidRequest:
 		return m.FallbackGroupIDOnInvalidRequest()
+	case group.FieldBalanceFallbackGroupID:
+		return m.BalanceFallbackGroupID()
 	case group.FieldModelRouting:
 		return m.ModelRouting()
 	case group.FieldModelRoutingEnabled:
@@ -17571,6 +17721,8 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldFallbackGroupID(ctx)
 	case group.FieldFallbackGroupIDOnInvalidRequest:
 		return m.OldFallbackGroupIDOnInvalidRequest(ctx)
+	case group.FieldBalanceFallbackGroupID:
+		return m.OldBalanceFallbackGroupID(ctx)
 	case group.FieldModelRouting:
 		return m.OldModelRouting(ctx)
 	case group.FieldModelRoutingEnabled:
@@ -17765,6 +17917,13 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetFallbackGroupIDOnInvalidRequest(v)
 		return nil
+	case group.FieldBalanceFallbackGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBalanceFallbackGroupID(v)
+		return nil
 	case group.FieldModelRouting:
 		v, ok := value.(map[string][]int64)
 		if !ok {
@@ -17890,6 +18049,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addfallback_group_id_on_invalid_request != nil {
 		fields = append(fields, group.FieldFallbackGroupIDOnInvalidRequest)
 	}
+	if m.addbalance_fallback_group_id != nil {
+		fields = append(fields, group.FieldBalanceFallbackGroupID)
+	}
 	if m.addsort_order != nil {
 		fields = append(fields, group.FieldSortOrder)
 	}
@@ -17926,6 +18088,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedFallbackGroupID()
 	case group.FieldFallbackGroupIDOnInvalidRequest:
 		return m.AddedFallbackGroupIDOnInvalidRequest()
+	case group.FieldBalanceFallbackGroupID:
+		return m.AddedBalanceFallbackGroupID()
 	case group.FieldSortOrder:
 		return m.AddedSortOrder()
 	case group.FieldRpmLimit:
@@ -18016,6 +18180,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddFallbackGroupIDOnInvalidRequest(v)
 		return nil
+	case group.FieldBalanceFallbackGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBalanceFallbackGroupID(v)
+		return nil
 	case group.FieldSortOrder:
 		v, ok := value.(int)
 		if !ok {
@@ -18068,6 +18239,9 @@ func (m *GroupMutation) ClearedFields() []string {
 	if m.FieldCleared(group.FieldFallbackGroupIDOnInvalidRequest) {
 		fields = append(fields, group.FieldFallbackGroupIDOnInvalidRequest)
 	}
+	if m.FieldCleared(group.FieldBalanceFallbackGroupID) {
+		fields = append(fields, group.FieldBalanceFallbackGroupID)
+	}
 	if m.FieldCleared(group.FieldModelRouting) {
 		fields = append(fields, group.FieldModelRouting)
 	}
@@ -18114,6 +18288,9 @@ func (m *GroupMutation) ClearField(name string) error {
 		return nil
 	case group.FieldFallbackGroupIDOnInvalidRequest:
 		m.ClearFallbackGroupIDOnInvalidRequest()
+		return nil
+	case group.FieldBalanceFallbackGroupID:
+		m.ClearBalanceFallbackGroupID()
 		return nil
 	case group.FieldModelRouting:
 		m.ClearModelRouting()
@@ -18194,6 +18371,9 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldFallbackGroupIDOnInvalidRequest:
 		m.ResetFallbackGroupIDOnInvalidRequest()
+		return nil
+	case group.FieldBalanceFallbackGroupID:
+		m.ResetBalanceFallbackGroupID()
 		return nil
 	case group.FieldModelRouting:
 		m.ResetModelRouting()
@@ -39379,80 +39559,87 @@ func (m *UsageLogMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                            Op
-	typ                           string
-	id                            *int64
-	created_at                    *time.Time
-	updated_at                    *time.Time
-	deleted_at                    *time.Time
-	email                         *string
-	password_hash                 *string
-	role                          *string
-	balance                       *float64
-	addbalance                    *float64
-	concurrency                   *int
-	addconcurrency                *int
-	status                        *string
-	username                      *string
-	notes                         *string
-	totp_secret_encrypted         *string
-	totp_enabled                  *bool
-	totp_enabled_at               *time.Time
-	signup_source                 *string
-	last_login_at                 *time.Time
-	last_active_at                *time.Time
-	balance_notify_enabled        *bool
-	balance_notify_threshold_type *string
-	balance_notify_threshold      *float64
-	addbalance_notify_threshold   *float64
-	balance_notify_extra_emails   *string
-	total_recharged               *float64
-	addtotal_recharged            *float64
-	rpm_limit                     *int
-	addrpm_limit                  *int
-	clearedFields                 map[string]struct{}
-	api_keys                      map[int64]struct{}
-	removedapi_keys               map[int64]struct{}
-	clearedapi_keys               bool
-	redeem_codes                  map[int64]struct{}
-	removedredeem_codes           map[int64]struct{}
-	clearedredeem_codes           bool
-	subscriptions                 map[int64]struct{}
-	removedsubscriptions          map[int64]struct{}
-	clearedsubscriptions          bool
-	assigned_subscriptions        map[int64]struct{}
-	removedassigned_subscriptions map[int64]struct{}
-	clearedassigned_subscriptions bool
-	announcement_reads            map[int64]struct{}
-	removedannouncement_reads     map[int64]struct{}
-	clearedannouncement_reads     bool
-	allowed_groups                map[int64]struct{}
-	removedallowed_groups         map[int64]struct{}
-	clearedallowed_groups         bool
-	usage_logs                    map[int64]struct{}
-	removedusage_logs             map[int64]struct{}
-	clearedusage_logs             bool
-	attribute_values              map[int64]struct{}
-	removedattribute_values       map[int64]struct{}
-	clearedattribute_values       bool
-	promo_code_usages             map[int64]struct{}
-	removedpromo_code_usages      map[int64]struct{}
-	clearedpromo_code_usages      bool
-	payment_orders                map[int64]struct{}
-	removedpayment_orders         map[int64]struct{}
-	clearedpayment_orders         bool
-	auth_identities               map[int64]struct{}
-	removedauth_identities        map[int64]struct{}
-	clearedauth_identities        bool
-	pending_auth_sessions         map[int64]struct{}
-	removedpending_auth_sessions  map[int64]struct{}
-	clearedpending_auth_sessions  bool
-	platform_quotas               map[int64]struct{}
-	removedplatform_quotas        map[int64]struct{}
-	clearedplatform_quotas        bool
-	done                          bool
-	oldValue                      func(context.Context) (*User, error)
-	predicates                    []predicate.User
+	op                                         Op
+	typ                                        string
+	id                                         *int64
+	created_at                                 *time.Time
+	updated_at                                 *time.Time
+	deleted_at                                 *time.Time
+	email                                      *string
+	password_hash                              *string
+	role                                       *string
+	balance                                    *float64
+	addbalance                                 *float64
+	concurrency                                *int
+	addconcurrency                             *int
+	status                                     *string
+	username                                   *string
+	notes                                      *string
+	totp_secret_encrypted                      *string
+	totp_enabled                               *bool
+	totp_enabled_at                            *time.Time
+	signup_source                              *string
+	last_login_at                              *time.Time
+	last_active_at                             *time.Time
+	balance_notify_enabled                     *bool
+	balance_notify_threshold_type              *string
+	balance_notify_threshold                   *float64
+	addbalance_notify_threshold                *float64
+	balance_notify_extra_emails                *string
+	total_recharged                            *float64
+	addtotal_recharged                         *float64
+	subscription_balance_fallback_enabled      *bool
+	subscription_balance_fallback_limit_usd    *float64
+	addsubscription_balance_fallback_limit_usd *float64
+	subscription_balance_fallback_used_usd     *float64
+	addsubscription_balance_fallback_used_usd  *float64
+	subscription_balance_fallback_group_id     *int64
+	addsubscription_balance_fallback_group_id  *int64
+	rpm_limit                                  *int
+	addrpm_limit                               *int
+	clearedFields                              map[string]struct{}
+	api_keys                                   map[int64]struct{}
+	removedapi_keys                            map[int64]struct{}
+	clearedapi_keys                            bool
+	redeem_codes                               map[int64]struct{}
+	removedredeem_codes                        map[int64]struct{}
+	clearedredeem_codes                        bool
+	subscriptions                              map[int64]struct{}
+	removedsubscriptions                       map[int64]struct{}
+	clearedsubscriptions                       bool
+	assigned_subscriptions                     map[int64]struct{}
+	removedassigned_subscriptions              map[int64]struct{}
+	clearedassigned_subscriptions              bool
+	announcement_reads                         map[int64]struct{}
+	removedannouncement_reads                  map[int64]struct{}
+	clearedannouncement_reads                  bool
+	allowed_groups                             map[int64]struct{}
+	removedallowed_groups                      map[int64]struct{}
+	clearedallowed_groups                      bool
+	usage_logs                                 map[int64]struct{}
+	removedusage_logs                          map[int64]struct{}
+	clearedusage_logs                          bool
+	attribute_values                           map[int64]struct{}
+	removedattribute_values                    map[int64]struct{}
+	clearedattribute_values                    bool
+	promo_code_usages                          map[int64]struct{}
+	removedpromo_code_usages                   map[int64]struct{}
+	clearedpromo_code_usages                   bool
+	payment_orders                             map[int64]struct{}
+	removedpayment_orders                      map[int64]struct{}
+	clearedpayment_orders                      bool
+	auth_identities                            map[int64]struct{}
+	removedauth_identities                     map[int64]struct{}
+	clearedauth_identities                     bool
+	pending_auth_sessions                      map[int64]struct{}
+	removedpending_auth_sessions               map[int64]struct{}
+	clearedpending_auth_sessions               bool
+	platform_quotas                            map[int64]struct{}
+	removedplatform_quotas                     map[int64]struct{}
+	clearedplatform_quotas                     bool
+	done                                       bool
+	oldValue                                   func(context.Context) (*User, error)
+	predicates                                 []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -40504,6 +40691,224 @@ func (m *UserMutation) ResetTotalRecharged() {
 	m.addtotal_recharged = nil
 }
 
+// SetSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field.
+func (m *UserMutation) SetSubscriptionBalanceFallbackEnabled(b bool) {
+	m.subscription_balance_fallback_enabled = &b
+}
+
+// SubscriptionBalanceFallbackEnabled returns the value of the "subscription_balance_fallback_enabled" field in the mutation.
+func (m *UserMutation) SubscriptionBalanceFallbackEnabled() (r bool, exists bool) {
+	v := m.subscription_balance_fallback_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionBalanceFallbackEnabled returns the old "subscription_balance_fallback_enabled" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldSubscriptionBalanceFallbackEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionBalanceFallbackEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionBalanceFallbackEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionBalanceFallbackEnabled: %w", err)
+	}
+	return oldValue.SubscriptionBalanceFallbackEnabled, nil
+}
+
+// ResetSubscriptionBalanceFallbackEnabled resets all changes to the "subscription_balance_fallback_enabled" field.
+func (m *UserMutation) ResetSubscriptionBalanceFallbackEnabled() {
+	m.subscription_balance_fallback_enabled = nil
+}
+
+// SetSubscriptionBalanceFallbackLimitUsd sets the "subscription_balance_fallback_limit_usd" field.
+func (m *UserMutation) SetSubscriptionBalanceFallbackLimitUsd(f float64) {
+	m.subscription_balance_fallback_limit_usd = &f
+	m.addsubscription_balance_fallback_limit_usd = nil
+}
+
+// SubscriptionBalanceFallbackLimitUsd returns the value of the "subscription_balance_fallback_limit_usd" field in the mutation.
+func (m *UserMutation) SubscriptionBalanceFallbackLimitUsd() (r float64, exists bool) {
+	v := m.subscription_balance_fallback_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionBalanceFallbackLimitUsd returns the old "subscription_balance_fallback_limit_usd" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldSubscriptionBalanceFallbackLimitUsd(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionBalanceFallbackLimitUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionBalanceFallbackLimitUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionBalanceFallbackLimitUsd: %w", err)
+	}
+	return oldValue.SubscriptionBalanceFallbackLimitUsd, nil
+}
+
+// AddSubscriptionBalanceFallbackLimitUsd adds f to the "subscription_balance_fallback_limit_usd" field.
+func (m *UserMutation) AddSubscriptionBalanceFallbackLimitUsd(f float64) {
+	if m.addsubscription_balance_fallback_limit_usd != nil {
+		*m.addsubscription_balance_fallback_limit_usd += f
+	} else {
+		m.addsubscription_balance_fallback_limit_usd = &f
+	}
+}
+
+// AddedSubscriptionBalanceFallbackLimitUsd returns the value that was added to the "subscription_balance_fallback_limit_usd" field in this mutation.
+func (m *UserMutation) AddedSubscriptionBalanceFallbackLimitUsd() (r float64, exists bool) {
+	v := m.addsubscription_balance_fallback_limit_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSubscriptionBalanceFallbackLimitUsd resets all changes to the "subscription_balance_fallback_limit_usd" field.
+func (m *UserMutation) ResetSubscriptionBalanceFallbackLimitUsd() {
+	m.subscription_balance_fallback_limit_usd = nil
+	m.addsubscription_balance_fallback_limit_usd = nil
+}
+
+// SetSubscriptionBalanceFallbackUsedUsd sets the "subscription_balance_fallback_used_usd" field.
+func (m *UserMutation) SetSubscriptionBalanceFallbackUsedUsd(f float64) {
+	m.subscription_balance_fallback_used_usd = &f
+	m.addsubscription_balance_fallback_used_usd = nil
+}
+
+// SubscriptionBalanceFallbackUsedUsd returns the value of the "subscription_balance_fallback_used_usd" field in the mutation.
+func (m *UserMutation) SubscriptionBalanceFallbackUsedUsd() (r float64, exists bool) {
+	v := m.subscription_balance_fallback_used_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionBalanceFallbackUsedUsd returns the old "subscription_balance_fallback_used_usd" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldSubscriptionBalanceFallbackUsedUsd(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionBalanceFallbackUsedUsd is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionBalanceFallbackUsedUsd requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionBalanceFallbackUsedUsd: %w", err)
+	}
+	return oldValue.SubscriptionBalanceFallbackUsedUsd, nil
+}
+
+// AddSubscriptionBalanceFallbackUsedUsd adds f to the "subscription_balance_fallback_used_usd" field.
+func (m *UserMutation) AddSubscriptionBalanceFallbackUsedUsd(f float64) {
+	if m.addsubscription_balance_fallback_used_usd != nil {
+		*m.addsubscription_balance_fallback_used_usd += f
+	} else {
+		m.addsubscription_balance_fallback_used_usd = &f
+	}
+}
+
+// AddedSubscriptionBalanceFallbackUsedUsd returns the value that was added to the "subscription_balance_fallback_used_usd" field in this mutation.
+func (m *UserMutation) AddedSubscriptionBalanceFallbackUsedUsd() (r float64, exists bool) {
+	v := m.addsubscription_balance_fallback_used_usd
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSubscriptionBalanceFallbackUsedUsd resets all changes to the "subscription_balance_fallback_used_usd" field.
+func (m *UserMutation) ResetSubscriptionBalanceFallbackUsedUsd() {
+	m.subscription_balance_fallback_used_usd = nil
+	m.addsubscription_balance_fallback_used_usd = nil
+}
+
+// SetSubscriptionBalanceFallbackGroupID sets the "subscription_balance_fallback_group_id" field.
+func (m *UserMutation) SetSubscriptionBalanceFallbackGroupID(i int64) {
+	m.subscription_balance_fallback_group_id = &i
+	m.addsubscription_balance_fallback_group_id = nil
+}
+
+// SubscriptionBalanceFallbackGroupID returns the value of the "subscription_balance_fallback_group_id" field in the mutation.
+func (m *UserMutation) SubscriptionBalanceFallbackGroupID() (r int64, exists bool) {
+	v := m.subscription_balance_fallback_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionBalanceFallbackGroupID returns the old "subscription_balance_fallback_group_id" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldSubscriptionBalanceFallbackGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionBalanceFallbackGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionBalanceFallbackGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionBalanceFallbackGroupID: %w", err)
+	}
+	return oldValue.SubscriptionBalanceFallbackGroupID, nil
+}
+
+// AddSubscriptionBalanceFallbackGroupID adds i to the "subscription_balance_fallback_group_id" field.
+func (m *UserMutation) AddSubscriptionBalanceFallbackGroupID(i int64) {
+	if m.addsubscription_balance_fallback_group_id != nil {
+		*m.addsubscription_balance_fallback_group_id += i
+	} else {
+		m.addsubscription_balance_fallback_group_id = &i
+	}
+}
+
+// AddedSubscriptionBalanceFallbackGroupID returns the value that was added to the "subscription_balance_fallback_group_id" field in this mutation.
+func (m *UserMutation) AddedSubscriptionBalanceFallbackGroupID() (r int64, exists bool) {
+	v := m.addsubscription_balance_fallback_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
+func (m *UserMutation) ClearSubscriptionBalanceFallbackGroupID() {
+	m.subscription_balance_fallback_group_id = nil
+	m.addsubscription_balance_fallback_group_id = nil
+	m.clearedFields[user.FieldSubscriptionBalanceFallbackGroupID] = struct{}{}
+}
+
+// SubscriptionBalanceFallbackGroupIDCleared returns if the "subscription_balance_fallback_group_id" field was cleared in this mutation.
+func (m *UserMutation) SubscriptionBalanceFallbackGroupIDCleared() bool {
+	_, ok := m.clearedFields[user.FieldSubscriptionBalanceFallbackGroupID]
+	return ok
+}
+
+// ResetSubscriptionBalanceFallbackGroupID resets all changes to the "subscription_balance_fallback_group_id" field.
+func (m *UserMutation) ResetSubscriptionBalanceFallbackGroupID() {
+	m.subscription_balance_fallback_group_id = nil
+	m.addsubscription_balance_fallback_group_id = nil
+	delete(m.clearedFields, user.FieldSubscriptionBalanceFallbackGroupID)
+}
+
 // SetRpmLimit sets the "rpm_limit" field.
 func (m *UserMutation) SetRpmLimit(i int) {
 	m.rpm_limit = &i
@@ -41296,7 +41701,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 27)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -41363,6 +41768,18 @@ func (m *UserMutation) Fields() []string {
 	if m.total_recharged != nil {
 		fields = append(fields, user.FieldTotalRecharged)
 	}
+	if m.subscription_balance_fallback_enabled != nil {
+		fields = append(fields, user.FieldSubscriptionBalanceFallbackEnabled)
+	}
+	if m.subscription_balance_fallback_limit_usd != nil {
+		fields = append(fields, user.FieldSubscriptionBalanceFallbackLimitUsd)
+	}
+	if m.subscription_balance_fallback_used_usd != nil {
+		fields = append(fields, user.FieldSubscriptionBalanceFallbackUsedUsd)
+	}
+	if m.subscription_balance_fallback_group_id != nil {
+		fields = append(fields, user.FieldSubscriptionBalanceFallbackGroupID)
+	}
 	if m.rpm_limit != nil {
 		fields = append(fields, user.FieldRpmLimit)
 	}
@@ -41418,6 +41835,14 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.BalanceNotifyExtraEmails()
 	case user.FieldTotalRecharged:
 		return m.TotalRecharged()
+	case user.FieldSubscriptionBalanceFallbackEnabled:
+		return m.SubscriptionBalanceFallbackEnabled()
+	case user.FieldSubscriptionBalanceFallbackLimitUsd:
+		return m.SubscriptionBalanceFallbackLimitUsd()
+	case user.FieldSubscriptionBalanceFallbackUsedUsd:
+		return m.SubscriptionBalanceFallbackUsedUsd()
+	case user.FieldSubscriptionBalanceFallbackGroupID:
+		return m.SubscriptionBalanceFallbackGroupID()
 	case user.FieldRpmLimit:
 		return m.RpmLimit()
 	}
@@ -41473,6 +41898,14 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldBalanceNotifyExtraEmails(ctx)
 	case user.FieldTotalRecharged:
 		return m.OldTotalRecharged(ctx)
+	case user.FieldSubscriptionBalanceFallbackEnabled:
+		return m.OldSubscriptionBalanceFallbackEnabled(ctx)
+	case user.FieldSubscriptionBalanceFallbackLimitUsd:
+		return m.OldSubscriptionBalanceFallbackLimitUsd(ctx)
+	case user.FieldSubscriptionBalanceFallbackUsedUsd:
+		return m.OldSubscriptionBalanceFallbackUsedUsd(ctx)
+	case user.FieldSubscriptionBalanceFallbackGroupID:
+		return m.OldSubscriptionBalanceFallbackGroupID(ctx)
 	case user.FieldRpmLimit:
 		return m.OldRpmLimit(ctx)
 	}
@@ -41638,6 +42071,34 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTotalRecharged(v)
 		return nil
+	case user.FieldSubscriptionBalanceFallbackEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionBalanceFallbackEnabled(v)
+		return nil
+	case user.FieldSubscriptionBalanceFallbackLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionBalanceFallbackLimitUsd(v)
+		return nil
+	case user.FieldSubscriptionBalanceFallbackUsedUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionBalanceFallbackUsedUsd(v)
+		return nil
+	case user.FieldSubscriptionBalanceFallbackGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionBalanceFallbackGroupID(v)
+		return nil
 	case user.FieldRpmLimit:
 		v, ok := value.(int)
 		if !ok {
@@ -41665,6 +42126,15 @@ func (m *UserMutation) AddedFields() []string {
 	if m.addtotal_recharged != nil {
 		fields = append(fields, user.FieldTotalRecharged)
 	}
+	if m.addsubscription_balance_fallback_limit_usd != nil {
+		fields = append(fields, user.FieldSubscriptionBalanceFallbackLimitUsd)
+	}
+	if m.addsubscription_balance_fallback_used_usd != nil {
+		fields = append(fields, user.FieldSubscriptionBalanceFallbackUsedUsd)
+	}
+	if m.addsubscription_balance_fallback_group_id != nil {
+		fields = append(fields, user.FieldSubscriptionBalanceFallbackGroupID)
+	}
 	if m.addrpm_limit != nil {
 		fields = append(fields, user.FieldRpmLimit)
 	}
@@ -41684,6 +42154,12 @@ func (m *UserMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBalanceNotifyThreshold()
 	case user.FieldTotalRecharged:
 		return m.AddedTotalRecharged()
+	case user.FieldSubscriptionBalanceFallbackLimitUsd:
+		return m.AddedSubscriptionBalanceFallbackLimitUsd()
+	case user.FieldSubscriptionBalanceFallbackUsedUsd:
+		return m.AddedSubscriptionBalanceFallbackUsedUsd()
+	case user.FieldSubscriptionBalanceFallbackGroupID:
+		return m.AddedSubscriptionBalanceFallbackGroupID()
 	case user.FieldRpmLimit:
 		return m.AddedRpmLimit()
 	}
@@ -41723,6 +42199,27 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddTotalRecharged(v)
 		return nil
+	case user.FieldSubscriptionBalanceFallbackLimitUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSubscriptionBalanceFallbackLimitUsd(v)
+		return nil
+	case user.FieldSubscriptionBalanceFallbackUsedUsd:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSubscriptionBalanceFallbackUsedUsd(v)
+		return nil
+	case user.FieldSubscriptionBalanceFallbackGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSubscriptionBalanceFallbackGroupID(v)
+		return nil
 	case user.FieldRpmLimit:
 		v, ok := value.(int)
 		if !ok {
@@ -41756,6 +42253,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldBalanceNotifyThreshold) {
 		fields = append(fields, user.FieldBalanceNotifyThreshold)
 	}
+	if m.FieldCleared(user.FieldSubscriptionBalanceFallbackGroupID) {
+		fields = append(fields, user.FieldSubscriptionBalanceFallbackGroupID)
+	}
 	return fields
 }
 
@@ -41787,6 +42287,9 @@ func (m *UserMutation) ClearField(name string) error {
 		return nil
 	case user.FieldBalanceNotifyThreshold:
 		m.ClearBalanceNotifyThreshold()
+		return nil
+	case user.FieldSubscriptionBalanceFallbackGroupID:
+		m.ClearSubscriptionBalanceFallbackGroupID()
 		return nil
 	}
 	return fmt.Errorf("unknown User nullable field %s", name)
@@ -41861,6 +42364,18 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldTotalRecharged:
 		m.ResetTotalRecharged()
+		return nil
+	case user.FieldSubscriptionBalanceFallbackEnabled:
+		m.ResetSubscriptionBalanceFallbackEnabled()
+		return nil
+	case user.FieldSubscriptionBalanceFallbackLimitUsd:
+		m.ResetSubscriptionBalanceFallbackLimitUsd()
+		return nil
+	case user.FieldSubscriptionBalanceFallbackUsedUsd:
+		m.ResetSubscriptionBalanceFallbackUsedUsd()
+		return nil
+	case user.FieldSubscriptionBalanceFallbackGroupID:
+		m.ResetSubscriptionBalanceFallbackGroupID()
 		return nil
 	case user.FieldRpmLimit:
 		m.ResetRpmLimit()

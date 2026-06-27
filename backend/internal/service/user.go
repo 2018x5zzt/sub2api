@@ -1,7 +1,10 @@
 package service
 
 import (
+	"context"
 	"time"
+
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -50,6 +53,12 @@ type User struct {
 	BalanceNotifyExtraEmails   []NotifyEmailEntry
 	TotalRecharged             float64
 
+	// 订阅余额兜底：默认关闭；开启后，订阅产品额度耗尽时可在累计上限内自动扣余额。
+	SubscriptionBalanceFallbackEnabled  bool
+	SubscriptionBalanceFallbackLimitUSD float64
+	SubscriptionBalanceFallbackUsedUSD  float64
+	SubscriptionBalanceFallbackGroupID  *int64
+
 	// RPMLimit 用户级每分钟请求数上限（0 = 不限制）。仅在所用分组未设置 rpm_limit
 	// 且该 (用户, 分组) 无 rpm_override 时作为全局兜底生效，计数键 rpm:u:{userID}:{min}。
 	RPMLimit int
@@ -87,6 +96,36 @@ func (u *User) CanBindGroup(groupID int64, isExclusive bool) bool {
 		}
 	}
 	return false
+}
+
+// validateSubscriptionBalanceFallbackConfig 校验用户订阅余额兜底配置：开启时必须设置正的累计上限，
+// 并选择一个有效、激活、标准计费且用户有权绑定的余额兜底分组。
+func validateSubscriptionBalanceFallbackConfig(ctx context.Context, groupRepo GroupRepository, user *User) error {
+	if user == nil || !user.SubscriptionBalanceFallbackEnabled {
+		return nil
+	}
+	if user.SubscriptionBalanceFallbackLimitUSD <= 0 {
+		return infraerrors.BadRequest("SUBSCRIPTION_BALANCE_FALLBACK_LIMIT_REQUIRED", "subscription balance fallback limit must be greater than 0")
+	}
+	if user.SubscriptionBalanceFallbackGroupID == nil || *user.SubscriptionBalanceFallbackGroupID <= 0 {
+		return infraerrors.BadRequest("SUBSCRIPTION_BALANCE_FALLBACK_GROUP_REQUIRED", "subscription balance fallback group is required")
+	}
+	if groupRepo == nil {
+		return infraerrors.BadRequest("SUBSCRIPTION_BALANCE_FALLBACK_GROUP_INVALID", "subscription balance fallback group cannot be validated")
+	}
+	fallbackGroup, err := groupRepo.GetByID(ctx, *user.SubscriptionBalanceFallbackGroupID)
+	if err != nil {
+		return err
+	}
+	if fallbackGroup == nil ||
+		!fallbackGroup.IsActive() ||
+		fallbackGroup.SubscriptionType != SubscriptionTypeStandard {
+		return infraerrors.BadRequest("SUBSCRIPTION_BALANCE_FALLBACK_GROUP_INVALID", "subscription balance fallback group must be an active standard group")
+	}
+	if !user.CanBindGroup(fallbackGroup.ID, fallbackGroup.IsExclusive) {
+		return infraerrors.Forbidden("SUBSCRIPTION_BALANCE_FALLBACK_GROUP_FORBIDDEN", "user is not authorized to use the selected balance fallback group")
+	}
+	return nil
 }
 
 func (u *User) SetPassword(password string) error {

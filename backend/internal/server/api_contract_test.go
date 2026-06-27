@@ -66,6 +66,10 @@ func TestAPIContracts(t *testing.T) {
 					"balance_notify_threshold": null,
 					"balance_notify_extra_emails": null,
 					"total_recharged": 0,
+					"subscription_balance_fallback_enabled": false,
+					"subscription_balance_fallback_limit_usd": 0,
+					"subscription_balance_fallback_used_usd": 0,
+					"subscription_balance_fallback_group_id": null,
 					"linuxdo_bound": false,
 					"oidc_bound": false,
 					"wechat_bound": false,
@@ -456,6 +460,7 @@ func TestAPIContracts(t *testing.T) {
 						"used_at": "2025-01-02T03:04:05Z",
 						"created_at": "2025-01-02T03:04:05Z",
 						"group_id": null,
+						"product_id": null,
 						"validity_days": 0
 					}
 				]

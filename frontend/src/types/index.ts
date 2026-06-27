@@ -93,6 +93,10 @@ export interface User {
   balance_notify_enabled: boolean
   balance_notify_threshold: number | null
   balance_notify_extra_emails: NotifyEmailEntry[]
+  subscription_balance_fallback_enabled: boolean
+  subscription_balance_fallback_limit_usd: number
+  subscription_balance_fallback_used_usd: number
+  subscription_balance_fallback_group_id: number | null
   subscriptions?: UserSubscription[] // User's active subscriptions
   last_active_at?: string | null
   created_at: string
@@ -1612,6 +1616,10 @@ export interface UpdateUserRequest {
   concurrency?: number
   status?: 'active' | 'disabled'
   allowed_groups?: number[] | null
+  subscription_balance_fallback_enabled?: boolean
+  subscription_balance_fallback_limit_usd?: number
+  subscription_balance_fallback_used_usd?: number
+  subscription_balance_fallback_group_id?: number | null
   // 用户专属分组倍率配置 (group_id -> rate_multiplier | null)
   // null 表示删除该分组的专属倍率
   group_rates?: Record<number, number | null>

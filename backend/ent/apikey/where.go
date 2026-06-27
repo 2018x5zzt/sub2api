@@ -90,6 +90,11 @@ func GroupID(v int64) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldGroupID, v))
 }
 
+// SubscriptionProductFamily applies equality check predicate on the "subscription_product_family" field. It's identical to SubscriptionProductFamilyEQ.
+func SubscriptionProductFamily(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldSubscriptionProductFamily, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldStatus, v))
@@ -468,6 +473,81 @@ func GroupIDIsNil() predicate.APIKey {
 // GroupIDNotNil applies the NotNil predicate on the "group_id" field.
 func GroupIDNotNil() predicate.APIKey {
 	return predicate.APIKey(sql.FieldNotNull(FieldGroupID))
+}
+
+// SubscriptionProductFamilyEQ applies the EQ predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldSubscriptionProductFamily, v))
+}
+
+// SubscriptionProductFamilyNEQ applies the NEQ predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyNEQ(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldSubscriptionProductFamily, v))
+}
+
+// SubscriptionProductFamilyIn applies the In predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldSubscriptionProductFamily, vs...))
+}
+
+// SubscriptionProductFamilyNotIn applies the NotIn predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyNotIn(vs ...string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldSubscriptionProductFamily, vs...))
+}
+
+// SubscriptionProductFamilyGT applies the GT predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyGT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldSubscriptionProductFamily, v))
+}
+
+// SubscriptionProductFamilyGTE applies the GTE predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyGTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldSubscriptionProductFamily, v))
+}
+
+// SubscriptionProductFamilyLT applies the LT predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyLT(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldSubscriptionProductFamily, v))
+}
+
+// SubscriptionProductFamilyLTE applies the LTE predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyLTE(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldSubscriptionProductFamily, v))
+}
+
+// SubscriptionProductFamilyContains applies the Contains predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyContains(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContains(FieldSubscriptionProductFamily, v))
+}
+
+// SubscriptionProductFamilyHasPrefix applies the HasPrefix predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyHasPrefix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasPrefix(FieldSubscriptionProductFamily, v))
+}
+
+// SubscriptionProductFamilyHasSuffix applies the HasSuffix predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyHasSuffix(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldHasSuffix(FieldSubscriptionProductFamily, v))
+}
+
+// SubscriptionProductFamilyIsNil applies the IsNil predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldSubscriptionProductFamily))
+}
+
+// SubscriptionProductFamilyNotNil applies the NotNil predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldSubscriptionProductFamily))
+}
+
+// SubscriptionProductFamilyEqualFold applies the EqualFold predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyEqualFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEqualFold(FieldSubscriptionProductFamily, v))
+}
+
+// SubscriptionProductFamilyContainsFold applies the ContainsFold predicate on the "subscription_product_family" field.
+func SubscriptionProductFamilyContainsFold(v string) predicate.APIKey {
+	return predicate.APIKey(sql.FieldContainsFold(FieldSubscriptionProductFamily, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

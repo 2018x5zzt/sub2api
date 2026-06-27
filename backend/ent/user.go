@@ -61,6 +61,14 @@ type User struct {
 	BalanceNotifyExtraEmails string `json:"balance_notify_extra_emails,omitempty"`
 	// TotalRecharged holds the value of the "total_recharged" field.
 	TotalRecharged float64 `json:"total_recharged,omitempty"`
+	// SubscriptionBalanceFallbackEnabled holds the value of the "subscription_balance_fallback_enabled" field.
+	SubscriptionBalanceFallbackEnabled bool `json:"subscription_balance_fallback_enabled,omitempty"`
+	// SubscriptionBalanceFallbackLimitUsd holds the value of the "subscription_balance_fallback_limit_usd" field.
+	SubscriptionBalanceFallbackLimitUsd float64 `json:"subscription_balance_fallback_limit_usd,omitempty"`
+	// SubscriptionBalanceFallbackUsedUsd holds the value of the "subscription_balance_fallback_used_usd" field.
+	SubscriptionBalanceFallbackUsedUsd float64 `json:"subscription_balance_fallback_used_usd,omitempty"`
+	// SubscriptionBalanceFallbackGroupID holds the value of the "subscription_balance_fallback_group_id" field.
+	SubscriptionBalanceFallbackGroupID *int64 `json:"subscription_balance_fallback_group_id,omitempty"`
 	// RpmLimit holds the value of the "rpm_limit" field.
 	RpmLimit int `json:"rpm_limit,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -235,11 +243,11 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldTotpEnabled, user.FieldBalanceNotifyEnabled:
+		case user.FieldTotpEnabled, user.FieldBalanceNotifyEnabled, user.FieldSubscriptionBalanceFallbackEnabled:
 			values[i] = new(sql.NullBool)
-		case user.FieldBalance, user.FieldBalanceNotifyThreshold, user.FieldTotalRecharged:
+		case user.FieldBalance, user.FieldBalanceNotifyThreshold, user.FieldTotalRecharged, user.FieldSubscriptionBalanceFallbackLimitUsd, user.FieldSubscriptionBalanceFallbackUsedUsd:
 			values[i] = new(sql.NullFloat64)
-		case user.FieldID, user.FieldConcurrency, user.FieldRpmLimit:
+		case user.FieldID, user.FieldConcurrency, user.FieldSubscriptionBalanceFallbackGroupID, user.FieldRpmLimit:
 			values[i] = new(sql.NullInt64)
 		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldSignupSource, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails:
 			values[i] = new(sql.NullString)
@@ -403,6 +411,31 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field total_recharged", values[i])
 			} else if value.Valid {
 				_m.TotalRecharged = value.Float64
+			}
+		case user.FieldSubscriptionBalanceFallbackEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_balance_fallback_enabled", values[i])
+			} else if value.Valid {
+				_m.SubscriptionBalanceFallbackEnabled = value.Bool
+			}
+		case user.FieldSubscriptionBalanceFallbackLimitUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_balance_fallback_limit_usd", values[i])
+			} else if value.Valid {
+				_m.SubscriptionBalanceFallbackLimitUsd = value.Float64
+			}
+		case user.FieldSubscriptionBalanceFallbackUsedUsd:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_balance_fallback_used_usd", values[i])
+			} else if value.Valid {
+				_m.SubscriptionBalanceFallbackUsedUsd = value.Float64
+			}
+		case user.FieldSubscriptionBalanceFallbackGroupID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_balance_fallback_group_id", values[i])
+			} else if value.Valid {
+				_m.SubscriptionBalanceFallbackGroupID = new(int64)
+				*_m.SubscriptionBalanceFallbackGroupID = value.Int64
 			}
 		case user.FieldRpmLimit:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -593,6 +626,20 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("total_recharged=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TotalRecharged))
+	builder.WriteString(", ")
+	builder.WriteString("subscription_balance_fallback_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionBalanceFallbackEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("subscription_balance_fallback_limit_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionBalanceFallbackLimitUsd))
+	builder.WriteString(", ")
+	builder.WriteString("subscription_balance_fallback_used_usd=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SubscriptionBalanceFallbackUsedUsd))
+	builder.WriteString(", ")
+	if v := _m.SubscriptionBalanceFallbackGroupID; v != nil {
+		builder.WriteString("subscription_balance_fallback_group_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("rpm_limit=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RpmLimit))
