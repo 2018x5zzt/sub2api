@@ -1416,6 +1416,60 @@ func TestOpenAIGatewayServiceRecordUsage_SubscriptionBillingSetsSubscriptionFiel
 	require.Equal(t, 0, userRepo.deductCalls)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_ProductSettlementFromContextBillsSubscription(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{}
+	billingRepo := &openAIRecordUsageBillingRepoStub{result: &UsageBillingApplyResult{Applied: true}}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceWithBillingRepoForTest(usageRepo, billingRepo, userRepo, subRepo, nil)
+	settlement := &ProductSettlementContext{
+		Binding: &SubscriptionProductBinding{
+			ProductID:       18,
+			GroupID:         21,
+			DebitMultiplier: 1,
+		},
+		Subscription: &UserProductSubscription{
+			ID:        184,
+			UserID:    2579,
+			ProductID: 18,
+			Status:    SubscriptionStatusActive,
+			ExpiresAt: time.Now().Add(24 * time.Hour),
+		},
+	}
+	ctx := ContextWithProductSettlement(context.Background(), settlement)
+
+	err := svc.RecordUsage(ctx, &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_product_subscription_billing",
+			Usage:     OpenAIUsage{InputTokens: 10, OutputTokens: 5},
+			Model:     "gpt-5.1",
+			Duration:  time.Second,
+		},
+		APIKey:  &APIKey{ID: 3444, GroupID: i64p(21), Group: &Group{ID: 21, SubscriptionType: SubscriptionTypeSubscription, RateMultiplier: 1.0}},
+		User:    &User{ID: 2579},
+		Account: &Account{ID: 300},
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.Equal(t, BillingTypeSubscription, usageRepo.lastLog.BillingType)
+	require.Nil(t, usageRepo.lastLog.SubscriptionID)
+	require.NotNil(t, usageRepo.lastLog.ProductSubscriptionID)
+	require.Equal(t, int64(184), *usageRepo.lastLog.ProductSubscriptionID)
+	require.NotNil(t, usageRepo.lastLog.ProductID)
+	require.Equal(t, int64(18), *usageRepo.lastLog.ProductID)
+	require.NotNil(t, usageRepo.lastLog.ProductDebitCost)
+	require.Greater(t, *usageRepo.lastLog.ProductDebitCost, 0.0)
+	require.Equal(t, 1, billingRepo.calls)
+	require.NotNil(t, billingRepo.lastCmd)
+	require.Equal(t, BillingTypeSubscription, billingRepo.lastCmd.BillingType)
+	require.NotNil(t, billingRepo.lastCmd.ProductSubscriptionID)
+	require.Equal(t, int64(184), *billingRepo.lastCmd.ProductSubscriptionID)
+	require.Greater(t, billingRepo.lastCmd.ProductDebitCost, 0.0)
+	require.Zero(t, billingRepo.lastCmd.BalanceCost)
+	require.Equal(t, 0, userRepo.deductCalls)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_SimpleModeSkipsBillingAfterPersist(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}

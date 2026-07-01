@@ -606,6 +606,7 @@ type adminServiceImpl struct {
 	userSubRepo          UserSubscriptionRepository
 	privacyClientFactory PrivacyClientFactory
 	runtimeBlocker       AccountRuntimeBlocker
+	productSubRepo       ProductSubscriptionRepository
 }
 
 type userGroupRateBatchReader interface {
@@ -632,6 +633,7 @@ func NewAdminService(
 	userSubRepo UserSubscriptionRepository,
 	privacyClientFactory PrivacyClientFactory,
 	runtimeBlocker AccountRuntimeBlocker,
+	productSubRepo ProductSubscriptionRepository,
 ) AdminService {
 	return &adminServiceImpl{
 		userRepo:             userRepo,
@@ -652,6 +654,7 @@ func NewAdminService(
 		userSubRepo:          userSubRepo,
 		privacyClientFactory: privacyClientFactory,
 		runtimeBlocker:       runtimeBlocker,
+		productSubRepo:       productSubRepo,
 	}
 }
 
@@ -3393,20 +3396,27 @@ func (s *adminServiceImpl) GenerateRedeemCodes(ctx context.Context, input *Gener
 		return nil, ErrRedeemCodeExpired
 	}
 
-	// 订阅类型：须绑定分组或产品之一（产品兑换码为 xlab 语义）。
+	// 订阅类型：须绑定产品或分组（分组自动解析到绑定的活跃产品）。
 	if input.Type == RedeemTypeSubscription {
 		if input.GroupID == nil && input.ProductID == nil {
 			return nil, errors.New("group_id or product_id is required for subscription type")
 		}
-		if input.GroupID != nil {
-			// 验证分组存在且为订阅类型
-			group, err := s.groupRepo.GetByID(ctx, *input.GroupID)
+		if input.ProductID != nil {
+			// 直接指定产品：验证产品存在且状态为 active
+			product, err := s.productSubRepo.GetProductByID(ctx, *input.ProductID)
 			if err != nil {
-				return nil, fmt.Errorf("group not found: %w", err)
+				return nil, fmt.Errorf("product not found: %w", err)
 			}
-			if !group.IsSubscriptionType() {
-				return nil, errors.New("group must be subscription type")
+			if product.Status != SubscriptionProductStatusActive {
+				return nil, errors.New("product must be active")
 			}
+		} else {
+			// 仅指定分组：解析分组绑定的活跃产品，自动填充 product_id
+			product, err := s.productSubRepo.ResolveActiveProductByGroupID(ctx, *input.GroupID)
+			if err != nil {
+				return nil, fmt.Errorf("group has no active product binding: %w", err)
+			}
+			input.ProductID = &product.ID
 		}
 	}
 

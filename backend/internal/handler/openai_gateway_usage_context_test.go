@@ -46,6 +46,32 @@ func TestOpenAISubmitUsageRecordTaskCopiesRequestContext(t *testing.T) {
 	require.Equal(t, "openai-request-456", gotRequestID)
 }
 
+func TestOpenAISubmitUsageRecordTaskCopiesProductSettlementContext(t *testing.T) {
+	settlement := &service.ProductSettlementContext{
+		Binding: &service.SubscriptionProductBinding{
+			ProductID:       99,
+			GroupID:         42,
+			DebitMultiplier: 1,
+		},
+		Subscription: &service.UserProductSubscription{
+			ID:        1001,
+			UserID:    2002,
+			ProductID: 99,
+			Status:    service.SubscriptionStatusActive,
+			ExpiresAt: time.Now().Add(time.Hour),
+		},
+	}
+	parent := service.ContextWithProductSettlement(context.Background(), settlement)
+
+	var got *service.ProductSettlementContext
+	h := &OpenAIGatewayHandler{}
+	h.submitUsageRecordTask(parent, func(ctx context.Context) {
+		got, _ = service.ProductSettlementFromContext(ctx)
+	})
+
+	require.Same(t, settlement, got)
+}
+
 func TestUsageUnrestrictedReportsProductSubscriptionSettlement(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

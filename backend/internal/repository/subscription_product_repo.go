@@ -32,6 +32,32 @@ func (r *subscriptionProductRepository) execForContext(ctx context.Context) sqlE
 	return r.sql
 }
 
+func (r *subscriptionProductRepository) GetProductByID(ctx context.Context, productID int64) (*service.SubscriptionProduct, error) {
+	if productID <= 0 {
+		return nil, service.ErrSubscriptionNotFound
+	}
+	var product service.SubscriptionProduct
+	err := scanSingleRow(ctx, r.sql, `
+SELECT
+	id, code, name, COALESCE(description, ''), status, product_family,
+	default_validity_days, daily_limit_usd, weekly_limit_usd, monthly_limit_usd,
+	sort_order, created_at, updated_at
+FROM subscription_products
+WHERE id = $1 AND deleted_at IS NULL`, []any{productID},
+		&product.ID, &product.Code, &product.Name, &product.Description,
+		&product.Status, &product.ProductFamily, &product.DefaultValidityDays,
+		&product.DailyLimitUSD, &product.WeeklyLimitUSD, &product.MonthlyLimitUSD,
+		&product.SortOrder, &product.CreatedAt, &product.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, service.ErrSubscriptionNotFound
+		}
+		return nil, fmt.Errorf("get subscription product by id: %w", err)
+	}
+	return &product, nil
+}
+
 func (r *subscriptionProductRepository) GetActiveProductSubscriptionByUserAndGroupID(ctx context.Context, userID, groupID int64, productFamily *string) (*service.SubscriptionProductBinding, *service.UserProductSubscription, error) {
 	normalizedFamily := ""
 	if productFamily != nil {

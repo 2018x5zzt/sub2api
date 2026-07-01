@@ -296,6 +296,7 @@ type SubscriptionProductSummary struct {
 }
 
 type ProductSubscriptionRepository interface {
+	GetProductByID(ctx context.Context, productID int64) (*SubscriptionProduct, error)
 	GetActiveProductSubscriptionByUserAndGroupID(ctx context.Context, userID, groupID int64, productFamily *string) (*SubscriptionProductBinding, *UserProductSubscription, error)
 	ListActiveProductsByUserID(ctx context.Context, userID int64) ([]ActiveSubscriptionProduct, error)
 	ListVisibleGroupsByUserID(ctx context.Context, userID int64) ([]Group, error)

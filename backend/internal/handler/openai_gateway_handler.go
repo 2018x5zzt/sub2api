@@ -86,6 +86,9 @@ func usageRecordContext(parent context.Context, base context.Context) context.Co
 	if requestID, _ := parent.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
 		base = context.WithValue(base, ctxkey.RequestID, strings.TrimSpace(requestID))
 	}
+	if settlement, ok := service.ProductSettlementFromContext(parent); ok {
+		base = service.ContextWithProductSettlement(base, settlement)
+	}
 	return base
 }
 
