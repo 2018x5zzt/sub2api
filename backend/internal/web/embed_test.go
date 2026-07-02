@@ -439,6 +439,8 @@ func TestFrontendServer_Middleware(t *testing.T) {
 			"/antigravity/test",
 			"/setup/init",
 			"/health",
+			"/oauth/token",
+			"/oauth/userinfo",
 			"/responses",
 			"/responses/compact",
 		}
@@ -643,6 +645,8 @@ func TestServeEmbeddedFrontend(t *testing.T) {
 			"/antigravity/test",
 			"/setup/init",
 			"/health",
+			"/oauth/token",
+			"/oauth/userinfo",
 			"/responses",
 			"/responses/compact",
 		}
