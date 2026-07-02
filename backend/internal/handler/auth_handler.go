@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 // AuthHandler handles authentication-related requests
@@ -27,14 +28,17 @@ type AuthHandler struct {
 	redeemService        *service.RedeemService
 	totpService          *service.TotpService
 	userAttributeService *service.UserAttributeService
+	// redisClient persists xlab OAuth authorization codes; nil falls back to
+	// an in-process store (single-instance deployments and unit tests).
+	redisClient *redis.Client
 
 	dingTalkClientInstance *DingTalkClient
 	dingTalkClientMu       sync.Mutex
 }
 
 // NewAuthHandler creates a new AuthHandler
-func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, redeemService *service.RedeemService, totpService *service.TotpService, userAttributeService *service.UserAttributeService) *AuthHandler {
-	return &AuthHandler{
+func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, redeemService *service.RedeemService, totpService *service.TotpService, userAttributeService *service.UserAttributeService, redisClients ...*redis.Client) *AuthHandler {
+	h := &AuthHandler{
 		cfg:                  cfg,
 		authService:          authService,
 		userService:          userService,
@@ -44,6 +48,10 @@ func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userSe
 		totpService:          totpService,
 		userAttributeService: userAttributeService,
 	}
+	if len(redisClients) > 0 {
+		h.redisClient = redisClients[0]
+	}
+	return h
 }
 
 // RegisterRequest represents the registration request payload

@@ -93,6 +93,18 @@ type Config struct {
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
+	XlabOAuthProvider       XlabOAuthProviderConfig       `mapstructure:"xlab_oauth_provider"`
+}
+
+// XlabOAuthProviderConfig configures first-party OAuth clients (e.g. Miku)
+// that use xlabapi as their SSO identity provider.
+type XlabOAuthProviderConfig struct {
+	Clients []XlabOAuthProviderClientConfig `mapstructure:"clients"`
+}
+
+type XlabOAuthProviderClientConfig struct {
+	ClientID     string `mapstructure:"client_id"`
+	ClientSecret string `mapstructure:"client_secret"`
 }
 
 type LogConfig struct {

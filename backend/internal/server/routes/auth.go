@@ -223,6 +223,8 @@ func RegisterAuthRoutes(
 	authenticated.Use(servermiddleware.BackendModeUserGuard(settingService))
 	{
 		authenticated.GET("/auth/me", h.Auth.GetCurrentUser)
+		// Xlab OAuth provider：已登录用户在 /oauth/consent 页面授权第三方客户端（Miku）
+		authenticated.POST("/oauth/authorize", h.Auth.XlabOAuthAuthorize)
 		// 撤销所有会话（需要认证）
 		authenticated.POST("/auth/revoke-all-sessions", h.Auth.RevokeAllSessions)
 		authenticated.POST("/auth/oauth/bind-token", h.Auth.PrepareOAuthBindAccessTokenCookie)

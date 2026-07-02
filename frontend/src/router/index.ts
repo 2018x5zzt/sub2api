@@ -139,6 +139,15 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/oauth/consent',
+    name: 'XlabOAuthConsent',
+    component: () => import('@/views/auth/XlabOAuthConsentView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Xlab OAuth'
+    }
+  },
+  {
     path: '/forgot-password',
     name: 'ForgotPassword',
     component: () => import('@/views/auth/ForgotPasswordView.vue'),
