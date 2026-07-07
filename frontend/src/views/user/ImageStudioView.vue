@@ -92,7 +92,7 @@ async function loadKey(): Promise<void> {
 
   try {
     const result = await keysAPI.list(1, 20)
-    const enabledKey = result.data?.find((k: ApiKey) => k.status === 'active') ?? null
+    const enabledKey = result.items.find((k: ApiKey) => k.status === 'active') ?? null
 
     if (!enabledKey) {
       loadState.value = 'no-key'
