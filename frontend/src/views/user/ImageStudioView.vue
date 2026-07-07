@@ -65,7 +65,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import Icon from '@/components/common/Icon.vue'
+import Icon from '@/components/icons/Icon.vue'
 import { keysAPI } from '@/api/keys'
 import type { ApiKey } from '@/types'
 
