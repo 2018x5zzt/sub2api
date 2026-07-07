@@ -9,6 +9,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -25,6 +28,7 @@ import (
 	"github.com/imroc/req/v3"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	_ "golang.org/x/image/webp"
 )
 
 const (
@@ -40,6 +44,7 @@ const (
 	openAIImageMaxDownloadBytes    = 20 << 20 // 20MB per image download
 	openAIImageMaxUploadPartSize   = 20 << 20 // 20MB per multipart upload part
 	openAIImagesResponsesMainModel = "gpt-5.4-mini"
+	openAIImageJPEGQuality         = 95
 )
 
 type OpenAIImagesCapability string
@@ -810,6 +815,25 @@ func rewriteOpenAIImagesMultipartModel(body []byte, contentType string, model st
 
 		formName := strings.TrimSpace(part.FormName())
 		partHeader := cloneMultipartHeader(part.Header)
+		if fileName := strings.TrimSpace(part.FileName()); fileName != "" && (formName == "image" || formName == "mask" || strings.HasPrefix(formName, "image[")) {
+			partBody, err := io.ReadAll(part)
+			_ = part.Close()
+			if err != nil {
+				return nil, "", fmt.Errorf("read multipart image part: %w", err)
+			}
+			partHeader, partBody, err = normalizeOpenAIImagesUploadPart(partHeader, partBody)
+			if err != nil {
+				return nil, "", fmt.Errorf("normalize multipart image part: %w", err)
+			}
+			target, err := writer.CreatePart(partHeader)
+			if err != nil {
+				return nil, "", fmt.Errorf("create multipart part: %w", err)
+			}
+			if _, err := target.Write(partBody); err != nil {
+				return nil, "", fmt.Errorf("copy multipart image part: %w", err)
+			}
+			continue
+		}
 		target, err := writer.CreatePart(partHeader)
 		if err != nil {
 			_ = part.Close()
@@ -851,6 +875,88 @@ func cloneMultipartHeader(src textproto.MIMEHeader) textproto.MIMEHeader {
 		dst[key] = copied
 	}
 	return dst
+}
+
+func normalizeOpenAIImagesUploadPart(header textproto.MIMEHeader, data []byte) (textproto.MIMEHeader, []byte, error) {
+	normalizedHeader := cloneMultipartHeader(header)
+	if len(data) == 0 {
+		return normalizedHeader, data, nil
+	}
+
+	declaredType := strings.ToLower(strings.TrimSpace(normalizedHeader.Get("Content-Type")))
+	detectedType := strings.ToLower(strings.TrimSpace(http.DetectContentType(data)))
+	switch detectedType {
+	case "image/png", "image/jpeg":
+		normalizedHeader.Set("Content-Type", detectedType)
+		normalizeOpenAIImagesUploadFilename(normalizedHeader, detectedType)
+		return normalizedHeader, data, nil
+	}
+	switch declaredType {
+	case "image/png", "image/jpeg":
+		normalizedHeader.Set("Content-Type", declaredType)
+		normalizeOpenAIImagesUploadFilename(normalizedHeader, declaredType)
+		return normalizedHeader, data, nil
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		if detectedType == "application/octet-stream" || strings.HasPrefix(detectedType, "text/") {
+			return normalizedHeader, data, nil
+		}
+		return nil, nil, err
+	}
+
+	var encoded bytes.Buffer
+	targetType := "image/png"
+	if detectedType == "image/jpeg" {
+		targetType = "image/jpeg"
+		if err := jpeg.Encode(&encoded, img, &jpeg.Options{Quality: openAIImageJPEGQuality}); err != nil {
+			return nil, nil, err
+		}
+	} else {
+		if err := png.Encode(&encoded, img); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	normalizedHeader.Set("Content-Type", targetType)
+	normalizeOpenAIImagesUploadFilename(normalizedHeader, targetType)
+	return normalizedHeader, encoded.Bytes(), nil
+}
+
+func normalizeOpenAIImagesUploadFilename(header textproto.MIMEHeader, contentType string) {
+	disposition := strings.TrimSpace(header.Get("Content-Disposition"))
+	if disposition == "" {
+		return
+	}
+	_, params, err := mime.ParseMediaType(disposition)
+	if err != nil {
+		return
+	}
+	filename := strings.TrimSpace(params["filename"])
+	if filename == "" {
+		return
+	}
+
+	targetExt := ".png"
+	if contentType == "image/jpeg" {
+		targetExt = ".jpg"
+	}
+	lower := strings.ToLower(filename)
+	switch {
+	case strings.HasSuffix(lower, ".png"):
+		filename = filename[:len(filename)-len(".png")] + targetExt
+	case strings.HasSuffix(lower, ".jpg"):
+		filename = filename[:len(filename)-len(".jpg")] + targetExt
+	case strings.HasSuffix(lower, ".jpeg"):
+		filename = filename[:len(filename)-len(".jpeg")] + targetExt
+	case strings.HasSuffix(lower, ".webp"):
+		filename = filename[:len(filename)-len(".webp")] + targetExt
+	default:
+		filename += targetExt
+	}
+	params["filename"] = filename
+	header.Set("Content-Disposition", mime.FormatMediaType("form-data", params))
 }
 
 func (s *OpenAIGatewayService) handleOpenAIImagesNonStreamingResponse(resp *http.Response, c *gin.Context) (OpenAIUsage, int, []string, error) {

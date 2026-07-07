@@ -3,9 +3,11 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -1196,6 +1198,97 @@ func TestOpenAIGatewayServiceForwardImages_APIKeyEditUsesConfiguredV1BaseURL(t *
 	require.Contains(t, string(upstream.lastBody), "gpt-image-2")
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, "ZWRpdGVk", gjson.Get(rec.Body.String(), "data.0.b64_json").String())
+}
+
+func TestOpenAIGatewayServiceForwardImages_APIKeyEditNormalizesWebPReferenceUpload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	webpData, err := base64.StdEncoding.DecodeString("UklGRvwCAABXRUJQVlA4TO8CAAAvSsAYAB8gEEiS3J9li6maqvlPbEPy9n+G5E5qNnZO1tyjucbrjZ1lbKevcW9s2zb6FKPiXG3bHnTPbtX3eap+Vd1JIvrvQJLUuGk7F8GYoNiPQIAtlVY6HAAr9PxFsnIF81NhePmeRdyMpQmnV3nXrMFdYFxKT2GUo7Lr91xrYmcLctDYtQb9XpEWVq4d6+lq0RO9Grc3V1CW6nPswc+3UZR7k8qTbR5OHs67BVarmGC9ZIVPgDMTwnqpsOx38kvVe5lPrDYJ22oy71XK/JXjVoA89RKwyY9e3KUCBwl/yfsUJiPsF75pGFHeXBCWa8AuURf65uqcBwA7dKjfhTSLU07uLTjla4Wyar2ES63DbVTYi3Hl67rwCFn5db81hwTCbc9z+jQIWLE2JbQCkTGRCzQ8Xy5dkz2owCOnLZsqhvWji4AdTY3ChuYFLssObttRDNJ9gFrhLlIH6jV+ISY7CF+Iog0NlyDKSmUH9vl3gEvZpTYfJMDOy6X8QNVybVHxJ9g0ueBPiH49X1oi8xZYq3LAICL89kYEZW+CtUyTJQSRnh4RVV+CTSqWuLK5QaiFcATsc6NlsVLlCZx2nBQ6KGQpik1W80gVe6WYshw4HYWq/k6Kk3USzLslLTaxQ/W4GvNrvEuSsaUCvdIQdmG5RnE5sV6H0oF90hciIU9mhd4C6np4QjzQLlKjqrpxMV0P7YF+v4AXxHbdoBKNPM64badPZg7hBPHjH/FJGRTkyQqSYmv+wxNlBTHIh1D6BTFVAMkSH2clnvTDwXy1Vjwf6xWuYVwpkWm+1F/yuPDzQWYZBuIRX8wzihE+yxkP4g1hmd2hN1xhdIPeskqNOnipqtIvo/nviDtGH14QXYxW3yfCxsTeNGy7hgejgwSLGqRyyppnMAjU9pqe7obmyfrbuteaD68trmW6mriHlVREaNZzDHpLrIPGkfEKn4D9RUkNrZmXyzPewQwo4nH4YjzhD4F4QSQChLHZC8BCAPgbAA==")
+	require.NoError(t, err)
+
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	require.NoError(t, writer.WriteField("model", "gpt-image-2"))
+	require.NoError(t, writer.WriteField("prompt", "replace background"))
+
+	imageHeader := make(textproto.MIMEHeader)
+	imageHeader.Set("Content-Disposition", `form-data; name="image"; filename="source.webp"`)
+	imageHeader.Set("Content-Type", "image/webp")
+	imagePart, err := writer.CreatePart(imageHeader)
+	require.NoError(t, err)
+	_, err = imagePart.Write(webpData)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/images/edits", bytes.NewReader(body.Bytes()))
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = req
+
+	upstream := &httpUpstreamRecorder{
+		resp: &http.Response{
+			StatusCode: http.StatusOK,
+			Header: http.Header{
+				"Content-Type": []string{"application/json"},
+				"X-Request-Id": []string{"req_img_edit_webp"},
+			},
+			Body: io.NopCloser(strings.NewReader(`{"created":1710000008,"data":[{"b64_json":"ZWRpdGVk","revised_prompt":"replace background"}]}`)),
+		},
+	}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{},
+		httpUpstream: upstream,
+	}
+	parsed, err := svc.ParseOpenAIImagesRequest(c, body.Bytes())
+	require.NoError(t, err)
+
+	account := &Account{
+		ID:       7,
+		Name:     "openai-apikey",
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":  "test-api-key",
+			"base_url": "https://image-upstream.example/v1/",
+		},
+	}
+
+	result, err := svc.ForwardImages(context.Background(), c, account, body.Bytes(), parsed, "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	contentType := upstream.lastReq.Header.Get("Content-Type")
+	mediaType, params, err := mime.ParseMediaType(contentType)
+	require.NoError(t, err)
+	require.Equal(t, "multipart/form-data", mediaType)
+
+	reader := multipart.NewReader(bytes.NewReader(upstream.lastBody), params["boundary"])
+	var imagePartType, imagePartFilename string
+	var imagePartBody []byte
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		if part.FormName() != "image" {
+			_ = part.Close()
+			continue
+		}
+		imagePartType = part.Header.Get("Content-Type")
+		imagePartFilename = part.FileName()
+		imagePartBody, err = io.ReadAll(part)
+		_ = part.Close()
+		require.NoError(t, err)
+	}
+
+	require.Equal(t, "image/png", imagePartType)
+	require.Equal(t, "source.png", imagePartFilename)
+	require.NotEmpty(t, imagePartBody)
+	require.Equal(t, "image/png", http.DetectContentType(imagePartBody))
+	require.Equal(t, http.StatusOK, rec.Code)
 }
 
 func TestOpenAIGatewayServiceForwardImages_OAuthStreamingTransformsEvents(t *testing.T) {
