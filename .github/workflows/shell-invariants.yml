@@ -1,0 +1,75 @@
+name: Shell Invariants (Soft Guard)
+
+# 薄壳软不变量检查：守住生图路由、OAuth consent 路由、订阅/兑换/模型中心路由。
+# 失败时产生 warning annotation，不阻断 merge，但需人工确认后方可合并。
+# 硬不变量 (H1-H6) 由 `go test -tags=unit ./backend/internal/xlab/...` 在主 CI 中执行。
+
+on:
+  push:
+    branches: [xlabapi]
+  pull_request:
+    branches: [xlabapi]
+
+concurrency:
+  group: shell-invariants-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  soft-invariants:
+    name: Soft Invariants (S1–S3)
+    runs-on: ubuntu-latest
+    # 失败只产生 warning，不阻断部署 job
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run soft invariant checks
+        id: invariants
+        run: pnpm vitest run src/xlab/__tests__/shell_invariants.spec.ts
+        # 失败时继续，下一步输出 summary
+        continue-on-error: true
+
+      - name: Write job summary
+        if: always()
+        run: |
+          if [ "${{ steps.invariants.outcome }}" = "failure" ]; then
+            echo "## ⚠️ Shell Invariants Warning" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**一条或多条软不变量检查失败。**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "这不会阻断 CI，但合并前**必须人工确认**以下路由仍然存在：" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| 不变量 | 检查项 | 后果 |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|--------|------|" >> $GITHUB_STEP_SUMMARY
+            echo "| S1 | \`/image-studio\` → ImageStudioView | 生图入口消失 |" >> $GITHUB_STEP_SUMMARY
+            echo "| S2 | \`/oauth/consent\` → XlabOAuthConsent | Miku SSO 中断 |" >> $GITHUB_STEP_SUMMARY
+            echo "| S3 | \`/subscriptions\` \`/redeem\` \`/model-hub\` | 前后端契约断裂 |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "查看上方测试输出了解具体失败项，并在 \`frontend/src/router/index.ts\` 中补回对应路由。" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ✅ Shell Invariants OK" >> $GITHUB_STEP_SUMMARY
+            echo "S1–S3 全部通过。" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Fail job if invariants failed
+        if: steps.invariants.outcome == 'failure'
+        run: |
+          echo "::warning::软不变量检查失败，请查看 Job Summary 了解需要恢复的路由"
+          exit 1

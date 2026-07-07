@@ -378,6 +378,7 @@ export default {
     announcements: '公告',
     apiKeys: 'API 密钥',
     modelHub: '模型广场',
+    imageStudio: '生图工作台',
     usage: '使用记录',
     redeem: '兑换',
     affiliate: '邀请返利',
