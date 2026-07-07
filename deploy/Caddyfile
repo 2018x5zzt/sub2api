@@ -121,8 +121,9 @@ canvas.xlabapi.com {
 	# Security headers
 	header {
 		X-Content-Type-Options "nosniff"
-		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "no-referrer"
+		# xlab 主站通过 iframe 嵌入该工作台，不能使用 X-Frame-Options: SAMEORIGIN
+		Content-Security-Policy "frame-ancestors https://xlabapi.com"
 	}
 
 	reverse_proxy localhost:13000 {
