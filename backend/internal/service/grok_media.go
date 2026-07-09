@@ -9,6 +9,7 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -288,7 +289,7 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	if err != nil {
 		return nil, err
 	}
-	targetURL, err := endpoint.upstreamURL(account.GetGrokBaseURL(), requestID)
+	targetURL, err := s.resolveGrokMediaUpstreamURL(account, endpoint, requestID)
 	if err != nil {
 		return nil, err
 	}
@@ -298,6 +299,12 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 		return nil, err
 	}
 	body, contentType, err = normalizeGrokMediaForwardBody(endpoint, body, contentType)
+	if err != nil {
+		return nil, err
+	}
+	// Capture billing-facing fields before stripping xAI-unsupported params.
+	requestInfo := ParseGrokMediaRequest(contentType, body)
+	body, contentType, err = stripUnsupportedGrokMediaUpstreamFields(body, contentType)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +343,6 @@ func (s *OpenAIGatewayService) ForwardGrokMedia(
 	defer func() { _ = resp.Body.Close() }()
 
 	requestIDHeader := firstNonEmpty(resp.Header.Get("x-request-id"), resp.Header.Get("xai-request-id"))
-	requestInfo := ParseGrokMediaRequest(contentType, body)
 	requestModel := requestInfo.Model
 	if resp.StatusCode >= 400 {
 		s.updateGrokUsageSnapshot(ctx, account.ID, xai.ParseQuotaHeaders(resp.Header, resp.StatusCode))
@@ -386,9 +392,7 @@ func prepareGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, conten
 	if info.N > 1 {
 		payload["n"] = info.N
 	}
-	if info.Size != "" {
-		payload["size"] = info.Size
-	}
+	// Do not forward OpenAI-style size: xAI Grok Imagine rejects unsupported size args.
 
 	images := make([]map[string]string, 0, len(info.InputImageURLs)+len(info.Uploads))
 	for _, imageURL := range info.InputImageURLs {
@@ -443,6 +447,45 @@ func normalizeGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, cont
 		return nil, "", fmt.Errorf("rewrite grok media model: %w", err)
 	}
 	return out, contentType, nil
+}
+
+// stripUnsupportedGrokMediaUpstreamFields removes OpenAI-only fields that xAI rejects
+// (e.g. size). Billing still uses the pre-strip requestInfo parsed by the caller.
+func stripUnsupportedGrokMediaUpstreamFields(body []byte, contentType string) ([]byte, string, error) {
+	if !gjson.ValidBytes(body) {
+		return body, contentType, nil
+	}
+	out := body
+	var err error
+	for _, field := range []string{"size"} {
+		if !gjson.GetBytes(out, field).Exists() {
+			continue
+		}
+		out, err = sjson.DeleteBytes(out, field)
+		if err != nil {
+			return nil, "", fmt.Errorf("strip unsupported grok media field %s: %w", field, err)
+		}
+	}
+	return out, contentType, nil
+}
+
+func (s *OpenAIGatewayService) resolveGrokMediaUpstreamURL(account *Account, endpoint GrokMediaEndpoint, requestID string) (string, error) {
+	switch endpoint {
+	case GrokMediaEndpointImagesGenerations:
+		return s.resolveGrokUpstreamURL(account, "/images/generations")
+	case GrokMediaEndpointImagesEdits:
+		return s.resolveGrokUpstreamURL(account, "/images/edits")
+	case GrokMediaEndpointVideosGenerations:
+		return s.resolveGrokUpstreamURL(account, "/videos/generations")
+	case GrokMediaEndpointVideoStatus:
+		requestID = strings.TrimSpace(requestID)
+		if requestID == "" {
+			return "", fmt.Errorf("request id is required")
+		}
+		return s.resolveGrokUpstreamURL(account, "/videos/"+url.PathEscape(requestID))
+	default:
+		return "", fmt.Errorf("unsupported grok media endpoint: %s", endpoint)
+	}
 }
 
 func (r GrokMediaRequestInfo) HasInputImage() bool {

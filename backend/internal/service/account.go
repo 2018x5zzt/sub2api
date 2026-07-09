@@ -252,6 +252,10 @@ func (a *Account) IsGrokOAuth() bool {
 	return a.IsGrok() && a.Type == AccountTypeOAuth
 }
 
+func (a *Account) IsGrokApiKey() bool {
+	return a.IsGrok() && a.Type == AccountTypeAPIKey
+}
+
 func (a *Account) IsOpenAICompatible() bool {
 	return a != nil && (a.Platform == PlatformOpenAI || a.Platform == PlatformGrok)
 }
@@ -1564,6 +1568,25 @@ func (a *Account) IsOpenAIPassthroughEnabled() bool {
 		return enabled
 	}
 	if enabled, ok := a.Extra["openai_oauth_passthrough"].(bool); ok {
+		return enabled
+	}
+	return false
+}
+
+// IsOpenAIImagesPassthroughEnabled 返回 OpenAI API Key 账号是否允许将非 gpt-image-*
+// 模型（如 grok-imagine-*）直接转发到 OpenAI 兼容上游的 /v1/images 端点。
+//
+// 字段：accounts.extra.images_passthrough_enabled
+// 兼容别名：accounts.extra.allow_non_openai_image_models
+// 默认 false，保持仅允许 gpt-image-* 的安全行为。
+func (a *Account) IsOpenAIImagesPassthroughEnabled() bool {
+	if a == nil || !a.IsOpenAI() || a.Type != AccountTypeAPIKey || a.Extra == nil {
+		return false
+	}
+	if enabled, ok := a.Extra["images_passthrough_enabled"].(bool); ok {
+		return enabled
+	}
+	if enabled, ok := a.Extra["allow_non_openai_image_models"].(bool); ok {
 		return enabled
 	}
 	return false

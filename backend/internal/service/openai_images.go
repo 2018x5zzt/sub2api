@@ -220,8 +220,10 @@ func (s *OpenAIGatewayService) ParseOpenAIImagesRequest(c *gin.Context, body []b
 	}
 
 	applyOpenAIImagesDefaults(req)
-	if err := validateOpenAIImagesModel(req.Model); err != nil {
-		return nil, err
+	// Model allowlist is enforced at forward time so OpenAI-compatible
+	// accounts can opt into non-gpt-image models via images_passthrough_enabled.
+	if strings.TrimSpace(req.Model) == "" {
+		return nil, fmt.Errorf("images endpoint requires an image model")
 	}
 	req.SizeTier = normalizeOpenAIImageSizeTier(req.Size)
 	req.RequiredCapability = classifyOpenAIImagesCapability(req)
@@ -474,6 +476,22 @@ func validateOpenAIImagesModel(model string) error {
 	return fmt.Errorf("images endpoint requires an image model, got %q", model)
 }
 
+// validateOpenAIImagesModelForAccount enforces gpt-image-* by default.
+// When the OpenAI API Key account enables images passthrough, any non-empty model is allowed.
+func validateOpenAIImagesModelForAccount(account *Account, model string) error {
+	model = strings.TrimSpace(model)
+	if isOpenAIImageGenerationModel(model) {
+		return nil
+	}
+	if account != nil && account.IsOpenAIImagesPassthroughEnabled() {
+		if model == "" {
+			return fmt.Errorf("images endpoint requires an image model")
+		}
+		return nil
+	}
+	return validateOpenAIImagesModel(model)
+}
+
 func normalizeOpenAIImagesEndpointPath(path string) string {
 	trimmed := strings.TrimSpace(path)
 	switch {
@@ -574,20 +592,21 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesAPIKey(
 	if mapped := strings.TrimSpace(channelMappedModel); mapped != "" {
 		requestModel = mapped
 	}
-	if err := validateOpenAIImagesModel(requestModel); err != nil {
+	if err := validateOpenAIImagesModelForAccount(account, requestModel); err != nil {
 		return nil, err
 	}
 	upstreamModel := account.GetMappedModel(requestModel)
-	if err := validateOpenAIImagesModel(upstreamModel); err != nil {
+	if err := validateOpenAIImagesModelForAccount(account, upstreamModel); err != nil {
 		return nil, err
 	}
 	logger.LegacyPrintf(
 		"service.openai_gateway",
-		"[OpenAI] Images request routing request_model=%s upstream_model=%s endpoint=%s account_type=%s",
+		"[OpenAI] Images request routing request_model=%s upstream_model=%s endpoint=%s account_type=%s images_passthrough=%v",
 		strings.TrimSpace(parsed.Model),
 		upstreamModel,
 		parsed.Endpoint,
 		account.Type,
+		account.IsOpenAIImagesPassthroughEnabled(),
 	)
 	forwardBody, forwardContentType, err := rewriteOpenAIImagesModel(body, parsed.ContentType, upstreamModel)
 	if err != nil {

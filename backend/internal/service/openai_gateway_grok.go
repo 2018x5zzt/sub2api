@@ -12,6 +12,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
+	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
@@ -31,8 +32,8 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 	reqStream bool,
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
-	if account.Type != AccountTypeOAuth {
-		return nil, fmt.Errorf("grok account type %s is not supported by subscription forwarding", account.Type)
+	if account.Type != AccountTypeOAuth && account.Type != AccountTypeAPIKey {
+		return nil, fmt.Errorf("grok account type %s is not supported", account.Type)
 	}
 
 	upstreamModel := account.GetMappedModel(originalModel)
@@ -51,7 +52,7 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 
 	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 	defer releaseUpstreamCtx()
-	upstreamReq, err := buildGrokResponsesRequest(upstreamCtx, c, account, patchedBody, token)
+	upstreamReq, err := s.buildGrokResponsesRequest(upstreamCtx, c, account, patchedBody, token)
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +447,7 @@ func (s *OpenAIGatewayService) describeGrokComposerImage(
 	}
 
 	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
-	upstreamReq, err := buildGrokResponsesRequest(upstreamCtx, c, account, body, token)
+	upstreamReq, err := s.buildGrokResponsesRequest(upstreamCtx, c, account, body, token)
 	releaseUpstreamCtx()
 	if err != nil {
 		return "", OpenAIUsage{}, fmt.Errorf("build grok composer image bridge request: %w", err)
@@ -612,8 +613,8 @@ func addOpenAIUsage(dst *OpenAIUsage, usage OpenAIUsage) {
 	dst.ImageOutputTokens += usage.ImageOutputTokens
 }
 
-func buildGrokResponsesRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token string) (*http.Request, error) {
-	targetURL, err := xai.BuildResponsesURL(account.GetGrokBaseURL())
+func (s *OpenAIGatewayService) buildGrokResponsesRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token string) (*http.Request, error) {
+	targetURL, err := s.resolveGrokUpstreamURL(account, "/responses")
 	if err != nil {
 		return nil, err
 	}
@@ -631,6 +632,48 @@ func buildGrokResponsesRequest(ctx context.Context, c *gin.Context, account *Acc
 		}
 	}
 	return req, nil
+}
+
+// resolveGrokUpstreamURL builds an upstream path under the account base URL.
+// API Key accounts accept custom OpenAI-compatible hosts via security URL allowlist rules.
+// OAuth accounts stay on the strict xAI host allowlist.
+func (s *OpenAIGatewayService) resolveGrokUpstreamURL(account *Account, path string) (string, error) {
+	if account == nil {
+		return "", fmt.Errorf("grok account is required")
+	}
+	baseURL := strings.TrimSpace(account.GetGrokBaseURL())
+	if baseURL == "" {
+		return "", fmt.Errorf("grok base_url is empty")
+	}
+	path = "/" + strings.TrimLeft(strings.TrimSpace(path), "/")
+	if account.Type == AccountTypeAPIKey {
+		validated, err := s.resolveGrokAPIKeyBaseURL(baseURL)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimRight(validated, "/") + path, nil
+	}
+	validated, err := xai.ValidatedBaseURL(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid base url: %w", err)
+	}
+	return strings.TrimRight(validated, "/") + path, nil
+}
+
+func (s *OpenAIGatewayService) resolveGrokAPIKeyBaseURL(baseURL string) (string, error) {
+	if s != nil && s.cfg != nil {
+		validated, err := s.validateUpstreamBaseURL(baseURL)
+		if err != nil {
+			return "", fmt.Errorf("invalid base url: %w", err)
+		}
+		return validated, nil
+	}
+	// Security config unset: format-only validation (same as URLAllowlist disabled).
+	validated, err := urlvalidator.ValidateURLFormat(baseURL, false)
+	if err != nil {
+		return "", fmt.Errorf("invalid base url: %w", err)
+	}
+	return validated, nil
 }
 
 func (s *OpenAIGatewayService) updateGrokUsageSnapshot(ctx context.Context, accountID int64, snapshot *xai.QuotaSnapshot) {

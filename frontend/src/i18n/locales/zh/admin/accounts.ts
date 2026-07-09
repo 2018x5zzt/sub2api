@@ -234,6 +234,7 @@ export default {
         codeAssist: 'Code Assist',
         antigravityOauth: 'Antigravity OAuth',
         grokOauth: 'Grok OAuth',
+        grokApikey: 'xAI API Key / Base URL',
         antigravityApikey: '通过 Base URL + API Key 连接',
         upstream: '对接上游',
         upstreamDesc: '通过 Base URL + API Key 连接上游',
@@ -589,10 +590,13 @@ export default {
         testModeDefault: '常规请求',
         testModeCompact: 'Compact 探测',
         modelRestrictionDisabledByPassthrough: '已开启自动透传：模型白名单/映射不会生效。',
+        imagesPassthrough: '图片兼容透传',
+        imagesPassthroughDesc:
+          '仅对 OpenAI API Key 账号生效。开启后，/v1/images 允许非 gpt-image-* 模型（例如 grok-imagine-*）直接转发到配置的 OpenAI 兼容上游；默认仍仅允许 gpt-image-*。',
       },
       grok: {
-        baseUrlHint: 'Grok OAuth 账号会转发到官方 xAI API Base URL。',
-        apiKeyHint: 'Grok 订阅支持使用 OAuth refresh token；API Key 账号不在本次范围内。'
+        baseUrlHint: '官方 xAI API 为 https://api.x.ai/v1；API Key 账号也可填写自定义 OpenAI 兼容上游 Base URL。',
+        apiKeyHint: '你的 xAI API Key（或兼容上游要求的 Key）。'
       },
       anthropic: {
         apiKeyPassthrough: '自动透传（仅替换认证）',
@@ -966,7 +970,9 @@ export default {
           missingExchangeParams: '缺少授权码、state 或 OAuth 会话',
           failedToExchangeCode: 'Grok 授权码兑换失败',
           failedToValidateRT: '验证 Grok refresh token 失败',
-          oauthOnlyHint: '首版 Grok 支持仅包含 OAuth 订阅的 Responses API 文本/推理转发。'
+          oauthOnlyHint: '首版 Grok 支持仅包含 OAuth 订阅的 Responses API 文本/推理转发。',
+          accountTypeHint:
+            'OAuth 用于 xAI 订阅账号；API Key 支持官方 xAI Key，或自定义 Base URL + API Key 的 OpenAI 兼容 Grok 上游（含图/视频）。'
         },
         // Gemini specific
         gemini: {

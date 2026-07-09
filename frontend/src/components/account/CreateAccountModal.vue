@@ -352,7 +352,7 @@
         </div>
       </div>
 
-      <!-- Account Type Selection (Grok - OAuth only) -->
+      <!-- Account Type Selection (Grok - OAuth or API Key) -->
       <div v-if="form.platform === 'grok'">
         <label class="input-label">{{ t('admin.accounts.accountType') }}</label>
         <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2" data-tour="account-form-type">
@@ -381,9 +381,35 @@
               <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.types.grokOauth') }}</span>
             </div>
           </button>
+
+          <button
+            type="button"
+            @click="accountCategory = 'apikey'"
+            :class="[
+              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
+              accountCategory === 'apikey'
+                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+                : 'border-gray-200 hover:border-purple-300 dark:border-dark-600 dark:hover:border-purple-700'
+            ]"
+          >
+            <div
+              :class="[
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                accountCategory === 'apikey'
+                  ? 'bg-purple-500 text-white'
+                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
+              ]"
+            >
+              <Icon name="key" size="sm" />
+            </div>
+            <div>
+              <span class="block text-sm font-medium text-gray-900 dark:text-white">API Key</span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.types.grokApikey') }}</span>
+            </div>
+          </button>
         </div>
         <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-          {{ t('admin.accounts.oauth.grok.oauthOnlyHint') }}
+          {{ t('admin.accounts.oauth.grok.accountTypeHint') }}
         </p>
       </div>
 
@@ -1096,7 +1122,9 @@
                 ? 'https://api.openai.com'
                 : form.platform === 'gemini'
                   ? 'https://generativelanguage.googleapis.com'
-                  : 'https://api.anthropic.com'
+                  : form.platform === 'grok'
+                    ? 'https://api.x.ai/v1'
+                    : 'https://api.anthropic.com'
             "
           />
           <p class="input-hint">{{ baseUrlHint }}</p>
@@ -1122,7 +1150,9 @@
                 ? 'sk-proj-...'
                 : form.platform === 'gemini'
                   ? 'AIza...'
-                  : 'sk-ant-...'
+                  : form.platform === 'grok'
+                    ? 'xai-...'
+                    : 'sk-ant-...'
             "
           />
           <p class="input-hint">{{ apiKeyHint }}</p>
@@ -2724,6 +2754,36 @@
         </div>
       </div>
 
+      <!-- OpenAI 图片兼容透传：允许 grok-imagine-* 等非 gpt-image 模型转发到兼容上游 -->
+      <div
+        v-if="form.platform === 'openai' && accountCategory === 'apikey'"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.openai.imagesPassthrough') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.openai.imagesPassthroughDesc') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            @click="openaiImagesPassthroughEnabled = !openaiImagesPassthroughEnabled"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              openaiImagesPassthroughEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                openaiImagesPassthroughEnabled ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+      </div>
+
       <!-- OpenAI WS Mode 三态（off/ctx_pool/passthrough） -->
       <div
         v-if="form.platform === 'openai' && (accountCategory === 'oauth-based' || accountCategory === 'apikey')"
@@ -3703,6 +3763,7 @@ const fillHeaderOverrideTemplate = () => {
 const interceptWarmupRequests = ref(false)
 const autoPauseOnExpired = ref(true)
 const openaiPassthroughEnabled = ref(false)
+const openaiImagesPassthroughEnabled = ref(false)
 const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
@@ -4208,6 +4269,7 @@ watch(
     }
     if (newPlatform !== 'openai') {
       openaiPassthroughEnabled.value = false
+      openaiImagesPassthroughEnabled.value = false
       openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
       openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
@@ -4630,6 +4692,7 @@ const resetForm = () => {
   interceptWarmupRequests.value = false
   autoPauseOnExpired.value = true
   openaiPassthroughEnabled.value = false
+  openaiImagesPassthroughEnabled.value = false
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
@@ -4712,6 +4775,12 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
   } else {
     delete extra.openai_passthrough
     delete extra.openai_oauth_passthrough
+  }
+  if (accountCategory.value === 'apikey' && openaiImagesPassthroughEnabled.value) {
+    extra.images_passthrough_enabled = true
+  } else {
+    delete extra.images_passthrough_enabled
+    delete extra.allow_non_openai_image_models
   }
 
   if (accountCategory.value === 'oauth-based' && codexCLIOnlyEnabled.value) {
@@ -5021,7 +5090,9 @@ const handleSubmit = async () => {
       ? 'https://api.openai.com'
       : form.platform === 'gemini'
         ? 'https://generativelanguage.googleapis.com'
-        : 'https://api.anthropic.com'
+        : form.platform === 'grok'
+          ? 'https://api.x.ai/v1'
+          : 'https://api.anthropic.com'
 
   // Build credentials with optional model mapping
   const credentials: Record<string, unknown> = {

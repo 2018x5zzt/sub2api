@@ -115,6 +115,7 @@ export default {
         codeAssist: 'Code Assist',
         antigravityOauth: 'Antigravity OAuth',
         grokOauth: 'Grok OAuth',
+        grokApikey: 'xAI API Key / Base URL',
         antigravityApikey: 'Connect via Base URL + API Key',
         upstream: 'Upstream',
         upstreamDesc: 'Connect via Base URL + API Key'
@@ -491,10 +492,13 @@ export default {
         testModeDefault: 'Default request',
         testModeCompact: 'Compact probe',
         modelRestrictionDisabledByPassthrough: 'Automatic passthrough is enabled: model whitelist/mapping will not take effect.',
+        imagesPassthrough: 'Images compatibility passthrough',
+        imagesPassthroughDesc:
+          'Only applies to OpenAI API Key accounts. When enabled, /v1/images accepts non-gpt-image models (for example grok-imagine-*) and forwards them to the configured OpenAI-compatible upstream. Default remains gpt-image-* only.',
       },
       grok: {
-        baseUrlHint: 'Grok OAuth accounts forward to the official xAI API base URL.',
-        apiKeyHint: 'Grok subscription support uses OAuth refresh tokens; API keys are out of scope for this account type.'
+        baseUrlHint: 'Official xAI API is https://api.x.ai/v1. Custom OpenAI-compatible upstream base URLs are also supported for API Key accounts.',
+        apiKeyHint: 'Your xAI API Key (or the key required by a Grok-compatible upstream).'
       },
       anthropic: {
         apiKeyPassthrough: 'Auto passthrough (auth only)',
@@ -879,7 +883,9 @@ export default {
           missingExchangeParams: 'Missing authorization code, state, or OAuth session',
           failedToExchangeCode: 'Failed to exchange Grok authorization code',
           failedToValidateRT: 'Failed to validate Grok refresh token',
-          oauthOnlyHint: 'Initial Grok support is OAuth subscription-backed Responses API text and reasoning traffic only.'
+          oauthOnlyHint: 'Initial Grok support is OAuth subscription-backed Responses API text and reasoning traffic only.',
+          accountTypeHint:
+            'OAuth uses xAI subscription accounts. API Key supports official xAI keys or custom Base URL + API Key for OpenAI-compatible Grok upstreams, including image/video media.'
         },
         // Gemini specific
 	        gemini: {

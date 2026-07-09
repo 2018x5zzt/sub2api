@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -117,7 +118,8 @@ func TestBuildGrokResponsesRequestUsesAccountBaseURLAndBearerToken(t *testing.T)
 		},
 	}
 
-	req, err := buildGrokResponsesRequest(context.Background(), nil, account, []byte(`{"model":"grok-4.3"}`), "access-token")
+	svc := &OpenAIGatewayService{}
+	req, err := svc.buildGrokResponsesRequest(context.Background(), nil, account, []byte(`{"model":"grok-4.3"}`), "access-token")
 	require.NoError(t, err)
 	require.Equal(t, http.MethodPost, req.Method)
 	require.Equal(t, "https://xai.test/v1/responses", req.URL.String())
@@ -141,9 +143,28 @@ func TestBuildGrokResponsesRequestRejectsUnsafeAccountBaseURL(t *testing.T) {
 		},
 	}
 
-	_, err := buildGrokResponsesRequest(context.Background(), nil, account, []byte(`{"model":"grok-4.3"}`), "access-token")
+	svc := &OpenAIGatewayService{}
+	_, err := svc.buildGrokResponsesRequest(context.Background(), nil, account, []byte(`{"model":"grok-4.3"}`), "access-token")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "invalid base url")
+}
+
+func TestBuildGrokResponsesRequestAPIKeyAllowsCustomBaseURL(t *testing.T) {
+	t.Parallel()
+
+	account := &Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"api_key":  "xai-key",
+			"base_url": "https://custom-grok.example.com/v1",
+		},
+	}
+	svc := &OpenAIGatewayService{cfg: &config.Config{}}
+	req, err := svc.buildGrokResponsesRequest(context.Background(), nil, account, []byte(`{"model":"grok-4.3"}`), "xai-key")
+	require.NoError(t, err)
+	require.Equal(t, "https://custom-grok.example.com/v1/responses", req.URL.String())
+	require.Equal(t, "Bearer xai-key", req.Header.Get("Authorization"))
 }
 
 func TestGrokMediaGenerationGateCoversImagesAndVideo(t *testing.T) {
@@ -270,6 +291,42 @@ func TestForwardGrokMediaImagesGenerationNormalizesImagineAlias(t *testing.T) {
 	require.Equal(t, "grok-imagine-image-quality", result.BillingModel)
 	require.Equal(t, 1, result.ImageCount)
 	require.Equal(t, ImageBillingSize2K, result.ImageSize)
+}
+
+func TestForwardGrokMediaImagesGenerationStripsUnsupportedSize(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	body := []byte(`{"model":"grok-imagine-image","prompt":"draw a cat","size":"1024x1024"}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	account := &Account{
+		ID:          61,
+		Name:        "grok",
+		Platform:    PlatformGrok,
+		Type:        AccountTypeAPIKey,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key":  "api-key",
+			"base_url": "https://xai.test/v1",
+		},
+	}
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"application/json"}},
+		Body:       io.NopCloser(strings.NewReader(`{"data":[]}`)),
+	}}
+	svc := &OpenAIGatewayService{httpUpstream: upstream}
+
+	result, err := svc.ForwardGrokMedia(context.Background(), c, account, GrokMediaEndpointImagesGenerations, "", body, "application/json")
+	require.NoError(t, err)
+	require.Equal(t, "https://xai.test/v1/images/generations", upstream.lastReq.URL.String())
+	require.JSONEq(t, `{"model":"grok-imagine-image","prompt":"draw a cat"}`, string(upstream.lastBody))
+	require.False(t, gjson.GetBytes(upstream.lastBody, "size").Exists())
+	// Billing still sees the original size tier.
+	require.Equal(t, ImageBillingSize1K, result.ImageSize)
 }
 
 func TestForwardGrokMediaImagesEditMultipartConvertsToJSON(t *testing.T) {

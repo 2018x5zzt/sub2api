@@ -41,7 +41,9 @@
                   ? 'https://generativelanguage.googleapis.com'
                   : account.platform === 'antigravity'
                     ? 'https://cloudcode-pa.googleapis.com'
-                    : 'https://api.anthropic.com'
+                    : account.platform === 'grok'
+                      ? 'https://api.x.ai/v1'
+                      : 'https://api.anthropic.com'
             "
           />
           <p class="input-hint">{{ baseUrlHint }}</p>
@@ -74,7 +76,9 @@
                   ? 'AIza...'
                   : account.platform === 'antigravity'
                     ? 'sk-...'
-                    : 'sk-ant-...'
+                    : account.platform === 'grok'
+                      ? 'xai-...'
+                      : 'sk-ant-...'
             "
           />
           <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
@@ -1494,6 +1498,36 @@
         </div>
       </div>
 
+      <!-- OpenAI 图片兼容透传（API Key only） -->
+      <div
+        v-if="account?.platform === 'openai' && account?.type === 'apikey'"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.openai.imagesPassthrough') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.openai.imagesPassthroughDesc') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            @click="openaiImagesPassthroughEnabled = !openaiImagesPassthroughEnabled"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              openaiImagesPassthroughEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                openaiImagesPassthroughEnabled ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+      </div>
+
       <!-- OpenAI Codex 图片工具统一策略（自动注入 + 客户端显式携带） -->
       <div
         v-if="account?.platform === 'openai' && (account?.type === 'oauth' || account?.type === 'setup-token' || account?.type === 'apikey')"
@@ -2650,6 +2684,7 @@ const baseUrlHint = computed(() => {
   if (!props.account) return t('admin.accounts.baseUrlHint')
   if (props.account.platform === 'openai') return t('admin.accounts.openai.baseUrlHint')
   if (props.account.platform === 'gemini') return t('admin.accounts.gemini.baseUrlHint')
+  if (props.account.platform === 'grok') return t('admin.accounts.grok.baseUrlHint')
   return t('admin.accounts.baseUrlHint')
 })
 
@@ -2814,6 +2849,7 @@ const customBaseUrl = ref('')
 
 // OpenAI 自动透传开关（OAuth/API Key）
 const openaiPassthroughEnabled = ref(false)
+const openaiImagesPassthroughEnabled = ref(false)
 const openAICompactMode = ref<OpenAICompactMode>('auto')
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
@@ -3298,6 +3334,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 
   // Load OpenAI passthrough toggle (OpenAI OAuth/SetupToken/API Key)
   openaiPassthroughEnabled.value = false
+  openaiImagesPassthroughEnabled.value = false
   openAICompactMode.value = 'auto'
   openAIResponsesMode.value = 'auto'
   openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
@@ -3312,6 +3349,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   webSearchEmulationMode.value = 'default'
   if (newAccount.platform === 'openai' && (newAccount.type === 'oauth' || newAccount.type === 'setup-token' || newAccount.type === 'apikey')) {
     openaiPassthroughEnabled.value = extra?.openai_passthrough === true || extra?.openai_oauth_passthrough === true
+    openaiImagesPassthroughEnabled.value =
+      extra?.images_passthrough_enabled === true || extra?.allow_non_openai_image_models === true
     openAICompactMode.value = (extra?.openai_compact_mode as OpenAICompactMode) || 'auto'
     if (newAccount.type === 'apikey') {
       openAIResponsesMode.value = normalizeOpenAIResponsesMode(extra?.openai_responses_mode)
@@ -4490,6 +4529,12 @@ const handleSubmit = async () => {
       } else {
         delete newExtra.openai_passthrough
         delete newExtra.openai_oauth_passthrough
+      }
+      if (props.account.type === 'apikey' && openaiImagesPassthroughEnabled.value) {
+        newExtra.images_passthrough_enabled = true
+      } else {
+        delete newExtra.images_passthrough_enabled
+        delete newExtra.allow_non_openai_image_models
       }
       if (openAICompactMode.value === 'auto') {
         delete newExtra.openai_compact_mode

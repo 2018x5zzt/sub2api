@@ -320,9 +320,9 @@ func TestOpenAIGatewayServiceParseOpenAIImagesRequest_ExplicitSizeRequiresNative
 	require.Equal(t, OpenAIImagesCapabilityNative, parsed.RequiredCapability)
 }
 
-func TestOpenAIGatewayServiceParseOpenAIImagesRequest_RejectsNonImageModel(t *testing.T) {
+func TestOpenAIGatewayServiceParseOpenAIImagesRequest_AllowsNonImageModelForPassthroughGate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	body := []byte(`{"model":"gpt-5.4","prompt":"draw a cat"}`)
+	body := []byte(`{"model":"grok-imagine-image","prompt":"draw a cat"}`)
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -332,8 +332,34 @@ func TestOpenAIGatewayServiceParseOpenAIImagesRequest_RejectsNonImageModel(t *te
 
 	svc := &OpenAIGatewayService{}
 	parsed, err := svc.ParseOpenAIImagesRequest(c, body)
-	require.Nil(t, parsed)
-	require.ErrorContains(t, err, `images endpoint requires an image model, got "gpt-5.4"`)
+	require.NoError(t, err)
+	require.NotNil(t, parsed)
+	require.Equal(t, "grok-imagine-image", parsed.Model)
+}
+
+func TestValidateOpenAIImagesModelForAccount(t *testing.T) {
+	t.Parallel()
+
+	require.ErrorContains(t, validateOpenAIImagesModelForAccount(nil, "grok-imagine-image"), `images endpoint requires an image model, got "grok-imagine-image"`)
+	require.NoError(t, validateOpenAIImagesModelForAccount(nil, "gpt-image-2"))
+
+	blocked := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Extra: map[string]any{}}
+	require.ErrorContains(t, validateOpenAIImagesModelForAccount(blocked, "grok-imagine-image"), `images endpoint requires an image model, got "grok-imagine-image"`)
+
+	allowed := &Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Extra:    map[string]any{"images_passthrough_enabled": true},
+	}
+	require.NoError(t, validateOpenAIImagesModelForAccount(allowed, "grok-imagine-image"))
+	require.NoError(t, validateOpenAIImagesModelForAccount(allowed, "gpt-image-2"))
+
+	alias := &Account{
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeAPIKey,
+		Extra:    map[string]any{"allow_non_openai_image_models": true},
+	}
+	require.NoError(t, validateOpenAIImagesModelForAccount(alias, "grok-imagine-image-quality"))
 }
 
 func TestOpenAIGatewayServiceParseOpenAIImagesRequest_JSONEditURLs(t *testing.T) {

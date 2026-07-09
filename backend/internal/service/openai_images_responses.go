@@ -1506,16 +1506,17 @@ func (s *OpenAIGatewayService) forwardOpenAIImagesOAuth(
 	if requestModel == "" {
 		requestModel = "gpt-image-2"
 	}
-	if err := validateOpenAIImagesModel(requestModel); err != nil {
+	if err := validateOpenAIImagesModelForAccount(account, requestModel); err != nil {
 		return nil, err
 	}
 	logger.LegacyPrintf(
 		"service.openai_gateway",
-		"[OpenAI] Images request routing request_model=%s endpoint=%s account_type=%s uploads=%d",
+		"[OpenAI] Images request routing request_model=%s endpoint=%s account_type=%s uploads=%d images_passthrough=%v",
 		requestModel,
 		parsed.Endpoint,
 		account.Type,
 		len(parsed.Uploads),
+		account.IsOpenAIImagesPassthroughEnabled(),
 	)
 	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
 	defer releaseUpstreamCtx()
