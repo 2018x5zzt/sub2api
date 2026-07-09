@@ -3,6 +3,7 @@ package handler
 import (
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -34,9 +35,12 @@ func TestCollectGroupModelIDs_ExpandsWildcardMappingSelectors(t *testing.T) {
 		t.Fatal("did not expect wildcard-only API key account to force default models")
 	}
 
+	// gpt-* 通配仅展开到 gpt- 前缀模型；非 gpt 的默认模型（如 codex-auto-review）不在其内。
 	want := make([]string, 0, len(defaults))
 	for _, model := range defaults {
-		want = append(want, model.ID)
+		if strings.HasPrefix(model.ID, "gpt-") {
+			want = append(want, model.ID)
+		}
 	}
 	sort.Strings(want)
 	if !reflect.DeepEqual(modelIDs, want) {
