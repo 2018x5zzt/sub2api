@@ -129,6 +129,27 @@ func (_u *UserUpdate) AddBalance(v float64) *UserUpdate {
 	return _u
 }
 
+// SetFrozenBalance sets the "frozen_balance" field.
+func (_u *UserUpdate) SetFrozenBalance(v float64) *UserUpdate {
+	_u.mutation.ResetFrozenBalance()
+	_u.mutation.SetFrozenBalance(v)
+	return _u
+}
+
+// SetNillableFrozenBalance sets the "frozen_balance" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableFrozenBalance(v *float64) *UserUpdate {
+	if v != nil {
+		_u.SetFrozenBalance(*v)
+	}
+	return _u
+}
+
+// AddFrozenBalance adds value to the "frozen_balance" field.
+func (_u *UserUpdate) AddFrozenBalance(v float64) *UserUpdate {
+	_u.mutation.AddFrozenBalance(v)
+	return _u
+}
+
 // SetConcurrency sets the "concurrency" field.
 func (_u *UserUpdate) SetConcurrency(v int) *UserUpdate {
 	_u.mutation.ResetConcurrency()
@@ -390,6 +411,27 @@ func (_u *UserUpdate) AddTotalRecharged(v float64) *UserUpdate {
 	return _u
 }
 
+// SetRpmLimit sets the "rpm_limit" field.
+func (_u *UserUpdate) SetRpmLimit(v int) *UserUpdate {
+	_u.mutation.ResetRpmLimit()
+	_u.mutation.SetRpmLimit(v)
+	return _u
+}
+
+// SetNillableRpmLimit sets the "rpm_limit" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableRpmLimit(v *int) *UserUpdate {
+	if v != nil {
+		_u.SetRpmLimit(*v)
+	}
+	return _u
+}
+
+// AddRpmLimit adds value to the "rpm_limit" field.
+func (_u *UserUpdate) AddRpmLimit(v int) *UserUpdate {
+	_u.mutation.AddRpmLimit(v)
+	return _u
+}
+
 // SetSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field.
 func (_u *UserUpdate) SetSubscriptionBalanceFallbackEnabled(v bool) *UserUpdate {
 	_u.mutation.SetSubscriptionBalanceFallbackEnabled(v)
@@ -470,27 +512,6 @@ func (_u *UserUpdate) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpdate
 // ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
 func (_u *UserUpdate) ClearSubscriptionBalanceFallbackGroupID() *UserUpdate {
 	_u.mutation.ClearSubscriptionBalanceFallbackGroupID()
-	return _u
-}
-
-// SetRpmLimit sets the "rpm_limit" field.
-func (_u *UserUpdate) SetRpmLimit(v int) *UserUpdate {
-	_u.mutation.ResetRpmLimit()
-	_u.mutation.SetRpmLimit(v)
-	return _u
-}
-
-// SetNillableRpmLimit sets the "rpm_limit" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableRpmLimit(v *int) *UserUpdate {
-	if v != nil {
-		_u.SetRpmLimit(*v)
-	}
-	return _u
-}
-
-// AddRpmLimit adds value to the "rpm_limit" field.
-func (_u *UserUpdate) AddRpmLimit(v int) *UserUpdate {
-	_u.mutation.AddRpmLimit(v)
 	return _u
 }
 
@@ -1080,6 +1101,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedBalance(); ok {
 		_spec.AddField(user.FieldBalance, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.FrozenBalance(); ok {
+		_spec.SetField(user.FieldFrozenBalance, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedFrozenBalance(); ok {
+		_spec.AddField(user.FieldFrozenBalance, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.Concurrency(); ok {
 		_spec.SetField(user.FieldConcurrency, field.TypeInt, value)
 	}
@@ -1149,6 +1176,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedTotalRecharged(); ok {
 		_spec.AddField(user.FieldTotalRecharged, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.RpmLimit(); ok {
+		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedRpmLimit(); ok {
+		_spec.AddField(user.FieldRpmLimit, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.SubscriptionBalanceFallbackEnabled(); ok {
 		_spec.SetField(user.FieldSubscriptionBalanceFallbackEnabled, field.TypeBool, value)
 	}
@@ -1172,12 +1205,6 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.SubscriptionBalanceFallbackGroupIDCleared() {
 		_spec.ClearField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.RpmLimit(); ok {
-		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedRpmLimit(); ok {
-		_spec.AddField(user.FieldRpmLimit, field.TypeInt, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1885,6 +1912,27 @@ func (_u *UserUpdateOne) AddBalance(v float64) *UserUpdateOne {
 	return _u
 }
 
+// SetFrozenBalance sets the "frozen_balance" field.
+func (_u *UserUpdateOne) SetFrozenBalance(v float64) *UserUpdateOne {
+	_u.mutation.ResetFrozenBalance()
+	_u.mutation.SetFrozenBalance(v)
+	return _u
+}
+
+// SetNillableFrozenBalance sets the "frozen_balance" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableFrozenBalance(v *float64) *UserUpdateOne {
+	if v != nil {
+		_u.SetFrozenBalance(*v)
+	}
+	return _u
+}
+
+// AddFrozenBalance adds value to the "frozen_balance" field.
+func (_u *UserUpdateOne) AddFrozenBalance(v float64) *UserUpdateOne {
+	_u.mutation.AddFrozenBalance(v)
+	return _u
+}
+
 // SetConcurrency sets the "concurrency" field.
 func (_u *UserUpdateOne) SetConcurrency(v int) *UserUpdateOne {
 	_u.mutation.ResetConcurrency()
@@ -2146,6 +2194,27 @@ func (_u *UserUpdateOne) AddTotalRecharged(v float64) *UserUpdateOne {
 	return _u
 }
 
+// SetRpmLimit sets the "rpm_limit" field.
+func (_u *UserUpdateOne) SetRpmLimit(v int) *UserUpdateOne {
+	_u.mutation.ResetRpmLimit()
+	_u.mutation.SetRpmLimit(v)
+	return _u
+}
+
+// SetNillableRpmLimit sets the "rpm_limit" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableRpmLimit(v *int) *UserUpdateOne {
+	if v != nil {
+		_u.SetRpmLimit(*v)
+	}
+	return _u
+}
+
+// AddRpmLimit adds value to the "rpm_limit" field.
+func (_u *UserUpdateOne) AddRpmLimit(v int) *UserUpdateOne {
+	_u.mutation.AddRpmLimit(v)
+	return _u
+}
+
 // SetSubscriptionBalanceFallbackEnabled sets the "subscription_balance_fallback_enabled" field.
 func (_u *UserUpdateOne) SetSubscriptionBalanceFallbackEnabled(v bool) *UserUpdateOne {
 	_u.mutation.SetSubscriptionBalanceFallbackEnabled(v)
@@ -2226,27 +2295,6 @@ func (_u *UserUpdateOne) AddSubscriptionBalanceFallbackGroupID(v int64) *UserUpd
 // ClearSubscriptionBalanceFallbackGroupID clears the value of the "subscription_balance_fallback_group_id" field.
 func (_u *UserUpdateOne) ClearSubscriptionBalanceFallbackGroupID() *UserUpdateOne {
 	_u.mutation.ClearSubscriptionBalanceFallbackGroupID()
-	return _u
-}
-
-// SetRpmLimit sets the "rpm_limit" field.
-func (_u *UserUpdateOne) SetRpmLimit(v int) *UserUpdateOne {
-	_u.mutation.ResetRpmLimit()
-	_u.mutation.SetRpmLimit(v)
-	return _u
-}
-
-// SetNillableRpmLimit sets the "rpm_limit" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableRpmLimit(v *int) *UserUpdateOne {
-	if v != nil {
-		_u.SetRpmLimit(*v)
-	}
-	return _u
-}
-
-// AddRpmLimit adds value to the "rpm_limit" field.
-func (_u *UserUpdateOne) AddRpmLimit(v int) *UserUpdateOne {
-	_u.mutation.AddRpmLimit(v)
 	return _u
 }
 
@@ -2866,6 +2914,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if value, ok := _u.mutation.AddedBalance(); ok {
 		_spec.AddField(user.FieldBalance, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.FrozenBalance(); ok {
+		_spec.SetField(user.FieldFrozenBalance, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedFrozenBalance(); ok {
+		_spec.AddField(user.FieldFrozenBalance, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.Concurrency(); ok {
 		_spec.SetField(user.FieldConcurrency, field.TypeInt, value)
 	}
@@ -2935,6 +2989,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if value, ok := _u.mutation.AddedTotalRecharged(); ok {
 		_spec.AddField(user.FieldTotalRecharged, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.RpmLimit(); ok {
+		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedRpmLimit(); ok {
+		_spec.AddField(user.FieldRpmLimit, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.SubscriptionBalanceFallbackEnabled(); ok {
 		_spec.SetField(user.FieldSubscriptionBalanceFallbackEnabled, field.TypeBool, value)
 	}
@@ -2958,12 +3018,6 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.SubscriptionBalanceFallbackGroupIDCleared() {
 		_spec.ClearField(user.FieldSubscriptionBalanceFallbackGroupID, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.RpmLimit(); ok {
-		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedRpmLimit(); ok {
-		_spec.AddField(user.FieldRpmLimit, field.TypeInt, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{

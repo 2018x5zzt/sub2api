@@ -3,6 +3,7 @@
 package service
 
 import (
+	"errors"
 	"context"
 	"testing"
 
@@ -45,6 +46,10 @@ func (r *productAwareProductRepoStub) ResolveActiveProductByGroupID(ctx context.
 	}
 	return nil, ErrSubscriptionNotFound
 }
+func (r *productAwareProductRepoStub) GetProductByID(context.Context, int64) (*SubscriptionProduct, error) {
+	return nil, errors.New("not implemented")
+}
+
 
 func (r *productAwareProductRepoStub) CreateProduct(context.Context, *CreateSubscriptionProductInput) (*SubscriptionProduct, error) {
 	return nil, ErrProductSubscriptionAssignerUnavailable

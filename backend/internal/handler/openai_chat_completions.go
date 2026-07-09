@@ -64,6 +64,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	}
 
 	if !gjson.ValidBytes(body) {
+		logRequestBodyParseFailure(reqLog, body, nil)
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
 	}
@@ -145,6 +146,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			failedAccountIDs,
 			service.OpenAIUpstreamTransportAny,
 			service.OpenAIEndpointCapabilityChatCompletions,
+			false,
 			false,
 			requestPlatform,
 		)
@@ -325,6 +327,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		clientIP := ip.GetClientIP(c)
 		inboundEndpoint := GetInboundEndpoint(c)
 		upstreamEndpoint := resolveOpenAIUpstreamEndpoint(c, account)
+		quotaPlatform := service.QuotaPlatform(c.Request.Context(), apiKey)
 
 		cyberBlocked := service.GetOpsCyberPolicy(c) != nil
 		h.submitOpenAIUsageRecordTask(c.Request.Context(), result, func(ctx context.Context) {
@@ -339,6 +342,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				UserAgent:          userAgent,
 				IPAddress:          clientIP,
 				APIKeyService:      h.apiKeyService,
+				QuotaPlatform:      quotaPlatform,
 				ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
 				CyberBlocked:       cyberBlocked,
 			}); err != nil {

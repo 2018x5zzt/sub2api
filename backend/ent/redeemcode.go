@@ -39,10 +39,10 @@ type RedeemCode struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID *int64 `json:"group_id,omitempty"`
-	// ProductID holds the value of the "product_id" field.
-	ProductID *int64 `json:"product_id,omitempty"`
 	// ValidityDays holds the value of the "validity_days" field.
 	ValidityDays int `json:"validity_days,omitempty"`
+	// ProductID holds the value of the "product_id" field.
+	ProductID *int64 `json:"product_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the RedeemCodeQuery when eager-loading is set.
 	Edges        RedeemCodeEdges `json:"edges"`
@@ -89,7 +89,7 @@ func (*RedeemCode) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case redeemcode.FieldValue:
 			values[i] = new(sql.NullFloat64)
-		case redeemcode.FieldID, redeemcode.FieldUsedBy, redeemcode.FieldGroupID, redeemcode.FieldProductID, redeemcode.FieldValidityDays:
+		case redeemcode.FieldID, redeemcode.FieldUsedBy, redeemcode.FieldGroupID, redeemcode.FieldValidityDays, redeemcode.FieldProductID:
 			values[i] = new(sql.NullInt64)
 		case redeemcode.FieldCode, redeemcode.FieldType, redeemcode.FieldStatus, redeemcode.FieldNotes:
 			values[i] = new(sql.NullString)
@@ -181,18 +181,18 @@ func (_m *RedeemCode) assignValues(columns []string, values []any) error {
 				_m.GroupID = new(int64)
 				*_m.GroupID = value.Int64
 			}
+		case redeemcode.FieldValidityDays:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field validity_days", values[i])
+			} else if value.Valid {
+				_m.ValidityDays = int(value.Int64)
+			}
 		case redeemcode.FieldProductID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field product_id", values[i])
 			} else if value.Valid {
 				_m.ProductID = new(int64)
 				*_m.ProductID = value.Int64
-			}
-		case redeemcode.FieldValidityDays:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field validity_days", values[i])
-			} else if value.Valid {
-				_m.ValidityDays = int(value.Int64)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -280,13 +280,13 @@ func (_m *RedeemCode) String() string {
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
+	builder.WriteString("validity_days=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ValidityDays))
+	builder.WriteString(", ")
 	if v := _m.ProductID; v != nil {
 		builder.WriteString("product_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
-	builder.WriteString(", ")
-	builder.WriteString("validity_days=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ValidityDays))
 	builder.WriteByte(')')
 	return builder.String()
 }

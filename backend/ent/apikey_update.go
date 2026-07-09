@@ -120,26 +120,6 @@ func (_u *APIKeyUpdate) ClearGroupID() *APIKeyUpdate {
 	return _u
 }
 
-// SetSubscriptionProductFamily sets the "subscription_product_family" field.
-func (_u *APIKeyUpdate) SetSubscriptionProductFamily(v string) *APIKeyUpdate {
-	_u.mutation.SetSubscriptionProductFamily(v)
-	return _u
-}
-
-// SetNillableSubscriptionProductFamily sets the "subscription_product_family" field if the given value is not nil.
-func (_u *APIKeyUpdate) SetNillableSubscriptionProductFamily(v *string) *APIKeyUpdate {
-	if v != nil {
-		_u.SetSubscriptionProductFamily(*v)
-	}
-	return _u
-}
-
-// ClearSubscriptionProductFamily clears the value of the "subscription_product_family" field.
-func (_u *APIKeyUpdate) ClearSubscriptionProductFamily() *APIKeyUpdate {
-	_u.mutation.ClearSubscriptionProductFamily()
-	return _u
-}
-
 // SetStatus sets the "status" field.
 func (_u *APIKeyUpdate) SetStatus(v string) *APIKeyUpdate {
 	_u.mutation.SetStatus(v)
@@ -458,6 +438,26 @@ func (_u *APIKeyUpdate) ClearWindow7dStart() *APIKeyUpdate {
 	return _u
 }
 
+// SetSubscriptionProductFamily sets the "subscription_product_family" field.
+func (_u *APIKeyUpdate) SetSubscriptionProductFamily(v string) *APIKeyUpdate {
+	_u.mutation.SetSubscriptionProductFamily(v)
+	return _u
+}
+
+// SetNillableSubscriptionProductFamily sets the "subscription_product_family" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableSubscriptionProductFamily(v *string) *APIKeyUpdate {
+	if v != nil {
+		_u.SetSubscriptionProductFamily(*v)
+	}
+	return _u
+}
+
+// ClearSubscriptionProductFamily clears the value of the "subscription_product_family" field.
+func (_u *APIKeyUpdate) ClearSubscriptionProductFamily() *APIKeyUpdate {
+	_u.mutation.ClearSubscriptionProductFamily()
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *APIKeyUpdate) SetUser(v *User) *APIKeyUpdate {
 	return _u.SetUserID(v.ID)
@@ -575,14 +575,14 @@ func (_u *APIKeyUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "APIKey.name": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.SubscriptionProductFamily(); ok {
-		if err := apikey.SubscriptionProductFamilyValidator(v); err != nil {
-			return &ValidationError{Name: "subscription_product_family", err: fmt.Errorf(`ent: validator failed for field "APIKey.subscription_product_family": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := apikey.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "APIKey.status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SubscriptionProductFamily(); ok {
+		if err := apikey.SubscriptionProductFamilyValidator(v); err != nil {
+			return &ValidationError{Name: "subscription_product_family", err: fmt.Errorf(`ent: validator failed for field "APIKey.subscription_product_family": %w`, err)}
 		}
 	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
@@ -617,12 +617,6 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.SubscriptionProductFamily(); ok {
-		_spec.SetField(apikey.FieldSubscriptionProductFamily, field.TypeString, value)
-	}
-	if _u.mutation.SubscriptionProductFamilyCleared() {
-		_spec.ClearField(apikey.FieldSubscriptionProductFamily, field.TypeString)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
@@ -726,6 +720,12 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.Window7dStartCleared() {
 		_spec.ClearField(apikey.FieldWindow7dStart, field.TypeTime)
+	}
+	if value, ok := _u.mutation.SubscriptionProductFamily(); ok {
+		_spec.SetField(apikey.FieldSubscriptionProductFamily, field.TypeString, value)
+	}
+	if _u.mutation.SubscriptionProductFamilyCleared() {
+		_spec.ClearField(apikey.FieldSubscriptionProductFamily, field.TypeString)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -935,26 +935,6 @@ func (_u *APIKeyUpdateOne) SetNillableGroupID(v *int64) *APIKeyUpdateOne {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *APIKeyUpdateOne) ClearGroupID() *APIKeyUpdateOne {
 	_u.mutation.ClearGroupID()
-	return _u
-}
-
-// SetSubscriptionProductFamily sets the "subscription_product_family" field.
-func (_u *APIKeyUpdateOne) SetSubscriptionProductFamily(v string) *APIKeyUpdateOne {
-	_u.mutation.SetSubscriptionProductFamily(v)
-	return _u
-}
-
-// SetNillableSubscriptionProductFamily sets the "subscription_product_family" field if the given value is not nil.
-func (_u *APIKeyUpdateOne) SetNillableSubscriptionProductFamily(v *string) *APIKeyUpdateOne {
-	if v != nil {
-		_u.SetSubscriptionProductFamily(*v)
-	}
-	return _u
-}
-
-// ClearSubscriptionProductFamily clears the value of the "subscription_product_family" field.
-func (_u *APIKeyUpdateOne) ClearSubscriptionProductFamily() *APIKeyUpdateOne {
-	_u.mutation.ClearSubscriptionProductFamily()
 	return _u
 }
 
@@ -1276,6 +1256,26 @@ func (_u *APIKeyUpdateOne) ClearWindow7dStart() *APIKeyUpdateOne {
 	return _u
 }
 
+// SetSubscriptionProductFamily sets the "subscription_product_family" field.
+func (_u *APIKeyUpdateOne) SetSubscriptionProductFamily(v string) *APIKeyUpdateOne {
+	_u.mutation.SetSubscriptionProductFamily(v)
+	return _u
+}
+
+// SetNillableSubscriptionProductFamily sets the "subscription_product_family" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableSubscriptionProductFamily(v *string) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionProductFamily(*v)
+	}
+	return _u
+}
+
+// ClearSubscriptionProductFamily clears the value of the "subscription_product_family" field.
+func (_u *APIKeyUpdateOne) ClearSubscriptionProductFamily() *APIKeyUpdateOne {
+	_u.mutation.ClearSubscriptionProductFamily()
+	return _u
+}
+
 // SetUser sets the "user" edge to the User entity.
 func (_u *APIKeyUpdateOne) SetUser(v *User) *APIKeyUpdateOne {
 	return _u.SetUserID(v.ID)
@@ -1406,14 +1406,14 @@ func (_u *APIKeyUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "APIKey.name": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.SubscriptionProductFamily(); ok {
-		if err := apikey.SubscriptionProductFamilyValidator(v); err != nil {
-			return &ValidationError{Name: "subscription_product_family", err: fmt.Errorf(`ent: validator failed for field "APIKey.subscription_product_family": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := apikey.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "APIKey.status": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SubscriptionProductFamily(); ok {
+		if err := apikey.SubscriptionProductFamilyValidator(v); err != nil {
+			return &ValidationError{Name: "subscription_product_family", err: fmt.Errorf(`ent: validator failed for field "APIKey.subscription_product_family": %w`, err)}
 		}
 	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
@@ -1465,12 +1465,6 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(apikey.FieldName, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.SubscriptionProductFamily(); ok {
-		_spec.SetField(apikey.FieldSubscriptionProductFamily, field.TypeString, value)
-	}
-	if _u.mutation.SubscriptionProductFamilyCleared() {
-		_spec.ClearField(apikey.FieldSubscriptionProductFamily, field.TypeString)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
@@ -1574,6 +1568,12 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if _u.mutation.Window7dStartCleared() {
 		_spec.ClearField(apikey.FieldWindow7dStart, field.TypeTime)
+	}
+	if value, ok := _u.mutation.SubscriptionProductFamily(); ok {
+		_spec.SetField(apikey.FieldSubscriptionProductFamily, field.TypeString, value)
+	}
+	if _u.mutation.SubscriptionProductFamilyCleared() {
+		_spec.ClearField(apikey.FieldSubscriptionProductFamily, field.TypeString)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{

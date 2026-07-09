@@ -90,6 +90,11 @@ func Balance(v float64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldBalance, v))
 }
 
+// FrozenBalance applies equality check predicate on the "frozen_balance" field. It's identical to FrozenBalanceEQ.
+func FrozenBalance(v float64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldFrozenBalance, v))
+}
+
 // Concurrency applies equality check predicate on the "concurrency" field. It's identical to ConcurrencyEQ.
 func Concurrency(v int) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldConcurrency, v))
@@ -165,6 +170,11 @@ func TotalRecharged(v float64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldTotalRecharged, v))
 }
 
+// RpmLimit applies equality check predicate on the "rpm_limit" field. It's identical to RpmLimitEQ.
+func RpmLimit(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRpmLimit, v))
+}
+
 // SubscriptionBalanceFallbackEnabled applies equality check predicate on the "subscription_balance_fallback_enabled" field. It's identical to SubscriptionBalanceFallbackEnabledEQ.
 func SubscriptionBalanceFallbackEnabled(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldSubscriptionBalanceFallbackEnabled, v))
@@ -183,11 +193,6 @@ func SubscriptionBalanceFallbackUsedUsd(v float64) predicate.User {
 // SubscriptionBalanceFallbackGroupID applies equality check predicate on the "subscription_balance_fallback_group_id" field. It's identical to SubscriptionBalanceFallbackGroupIDEQ.
 func SubscriptionBalanceFallbackGroupID(v int64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldSubscriptionBalanceFallbackGroupID, v))
-}
-
-// RpmLimit applies equality check predicate on the "rpm_limit" field. It's identical to RpmLimitEQ.
-func RpmLimit(v int) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldRpmLimit, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
@@ -553,6 +558,46 @@ func BalanceLT(v float64) predicate.User {
 // BalanceLTE applies the LTE predicate on the "balance" field.
 func BalanceLTE(v float64) predicate.User {
 	return predicate.User(sql.FieldLTE(FieldBalance, v))
+}
+
+// FrozenBalanceEQ applies the EQ predicate on the "frozen_balance" field.
+func FrozenBalanceEQ(v float64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldFrozenBalance, v))
+}
+
+// FrozenBalanceNEQ applies the NEQ predicate on the "frozen_balance" field.
+func FrozenBalanceNEQ(v float64) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldFrozenBalance, v))
+}
+
+// FrozenBalanceIn applies the In predicate on the "frozen_balance" field.
+func FrozenBalanceIn(vs ...float64) predicate.User {
+	return predicate.User(sql.FieldIn(FieldFrozenBalance, vs...))
+}
+
+// FrozenBalanceNotIn applies the NotIn predicate on the "frozen_balance" field.
+func FrozenBalanceNotIn(vs ...float64) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldFrozenBalance, vs...))
+}
+
+// FrozenBalanceGT applies the GT predicate on the "frozen_balance" field.
+func FrozenBalanceGT(v float64) predicate.User {
+	return predicate.User(sql.FieldGT(FieldFrozenBalance, v))
+}
+
+// FrozenBalanceGTE applies the GTE predicate on the "frozen_balance" field.
+func FrozenBalanceGTE(v float64) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldFrozenBalance, v))
+}
+
+// FrozenBalanceLT applies the LT predicate on the "frozen_balance" field.
+func FrozenBalanceLT(v float64) predicate.User {
+	return predicate.User(sql.FieldLT(FieldFrozenBalance, v))
+}
+
+// FrozenBalanceLTE applies the LTE predicate on the "frozen_balance" field.
+func FrozenBalanceLTE(v float64) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldFrozenBalance, v))
 }
 
 // ConcurrencyEQ applies the EQ predicate on the "concurrency" field.
@@ -1320,6 +1365,46 @@ func TotalRechargedLTE(v float64) predicate.User {
 	return predicate.User(sql.FieldLTE(FieldTotalRecharged, v))
 }
 
+// RpmLimitEQ applies the EQ predicate on the "rpm_limit" field.
+func RpmLimitEQ(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldRpmLimit, v))
+}
+
+// RpmLimitNEQ applies the NEQ predicate on the "rpm_limit" field.
+func RpmLimitNEQ(v int) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldRpmLimit, v))
+}
+
+// RpmLimitIn applies the In predicate on the "rpm_limit" field.
+func RpmLimitIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldIn(FieldRpmLimit, vs...))
+}
+
+// RpmLimitNotIn applies the NotIn predicate on the "rpm_limit" field.
+func RpmLimitNotIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldRpmLimit, vs...))
+}
+
+// RpmLimitGT applies the GT predicate on the "rpm_limit" field.
+func RpmLimitGT(v int) predicate.User {
+	return predicate.User(sql.FieldGT(FieldRpmLimit, v))
+}
+
+// RpmLimitGTE applies the GTE predicate on the "rpm_limit" field.
+func RpmLimitGTE(v int) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldRpmLimit, v))
+}
+
+// RpmLimitLT applies the LT predicate on the "rpm_limit" field.
+func RpmLimitLT(v int) predicate.User {
+	return predicate.User(sql.FieldLT(FieldRpmLimit, v))
+}
+
+// RpmLimitLTE applies the LTE predicate on the "rpm_limit" field.
+func RpmLimitLTE(v int) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldRpmLimit, v))
+}
+
 // SubscriptionBalanceFallbackEnabledEQ applies the EQ predicate on the "subscription_balance_fallback_enabled" field.
 func SubscriptionBalanceFallbackEnabledEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldSubscriptionBalanceFallbackEnabled, v))
@@ -1458,46 +1543,6 @@ func SubscriptionBalanceFallbackGroupIDIsNil() predicate.User {
 // SubscriptionBalanceFallbackGroupIDNotNil applies the NotNil predicate on the "subscription_balance_fallback_group_id" field.
 func SubscriptionBalanceFallbackGroupIDNotNil() predicate.User {
 	return predicate.User(sql.FieldNotNull(FieldSubscriptionBalanceFallbackGroupID))
-}
-
-// RpmLimitEQ applies the EQ predicate on the "rpm_limit" field.
-func RpmLimitEQ(v int) predicate.User {
-	return predicate.User(sql.FieldEQ(FieldRpmLimit, v))
-}
-
-// RpmLimitNEQ applies the NEQ predicate on the "rpm_limit" field.
-func RpmLimitNEQ(v int) predicate.User {
-	return predicate.User(sql.FieldNEQ(FieldRpmLimit, v))
-}
-
-// RpmLimitIn applies the In predicate on the "rpm_limit" field.
-func RpmLimitIn(vs ...int) predicate.User {
-	return predicate.User(sql.FieldIn(FieldRpmLimit, vs...))
-}
-
-// RpmLimitNotIn applies the NotIn predicate on the "rpm_limit" field.
-func RpmLimitNotIn(vs ...int) predicate.User {
-	return predicate.User(sql.FieldNotIn(FieldRpmLimit, vs...))
-}
-
-// RpmLimitGT applies the GT predicate on the "rpm_limit" field.
-func RpmLimitGT(v int) predicate.User {
-	return predicate.User(sql.FieldGT(FieldRpmLimit, v))
-}
-
-// RpmLimitGTE applies the GTE predicate on the "rpm_limit" field.
-func RpmLimitGTE(v int) predicate.User {
-	return predicate.User(sql.FieldGTE(FieldRpmLimit, v))
-}
-
-// RpmLimitLT applies the LT predicate on the "rpm_limit" field.
-func RpmLimitLT(v int) predicate.User {
-	return predicate.User(sql.FieldLT(FieldRpmLimit, v))
-}
-
-// RpmLimitLTE applies the LTE predicate on the "rpm_limit" field.
-func RpmLimitLTE(v int) predicate.User {
-	return predicate.User(sql.FieldLTE(FieldRpmLimit, v))
 }
 
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.

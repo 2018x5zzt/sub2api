@@ -29,6 +29,8 @@ const (
 	FieldRole = "role"
 	// FieldBalance holds the string denoting the balance field in the database.
 	FieldBalance = "balance"
+	// FieldFrozenBalance holds the string denoting the frozen_balance field in the database.
+	FieldFrozenBalance = "frozen_balance"
 	// FieldConcurrency holds the string denoting the concurrency field in the database.
 	FieldConcurrency = "concurrency"
 	// FieldStatus holds the string denoting the status field in the database.
@@ -59,6 +61,8 @@ const (
 	FieldBalanceNotifyExtraEmails = "balance_notify_extra_emails"
 	// FieldTotalRecharged holds the string denoting the total_recharged field in the database.
 	FieldTotalRecharged = "total_recharged"
+	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
+	FieldRpmLimit = "rpm_limit"
 	// FieldSubscriptionBalanceFallbackEnabled holds the string denoting the subscription_balance_fallback_enabled field in the database.
 	FieldSubscriptionBalanceFallbackEnabled = "subscription_balance_fallback_enabled"
 	// FieldSubscriptionBalanceFallbackLimitUsd holds the string denoting the subscription_balance_fallback_limit_usd field in the database.
@@ -67,8 +71,6 @@ const (
 	FieldSubscriptionBalanceFallbackUsedUsd = "subscription_balance_fallback_used_usd"
 	// FieldSubscriptionBalanceFallbackGroupID holds the string denoting the subscription_balance_fallback_group_id field in the database.
 	FieldSubscriptionBalanceFallbackGroupID = "subscription_balance_fallback_group_id"
-	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
-	FieldRpmLimit = "rpm_limit"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
@@ -207,6 +209,7 @@ var Columns = []string{
 	FieldPasswordHash,
 	FieldRole,
 	FieldBalance,
+	FieldFrozenBalance,
 	FieldConcurrency,
 	FieldStatus,
 	FieldUsername,
@@ -222,11 +225,11 @@ var Columns = []string{
 	FieldBalanceNotifyThreshold,
 	FieldBalanceNotifyExtraEmails,
 	FieldTotalRecharged,
+	FieldRpmLimit,
 	FieldSubscriptionBalanceFallbackEnabled,
 	FieldSubscriptionBalanceFallbackLimitUsd,
 	FieldSubscriptionBalanceFallbackUsedUsd,
 	FieldSubscriptionBalanceFallbackGroupID,
-	FieldRpmLimit,
 }
 
 var (
@@ -269,6 +272,8 @@ var (
 	RoleValidator func(string) error
 	// DefaultBalance holds the default value on creation for the "balance" field.
 	DefaultBalance float64
+	// DefaultFrozenBalance holds the default value on creation for the "frozen_balance" field.
+	DefaultFrozenBalance float64
 	// DefaultConcurrency holds the default value on creation for the "concurrency" field.
 	DefaultConcurrency int
 	// DefaultStatus holds the default value on creation for the "status" field.
@@ -295,14 +300,14 @@ var (
 	DefaultBalanceNotifyExtraEmails string
 	// DefaultTotalRecharged holds the default value on creation for the "total_recharged" field.
 	DefaultTotalRecharged float64
+	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.
+	DefaultRpmLimit int
 	// DefaultSubscriptionBalanceFallbackEnabled holds the default value on creation for the "subscription_balance_fallback_enabled" field.
 	DefaultSubscriptionBalanceFallbackEnabled bool
 	// DefaultSubscriptionBalanceFallbackLimitUsd holds the default value on creation for the "subscription_balance_fallback_limit_usd" field.
 	DefaultSubscriptionBalanceFallbackLimitUsd float64
 	// DefaultSubscriptionBalanceFallbackUsedUsd holds the default value on creation for the "subscription_balance_fallback_used_usd" field.
 	DefaultSubscriptionBalanceFallbackUsedUsd float64
-	// DefaultRpmLimit holds the default value on creation for the "rpm_limit" field.
-	DefaultRpmLimit int
 )
 
 // OrderOption defines the ordering options for the User queries.
@@ -346,6 +351,11 @@ func ByRole(opts ...sql.OrderTermOption) OrderOption {
 // ByBalance orders the results by the balance field.
 func ByBalance(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBalance, opts...).ToFunc()
+}
+
+// ByFrozenBalance orders the results by the frozen_balance field.
+func ByFrozenBalance(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFrozenBalance, opts...).ToFunc()
 }
 
 // ByConcurrency orders the results by the concurrency field.
@@ -423,6 +433,11 @@ func ByTotalRecharged(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotalRecharged, opts...).ToFunc()
 }
 
+// ByRpmLimit orders the results by the rpm_limit field.
+func ByRpmLimit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRpmLimit, opts...).ToFunc()
+}
+
 // BySubscriptionBalanceFallbackEnabled orders the results by the subscription_balance_fallback_enabled field.
 func BySubscriptionBalanceFallbackEnabled(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionBalanceFallbackEnabled, opts...).ToFunc()
@@ -441,11 +456,6 @@ func BySubscriptionBalanceFallbackUsedUsd(opts ...sql.OrderTermOption) OrderOpti
 // BySubscriptionBalanceFallbackGroupID orders the results by the subscription_balance_fallback_group_id field.
 func BySubscriptionBalanceFallbackGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionBalanceFallbackGroupID, opts...).ToFunc()
-}
-
-// ByRpmLimit orders the results by the rpm_limit field.
-func ByRpmLimit(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldRpmLimit, opts...).ToFunc()
 }
 
 // ByAPIKeysCount orders the results by api_keys count.

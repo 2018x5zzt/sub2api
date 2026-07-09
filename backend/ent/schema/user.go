@@ -49,6 +49,9 @@ func (User) Fields() []ent.Field {
 		field.Float("balance").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
+		field.Float("frozen_balance").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0),
 		field.Int("concurrency").
 			Default(5),
 		field.String("status").
@@ -109,7 +112,10 @@ func (User) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
 
-		// 订阅额度耗尽时回退到余额计费（xlab 产品订阅）。
+		// 用户级每分钟请求数上限（0 = 不限制）。仅当所在分组未设置 rpm_limit 时作为兜底生效。
+		field.Int("rpm_limit").
+			Default(0),
+		// 订阅余额兜底（xlab 产品订阅）
 		field.Bool("subscription_balance_fallback_enabled").
 			Default(false),
 		field.Float("subscription_balance_fallback_limit_usd").
@@ -121,10 +127,6 @@ func (User) Fields() []ent.Field {
 		field.Int64("subscription_balance_fallback_group_id").
 			Optional().
 			Nillable(),
-
-		// 用户级每分钟请求数上限（0 = 不限制）。仅当所在分组未设置 rpm_limit 时作为兜底生效。
-		field.Int("rpm_limit").
-			Default(0),
 	}
 }
 
@@ -152,7 +154,6 @@ func (User) Indexes() []ent.Index {
 	return []ent.Index{
 		// email 字段已在 Fields() 中声明 Unique()，无需重复索引
 		index.Fields("status"),
-		index.Fields("subscription_balance_fallback_group_id"),
 		index.Fields("deleted_at"),
 	}
 }

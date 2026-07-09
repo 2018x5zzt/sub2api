@@ -70,11 +70,11 @@ func (RedeemCode) Fields() []ent.Field {
 		field.Int64("group_id").
 			Optional().
 			Nillable(),
+		field.Int("validity_days").
+			Default(30),
 		field.Int64("product_id").
 			Optional().
 			Nillable(),
-		field.Int("validity_days").
-			Default(30),
 	}
 }
 

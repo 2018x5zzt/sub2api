@@ -156,20 +156,6 @@ func (_c *RedeemCodeCreate) SetNillableGroupID(v *int64) *RedeemCodeCreate {
 	return _c
 }
 
-// SetProductID sets the "product_id" field.
-func (_c *RedeemCodeCreate) SetProductID(v int64) *RedeemCodeCreate {
-	_c.mutation.SetProductID(v)
-	return _c
-}
-
-// SetNillableProductID sets the "product_id" field if the given value is not nil.
-func (_c *RedeemCodeCreate) SetNillableProductID(v *int64) *RedeemCodeCreate {
-	if v != nil {
-		_c.SetProductID(*v)
-	}
-	return _c
-}
-
 // SetValidityDays sets the "validity_days" field.
 func (_c *RedeemCodeCreate) SetValidityDays(v int) *RedeemCodeCreate {
 	_c.mutation.SetValidityDays(v)
@@ -180,6 +166,20 @@ func (_c *RedeemCodeCreate) SetValidityDays(v int) *RedeemCodeCreate {
 func (_c *RedeemCodeCreate) SetNillableValidityDays(v *int) *RedeemCodeCreate {
 	if v != nil {
 		_c.SetValidityDays(*v)
+	}
+	return _c
+}
+
+// SetProductID sets the "product_id" field.
+func (_c *RedeemCodeCreate) SetProductID(v int64) *RedeemCodeCreate {
+	_c.mutation.SetProductID(v)
+	return _c
+}
+
+// SetNillableProductID sets the "product_id" field if the given value is not nil.
+func (_c *RedeemCodeCreate) SetNillableProductID(v *int64) *RedeemCodeCreate {
+	if v != nil {
+		_c.SetProductID(*v)
 	}
 	return _c
 }
@@ -359,13 +359,13 @@ func (_c *RedeemCodeCreate) createSpec() (*RedeemCode, *sqlgraph.CreateSpec) {
 		_spec.SetField(redeemcode.FieldExpiresAt, field.TypeTime, value)
 		_node.ExpiresAt = &value
 	}
-	if value, ok := _c.mutation.ProductID(); ok {
-		_spec.SetField(redeemcode.FieldProductID, field.TypeInt64, value)
-		_node.ProductID = &value
-	}
 	if value, ok := _c.mutation.ValidityDays(); ok {
 		_spec.SetField(redeemcode.FieldValidityDays, field.TypeInt, value)
 		_node.ValidityDays = value
+	}
+	if value, ok := _c.mutation.ProductID(); ok {
+		_spec.SetField(redeemcode.FieldProductID, field.TypeInt64, value)
+		_node.ProductID = &value
 	}
 	if nodes := _c.mutation.UserIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -597,6 +597,24 @@ func (u *RedeemCodeUpsert) ClearGroupID() *RedeemCodeUpsert {
 	return u
 }
 
+// SetValidityDays sets the "validity_days" field.
+func (u *RedeemCodeUpsert) SetValidityDays(v int) *RedeemCodeUpsert {
+	u.Set(redeemcode.FieldValidityDays, v)
+	return u
+}
+
+// UpdateValidityDays sets the "validity_days" field to the value that was provided on create.
+func (u *RedeemCodeUpsert) UpdateValidityDays() *RedeemCodeUpsert {
+	u.SetExcluded(redeemcode.FieldValidityDays)
+	return u
+}
+
+// AddValidityDays adds v to the "validity_days" field.
+func (u *RedeemCodeUpsert) AddValidityDays(v int) *RedeemCodeUpsert {
+	u.Add(redeemcode.FieldValidityDays, v)
+	return u
+}
+
 // SetProductID sets the "product_id" field.
 func (u *RedeemCodeUpsert) SetProductID(v int64) *RedeemCodeUpsert {
 	u.Set(redeemcode.FieldProductID, v)
@@ -618,24 +636,6 @@ func (u *RedeemCodeUpsert) AddProductID(v int64) *RedeemCodeUpsert {
 // ClearProductID clears the value of the "product_id" field.
 func (u *RedeemCodeUpsert) ClearProductID() *RedeemCodeUpsert {
 	u.SetNull(redeemcode.FieldProductID)
-	return u
-}
-
-// SetValidityDays sets the "validity_days" field.
-func (u *RedeemCodeUpsert) SetValidityDays(v int) *RedeemCodeUpsert {
-	u.Set(redeemcode.FieldValidityDays, v)
-	return u
-}
-
-// UpdateValidityDays sets the "validity_days" field to the value that was provided on create.
-func (u *RedeemCodeUpsert) UpdateValidityDays() *RedeemCodeUpsert {
-	u.SetExcluded(redeemcode.FieldValidityDays)
-	return u
-}
-
-// AddValidityDays adds v to the "validity_days" field.
-func (u *RedeemCodeUpsert) AddValidityDays(v int) *RedeemCodeUpsert {
-	u.Add(redeemcode.FieldValidityDays, v)
 	return u
 }
 
@@ -852,6 +852,27 @@ func (u *RedeemCodeUpsertOne) ClearGroupID() *RedeemCodeUpsertOne {
 	})
 }
 
+// SetValidityDays sets the "validity_days" field.
+func (u *RedeemCodeUpsertOne) SetValidityDays(v int) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetValidityDays(v)
+	})
+}
+
+// AddValidityDays adds v to the "validity_days" field.
+func (u *RedeemCodeUpsertOne) AddValidityDays(v int) *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.AddValidityDays(v)
+	})
+}
+
+// UpdateValidityDays sets the "validity_days" field to the value that was provided on create.
+func (u *RedeemCodeUpsertOne) UpdateValidityDays() *RedeemCodeUpsertOne {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateValidityDays()
+	})
+}
+
 // SetProductID sets the "product_id" field.
 func (u *RedeemCodeUpsertOne) SetProductID(v int64) *RedeemCodeUpsertOne {
 	return u.Update(func(s *RedeemCodeUpsert) {
@@ -877,27 +898,6 @@ func (u *RedeemCodeUpsertOne) UpdateProductID() *RedeemCodeUpsertOne {
 func (u *RedeemCodeUpsertOne) ClearProductID() *RedeemCodeUpsertOne {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.ClearProductID()
-	})
-}
-
-// SetValidityDays sets the "validity_days" field.
-func (u *RedeemCodeUpsertOne) SetValidityDays(v int) *RedeemCodeUpsertOne {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.SetValidityDays(v)
-	})
-}
-
-// AddValidityDays adds v to the "validity_days" field.
-func (u *RedeemCodeUpsertOne) AddValidityDays(v int) *RedeemCodeUpsertOne {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.AddValidityDays(v)
-	})
-}
-
-// UpdateValidityDays sets the "validity_days" field to the value that was provided on create.
-func (u *RedeemCodeUpsertOne) UpdateValidityDays() *RedeemCodeUpsertOne {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.UpdateValidityDays()
 	})
 }
 
@@ -1280,6 +1280,27 @@ func (u *RedeemCodeUpsertBulk) ClearGroupID() *RedeemCodeUpsertBulk {
 	})
 }
 
+// SetValidityDays sets the "validity_days" field.
+func (u *RedeemCodeUpsertBulk) SetValidityDays(v int) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.SetValidityDays(v)
+	})
+}
+
+// AddValidityDays adds v to the "validity_days" field.
+func (u *RedeemCodeUpsertBulk) AddValidityDays(v int) *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.AddValidityDays(v)
+	})
+}
+
+// UpdateValidityDays sets the "validity_days" field to the value that was provided on create.
+func (u *RedeemCodeUpsertBulk) UpdateValidityDays() *RedeemCodeUpsertBulk {
+	return u.Update(func(s *RedeemCodeUpsert) {
+		s.UpdateValidityDays()
+	})
+}
+
 // SetProductID sets the "product_id" field.
 func (u *RedeemCodeUpsertBulk) SetProductID(v int64) *RedeemCodeUpsertBulk {
 	return u.Update(func(s *RedeemCodeUpsert) {
@@ -1305,27 +1326,6 @@ func (u *RedeemCodeUpsertBulk) UpdateProductID() *RedeemCodeUpsertBulk {
 func (u *RedeemCodeUpsertBulk) ClearProductID() *RedeemCodeUpsertBulk {
 	return u.Update(func(s *RedeemCodeUpsert) {
 		s.ClearProductID()
-	})
-}
-
-// SetValidityDays sets the "validity_days" field.
-func (u *RedeemCodeUpsertBulk) SetValidityDays(v int) *RedeemCodeUpsertBulk {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.SetValidityDays(v)
-	})
-}
-
-// AddValidityDays adds v to the "validity_days" field.
-func (u *RedeemCodeUpsertBulk) AddValidityDays(v int) *RedeemCodeUpsertBulk {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.AddValidityDays(v)
-	})
-}
-
-// UpdateValidityDays sets the "validity_days" field to the value that was provided on create.
-func (u *RedeemCodeUpsertBulk) UpdateValidityDays() *RedeemCodeUpsertBulk {
-	return u.Update(func(s *RedeemCodeUpsert) {
-		s.UpdateValidityDays()
 	})
 }
 

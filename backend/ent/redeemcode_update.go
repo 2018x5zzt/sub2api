@@ -193,6 +193,27 @@ func (_u *RedeemCodeUpdate) ClearGroupID() *RedeemCodeUpdate {
 	return _u
 }
 
+// SetValidityDays sets the "validity_days" field.
+func (_u *RedeemCodeUpdate) SetValidityDays(v int) *RedeemCodeUpdate {
+	_u.mutation.ResetValidityDays()
+	_u.mutation.SetValidityDays(v)
+	return _u
+}
+
+// SetNillableValidityDays sets the "validity_days" field if the given value is not nil.
+func (_u *RedeemCodeUpdate) SetNillableValidityDays(v *int) *RedeemCodeUpdate {
+	if v != nil {
+		_u.SetValidityDays(*v)
+	}
+	return _u
+}
+
+// AddValidityDays adds value to the "validity_days" field.
+func (_u *RedeemCodeUpdate) AddValidityDays(v int) *RedeemCodeUpdate {
+	_u.mutation.AddValidityDays(v)
+	return _u
+}
+
 // SetProductID sets the "product_id" field.
 func (_u *RedeemCodeUpdate) SetProductID(v int64) *RedeemCodeUpdate {
 	_u.mutation.ResetProductID()
@@ -217,27 +238,6 @@ func (_u *RedeemCodeUpdate) AddProductID(v int64) *RedeemCodeUpdate {
 // ClearProductID clears the value of the "product_id" field.
 func (_u *RedeemCodeUpdate) ClearProductID() *RedeemCodeUpdate {
 	_u.mutation.ClearProductID()
-	return _u
-}
-
-// SetValidityDays sets the "validity_days" field.
-func (_u *RedeemCodeUpdate) SetValidityDays(v int) *RedeemCodeUpdate {
-	_u.mutation.ResetValidityDays()
-	_u.mutation.SetValidityDays(v)
-	return _u
-}
-
-// SetNillableValidityDays sets the "validity_days" field if the given value is not nil.
-func (_u *RedeemCodeUpdate) SetNillableValidityDays(v *int) *RedeemCodeUpdate {
-	if v != nil {
-		_u.SetValidityDays(*v)
-	}
-	return _u
-}
-
-// AddValidityDays adds value to the "validity_days" field.
-func (_u *RedeemCodeUpdate) AddValidityDays(v int) *RedeemCodeUpdate {
-	_u.mutation.AddValidityDays(v)
 	return _u
 }
 
@@ -374,6 +374,12 @@ func (_u *RedeemCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	if _u.mutation.ExpiresAtCleared() {
 		_spec.ClearField(redeemcode.FieldExpiresAt, field.TypeTime)
 	}
+	if value, ok := _u.mutation.ValidityDays(); ok {
+		_spec.SetField(redeemcode.FieldValidityDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedValidityDays(); ok {
+		_spec.AddField(redeemcode.FieldValidityDays, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.ProductID(); ok {
 		_spec.SetField(redeemcode.FieldProductID, field.TypeInt64, value)
 	}
@@ -382,12 +388,6 @@ func (_u *RedeemCodeUpdate) sqlSave(ctx context.Context) (_node int, err error) 
 	}
 	if _u.mutation.ProductIDCleared() {
 		_spec.ClearField(redeemcode.FieldProductID, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.ValidityDays(); ok {
-		_spec.SetField(redeemcode.FieldValidityDays, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedValidityDays(); ok {
-		_spec.AddField(redeemcode.FieldValidityDays, field.TypeInt, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -630,6 +630,27 @@ func (_u *RedeemCodeUpdateOne) ClearGroupID() *RedeemCodeUpdateOne {
 	return _u
 }
 
+// SetValidityDays sets the "validity_days" field.
+func (_u *RedeemCodeUpdateOne) SetValidityDays(v int) *RedeemCodeUpdateOne {
+	_u.mutation.ResetValidityDays()
+	_u.mutation.SetValidityDays(v)
+	return _u
+}
+
+// SetNillableValidityDays sets the "validity_days" field if the given value is not nil.
+func (_u *RedeemCodeUpdateOne) SetNillableValidityDays(v *int) *RedeemCodeUpdateOne {
+	if v != nil {
+		_u.SetValidityDays(*v)
+	}
+	return _u
+}
+
+// AddValidityDays adds value to the "validity_days" field.
+func (_u *RedeemCodeUpdateOne) AddValidityDays(v int) *RedeemCodeUpdateOne {
+	_u.mutation.AddValidityDays(v)
+	return _u
+}
+
 // SetProductID sets the "product_id" field.
 func (_u *RedeemCodeUpdateOne) SetProductID(v int64) *RedeemCodeUpdateOne {
 	_u.mutation.ResetProductID()
@@ -654,27 +675,6 @@ func (_u *RedeemCodeUpdateOne) AddProductID(v int64) *RedeemCodeUpdateOne {
 // ClearProductID clears the value of the "product_id" field.
 func (_u *RedeemCodeUpdateOne) ClearProductID() *RedeemCodeUpdateOne {
 	_u.mutation.ClearProductID()
-	return _u
-}
-
-// SetValidityDays sets the "validity_days" field.
-func (_u *RedeemCodeUpdateOne) SetValidityDays(v int) *RedeemCodeUpdateOne {
-	_u.mutation.ResetValidityDays()
-	_u.mutation.SetValidityDays(v)
-	return _u
-}
-
-// SetNillableValidityDays sets the "validity_days" field if the given value is not nil.
-func (_u *RedeemCodeUpdateOne) SetNillableValidityDays(v *int) *RedeemCodeUpdateOne {
-	if v != nil {
-		_u.SetValidityDays(*v)
-	}
-	return _u
-}
-
-// AddValidityDays adds value to the "validity_days" field.
-func (_u *RedeemCodeUpdateOne) AddValidityDays(v int) *RedeemCodeUpdateOne {
-	_u.mutation.AddValidityDays(v)
 	return _u
 }
 
@@ -841,6 +841,12 @@ func (_u *RedeemCodeUpdateOne) sqlSave(ctx context.Context) (_node *RedeemCode, 
 	if _u.mutation.ExpiresAtCleared() {
 		_spec.ClearField(redeemcode.FieldExpiresAt, field.TypeTime)
 	}
+	if value, ok := _u.mutation.ValidityDays(); ok {
+		_spec.SetField(redeemcode.FieldValidityDays, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedValidityDays(); ok {
+		_spec.AddField(redeemcode.FieldValidityDays, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.ProductID(); ok {
 		_spec.SetField(redeemcode.FieldProductID, field.TypeInt64, value)
 	}
@@ -849,12 +855,6 @@ func (_u *RedeemCodeUpdateOne) sqlSave(ctx context.Context) (_node *RedeemCode, 
 	}
 	if _u.mutation.ProductIDCleared() {
 		_spec.ClearField(redeemcode.FieldProductID, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.ValidityDays(); ok {
-		_spec.SetField(redeemcode.FieldValidityDays, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedValidityDays(); ok {
-		_spec.AddField(redeemcode.FieldValidityDays, field.TypeInt, value)
 	}
 	if _u.mutation.UserCleared() {
 		edge := &sqlgraph.EdgeSpec{

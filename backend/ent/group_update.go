@@ -117,6 +117,69 @@ func (_u *GroupUpdate) AddRateMultiplier(v float64) *GroupUpdate {
 	return _u
 }
 
+// SetPeakRateEnabled sets the "peak_rate_enabled" field.
+func (_u *GroupUpdate) SetPeakRateEnabled(v bool) *GroupUpdate {
+	_u.mutation.SetPeakRateEnabled(v)
+	return _u
+}
+
+// SetNillablePeakRateEnabled sets the "peak_rate_enabled" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillablePeakRateEnabled(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetPeakRateEnabled(*v)
+	}
+	return _u
+}
+
+// SetPeakStart sets the "peak_start" field.
+func (_u *GroupUpdate) SetPeakStart(v string) *GroupUpdate {
+	_u.mutation.SetPeakStart(v)
+	return _u
+}
+
+// SetNillablePeakStart sets the "peak_start" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillablePeakStart(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetPeakStart(*v)
+	}
+	return _u
+}
+
+// SetPeakEnd sets the "peak_end" field.
+func (_u *GroupUpdate) SetPeakEnd(v string) *GroupUpdate {
+	_u.mutation.SetPeakEnd(v)
+	return _u
+}
+
+// SetNillablePeakEnd sets the "peak_end" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillablePeakEnd(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetPeakEnd(*v)
+	}
+	return _u
+}
+
+// SetPeakRateMultiplier sets the "peak_rate_multiplier" field.
+func (_u *GroupUpdate) SetPeakRateMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetPeakRateMultiplier()
+	_u.mutation.SetPeakRateMultiplier(v)
+	return _u
+}
+
+// SetNillablePeakRateMultiplier sets the "peak_rate_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillablePeakRateMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetPeakRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddPeakRateMultiplier adds value to the "peak_rate_multiplier" field.
+func (_u *GroupUpdate) AddPeakRateMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddPeakRateMultiplier(v)
+	return _u
+}
+
 // SetIsExclusive sets the "is_exclusive" field.
 func (_u *GroupUpdate) SetIsExclusive(v bool) *GroupUpdate {
 	_u.mutation.SetIsExclusive(v)
@@ -289,6 +352,20 @@ func (_u *GroupUpdate) SetNillableAllowImageGeneration(v *bool) *GroupUpdate {
 	return _u
 }
 
+// SetAllowBatchImageGeneration sets the "allow_batch_image_generation" field.
+func (_u *GroupUpdate) SetAllowBatchImageGeneration(v bool) *GroupUpdate {
+	_u.mutation.SetAllowBatchImageGeneration(v)
+	return _u
+}
+
+// SetNillableAllowBatchImageGeneration sets the "allow_batch_image_generation" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableAllowBatchImageGeneration(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetAllowBatchImageGeneration(*v)
+	}
+	return _u
+}
+
 // SetImageRateIndependent sets the "image_rate_independent" field.
 func (_u *GroupUpdate) SetImageRateIndependent(v bool) *GroupUpdate {
 	_u.mutation.SetImageRateIndependent(v)
@@ -405,6 +482,48 @@ func (_u *GroupUpdate) ClearImagePrice4k() *GroupUpdate {
 	return _u
 }
 
+// SetBatchImageDiscountMultiplier sets the "batch_image_discount_multiplier" field.
+func (_u *GroupUpdate) SetBatchImageDiscountMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetBatchImageDiscountMultiplier()
+	_u.mutation.SetBatchImageDiscountMultiplier(v)
+	return _u
+}
+
+// SetNillableBatchImageDiscountMultiplier sets the "batch_image_discount_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableBatchImageDiscountMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetBatchImageDiscountMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBatchImageDiscountMultiplier adds value to the "batch_image_discount_multiplier" field.
+func (_u *GroupUpdate) AddBatchImageDiscountMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddBatchImageDiscountMultiplier(v)
+	return _u
+}
+
+// SetBatchImageHoldMultiplier sets the "batch_image_hold_multiplier" field.
+func (_u *GroupUpdate) SetBatchImageHoldMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetBatchImageHoldMultiplier()
+	_u.mutation.SetBatchImageHoldMultiplier(v)
+	return _u
+}
+
+// SetNillableBatchImageHoldMultiplier sets the "batch_image_hold_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableBatchImageHoldMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetBatchImageHoldMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBatchImageHoldMultiplier adds value to the "batch_image_hold_multiplier" field.
+func (_u *GroupUpdate) AddBatchImageHoldMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddBatchImageHoldMultiplier(v)
+	return _u
+}
+
 // SetClaudeCodeOnly sets the "claude_code_only" field.
 func (_u *GroupUpdate) SetClaudeCodeOnly(v bool) *GroupUpdate {
 	_u.mutation.SetClaudeCodeOnly(v)
@@ -470,33 +589,6 @@ func (_u *GroupUpdate) AddFallbackGroupIDOnInvalidRequest(v int64) *GroupUpdate 
 // ClearFallbackGroupIDOnInvalidRequest clears the value of the "fallback_group_id_on_invalid_request" field.
 func (_u *GroupUpdate) ClearFallbackGroupIDOnInvalidRequest() *GroupUpdate {
 	_u.mutation.ClearFallbackGroupIDOnInvalidRequest()
-	return _u
-}
-
-// SetBalanceFallbackGroupID sets the "balance_fallback_group_id" field.
-func (_u *GroupUpdate) SetBalanceFallbackGroupID(v int64) *GroupUpdate {
-	_u.mutation.ResetBalanceFallbackGroupID()
-	_u.mutation.SetBalanceFallbackGroupID(v)
-	return _u
-}
-
-// SetNillableBalanceFallbackGroupID sets the "balance_fallback_group_id" field if the given value is not nil.
-func (_u *GroupUpdate) SetNillableBalanceFallbackGroupID(v *int64) *GroupUpdate {
-	if v != nil {
-		_u.SetBalanceFallbackGroupID(*v)
-	}
-	return _u
-}
-
-// AddBalanceFallbackGroupID adds value to the "balance_fallback_group_id" field.
-func (_u *GroupUpdate) AddBalanceFallbackGroupID(v int64) *GroupUpdate {
-	_u.mutation.AddBalanceFallbackGroupID(v)
-	return _u
-}
-
-// ClearBalanceFallbackGroupID clears the value of the "balance_fallback_group_id" field.
-func (_u *GroupUpdate) ClearBalanceFallbackGroupID() *GroupUpdate {
-	_u.mutation.ClearBalanceFallbackGroupID()
 	return _u
 }
 
@@ -675,6 +767,33 @@ func (_u *GroupUpdate) SetNillableRpmLimit(v *int) *GroupUpdate {
 // AddRpmLimit adds value to the "rpm_limit" field.
 func (_u *GroupUpdate) AddRpmLimit(v int) *GroupUpdate {
 	_u.mutation.AddRpmLimit(v)
+	return _u
+}
+
+// SetBalanceFallbackGroupID sets the "balance_fallback_group_id" field.
+func (_u *GroupUpdate) SetBalanceFallbackGroupID(v int64) *GroupUpdate {
+	_u.mutation.ResetBalanceFallbackGroupID()
+	_u.mutation.SetBalanceFallbackGroupID(v)
+	return _u
+}
+
+// SetNillableBalanceFallbackGroupID sets the "balance_fallback_group_id" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableBalanceFallbackGroupID(v *int64) *GroupUpdate {
+	if v != nil {
+		_u.SetBalanceFallbackGroupID(*v)
+	}
+	return _u
+}
+
+// AddBalanceFallbackGroupID adds value to the "balance_fallback_group_id" field.
+func (_u *GroupUpdate) AddBalanceFallbackGroupID(v int64) *GroupUpdate {
+	_u.mutation.AddBalanceFallbackGroupID(v)
+	return _u
+}
+
+// ClearBalanceFallbackGroupID clears the value of the "balance_fallback_group_id" field.
+func (_u *GroupUpdate) ClearBalanceFallbackGroupID() *GroupUpdate {
+	_u.mutation.ClearBalanceFallbackGroupID()
 	return _u
 }
 
@@ -948,6 +1067,16 @@ func (_u *GroupUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Group.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PeakStart(); ok {
+		if err := group.PeakStartValidator(v); err != nil {
+			return &ValidationError{Name: "peak_start", err: fmt.Errorf(`ent: validator failed for field "Group.peak_start": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PeakEnd(); ok {
+		if err := group.PeakEndValidator(v); err != nil {
+			return &ValidationError{Name: "peak_end", err: fmt.Errorf(`ent: validator failed for field "Group.peak_end": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := group.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
@@ -1007,6 +1136,21 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.PeakRateEnabled(); ok {
+		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.PeakStart(); ok {
+		_spec.SetField(group.FieldPeakStart, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PeakEnd(); ok {
+		_spec.SetField(group.FieldPeakEnd, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PeakRateMultiplier(); ok {
+		_spec.SetField(group.FieldPeakRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPeakRateMultiplier(); ok {
+		_spec.AddField(group.FieldPeakRateMultiplier, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.IsExclusive(); ok {
 		_spec.SetField(group.FieldIsExclusive, field.TypeBool, value)
 	}
@@ -1055,6 +1199,9 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AllowImageGeneration(); ok {
 		_spec.SetField(group.FieldAllowImageGeneration, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.AllowBatchImageGeneration(); ok {
+		_spec.SetField(group.FieldAllowBatchImageGeneration, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.ImageRateIndependent(); ok {
 		_spec.SetField(group.FieldImageRateIndependent, field.TypeBool, value)
 	}
@@ -1091,6 +1238,18 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.ImagePrice4kCleared() {
 		_spec.ClearField(group.FieldImagePrice4k, field.TypeFloat64)
 	}
+	if value, ok := _u.mutation.BatchImageDiscountMultiplier(); ok {
+		_spec.SetField(group.FieldBatchImageDiscountMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBatchImageDiscountMultiplier(); ok {
+		_spec.AddField(group.FieldBatchImageDiscountMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BatchImageHoldMultiplier(); ok {
+		_spec.SetField(group.FieldBatchImageHoldMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBatchImageHoldMultiplier(); ok {
+		_spec.AddField(group.FieldBatchImageHoldMultiplier, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.ClaudeCodeOnly(); ok {
 		_spec.SetField(group.FieldClaudeCodeOnly, field.TypeBool, value)
 	}
@@ -1111,15 +1270,6 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.FallbackGroupIDOnInvalidRequestCleared() {
 		_spec.ClearField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.BalanceFallbackGroupID(); ok {
-		_spec.SetField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedBalanceFallbackGroupID(); ok {
-		_spec.AddField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if _u.mutation.BalanceFallbackGroupIDCleared() {
-		_spec.ClearField(group.FieldBalanceFallbackGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
@@ -1170,6 +1320,15 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedRpmLimit(); ok {
 		_spec.AddField(group.FieldRpmLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.BalanceFallbackGroupID(); ok {
+		_spec.SetField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedBalanceFallbackGroupID(); ok {
+		_spec.AddField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.BalanceFallbackGroupIDCleared() {
+		_spec.ClearField(group.FieldBalanceFallbackGroupID, field.TypeInt64)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1566,6 +1725,69 @@ func (_u *GroupUpdateOne) AddRateMultiplier(v float64) *GroupUpdateOne {
 	return _u
 }
 
+// SetPeakRateEnabled sets the "peak_rate_enabled" field.
+func (_u *GroupUpdateOne) SetPeakRateEnabled(v bool) *GroupUpdateOne {
+	_u.mutation.SetPeakRateEnabled(v)
+	return _u
+}
+
+// SetNillablePeakRateEnabled sets the "peak_rate_enabled" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillablePeakRateEnabled(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetPeakRateEnabled(*v)
+	}
+	return _u
+}
+
+// SetPeakStart sets the "peak_start" field.
+func (_u *GroupUpdateOne) SetPeakStart(v string) *GroupUpdateOne {
+	_u.mutation.SetPeakStart(v)
+	return _u
+}
+
+// SetNillablePeakStart sets the "peak_start" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillablePeakStart(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetPeakStart(*v)
+	}
+	return _u
+}
+
+// SetPeakEnd sets the "peak_end" field.
+func (_u *GroupUpdateOne) SetPeakEnd(v string) *GroupUpdateOne {
+	_u.mutation.SetPeakEnd(v)
+	return _u
+}
+
+// SetNillablePeakEnd sets the "peak_end" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillablePeakEnd(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetPeakEnd(*v)
+	}
+	return _u
+}
+
+// SetPeakRateMultiplier sets the "peak_rate_multiplier" field.
+func (_u *GroupUpdateOne) SetPeakRateMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetPeakRateMultiplier()
+	_u.mutation.SetPeakRateMultiplier(v)
+	return _u
+}
+
+// SetNillablePeakRateMultiplier sets the "peak_rate_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillablePeakRateMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetPeakRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddPeakRateMultiplier adds value to the "peak_rate_multiplier" field.
+func (_u *GroupUpdateOne) AddPeakRateMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddPeakRateMultiplier(v)
+	return _u
+}
+
 // SetIsExclusive sets the "is_exclusive" field.
 func (_u *GroupUpdateOne) SetIsExclusive(v bool) *GroupUpdateOne {
 	_u.mutation.SetIsExclusive(v)
@@ -1738,6 +1960,20 @@ func (_u *GroupUpdateOne) SetNillableAllowImageGeneration(v *bool) *GroupUpdateO
 	return _u
 }
 
+// SetAllowBatchImageGeneration sets the "allow_batch_image_generation" field.
+func (_u *GroupUpdateOne) SetAllowBatchImageGeneration(v bool) *GroupUpdateOne {
+	_u.mutation.SetAllowBatchImageGeneration(v)
+	return _u
+}
+
+// SetNillableAllowBatchImageGeneration sets the "allow_batch_image_generation" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableAllowBatchImageGeneration(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetAllowBatchImageGeneration(*v)
+	}
+	return _u
+}
+
 // SetImageRateIndependent sets the "image_rate_independent" field.
 func (_u *GroupUpdateOne) SetImageRateIndependent(v bool) *GroupUpdateOne {
 	_u.mutation.SetImageRateIndependent(v)
@@ -1854,6 +2090,48 @@ func (_u *GroupUpdateOne) ClearImagePrice4k() *GroupUpdateOne {
 	return _u
 }
 
+// SetBatchImageDiscountMultiplier sets the "batch_image_discount_multiplier" field.
+func (_u *GroupUpdateOne) SetBatchImageDiscountMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetBatchImageDiscountMultiplier()
+	_u.mutation.SetBatchImageDiscountMultiplier(v)
+	return _u
+}
+
+// SetNillableBatchImageDiscountMultiplier sets the "batch_image_discount_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableBatchImageDiscountMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetBatchImageDiscountMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBatchImageDiscountMultiplier adds value to the "batch_image_discount_multiplier" field.
+func (_u *GroupUpdateOne) AddBatchImageDiscountMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddBatchImageDiscountMultiplier(v)
+	return _u
+}
+
+// SetBatchImageHoldMultiplier sets the "batch_image_hold_multiplier" field.
+func (_u *GroupUpdateOne) SetBatchImageHoldMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetBatchImageHoldMultiplier()
+	_u.mutation.SetBatchImageHoldMultiplier(v)
+	return _u
+}
+
+// SetNillableBatchImageHoldMultiplier sets the "batch_image_hold_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableBatchImageHoldMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetBatchImageHoldMultiplier(*v)
+	}
+	return _u
+}
+
+// AddBatchImageHoldMultiplier adds value to the "batch_image_hold_multiplier" field.
+func (_u *GroupUpdateOne) AddBatchImageHoldMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddBatchImageHoldMultiplier(v)
+	return _u
+}
+
 // SetClaudeCodeOnly sets the "claude_code_only" field.
 func (_u *GroupUpdateOne) SetClaudeCodeOnly(v bool) *GroupUpdateOne {
 	_u.mutation.SetClaudeCodeOnly(v)
@@ -1919,33 +2197,6 @@ func (_u *GroupUpdateOne) AddFallbackGroupIDOnInvalidRequest(v int64) *GroupUpda
 // ClearFallbackGroupIDOnInvalidRequest clears the value of the "fallback_group_id_on_invalid_request" field.
 func (_u *GroupUpdateOne) ClearFallbackGroupIDOnInvalidRequest() *GroupUpdateOne {
 	_u.mutation.ClearFallbackGroupIDOnInvalidRequest()
-	return _u
-}
-
-// SetBalanceFallbackGroupID sets the "balance_fallback_group_id" field.
-func (_u *GroupUpdateOne) SetBalanceFallbackGroupID(v int64) *GroupUpdateOne {
-	_u.mutation.ResetBalanceFallbackGroupID()
-	_u.mutation.SetBalanceFallbackGroupID(v)
-	return _u
-}
-
-// SetNillableBalanceFallbackGroupID sets the "balance_fallback_group_id" field if the given value is not nil.
-func (_u *GroupUpdateOne) SetNillableBalanceFallbackGroupID(v *int64) *GroupUpdateOne {
-	if v != nil {
-		_u.SetBalanceFallbackGroupID(*v)
-	}
-	return _u
-}
-
-// AddBalanceFallbackGroupID adds value to the "balance_fallback_group_id" field.
-func (_u *GroupUpdateOne) AddBalanceFallbackGroupID(v int64) *GroupUpdateOne {
-	_u.mutation.AddBalanceFallbackGroupID(v)
-	return _u
-}
-
-// ClearBalanceFallbackGroupID clears the value of the "balance_fallback_group_id" field.
-func (_u *GroupUpdateOne) ClearBalanceFallbackGroupID() *GroupUpdateOne {
-	_u.mutation.ClearBalanceFallbackGroupID()
 	return _u
 }
 
@@ -2124,6 +2375,33 @@ func (_u *GroupUpdateOne) SetNillableRpmLimit(v *int) *GroupUpdateOne {
 // AddRpmLimit adds value to the "rpm_limit" field.
 func (_u *GroupUpdateOne) AddRpmLimit(v int) *GroupUpdateOne {
 	_u.mutation.AddRpmLimit(v)
+	return _u
+}
+
+// SetBalanceFallbackGroupID sets the "balance_fallback_group_id" field.
+func (_u *GroupUpdateOne) SetBalanceFallbackGroupID(v int64) *GroupUpdateOne {
+	_u.mutation.ResetBalanceFallbackGroupID()
+	_u.mutation.SetBalanceFallbackGroupID(v)
+	return _u
+}
+
+// SetNillableBalanceFallbackGroupID sets the "balance_fallback_group_id" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableBalanceFallbackGroupID(v *int64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetBalanceFallbackGroupID(*v)
+	}
+	return _u
+}
+
+// AddBalanceFallbackGroupID adds value to the "balance_fallback_group_id" field.
+func (_u *GroupUpdateOne) AddBalanceFallbackGroupID(v int64) *GroupUpdateOne {
+	_u.mutation.AddBalanceFallbackGroupID(v)
+	return _u
+}
+
+// ClearBalanceFallbackGroupID clears the value of the "balance_fallback_group_id" field.
+func (_u *GroupUpdateOne) ClearBalanceFallbackGroupID() *GroupUpdateOne {
+	_u.mutation.ClearBalanceFallbackGroupID()
 	return _u
 }
 
@@ -2410,6 +2688,16 @@ func (_u *GroupUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Group.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PeakStart(); ok {
+		if err := group.PeakStartValidator(v); err != nil {
+			return &ValidationError{Name: "peak_start", err: fmt.Errorf(`ent: validator failed for field "Group.peak_start": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.PeakEnd(); ok {
+		if err := group.PeakEndValidator(v); err != nil {
+			return &ValidationError{Name: "peak_end", err: fmt.Errorf(`ent: validator failed for field "Group.peak_end": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := group.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Group.status": %w`, err)}
@@ -2486,6 +2774,21 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	if value, ok := _u.mutation.AddedRateMultiplier(); ok {
 		_spec.AddField(group.FieldRateMultiplier, field.TypeFloat64, value)
 	}
+	if value, ok := _u.mutation.PeakRateEnabled(); ok {
+		_spec.SetField(group.FieldPeakRateEnabled, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.PeakStart(); ok {
+		_spec.SetField(group.FieldPeakStart, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PeakEnd(); ok {
+		_spec.SetField(group.FieldPeakEnd, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PeakRateMultiplier(); ok {
+		_spec.SetField(group.FieldPeakRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedPeakRateMultiplier(); ok {
+		_spec.AddField(group.FieldPeakRateMultiplier, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.IsExclusive(); ok {
 		_spec.SetField(group.FieldIsExclusive, field.TypeBool, value)
 	}
@@ -2534,6 +2837,9 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	if value, ok := _u.mutation.AllowImageGeneration(); ok {
 		_spec.SetField(group.FieldAllowImageGeneration, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.AllowBatchImageGeneration(); ok {
+		_spec.SetField(group.FieldAllowBatchImageGeneration, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.ImageRateIndependent(); ok {
 		_spec.SetField(group.FieldImageRateIndependent, field.TypeBool, value)
 	}
@@ -2570,6 +2876,18 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	if _u.mutation.ImagePrice4kCleared() {
 		_spec.ClearField(group.FieldImagePrice4k, field.TypeFloat64)
 	}
+	if value, ok := _u.mutation.BatchImageDiscountMultiplier(); ok {
+		_spec.SetField(group.FieldBatchImageDiscountMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBatchImageDiscountMultiplier(); ok {
+		_spec.AddField(group.FieldBatchImageDiscountMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.BatchImageHoldMultiplier(); ok {
+		_spec.SetField(group.FieldBatchImageHoldMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedBatchImageHoldMultiplier(); ok {
+		_spec.AddField(group.FieldBatchImageHoldMultiplier, field.TypeFloat64, value)
+	}
 	if value, ok := _u.mutation.ClaudeCodeOnly(); ok {
 		_spec.SetField(group.FieldClaudeCodeOnly, field.TypeBool, value)
 	}
@@ -2590,15 +2908,6 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if _u.mutation.FallbackGroupIDOnInvalidRequestCleared() {
 		_spec.ClearField(group.FieldFallbackGroupIDOnInvalidRequest, field.TypeInt64)
-	}
-	if value, ok := _u.mutation.BalanceFallbackGroupID(); ok {
-		_spec.SetField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedBalanceFallbackGroupID(); ok {
-		_spec.AddField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
-	}
-	if _u.mutation.BalanceFallbackGroupIDCleared() {
-		_spec.ClearField(group.FieldBalanceFallbackGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ModelRouting(); ok {
 		_spec.SetField(group.FieldModelRouting, field.TypeJSON, value)
@@ -2649,6 +2958,15 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedRpmLimit(); ok {
 		_spec.AddField(group.FieldRpmLimit, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.BalanceFallbackGroupID(); ok {
+		_spec.SetField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedBalanceFallbackGroupID(); ok {
+		_spec.AddField(group.FieldBalanceFallbackGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.BalanceFallbackGroupIDCleared() {
+		_spec.ClearField(group.FieldBalanceFallbackGroupID, field.TypeInt64)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
