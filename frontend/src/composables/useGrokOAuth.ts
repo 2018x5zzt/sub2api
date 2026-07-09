@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
 import type { GrokTokenInfo } from '@/api/admin/grok'
+import { extractApiErrorCode, extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 
 export function useGrokOAuth() {
   const appStore = useAppStore()
@@ -13,6 +14,18 @@ export function useGrokOAuth() {
   const state = ref('')
   const loading = ref(false)
   const error = ref('')
+
+  const formatGrokOAuthError = (err: unknown, fallbackKey: string): string => {
+    // Prefer reason-specific i18n (session expired, invalid state, token exchange, ...).
+    const localized = extractI18nErrorMessage(err, t, 'admin.accounts.oauth.grok.errors', '')
+    if (localized) return localized
+    const code = extractApiErrorCode(err)
+    const message = extractApiErrorMessage(err, t(fallbackKey))
+    if (code && message && !message.includes(code)) {
+      return `${message} (${code})`
+    }
+    return message || t(fallbackKey)
+  }
 
   const resetState = () => {
     authUrl.value = ''
@@ -38,8 +51,8 @@ export function useGrokOAuth() {
       sessionId.value = response.session_id
       state.value = response.state
       return true
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || t('admin.accounts.oauth.grok.failedToGenerateUrl')
+    } catch (err: unknown) {
+      error.value = formatGrokOAuthError(err, 'admin.accounts.oauth.grok.failedToGenerateUrl')
       appStore.showError(error.value)
       return false
     } finally {
@@ -71,8 +84,8 @@ export function useGrokOAuth() {
       if (params.proxyId) payload.proxy_id = params.proxyId
 
       return await adminAPI.grok.exchangeCode(payload as any)
-    } catch (err: any) {
-      error.value = err.response?.data?.detail || t('admin.accounts.oauth.grok.failedToExchangeCode')
+    } catch (err: unknown) {
+      error.value = formatGrokOAuthError(err, 'admin.accounts.oauth.grok.failedToExchangeCode')
       appStore.showError(error.value)
       return null
     } finally {

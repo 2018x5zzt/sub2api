@@ -972,7 +972,25 @@ export default {
           failedToValidateRT: '验证 Grok refresh token 失败',
           oauthOnlyHint: '首版 Grok 支持仅包含 OAuth 订阅的 Responses API 文本/推理转发。',
           accountTypeHint:
-            'OAuth 用于 xAI 订阅账号；API Key 支持官方 xAI Key，或自定义 Base URL + API Key 的 OpenAI 兼容 Grok 上游（含图/视频）。'
+            'OAuth 用于 xAI 订阅账号；API Key 支持官方 xAI Key，或自定义 Base URL + API Key 的 OpenAI 兼容 Grok 上游（含图/视频）。',
+          exchangeHint:
+            '授权链接、code、state、PKCE session 必须来自同一次生成流程；重新生成、后端重启、session 过期或重复使用 code 都会导致兑换失败。',
+          errors: {
+            GROK_OAUTH_SESSION_NOT_FOUND:
+              'OAuth 会话不存在或已过期。请重新生成授权链接，并勿复用旧 code。',
+            GROK_OAUTH_INVALID_STATE:
+              'OAuth state 不匹配。请粘贴与当前会话同一轮授权产生的完整 callback URL。',
+            GROK_OAUTH_STATE_REQUIRED:
+              '缺少 OAuth state。请尽量粘贴完整 callback URL（含 state），而不是只贴裸 code。',
+            GROK_OAUTH_CODE_REQUIRED: '缺少授权码 code。',
+            GROK_OAUTH_TOKEN_EXCHANGE_FAILED:
+              'xAI 拒绝了 token 兑换。code 可能已过期/已使用，或 redirect URI / PKCE verifier 不匹配。',
+            GROK_OAUTH_REQUEST_FAILED:
+              '后端无法访问 xAI token 端点。请检查出站网络，以及该 OAuth 流程配置的代理。',
+            GROK_OAUTH_ENTITLEMENT_DENIED:
+              'xAI 拒绝了 OAuth token（权益/订阅）。请确认该账号 SuperGrok 订阅有效。',
+            GROK_OAUTH_NO_REFRESH_TOKEN: 'token 响应未包含 refresh_token，无法创建可续期的 OAuth 账号。'
+          }
         },
         // Gemini specific
         gemini: {
