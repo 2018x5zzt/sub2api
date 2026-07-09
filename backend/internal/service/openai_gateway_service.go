@@ -26,6 +26,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai_compat"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/xai"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
@@ -2799,7 +2800,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		return nil, errors.New("image generation disabled for group")
 	}
 
-	if imageGenerationAllowed && (codexImageGenerationBridgeEnabled || isOpenAIImageGenerationModel(requestView.Model) || openAIRequestBodyImageGenerationToolNeedsNormalization(body) || isOpenAIImageGenerationModel(upstreamModel)) {
+	// /responses/compact 是会话压缩请求：上游不接受 tool_choice（400 unknown_parameter），
+	// 注入 image_generation 工具也没有意义，整块豁免。
+	if imageGenerationAllowed && !isCompactRequest && (codexImageGenerationBridgeEnabled || isOpenAIImageGenerationModel(requestView.Model) || openAIRequestBodyImageGenerationToolNeedsNormalization(body) || isOpenAIImageGenerationModel(upstreamModel)) {
 		decoded, decodeErr := ensureReqBody()
 		if decodeErr != nil {
 			return nil, decodeErr
@@ -6489,9 +6492,12 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		}
 		multiplier = resolver.Resolve(ctx, user.ID, *apiKey.GroupID, apiKey.Group.RateMultiplier)
 	}
-	// fork: 叠加账号分组计费倍率，使分组维度计费倍率在统一计费路径生效，并传播到图片倍率
+	// fork: 叠加账号分组计费倍率，使分组维度计费倍率在统一计费路径生效
 	multiplier *= account.GroupBillingMultiplier(apiKey.GroupID)
-	imageMultiplier := resolveImageRateMultiplier(apiKey, multiplier)
+	// 上游: token 倍率叠加高峰因子（高峰因子按请求时刻现算，不并入上面的 Resolve，
+	// 以免污染 user:group 倍率缓存）；imageMultiplier 经 computePeakAwareMultipliers
+	// 内部的 resolveImageRateMultiplier 计算，保留 fork 的独立图片费率逻辑。
+	multiplier, imageMultiplier := computePeakAwareMultipliers(apiKey, multiplier, timezone.Now())
 
 	var cost *CostBreakdown
 	var err error
