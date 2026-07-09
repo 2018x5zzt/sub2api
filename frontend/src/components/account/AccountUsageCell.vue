@@ -372,6 +372,13 @@
             <span class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800" :title="t('usage.accountBilled')">
               A ${{ formatWindowCost(grokLocalUsage) }}
             </span>
+            <span
+              v-if="grokLocalUsage.user_cost != null"
+              class="rounded bg-gray-100 px-1.5 py-0.5 dark:bg-gray-800"
+              :title="t('usage.userBilled')"
+            >
+              U ${{ formatWindowUserCost(grokLocalUsage) }}
+            </span>
           </div>
         </div>
         <UsageProgressBar
@@ -1028,10 +1035,15 @@ interface GrokQuotaBarInfo {
 }
 
 const makeGrokQuotaBar = (quota?: { limit?: number | null; remaining?: number | null; reset_at?: string | null } | null): GrokQuotaBarInfo | null => {
-  if (!quota || quota.limit == null || quota.remaining == null || quota.limit <= 0) return null
-  const used = Math.max(0, quota.limit - quota.remaining)
+  if (!quota) return null
+  const limit = Number(quota.limit)
+  const remainingRaw = Number(quota.remaining)
+  if (!Number.isFinite(limit) || limit <= 0 || !Number.isFinite(remainingRaw)) return null
+  // Clamp remaining into [0, limit] so inverted/overshooting headers cannot break the bar.
+  const remaining = Math.min(Math.max(0, remainingRaw), limit)
+  const used = limit - remaining
   return {
-    utilization: Math.min(100, (used / quota.limit) * 100),
+    utilization: Math.min(100, Math.max(0, (used / limit) * 100)),
     resetsAt: quota.reset_at || null
   }
 }
@@ -1086,7 +1098,9 @@ const grokRetryAfterLabel = computed(() => {
 
 const formatWindowRequests = (stats: WindowStats) => formatCompactNumber(stats.requests, { allowBillions: false })
 const formatWindowTokens = (stats: WindowStats) => formatCompactNumber(stats.tokens)
-const formatWindowCost = (stats: WindowStats) => stats.cost.toFixed(2)
+const formatWindowCost = (stats: WindowStats) => Number(stats.cost ?? 0).toFixed(2)
+const formatWindowUserCost = (stats: WindowStats) =>
+  stats.user_cost == null ? '0.00' : Number(stats.user_cost).toFixed(2)
 
 // 账户类型显示标签
 const antigravityTierLabel = computed(() => {

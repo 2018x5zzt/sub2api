@@ -710,6 +710,62 @@ describe('AccountUsageCell', () => {
     expect(wrapper.text()).toContain('7d F|100')
   })
 
+  it('Grok OAuth 展示 User billed 与正确配额百分比', async () => {
+    getUsage.mockResolvedValue({
+      grok_local_usage: {
+        requests: 12,
+        tokens: 3400,
+        cost: 1.25,
+        user_cost: 2.5
+      },
+      grok_request_quota: {
+        limit: 100,
+        remaining: 25,
+        reset_at: '2026-07-10T00:00:00Z'
+      },
+      grok_token_quota: {
+        limit: 1000,
+        // remaining 越界时也应 clamp，避免负百分比或 >100%
+        remaining: 1200,
+        reset_at: '2026-07-10T00:00:00Z'
+      },
+      grok_quota_snapshot_state: 'observed'
+    })
+
+    const wrapper = mount(AccountUsageCell, {
+      props: {
+        account: makeAccount({
+          id: 4001,
+          platform: 'grok',
+          type: 'oauth',
+          extra: {}
+        })
+      },
+      global: {
+        stubs: {
+          UsageProgressBar: {
+            props: ['label', 'utilization', 'resetsAt', 'color'],
+            template: '<div class="usage-bar" :data-util="utilization">{{ label }}|{{ utilization }}</div>'
+          },
+          AccountQuotaInfo: true,
+          GrokQuotaProbeCell: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const badges = wrapper.findAll('span[title]')
+    expect(badges.some(node => node.attributes('title') === 'usage.accountBilled')).toBe(true)
+    expect(badges.some(node => node.attributes('title') === 'usage.userBilled')).toBe(true)
+    expect(wrapper.text()).toContain('A $1.25')
+    expect(wrapper.text()).toContain('U $2.50')
+    // used = 100 - 25 => 75%
+    expect(wrapper.text()).toContain('|75')
+    // remaining clamped to limit => used 0%
+    expect(wrapper.text()).toContain('|0')
+  })
+
   it('Anthropic OAuth 无 Fable 数据时不渲染 7d F 进度条', async () => {
     getUsage.mockResolvedValue({
       source: 'passive',
