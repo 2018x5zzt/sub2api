@@ -48,6 +48,8 @@ func DefaultModelMapping() map[string]string {
 	mapping["grok-latest"] = "grok-4.3"
 	mapping["grok-build"] = "grok-build-0.1"
 	mapping["grok-composer"] = "grok-composer-2.5-fast"
+	// SuperGrok / OpenCode clients sometimes request the short Composer id.
+	mapping["composer-2.5"] = "grok-composer-2.5-fast"
 	mapping["grok-4.20-reasoning"] = "grok-4.20-0309-reasoning"
 	mapping["grok-4.20-non-reasoning"] = "grok-4.20-0309-non-reasoning"
 	return mapping

@@ -300,3 +300,53 @@ func TestShouldAutoPauseGrokAccountByQuota(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveGrokQuotaProbeModel(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, grokQuotaDefaultModel, resolveGrokQuotaProbeModel(nil))
+	require.Equal(t, grokQuotaDefaultModel, resolveGrokQuotaProbeModel(&Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeOAuth,
+	}))
+	// No mapping: GetMappedModel("grok") would return "grok", but we must keep default.
+	require.Equal(t, grokQuotaDefaultModel, resolveGrokQuotaProbeModel(&Account{
+		Platform:    PlatformGrok,
+		Type:        AccountTypeOAuth,
+		Credentials: map[string]any{},
+	}))
+	// Explicit safe mapping is honored.
+	require.Equal(t, "grok-build-0.1", resolveGrokQuotaProbeModel(&Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"grok": "grok-build-0.1"},
+		},
+	}))
+	// Composer/media mappings fall back to default probe model.
+	require.Equal(t, grokQuotaDefaultModel, resolveGrokQuotaProbeModel(&Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"grok": "grok-composer-2.5-fast"},
+		},
+	}))
+	require.Equal(t, grokQuotaDefaultModel, resolveGrokQuotaProbeModel(&Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeOAuth,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"grok": "grok-imagine-image"},
+		},
+	}))
+}
+
+func TestBuildGrokQuotaProbeBodyUsesResolvedModel(t *testing.T) {
+	t.Parallel()
+
+	body, err := buildGrokQuotaProbeBody(resolveGrokQuotaProbeModel(&Account{
+		Platform: PlatformGrok,
+		Type:     AccountTypeOAuth,
+	}))
+	require.NoError(t, err)
+	require.Contains(t, string(body), `"model":"grok-4.3"`)
+}

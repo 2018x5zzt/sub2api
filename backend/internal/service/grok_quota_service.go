@@ -62,7 +62,8 @@ func (s *GrokQuotaService) ProbeUsage(ctx context.Context, accountID int64) (*Gr
 		return nil, err
 	}
 
-	body, err := buildGrokQuotaProbeBody(account)
+	probeModel := resolveGrokQuotaProbeModel(account)
+	body, err := buildGrokQuotaProbeBody(probeModel)
 	if err != nil {
 		return nil, infraerrors.Newf(http.StatusBadRequest, "GROK_QUOTA_PROBE_BODY_ERROR", "failed to build probe body: %v", err)
 	}
@@ -84,7 +85,7 @@ func (s *GrokQuotaService) ProbeUsage(ctx context.Context, accountID int64) (*Gr
 
 	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, maxInt(account.Concurrency, 1))
 	if err != nil {
-		return nil, infraerrors.Newf(http.StatusBadGateway, "GROK_QUOTA_PROBE_REQUEST_FAILED", "upstream probe failed: %v", err)
+		return nil, infraerrors.Newf(http.StatusBadGateway, "GROK_QUOTA_PROBE_REQUEST_FAILED", "upstream probe failed for model %q: %v", probeModel, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -107,8 +108,15 @@ func (s *GrokQuotaService) ProbeUsage(ctx context.Context, accountID int64) (*Gr
 	if resp.StatusCode >= 400 {
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 240))
 		bodyText := truncate(strings.TrimSpace(string(bodyBytes)), 240)
-		slog.Warn("grok_quota_probe_failed", "account_id", account.ID, "status", resp.StatusCode, "body", bodyText)
-		return nil, infraerrors.Newf(mapUpstreamStatus(resp.StatusCode), "GROK_QUOTA_PROBE_UPSTREAM_ERROR", "upstream returned %d: %s", resp.StatusCode, bodyText)
+		slog.Warn("grok_quota_probe_failed", "account_id", account.ID, "model", probeModel, "status", resp.StatusCode, "body", bodyText)
+		return nil, infraerrors.Newf(
+			mapUpstreamStatus(resp.StatusCode),
+			"GROK_QUOTA_PROBE_UPSTREAM_ERROR",
+			"upstream returned %d for model %q: %s",
+			resp.StatusCode,
+			probeModel,
+			bodyText,
+		)
 	}
 	return result, nil
 }
@@ -175,12 +183,10 @@ func (s *GrokQuotaService) loadGrokOAuthAccount(ctx context.Context, accountID i
 	return account, nil
 }
 
-func buildGrokQuotaProbeBody(account *Account) ([]byte, error) {
-	model := grokQuotaDefaultModel
-	if account != nil {
-		if mapped := strings.TrimSpace(account.GetMappedModel("grok")); mapped != "" {
-			model = mapped
-		}
+func buildGrokQuotaProbeBody(model string) ([]byte, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = grokQuotaDefaultModel
 	}
 	return json.Marshal(map[string]any{
 		"model":             model,
@@ -188,6 +194,43 @@ func buildGrokQuotaProbeBody(account *Account) ([]byte, error) {
 		"max_output_tokens": 1,
 		"store":             false,
 	})
+}
+
+// resolveGrokQuotaProbeModel picks a stable text model for quota probing.
+//
+// GetMappedModel("grok") returns the literal "grok" when no mapping exists, which
+// xAI rejects as "Model not found: grok". Only honor an *explicit* mapping hit,
+// and only when the target is safe for a minimal /responses probe.
+func resolveGrokQuotaProbeModel(account *Account) string {
+	if account != nil {
+		if mapped, matched := account.ResolveMappedModel("grok"); matched {
+			mapped = strings.TrimSpace(mapped)
+			if mapped != "" && isGrokQuotaProbeSafeModel(mapped) {
+				return mapped
+			}
+		}
+	}
+	return grokQuotaDefaultModel
+}
+
+func isGrokQuotaProbeSafeModel(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	if model == "" || model == "grok" || model == "grok-latest" {
+		return false
+	}
+	// Media / composer endpoints frequently reject the tiny probe payload.
+	if strings.Contains(model, "imagine") ||
+		strings.Contains(model, "video") ||
+		strings.Contains(model, "composer") ||
+		strings.Contains(model, "edit") {
+		return false
+	}
+	for _, id := range xai.DefaultModelIDs() {
+		if strings.EqualFold(id, model) {
+			return true
+		}
+	}
+	return strings.HasPrefix(model, "grok-4") || strings.HasPrefix(model, "grok-build")
 }
 
 func maxInt(a, b int) int {

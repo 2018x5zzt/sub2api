@@ -101,8 +101,14 @@ func TestAccountHandlerGetAvailableModels_GrokUsesXAIModels(t *testing.T) {
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Len(t, resp.Data, 1)
-	require.Equal(t, "grok-4.3", resp.Data[0].ID)
+	// Partial mapping must not hide the rest of the Grok catalog (Composer/Build/etc).
+	var ids []string
+	for _, model := range resp.Data {
+		ids = append(ids, model.ID)
+	}
+	require.Contains(t, ids, "grok-4.3")
+	require.Contains(t, ids, "grok-composer-2.5-fast")
+	require.Contains(t, ids, "grok-build-0.1")
 }
 
 func TestAccountHandlerGetAvailableModels_GrokDefaultsToXAIModelsWithoutMapping(t *testing.T) {
@@ -140,6 +146,7 @@ func TestAccountHandlerGetAvailableModels_GrokDefaultsToXAIModelsWithoutMapping(
 	}
 	require.Contains(t, ids, "grok-4.3")
 	require.Contains(t, ids, "grok-build-0.1")
+	require.Contains(t, ids, "grok-composer-2.5-fast")
 }
 
 func TestAccountHandlerGetAvailableModels_OpenAIOAuthUsesExplicitModelMapping(t *testing.T) {

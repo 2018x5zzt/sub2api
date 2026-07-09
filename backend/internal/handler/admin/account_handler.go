@@ -2375,20 +2375,9 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 
 	// Handle Grok accounts
 	if account.Platform == service.PlatformGrok {
+		// Always expose the full default catalog (includes Composer/Build/Imagine).
+		// Partial model_mapping configs previously hid catalog models like Composer.
 		defaultModels := xai.DefaultModels()
-
-		hasExplicitMapping := false
-		switch rawMapping := account.Credentials["model_mapping"].(type) {
-		case map[string]any:
-			hasExplicitMapping = len(rawMapping) > 0
-		case map[string]string:
-			hasExplicitMapping = len(rawMapping) > 0
-		}
-		if !hasExplicitMapping {
-			response.Success(c, defaultModels)
-			return
-		}
-
 		mapping := account.GetModelMapping()
 		if len(mapping) == 0 {
 			response.Success(c, defaultModels)
@@ -2396,8 +2385,10 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		}
 
 		defaultByID := make(map[string]xai.Model, len(defaultModels))
+		models := make([]xai.Model, 0, len(defaultModels)+len(mapping))
 		for _, model := range defaultModels {
 			defaultByID[model.ID] = model
+			models = append(models, model)
 		}
 
 		requestedModels := make([]string, 0, len(mapping))
@@ -2406,11 +2397,15 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		}
 		sort.Strings(requestedModels)
 
-		var models []xai.Model
 		for _, requestedModel := range requestedModels {
-			if defaultModel, found := defaultByID[requestedModel]; found {
-				models = append(models, defaultModel)
+			if _, found := defaultByID[requestedModel]; found {
 				continue
+			}
+			// Also skip keys already present as mapping values covered by catalog ids.
+			if mappedTo := strings.TrimSpace(mapping[requestedModel]); mappedTo != "" {
+				if _, found := defaultByID[mappedTo]; found && requestedModel == mappedTo {
+					continue
+				}
 			}
 			models = append(models, xai.Model{
 				ID:          requestedModel,
