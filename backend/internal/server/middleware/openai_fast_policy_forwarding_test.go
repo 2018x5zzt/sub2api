@@ -94,7 +94,9 @@ func TestAPIKeyAuthForwardsUserScopedOpenAIFastPolicyToUpstream(t *testing.T) {
 	}
 
 	router := gin.New()
-	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, cfg)))
+	// 为什么：xlabapi 的鉴权中间件比上游多两个订阅服务参数（普通订阅 + 产品订阅结算），
+	// 上游 v0.1.151 新增的用户级 Fast/Flex 转发测试仍按三参数签名调用，需补齐 nil 占位才能编译。
+	router.Use(gin.HandlerFunc(NewAPIKeyAuthMiddleware(apiKeyService, nil, nil, cfg)))
 	router.POST("/v1/responses", func(c *gin.Context) {
 		body, readErr := io.ReadAll(c.Request.Body)
 		if readErr != nil {
