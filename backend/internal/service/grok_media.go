@@ -267,21 +267,6 @@ func (s *OpenAIGatewayService) BindGrokMediaVideoRequestAccount(ctx context.Cont
 	return s.BindStickySession(ctx, groupID, GrokMediaVideoRequestSessionHash(requestID), accountID)
 }
 
-func (e GrokMediaEndpoint) upstreamURL(baseURL, requestID string) (string, error) {
-	switch e {
-	case GrokMediaEndpointImagesGenerations:
-		return xai.BuildImagesGenerationsURL(baseURL)
-	case GrokMediaEndpointImagesEdits:
-		return xai.BuildImagesEditsURL(baseURL)
-	case GrokMediaEndpointVideosGenerations:
-		return xai.BuildVideosGenerationsURL(baseURL)
-	case GrokMediaEndpointVideoStatus:
-		return xai.BuildVideoURL(baseURL, requestID)
-	default:
-		return "", fmt.Errorf("unsupported grok media endpoint: %s", e)
-	}
-}
-
 func (s *OpenAIGatewayService) ForwardGrokMedia(
 	ctx context.Context,
 	c *gin.Context,

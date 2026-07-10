@@ -3,7 +3,9 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,6 +19,25 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+type xlabOAuthCodeStoreStub struct {
+	storedTokenID   string
+	storedTTL       time.Duration
+	consumedTokenID string
+	consumeResult   bool
+	err             error
+}
+
+func (s *xlabOAuthCodeStoreStub) StoreCode(_ context.Context, tokenID string, ttl time.Duration) error {
+	s.storedTokenID = tokenID
+	s.storedTTL = ttl
+	return s.err
+}
+
+func (s *xlabOAuthCodeStoreStub) ConsumeCode(_ context.Context, tokenID string) (bool, error) {
+	s.consumedTokenID = tokenID
+	return s.consumeResult, s.err
+}
 
 func TestXlabOAuthProviderAuthorizeIssuesCodeForMikuCallback(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -262,6 +283,22 @@ func TestXlabOAuthProviderAuthorizationCodeCanOnlyBeRedeemedOnce(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, redeem())
 	require.Equal(t, http.StatusUnauthorized, redeem())
+}
+
+func TestXlabOAuthProviderDelegatesAuthorizationCodeStorage(t *testing.T) {
+	store := &xlabOAuthCodeStoreStub{consumeResult: true}
+	handler := &AuthHandler{xlabOAuthCodeStore: store}
+	ctx := context.Background()
+
+	require.NoError(t, handler.storeXlabOAuthCode(ctx, "code-id", time.Minute))
+	require.Equal(t, "code-id", store.storedTokenID)
+	require.Equal(t, time.Minute, store.storedTTL)
+	require.True(t, handler.consumeXlabOAuthCode(ctx, "code-id"))
+	require.Equal(t, "code-id", store.consumedTokenID)
+
+	store.err = errors.New("redis unavailable")
+	require.Error(t, handler.storeXlabOAuthCode(ctx, "failed-code", time.Minute))
+	require.False(t, handler.consumeXlabOAuthCode(ctx, "failed-code"))
 }
 
 func newXlabOAuthProviderTestHandler(user *service.User) *AuthHandler {

@@ -473,17 +473,6 @@ func isGrokImageGenerationModel(model string) bool {
 		strings.HasPrefix(model, "grok-imagine-image")
 }
 
-func validateOpenAIImagesModel(model string) error {
-	model = strings.TrimSpace(model)
-	if isOpenAIImageGenerationModel(model) {
-		return nil
-	}
-	if model == "" {
-		return fmt.Errorf("images endpoint requires an image model")
-	}
-	return fmt.Errorf("images endpoint requires an image model, got %q", model)
-}
-
 // validateOpenAIImagesModelForAccount enforces gpt-image-* by default.
 // When the OpenAI API Key account enables images passthrough, any non-empty model is allowed.
 func validateOpenAIImagesModelForAccount(account *Account, model string) error {

@@ -29,7 +29,6 @@ const (
 	xlabOAuthProviderAccessTokenTTL   = 15 * time.Minute
 	xlabOAuthProviderPurposeCode      = "xlab_oauth_code"
 	xlabOAuthProviderPurposeUserToken = "xlab_oauth_access_token"
-	xlabOAuthProviderCodeKeyPrefix    = "xlab:oauth:code:"
 )
 
 var xlabOAuthProviderMemoryCodes = newXlabOAuthProviderMemoryCodeStore()
@@ -352,8 +351,8 @@ func (h *AuthHandler) storeXlabOAuthCode(ctx context.Context, jti string, ttl ti
 	if jti == "" {
 		return fmt.Errorf("authorization code id is empty")
 	}
-	if h != nil && h.redisClient != nil {
-		return h.redisClient.Set(ctx, xlabOAuthProviderCodeKeyPrefix+jti, "1", ttl).Err()
+	if h != nil && h.xlabOAuthCodeStore != nil {
+		return h.xlabOAuthCodeStore.StoreCode(ctx, jti, ttl)
 	}
 	xlabOAuthProviderMemoryCodes.store(jti, ttl)
 	return nil
@@ -364,9 +363,9 @@ func (h *AuthHandler) consumeXlabOAuthCode(ctx context.Context, jti string) bool
 	if jti == "" {
 		return false
 	}
-	if h != nil && h.redisClient != nil {
-		_, err := h.redisClient.GetDel(ctx, xlabOAuthProviderCodeKeyPrefix+jti).Result()
-		return err == nil
+	if h != nil && h.xlabOAuthCodeStore != nil {
+		consumed, err := h.xlabOAuthCodeStore.ConsumeCode(ctx, jti)
+		return err == nil && consumed
 	}
 	return xlabOAuthProviderMemoryCodes.consume(jti)
 }

@@ -129,6 +129,7 @@ var ProviderSet = wire.NewSet(
 	NewErrorPassthroughCache,
 	NewTLSFingerprintProfileCache,
 	NewContentModerationHashCache,
+	NewXlabOAuthCodeStore,
 
 	// Encryptors
 	NewAESEncryptor,

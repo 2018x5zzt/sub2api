@@ -27,18 +27,24 @@ func mustReadFile(t *testing.T, relPath string) string {
 	return string(data)
 }
 
-// H1: Miku OAuth provider 文件存在且包含 xlab provider 核心常量。
+// H1: Miku OAuth provider 及其 Redis code store 存在且包含核心常量。
 // 丢失后果：Miku SSO 登录全部返回 404。已丢失过 2 次（0.1.123、0.1.139 重滚）。
 // 恢复方式：从 xlabapi-snapshot-0.1.137 中取回 backend/internal/handler/auth_xlab_oauth_provider.go。
 func TestH1_XlabOAuthProviderExists(t *testing.T) {
-	content := mustReadFile(t, "backend/internal/handler/auth_xlab_oauth_provider.go")
-	markers := []string{
-		"xlabOAuthProviderCodeKeyPrefix",
-		"xlabOAuthProviderClientMiku",
+	checks := []struct {
+		path   string
+		marker string
+	}{
+		{"backend/internal/handler/auth_xlab_oauth_provider.go", "xlabOAuthProviderClientMiku"},
+		{"backend/internal/handler/auth_handler.go", "xlabOAuthCodeStore"},
+		{"backend/internal/repository/xlab_oauth_code_store.go", "xlabOAuthProviderCodeKeyPrefix"},
+		{"backend/internal/repository/wire.go", "NewXlabOAuthCodeStore"},
+		{"backend/cmd/server/wire_gen.go", "xlabOAuthCodeStore := repository.NewXlabOAuthCodeStore"},
 	}
-	for _, m := range markers {
-		if !strings.Contains(content, m) {
-			t.Errorf("H1 FAIL: auth_xlab_oauth_provider.go 缺少标识符 %q\n恢复方式：从 xlabapi-snapshot-0.1.137 恢复 backend/internal/handler/auth_xlab_oauth_provider.go", m)
+	for _, check := range checks {
+		content := mustReadFile(t, check.path)
+		if !strings.Contains(content, check.marker) {
+			t.Errorf("H1 FAIL: %s 缺少标识符 %q\n恢复方式：从 xlabapi-snapshot-0.1.137 恢复对应 xlab OAuth 实现", check.path, check.marker)
 		}
 	}
 }

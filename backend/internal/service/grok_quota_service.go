@@ -63,7 +63,7 @@ func (s *GrokQuotaService) ProbeUsage(ctx context.Context, accountID int64) (*Gr
 		return nil, err
 	}
 
-	probeModel := resolveGrokQuotaProbeModel(account)
+	probeModel := grokQuotaProbeModel()
 	body, err := buildGrokQuotaProbeBody(probeModel)
 	if err != nil {
 		return nil, infraerrors.Newf(http.StatusBadRequest, "GROK_QUOTA_PROBE_BODY_ERROR", "failed to build probe body: %v", err)
@@ -198,41 +198,10 @@ func buildGrokQuotaProbeBody(model string) ([]byte, error) {
 	})
 }
 
-// resolveGrokQuotaProbeModel picks a stable text model for quota probing.
-//
-// GetMappedModel("grok") returns the literal "grok" when no mapping exists, which
-// xAI rejects as "Model not found: grok". Only honor an *explicit* mapping hit,
-// and only when the target is safe for a minimal /responses probe.
-func resolveGrokQuotaProbeModel(account *Account) string {
-	if account != nil {
-		if mapped, matched := account.ResolveMappedModel("grok"); matched {
-			mapped = strings.TrimSpace(mapped)
-			if mapped != "" && isGrokQuotaProbeSafeModel(mapped) {
-				return mapped
-			}
-		}
-	}
+// Quota probes deliberately stay on the known-good low-cost text model. Account
+// mappings control user traffic and must not silently change probe behavior.
+func grokQuotaProbeModel() string {
 	return grokQuotaDefaultModel
-}
-
-func isGrokQuotaProbeSafeModel(model string) bool {
-	model = strings.ToLower(strings.TrimSpace(model))
-	if model == "" || model == "grok" || model == "grok-latest" {
-		return false
-	}
-	// Media / composer endpoints frequently reject the tiny probe payload.
-	if strings.Contains(model, "imagine") ||
-		strings.Contains(model, "video") ||
-		strings.Contains(model, "composer") ||
-		strings.Contains(model, "edit") {
-		return false
-	}
-	for _, id := range xai.DefaultModelIDs() {
-		if strings.EqualFold(id, model) {
-			return true
-		}
-	}
-	return strings.HasPrefix(model, "grok-4") || strings.HasPrefix(model, "grok-build")
 }
 
 func maxInt(a, b int) int {
