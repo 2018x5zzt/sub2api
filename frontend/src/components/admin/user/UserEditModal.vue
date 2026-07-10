@@ -30,6 +30,13 @@
         <input v-model="form.username" type="text" class="input" />
       </div>
       <div>
+        <label class="input-label">{{ t('admin.users.form.roleLabel') }}</label>
+        <select v-model="form.role" class="input">
+          <option value="user">{{ t('admin.users.roles.user') }}</option>
+          <option value="admin">{{ t('admin.users.roles.admin') }}</option>
+        </select>
+      </div>
+      <div>
         <label class="input-label">{{ t('admin.users.notes') }}</label>
         <textarea v-model="form.notes" rows="3" class="input"></textarea>
       </div>
@@ -117,6 +124,7 @@ const form = reactive({
   password: '',
   username: '',
   notes: '',
+  role: 'user' as 'user' | 'admin',
   concurrency: 1,
   rpm_limit: 0,
   subscription_balance_fallback_enabled: false,
@@ -146,6 +154,7 @@ watch(() => props.user, (u) => {
       password: '',
       username: u.username || '',
       notes: u.notes || '',
+      role: u.role || 'user',
       concurrency: u.concurrency,
       rpm_limit: u.rpm_limit ?? 0,
       subscription_balance_fallback_enabled: !!u.subscription_balance_fallback_enabled,
@@ -195,6 +204,7 @@ const handleUpdateUser = async () => {
       email: form.email,
       username: form.username,
       notes: form.notes,
+      role: form.role,
       concurrency: form.concurrency,
       rpm_limit: form.rpm_limit,
       subscription_balance_fallback_enabled: form.subscription_balance_fallback_enabled,

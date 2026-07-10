@@ -890,19 +890,25 @@ export default {
             'Auth URL, code, state, and PKCE session must come from the same generate flow. Regenerating the URL, restarting the backend, session TTL expiry, or reusing a code will fail the exchange.',
           errors: {
             GROK_OAUTH_SESSION_NOT_FOUND:
-              'OAuth session not found or expired. Generate a new authorization URL and try again without reusing an old code.',
+              'Grok OAuth session was not found or has expired. Generate a new auth URL and paste the newest callback URL.',
             GROK_OAUTH_INVALID_STATE:
-              'OAuth state mismatch. Paste the full callback URL from the same authorization attempt that produced the current session.',
+              'Grok OAuth state does not match this session. Paste the callback URL from the same generated auth link.',
             GROK_OAUTH_STATE_REQUIRED:
-              'OAuth state is required. Paste the full callback URL (including state) rather than a bare code when possible.',
-            GROK_OAUTH_CODE_REQUIRED: 'Authorization code is required.',
+              'The callback URL is missing the OAuth state. Paste the full callback URL, not only the code.',
+            GROK_OAUTH_CODE_REQUIRED:
+              'The Grok authorization code is missing. Paste the full callback URL, query string, or code value.',
             GROK_OAUTH_TOKEN_EXCHANGE_FAILED:
               'xAI rejected the token exchange. The code may be expired/used, or the redirect URI / PKCE verifier does not match.',
             GROK_OAUTH_REQUEST_FAILED:
               'Backend could not reach the xAI token endpoint. Check outbound network access and any proxy configured for this OAuth flow.',
             GROK_OAUTH_ENTITLEMENT_DENIED:
               'xAI denied the OAuth token (entitlement/subscription). Confirm the SuperGrok subscription is active for this account.',
-            GROK_OAUTH_NO_REFRESH_TOKEN: 'Token response did not include a refresh_token; cannot create a durable OAuth account.'
+            GROK_OAUTH_NO_REFRESH_TOKEN:
+              'The Grok response did not include a refresh token. Generate a new auth URL and approve offline access again.',
+            GROK_OAUTH_PROXY_NOT_AVAILABLE:
+              'Grok OAuth proxy lookup is unavailable. Check the selected proxy and retry.',
+            GROK_OAUTH_PROXY_NOT_FOUND:
+              'The selected proxy could not be found. Choose an available proxy and retry.'
           }
         },
         // Gemini specific

@@ -108,7 +108,12 @@ export function useGrokOAuth() {
     try {
       return await adminAPI.grok.refreshGrokToken(refreshToken.trim(), proxyId)
     } catch (err: any) {
-      error.value = err.response?.data?.detail || t('admin.accounts.oauth.grok.failedToValidateRT')
+      error.value = extractI18nErrorMessage(
+        err,
+        t,
+        'admin.accounts.oauth.grok.errors',
+        t('admin.accounts.oauth.grok.failedToValidateRT')
+      )
       return null
     } finally {
       loading.value = false

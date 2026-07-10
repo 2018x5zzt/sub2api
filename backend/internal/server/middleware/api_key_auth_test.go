@@ -64,7 +64,6 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		cfg.SubscriptionMaintenance.QueueSize = 1
 
 		apiKeyService := service.NewAPIKeyService(apiKeyRepo, nil, nil, nil, nil, nil, cfg)
-
 		legacyQueried := false
 		subscriptionRepo := &stubUserSubscriptionRepo{
 			getActive: func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error) {
@@ -97,7 +96,6 @@ func TestSimpleModeBypassesQuotaCheck(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/t", nil)
 		req.Header.Set("x-api-key", apiKey.Key)
 		router.ServeHTTP(w, req)
-
 		require.Equal(t, http.StatusForbidden, w.Code)
 		requireAPIKeyAuthError(t, w, "SUBSCRIPTION_NOT_FOUND", "No active product subscription found for this group")
 		require.False(t, legacyQueried, "legacy user_subscriptions must not be queried after product subscriptions are enabled")
@@ -1222,6 +1220,7 @@ func (r *stubApiKeyRepo) GetRateLimitData(ctx context.Context, id int64) (*servi
 }
 
 type stubUserSubscriptionRepo struct {
+	getByID        func(ctx context.Context, id int64) (*service.UserSubscription, error)
 	getActive      func(ctx context.Context, userID, groupID int64) (*service.UserSubscription, error)
 	updateStatus   func(ctx context.Context, subscriptionID int64, status string) error
 	activateWindow func(ctx context.Context, id int64, start time.Time) error
@@ -1274,6 +1273,9 @@ func (r *stubUserSubscriptionRepo) Create(ctx context.Context, sub *service.User
 }
 
 func (r *stubUserSubscriptionRepo) GetByID(ctx context.Context, id int64) (*service.UserSubscription, error) {
+	if r.getByID != nil {
+		return r.getByID(ctx, id)
+	}
 	return nil, errors.New("not implemented")
 }
 
@@ -1350,21 +1352,25 @@ func (r *stubUserSubscriptionRepo) ActivateWindows(ctx context.Context, id int64
 	return errors.New("not implemented")
 }
 
-func (r *stubUserSubscriptionRepo) ResetDailyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
+func (r *stubUserSubscriptionRepo) ResetUsageWindows(context.Context, int64, bool, bool, bool, time.Time) error {
+	return errors.New("not implemented")
+}
+
+func (r *stubUserSubscriptionRepo) ResetDailyUsage(ctx context.Context, id int64, _ *time.Time, newWindowStart time.Time) error {
 	if r.resetDaily != nil {
 		return r.resetDaily(ctx, id, newWindowStart)
 	}
 	return errors.New("not implemented")
 }
 
-func (r *stubUserSubscriptionRepo) ResetWeeklyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
+func (r *stubUserSubscriptionRepo) ResetWeeklyUsage(ctx context.Context, id int64, _ *time.Time, newWindowStart time.Time) error {
 	if r.resetWeekly != nil {
 		return r.resetWeekly(ctx, id, newWindowStart)
 	}
 	return errors.New("not implemented")
 }
 
-func (r *stubUserSubscriptionRepo) ResetMonthlyUsage(ctx context.Context, id int64, newWindowStart time.Time) error {
+func (r *stubUserSubscriptionRepo) ResetMonthlyUsage(ctx context.Context, id int64, _ *time.Time, newWindowStart time.Time) error {
 	if r.resetMonthly != nil {
 		return r.resetMonthly(ctx, id, newWindowStart)
 	}

@@ -1039,11 +1039,10 @@ const makeGrokQuotaBar = (quota?: { limit?: number | null; remaining?: number | 
   const limit = Number(quota.limit)
   const remainingRaw = Number(quota.remaining)
   if (!Number.isFinite(limit) || limit <= 0 || !Number.isFinite(remainingRaw)) return null
-  // Clamp remaining into [0, limit] so inverted/overshooting headers cannot break the bar.
-  const remaining = Math.min(Math.max(0, remainingRaw), limit)
-  const used = limit - remaining
+  // Negative remaining values represent over-quota usage and must remain visible above 100%.
+  const used = Math.max(0, limit - remainingRaw)
   return {
-    utilization: Math.min(100, Math.max(0, (used / limit) * 100)),
+    utilization: (used / limit) * 100,
     resetsAt: quota.reset_at || null
   }
 }

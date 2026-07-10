@@ -22,6 +22,7 @@ const (
 
 type GrokQuotaProbeResult struct {
 	Source          string             `json:"source"`
+	Model           string             `json:"model"`
 	Snapshot        *xai.QuotaSnapshot `json:"snapshot,omitempty"`
 	StatusCode      int                `json:"status_code,omitempty"`
 	HeadersObserved bool               `json:"headers_observed"`
@@ -96,6 +97,7 @@ func (s *GrokQuotaService) ProbeUsage(ctx context.Context, accountID int64) (*Gr
 
 	result := &GrokQuotaProbeResult{
 		Source:          "active_probe",
+		Model:           probeModel,
 		Snapshot:        snapshot,
 		StatusCode:      resp.StatusCode,
 		HeadersObserved: snapshot.HeadersObserved,
@@ -112,7 +114,7 @@ func (s *GrokQuotaService) ProbeUsage(ctx context.Context, accountID int64) (*Gr
 		return nil, infraerrors.Newf(
 			mapUpstreamStatus(resp.StatusCode),
 			"GROK_QUOTA_PROBE_UPSTREAM_ERROR",
-			"upstream returned %d for model %q: %s",
+			"upstream returned %d for probe model %q: %s",
 			resp.StatusCode,
 			probeModel,
 			bodyText,

@@ -462,7 +462,15 @@ func applyOpenAIImagesDefaults(req *OpenAIImagesRequest) {
 }
 
 func isOpenAIImageGenerationModel(model string) bool {
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "gpt-image-")
+	model = strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(model, "gpt-image-") || isGrokImageGenerationModel(model)
+}
+
+func isGrokImageGenerationModel(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	return model == "grok-imagine" ||
+		model == "grok-imagine-edit" ||
+		strings.HasPrefix(model, "grok-imagine-image")
 }
 
 func validateOpenAIImagesModel(model string) error {
@@ -480,7 +488,7 @@ func validateOpenAIImagesModel(model string) error {
 // When the OpenAI API Key account enables images passthrough, any non-empty model is allowed.
 func validateOpenAIImagesModelForAccount(account *Account, model string) error {
 	model = strings.TrimSpace(model)
-	if isOpenAIImageGenerationModel(model) {
+	if strings.HasPrefix(strings.ToLower(model), "gpt-image-") {
 		return nil
 	}
 	if account != nil && account.IsOpenAIImagesPassthroughEnabled() {
@@ -489,7 +497,10 @@ func validateOpenAIImagesModelForAccount(account *Account, model string) error {
 		}
 		return nil
 	}
-	return validateOpenAIImagesModel(model)
+	if model == "" {
+		return fmt.Errorf("images endpoint requires an image model")
+	}
+	return fmt.Errorf("images endpoint requires an image model, got %q", model)
 }
 
 func normalizeOpenAIImagesEndpointPath(path string) string {
