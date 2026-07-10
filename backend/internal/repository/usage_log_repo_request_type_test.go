@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -248,6 +249,15 @@ func TestPrepareUsageLogInsert_ArgCountMatchesTypes(t *testing.T) {
 	})
 
 	require.Len(t, prepared.args, len(usageLogInsertArgTypes))
+	columns := strings.Split(strings.TrimSpace(usageLogInsertColumnList), ",")
+	require.Len(t, columns, len(prepared.args))
+
+	for _, returning := range []bool{false, true} {
+		query := buildUsageLogDirectInsertQuery(returning)
+		require.Equal(t, len(prepared.args), strings.Count(query, "$"))
+		require.Contains(t, query, fmt.Sprintf("$%d", len(prepared.args)))
+		require.Equal(t, returning, strings.Contains(query, "RETURNING id, created_at"))
+	}
 }
 
 func TestPrepareUsageLogInsert_PersistsImageSizeMetadata(t *testing.T) {
