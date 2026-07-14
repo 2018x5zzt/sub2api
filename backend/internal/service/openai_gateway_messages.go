@@ -246,14 +246,21 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	responsesBody = updatedBody
 	grokCacheIdentity := ""
 	if account.Platform == PlatformGrok {
-		grokCacheIdentity = resolveGrokCacheIdentity(c, responsesBody, promptCacheKey, upstreamModel)
+		usePromptCache := shouldApplyGrokPromptCache(account)
+		if usePromptCache {
+			grokCacheIdentity = resolveGrokCacheIdentity(c, responsesBody, promptCacheKey, upstreamModel)
+		}
+		grokIntentSourceBody := responsesBody
 		patchedBody, patchErr := patchGrokResponsesBody(responsesBody, upstreamModel)
 		if patchErr != nil {
 			return nil, patchErr
 		}
-		responsesBody, patchErr = applyGrokResponsesCacheIdentity(patchedBody, responsesBody, grokCacheIdentity, account.IsGrokOAuth())
-		if patchErr != nil {
-			return nil, fmt.Errorf("apply grok prompt cache identity: %w", patchErr)
+		responsesBody = patchedBody
+		if usePromptCache {
+			responsesBody, patchErr = applyGrokResponsesCacheIdentity(patchedBody, grokIntentSourceBody, grokCacheIdentity, account.IsGrokOAuth())
+			if patchErr != nil {
+				return nil, fmt.Errorf("apply grok prompt cache identity: %w", patchErr)
+			}
 		}
 	}
 

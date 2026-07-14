@@ -269,24 +269,6 @@ func (s *OpenAIGatewayService) BindGrokMediaVideoRequestAccount(ctx context.Cont
 	return s.BindStickySession(ctx, groupID, GrokMediaVideoRequestSessionHash(requestID), accountID)
 }
 
-func (e GrokMediaEndpoint) upstreamURL(baseURL, requestID string) (string, error) {
-	switch e {
-	case GrokMediaEndpointImagesGenerations:
-		return xai.BuildImagesGenerationsURL(baseURL)
-	case GrokMediaEndpointImagesEdits:
-		return xai.BuildImagesEditsURL(baseURL)
-	case GrokMediaEndpointVideosGenerations:
-		return xai.BuildVideosGenerationsURL(baseURL)
-	case GrokMediaEndpointVideosEdits:
-		return xai.BuildVideosEditsURL(baseURL)
-	case GrokMediaEndpointVideosExtensions:
-		return xai.BuildVideosExtensionsURL(baseURL)
-	case GrokMediaEndpointVideoStatus:
-		return xai.BuildVideoURL(baseURL, requestID)
-	default:
-		return "", fmt.Errorf("unsupported grok media endpoint: %s", e)
-	}
-}
 func (s *OpenAIGatewayService) ForwardGrokMedia(
 	ctx context.Context,
 	c *gin.Context,
@@ -413,7 +395,11 @@ func prepareGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, conten
 	if info.N > 1 {
 		payload["n"] = info.N
 	}
-	// Do not forward OpenAI-style size: xAI Grok Imagine rejects unsupported size args.
+	if info.Size != "" {
+		// Preserve the requested size until billing metadata is captured. The
+		// sanitizer removes it before forwarding because xAI rejects the field.
+		payload["size"] = info.Size
+	}
 
 	images := make([]map[string]string, 0, len(info.InputImageURLs)+len(info.Uploads))
 	for _, imageURL := range info.InputImageURLs {
@@ -490,26 +476,28 @@ func sanitizeGrokMediaForwardBody(endpoint GrokMediaEndpoint, body []byte, conte
 }
 
 func (s *OpenAIGatewayService) resolveGrokMediaUpstreamURL(account *Account, endpoint GrokMediaEndpoint, requestID string) (string, error) {
+	path := ""
 	switch endpoint {
 	case GrokMediaEndpointImagesGenerations:
-		return s.resolveGrokUpstreamURL(account, "/images/generations")
+		path = "/images/generations"
 	case GrokMediaEndpointImagesEdits:
-		return s.resolveGrokUpstreamURL(account, "/images/edits")
+		path = "/images/edits"
 	case GrokMediaEndpointVideosGenerations:
-		return s.resolveGrokUpstreamURL(account, "/videos/generations")
+		path = "/videos/generations"
 	case GrokMediaEndpointVideosEdits:
-		return s.resolveGrokUpstreamURL(account, "/videos/edits")
+		path = "/videos/edits"
 	case GrokMediaEndpointVideosExtensions:
-		return s.resolveGrokUpstreamURL(account, "/videos/extensions")
+		path = "/videos/extensions"
 	case GrokMediaEndpointVideoStatus:
 		requestID = strings.TrimSpace(requestID)
 		if requestID == "" {
 			return "", fmt.Errorf("request id is required")
 		}
-		return s.resolveGrokUpstreamURL(account, "/videos/"+url.PathEscape(requestID))
+		path = "/videos/" + url.PathEscape(requestID)
 	default:
 		return "", fmt.Errorf("unsupported grok media endpoint: %s", endpoint)
 	}
+	return s.resolveGrokUpstreamURLFromBase(account, account.GetGrokMediaBaseURL(), path)
 }
 
 func (r GrokMediaRequestInfo) HasInputImage() bool {

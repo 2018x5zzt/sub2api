@@ -20,7 +20,7 @@ import (
 const (
 	grokQuotaUpstreamTimeout = 20 * time.Second
 	grokQuotaProbeInput      = "."
-	grokQuotaDefaultModel    = grokDefaultResponsesModel
+	grokQuotaDefaultModel    = "grok-4.3"
 	grokBillingExtraKey      = "grok_billing_snapshot"
 )
 
@@ -183,16 +183,21 @@ func (s *GrokQuotaService) probeUsage(ctx context.Context, accountID int64) (*Gr
 		return result, nil
 	}
 	if resp.StatusCode >= 400 {
-		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 240))
-		bodyText := truncate(strings.TrimSpace(string(bodyBytes)), 240)
-		slog.Warn("grok_quota_probe_failed", "account_id", account.ID, "model", probeModel, "status", resp.StatusCode, "body", bodyText)
+		const reason = "GROK_QUOTA_PROBE_UPSTREAM_ERROR"
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4<<10))
+		slog.Warn(
+			"grok_quota_probe_failed",
+			"account_id", account.ID,
+			"model", probeModel,
+			"status", resp.StatusCode,
+			"reason", reason,
+		)
 		return nil, infraerrors.Newf(
 			mapUpstreamStatus(resp.StatusCode),
-			"GROK_QUOTA_PROBE_UPSTREAM_ERROR",
-			"upstream returned %d for probe model %q: %s",
+			reason,
+			"upstream returned %d for probe model %q",
 			resp.StatusCode,
 			probeModel,
-			bodyText,
 		)
 	}
 	return result, nil

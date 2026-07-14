@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 16 // v16: product subscriptions plus group web-search pricing
+const apiKeyAuthSnapshotVersion = 16 // v16: product family, peak/video rates, and web search per-call pricing
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int

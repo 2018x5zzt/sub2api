@@ -45,14 +45,20 @@ func (s *OpenAIGatewayService) forwardGrokResponses(
 	if strings.TrimSpace(upstreamModel) == "" {
 		upstreamModel = grokDefaultResponsesModel
 	}
-	cacheIdentity := resolveGrokCacheIdentity(c, body, "", upstreamModel)
+	cacheIdentity := ""
+	usePromptCache := shouldApplyGrokPromptCache(account)
+	if usePromptCache {
+		cacheIdentity = resolveGrokCacheIdentity(c, body, "", upstreamModel)
+	}
 	patchedBody, err := patchGrokResponsesBody(body, upstreamModel)
 	if err != nil {
 		return nil, err
 	}
-	patchedBody, err = applyGrokResponsesCacheIdentity(patchedBody, body, cacheIdentity, account.IsGrokOAuth())
-	if err != nil {
-		return nil, fmt.Errorf("apply grok prompt cache identity: %w", err)
+	if usePromptCache {
+		patchedBody, err = applyGrokResponsesCacheIdentity(patchedBody, body, cacheIdentity, account.IsGrokOAuth())
+		if err != nil {
+			return nil, fmt.Errorf("apply grok prompt cache identity: %w", err)
+		}
 	}
 
 	token, _, err := s.GetAccessToken(ctx, account)
@@ -739,7 +745,7 @@ func addOpenAIUsage(dst *OpenAIUsage, usage OpenAIUsage) {
 	dst.ImageOutputTokens += usage.ImageOutputTokens
 }
 
-func (s *OpenAIGatewayService) buildGrokResponsesRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token string, cacheIdentities ...string) (*http.Request, error) {
+func (s *OpenAIGatewayService) buildGrokResponsesRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token, cacheIdentity string) (*http.Request, error) {
 	targetURL, err := s.resolveGrokUpstreamURL(account, "/responses")
 	if err != nil {
 		return nil, err
@@ -751,50 +757,12 @@ func (s *OpenAIGatewayService) buildGrokResponsesRequest(ctx context.Context, c 
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
-	applyGrokCLIHeaders(req.Header)
-	cacheIdentity := ""
-	if len(cacheIdentities) > 0 {
-		cacheIdentity = cacheIdentities[0]
-	}
-	applyGrokCacheHeaders(req.Header, cacheIdentity)
-	if c != nil {
-		if v := c.GetHeader("OpenAI-Beta"); strings.TrimSpace(v) != "" {
-			req.Header.Set("OpenAI-Beta", v)
-		}
-	}
-	return req, nil
-}
-
-// buildGrokResponsesRequest is the context-free helper used by the Grok chat
-// bridge. It retains upstream's strict OAuth URL handling while allowing API
-// key accounts to use a validated custom OpenAI-compatible base URL.
-func buildGrokResponsesRequest(ctx context.Context, c *gin.Context, account *Account, body []byte, token, cacheIdentity string) (*http.Request, error) {
-	if account == nil {
-		return nil, fmt.Errorf("grok account is required")
-	}
-	var targetURL string
-	var err error
-	if account.Type == AccountTypeAPIKey {
-		validated, validateErr := urlvalidator.ValidateURLFormat(account.GetGrokBaseURL(), false)
-		if validateErr != nil {
-			return nil, fmt.Errorf("invalid base url: %w", validateErr)
-		}
-		targetURL = strings.TrimRight(validated, "/") + "/responses"
+	if shouldApplyGrokPromptCache(account) {
+		applyGrokCLIHeaders(req.Header)
+		applyGrokCacheHeaders(req.Header, cacheIdentity)
 	} else {
-		targetURL, err = xai.BuildResponsesURL(account.GetGrokBaseURL())
-		if err != nil {
-			return nil, err
-		}
+		req.Header.Set("User-Agent", grokUpstreamUserAgent)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	applyGrokCLIHeaders(req.Header)
-	applyGrokCacheHeaders(req.Header, cacheIdentity)
 	if c != nil {
 		if v := c.GetHeader("OpenAI-Beta"); strings.TrimSpace(v) != "" {
 			req.Header.Set("OpenAI-Beta", v)
@@ -810,7 +778,14 @@ func (s *OpenAIGatewayService) resolveGrokUpstreamURL(account *Account, path str
 	if account == nil {
 		return "", fmt.Errorf("grok account is required")
 	}
-	baseURL := strings.TrimSpace(account.GetGrokBaseURL())
+	return s.resolveGrokUpstreamURLFromBase(account, account.GetGrokBaseURL(), path)
+}
+
+func (s *OpenAIGatewayService) resolveGrokUpstreamURLFromBase(account *Account, baseURL, path string) (string, error) {
+	if account == nil {
+		return "", fmt.Errorf("grok account is required")
+	}
+	baseURL = strings.TrimSpace(baseURL)
 	if baseURL == "" {
 		return "", fmt.Errorf("grok base_url is empty")
 	}
@@ -843,6 +818,17 @@ func (s *OpenAIGatewayService) resolveGrokAPIKeyBaseURL(baseURL string) (string,
 		return "", fmt.Errorf("invalid base url: %w", err)
 	}
 	return validated, nil
+}
+
+func shouldApplyGrokPromptCache(account *Account) bool {
+	if account == nil || !account.IsGrok() {
+		return false
+	}
+	if account.IsGrokOAuth() {
+		return true
+	}
+	baseURL := account.GetGrokBaseURL()
+	return isOfficialGrokAPIBaseURL(baseURL) || isOfficialGrokCLIBaseURL(baseURL)
 }
 
 // applyGrokCLIHeaders identifies subscription traffic as a supported Grok CLI

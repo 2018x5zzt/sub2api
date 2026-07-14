@@ -209,7 +209,10 @@ func (s *OpenAIGatewayService) forwardGrokChatCompletionsViaResponses(
 	clientStream := chatReq.Stream
 	billingModel := resolveOpenAIForwardModel(account, originalModel, defaultMappedModel)
 	upstreamModel := normalizeOpenAIModelForUpstream(account, billingModel)
-	cacheIdentity := resolveGrokCacheIdentity(c, body, promptCacheKey, upstreamModel)
+	cacheIdentity := ""
+	if shouldApplyGrokPromptCache(account) {
+		cacheIdentity = resolveGrokCacheIdentity(c, body, promptCacheKey, upstreamModel)
+	}
 	if !grokChatResponsesRuntimeEligible(upstreamModel, cacheIdentity) {
 		return s.forwardAsRawChatCompletions(ctx, c, account, body, defaultMappedModel)
 	}
@@ -258,7 +261,7 @@ func (s *OpenAIGatewayService) forwardGrokChatCompletionsViaResponses(
 		return nil, fmt.Errorf("get grok access token: %w", err)
 	}
 	upstreamCtx, releaseUpstreamCtx := detachUpstreamContext(ctx)
-	upstreamReq, err := buildGrokResponsesRequest(upstreamCtx, c, account, responsesBody, token, cacheIdentity)
+	upstreamReq, err := s.buildGrokResponsesRequest(upstreamCtx, c, account, responsesBody, token, cacheIdentity)
 	releaseUpstreamCtx()
 	if err != nil {
 		return nil, fmt.Errorf("build grok responses bridge request: %w", err)
