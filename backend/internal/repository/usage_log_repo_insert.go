@@ -71,6 +71,7 @@ var usageLogInsertArgTypes = [...]string{
 	"text",        // inbound_endpoint
 	"text",        // upstream_endpoint
 	"boolean",     // cache_ttl_overridden
+	"boolean",     // long_context_billing_applied
 	"bigint",      // channel_id
 	"text",        // model_mapping_chain
 	"text",        // billing_tier
@@ -130,6 +131,7 @@ const usageLogInsertColumnList = `
 			inbound_endpoint,
 			upstream_endpoint,
 			cache_ttl_overridden,
+			long_context_billing_applied,
 			channel_id,
 			model_mapping_chain,
 			billing_tier,
@@ -730,6 +732,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			inbound_endpoint,
 			upstream_endpoint,
 			cache_ttl_overridden,
+			long_context_billing_applied,
 			channel_id,
 			model_mapping_chain,
 			billing_tier,
@@ -817,6 +820,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				inbound_endpoint,
 				upstream_endpoint,
 				cache_ttl_overridden,
+				long_context_billing_applied,
 				channel_id,
 				model_mapping_chain,
 				billing_tier,
@@ -875,6 +879,7 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				inbound_endpoint,
 				upstream_endpoint,
 				cache_ttl_overridden,
+				long_context_billing_applied,
 				channel_id,
 				model_mapping_chain,
 				billing_tier,
@@ -973,6 +978,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			inbound_endpoint,
 			upstream_endpoint,
 			cache_ttl_overridden,
+			long_context_billing_applied,
 			channel_id,
 			model_mapping_chain,
 			billing_tier,
@@ -1057,6 +1063,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			inbound_endpoint,
 			upstream_endpoint,
 			cache_ttl_overridden,
+			long_context_billing_applied,
 			channel_id,
 			model_mapping_chain,
 			billing_tier,
@@ -1115,6 +1122,7 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			inbound_endpoint,
 			upstream_endpoint,
 			cache_ttl_overridden,
+			long_context_billing_applied,
 			channel_id,
 			model_mapping_chain,
 			billing_tier,
@@ -1235,6 +1243,7 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			inboundEndpoint,
 			upstreamEndpoint,
 			log.CacheTTLOverridden,
+			log.LongContextBillingApplied,
 			channelID,
 			modelMappingChain,
 			billingTier,
