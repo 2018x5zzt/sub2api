@@ -11,36 +11,13 @@ import (
 
 const modelHubPath = "/models"
 
-func shouldBypassEmbeddedFrontend(path string) bool {
-	trimmed := strings.TrimSpace(path)
-	return strings.HasPrefix(trimmed, "/api/") ||
-		strings.HasPrefix(trimmed, "/v1/") ||
-		strings.HasPrefix(trimmed, "/v1beta/") ||
-		strings.HasPrefix(trimmed, "/backend-api/") ||
-		strings.HasPrefix(trimmed, "/antigravity/") ||
-		strings.HasPrefix(trimmed, "/setup/") ||
-		trimmed == "/health" ||
-		trimmed == "/oauth/token" ||
-		trimmed == "/oauth/userinfo" ||
-		trimmed == modelHubPath ||
-		trimmed == "/responses" ||
-		strings.HasPrefix(trimmed, "/responses/") ||
-		trimmed == "/alpha/search" ||
-		strings.HasPrefix(trimmed, "/images/") ||
-		strings.HasPrefix(trimmed, "/videos/")
-}
-
-func shouldBypassEmbeddedFrontendRequest(request *http.Request) bool {
+func shouldServeModelHub(request *http.Request) bool {
 	if request == nil || request.URL == nil {
-		return true
+		return false
 	}
 	if strings.TrimSpace(request.URL.Path) != modelHubPath {
-		return shouldBypassEmbeddedFrontend(request.URL.Path)
+		return false
 	}
-	return !isModelHubNavigationRequest(request)
-}
-
-func isModelHubNavigationRequest(request *http.Request) bool {
 	if request.Method != http.MethodGet {
 		return false
 	}

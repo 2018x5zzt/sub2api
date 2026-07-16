@@ -51,21 +51,20 @@ func TestH1_XlabOAuthProviderExists(t *testing.T) {
 
 // H2: embed middleware 仍接入 xlab 路由策略，且 OAuth bypass 存在。
 // 丢失后果：xlab OAuth 颁发 token 的端点被前端静态文件拦截，返回 HTML 而非 JSON。
-// 恢复方式：确认 embed_on.go 调用 request-aware helper，且 embed_routing_xlab.go 包含这两条路径。
+// 恢复方式：确认 embed_on.go 调用 request-aware helper，且通用 bypass 表包含这两条路径。
 func TestH2_EmbedBypassExists(t *testing.T) {
 	core := mustReadFile(t, "backend/internal/web/embed_on.go")
 	if !strings.Contains(core, "shouldBypassEmbeddedFrontendRequest") {
 		t.Error("H2 FAIL: embed_on.go 未调用 xlab request-aware bypass\n恢复方式：在主、legacy embed middleware 中接回 shouldBypassEmbeddedFrontendRequest")
 	}
 
-	policy := mustReadFile(t, "backend/internal/web/embed_routing_xlab.go")
 	required := []string{
 		`"/oauth/token"`,
 		`"/oauth/userinfo"`,
 	}
 	for _, r := range required {
-		if !strings.Contains(policy, r) {
-			t.Errorf("H2 FAIL: embed_routing_xlab.go 缺少 bypass 路径 %s\n恢复方式：在 shouldBypassEmbeddedFrontend 中加回该路径判断", r)
+		if !strings.Contains(core, r) {
+			t.Errorf("H2 FAIL: embed_on.go 缺少 bypass 路径 %s\n恢复方式：在 shouldBypassEmbeddedFrontend 中加回该路径判断", r)
 		}
 	}
 }
