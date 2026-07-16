@@ -482,11 +482,24 @@ const dailyUsageOptions = computed(() => [
   { value: 90 as const, label: t('keyUsage.dateRange90d') },
 ])
 
+function subtractCalendarMonthsClamped(date: Date, months: number): Date {
+  const targetMonth = new Date(date.getFullYear(), date.getMonth() - months, 1)
+  const lastDay = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0).getDate()
+  return new Date(targetMonth.getFullYear(), targetMonth.getMonth(), Math.min(date.getDate(), lastDay))
+}
+
 function setDateRange(key: DateRangeKey) {
   currentRange.value = key
-  if (key !== 'custom') {
-    queryKey()
+  if (key === 'custom') {
+    if (!customStartDate.value && !customEndDate.value) {
+      const today = new Date()
+      const start = subtractCalendarMonthsClamped(today, 2)
+      customStartDate.value = formatDateLocalInput(start)
+      customEndDate.value = formatDateLocalInput(today)
+    }
+    return
   }
+  queryKey()
 }
 
 function getDateParams(): string {

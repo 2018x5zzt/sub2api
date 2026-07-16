@@ -231,4 +231,75 @@ describe('KeyUsageView daily detail', () => {
 
     wrapper.unmount()
   })
+
+  it('prefills a custom range from two calendar months ago through today', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 16, 12))
+
+    const wrapper = mount(KeyUsageView, {
+      global: {
+        stubs: {
+          RouterLink: { template: '<a><slot /></a>' },
+          LocaleSwitcher: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await wrapper.find('input').setValue('sk-test-key')
+    await wrapper.find('input').trigger('keydown.enter')
+    await flushPromises()
+
+    const customButton = wrapper.findAll('button').find((button) => button.text() === 'Custom')
+    expect(customButton).toBeDefined()
+    await customButton!.trigger('click')
+
+    const dateInputs = wrapper.findAll<HTMLInputElement>('input[type="date"]')
+    expect(dateInputs).toHaveLength(2)
+    expect(dateInputs[0].element.value).toBe('2026-05-16')
+    expect(dateInputs[1].element.value).toBe('2026-07-16')
+
+    const applyButton = wrapper.findAll('button').find((button) => button.text() === 'Apply')
+    expect(applyButton).toBeDefined()
+    await applyButton!.trigger('click')
+    await flushPromises()
+
+    const fetchMock = vi.mocked(fetch)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const customRequest = new URL(String(fetchMock.mock.calls[1][0]), window.location.origin)
+    expect(customRequest.searchParams.get('start_date')).toBe('2026-05-16')
+    expect(customRequest.searchParams.get('end_date')).toBe('2026-07-16')
+
+    wrapper.unmount()
+  })
+
+  it('clamps the custom range start to the target month end', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 7, 31, 12))
+
+    const wrapper = mount(KeyUsageView, {
+      global: {
+        stubs: {
+          RouterLink: { template: '<a><slot /></a>' },
+          LocaleSwitcher: true,
+          Icon: true,
+        },
+      },
+    })
+
+    await wrapper.find('input').setValue('sk-test-key')
+    await wrapper.find('input').trigger('keydown.enter')
+    await flushPromises()
+
+    const customButton = wrapper.findAll('button').find((button) => button.text() === 'Custom')
+    expect(customButton).toBeDefined()
+    await customButton!.trigger('click')
+
+    const dateInputs = wrapper.findAll<HTMLInputElement>('input[type="date"]')
+    expect(dateInputs).toHaveLength(2)
+    expect(dateInputs[0].element.value).toBe('2026-06-30')
+    expect(dateInputs[1].element.value).toBe('2026-08-31')
+
+    wrapper.unmount()
+  })
 })
