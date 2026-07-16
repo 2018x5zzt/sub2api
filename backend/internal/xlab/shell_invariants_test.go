@@ -54,8 +54,9 @@ func TestH1_XlabOAuthProviderExists(t *testing.T) {
 // 恢复方式：确认 embed_on.go 调用 request-aware helper，且通用 bypass 表包含这两条路径。
 func TestH2_EmbedBypassExists(t *testing.T) {
 	core := mustReadFile(t, "backend/internal/web/embed_on.go")
-	if !strings.Contains(core, "shouldBypassEmbeddedFrontendRequest") {
-		t.Error("H2 FAIL: embed_on.go 未调用 xlab request-aware bypass\n恢复方式：在主、legacy embed middleware 中接回 shouldBypassEmbeddedFrontendRequest")
+	const requestAwareCall = "shouldBypassEmbeddedFrontendRequest(c.Request)"
+	if strings.Count(core, requestAwareCall) < 2 {
+		t.Error("H2 FAIL: embed_on.go 未在主、legacy middleware 中完整调用 xlab request-aware bypass\n恢复方式：在两个 embed middleware 中接回 shouldBypassEmbeddedFrontendRequest(c.Request)")
 	}
 
 	required := []string{
