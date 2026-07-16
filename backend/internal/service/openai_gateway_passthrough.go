@@ -478,7 +478,18 @@ func shouldFailoverOpenAIPassthroughResponse(account *Account, statusCode int, r
 	case http.StatusTooManyRequests, 529:
 		return true
 	}
-	if account == nil || account.Type != AccountTypeAPIKey {
+	if account == nil {
+		return false
+	}
+	if account.Type == AccountTypeOAuth {
+		switch statusCode {
+		case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+			return true
+		default:
+			return false
+		}
+	}
+	if account.Type != AccountTypeAPIKey {
 		return false
 	}
 	switch statusCode {
@@ -646,32 +657,6 @@ func (s *OpenAIGatewayService) handleErrorResponsePassthrough(
 	}
 	setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
 	logOpenAIInstructionsRequiredDebug(ctx, c, account, resp.StatusCode, upstreamMsg, requestBody, body)
-	// fork: 透传错误若属于可 failover 的上游错误（含 5xx/容量类），触发多账号换号，
-	// 避免坏号把上游错误直接返回给客户端，维持基础 SLA。
-	if s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, body) {
-		if s.rateLimitService != nil {
-			_ = s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
-		}
-		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-			Platform:             account.Platform,
-			AccountID:            account.ID,
-			AccountName:          account.Name,
-			UpstreamStatusCode:   resp.StatusCode,
-			UpstreamRequestID:    resp.Header.Get("x-request-id"),
-			Passthrough:          true,
-			Kind:                 "failover",
-			Message:              upstreamMsg,
-			Detail:               upstreamDetail,
-			UpstreamResponseBody: upstreamDetail,
-		})
-		return &UpstreamFailoverError{
-			StatusCode:             resp.StatusCode,
-			ResponseBody:           body,
-			ResponseHeaders:        resp.Header.Clone(),
-			RetryableOnSameAccount: account.IsPoolMode() && (isPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, body)),
-		}
-	}
-
 	// 非 failover 错误体不会原样透传，但运行态账号状态仍需更新，避免粘性路由继续复用
 	// 刚被限流的账号。cyber 例外：不冷却账号。
 	if !cyberHit {

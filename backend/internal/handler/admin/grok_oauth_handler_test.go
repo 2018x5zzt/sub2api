@@ -136,7 +136,7 @@ func TestGrokOAuthHandlerQueryQuotaProbesUpstream(t *testing.T) {
 	for i, upstreamReq := range requests {
 		require.Equal(t, "Bearer access-token", upstreamReq.Header.Get("Authorization"))
 		if upstreamReq.URL.String() == xai.DefaultCLIBaseURL+"/responses" {
-			require.Contains(t, string(bodies[i]), `"model":"grok-4.5"`)
+			require.Contains(t, string(bodies[i]), `"model":"grok-4.3"`)
 			require.Contains(t, string(bodies[i]), `"store":false`)
 		}
 	}
