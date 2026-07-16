@@ -86,9 +86,10 @@ func (s *FrontendServer) InvalidateCache() {
 func (s *FrontendServer) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
+		addModelHubVaryHeader(c.Writer.Header(), path)
 
 		// Skip API routes
-		if shouldBypassEmbeddedFrontend(path) {
+		if shouldBypassEmbeddedFrontendRequest(c.Request) {
 			c.Next()
 			return
 		}
@@ -257,8 +258,9 @@ func ServeEmbeddedFrontend() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
+		addModelHubVaryHeader(c.Writer.Header(), path)
 
-		if shouldBypassEmbeddedFrontend(path) {
+		if shouldBypassEmbeddedFrontendRequest(c.Request) {
 			c.Next()
 			return
 		}
@@ -297,25 +299,6 @@ func tryServeOverrideFile(c *gin.Context, overrideDir, cleanPath string) bool {
 	c.File(filePath)
 	c.Abort()
 	return true
-}
-
-func shouldBypassEmbeddedFrontend(path string) bool {
-	trimmed := strings.TrimSpace(path)
-	return strings.HasPrefix(trimmed, "/api/") ||
-		strings.HasPrefix(trimmed, "/v1/") ||
-		strings.HasPrefix(trimmed, "/v1beta/") ||
-		strings.HasPrefix(trimmed, "/backend-api/") ||
-		strings.HasPrefix(trimmed, "/antigravity/") ||
-		strings.HasPrefix(trimmed, "/setup/") ||
-		trimmed == "/health" ||
-		trimmed == "/oauth/token" ||
-		trimmed == "/oauth/userinfo" ||
-		trimmed == "/models" ||
-		trimmed == "/responses" ||
-		strings.HasPrefix(trimmed, "/responses/") ||
-		trimmed == "/alpha/search" ||
-		strings.HasPrefix(trimmed, "/images/") ||
-		strings.HasPrefix(trimmed, "/videos/")
 }
 
 func serveIndexHTML(c *gin.Context, fsys fs.FS) {

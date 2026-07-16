@@ -475,6 +475,36 @@ func TestOverrideFilesNeverReceiveImmutableCacheHeaders(t *testing.T) {
 }
 
 func TestFrontendServer_Middleware(t *testing.T) {
+	t.Run("serves_model_hub_for_browser_navigation", func(t *testing.T) {
+		provider := &mockSettingsProvider{
+			settings: map[string]string{"test": "value"},
+		}
+
+		server, err := NewFrontendServer(provider)
+		require.NoError(t, err)
+
+		router := gin.New()
+		router.Use(server.Middleware())
+		nextCalled := false
+		router.GET("/models", func(c *gin.Context) {
+			nextCalled = true
+			c.String(http.StatusOK, "api")
+		})
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/models", nil)
+		req.Header.Set("Accept", "text/html,application/xhtml+xml")
+		req.Header.Set("Sec-Fetch-Dest", "document")
+		router.ServeHTTP(w, req)
+
+		assert.False(t, nextCalled)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Header().Get("Content-Type"), "text/html")
+		assert.Contains(t, w.Body.String(), "<!doctype html>")
+		assert.Contains(t, w.Header().Get("Vary"), "Accept")
+		assert.Contains(t, w.Header().Get("Vary"), "Authorization")
+	})
+
 	t.Run("skips_api_routes", func(t *testing.T) {
 		provider := &mockSettingsProvider{
 			settings: map[string]string{"test": "value"},
@@ -742,6 +772,28 @@ func TestServeEmbeddedFrontend(t *testing.T) {
 				assert.Contains(t, w.Header().Get("Content-Type"), "text/html")
 			})
 		}
+	})
+
+	t.Run("serves_model_hub_for_browser_navigation", func(t *testing.T) {
+		middleware := ServeEmbeddedFrontend()
+		router := gin.New()
+		router.Use(middleware)
+		nextCalled := false
+		router.GET("/models", func(c *gin.Context) {
+			nextCalled = true
+			c.String(http.StatusOK, "api")
+		})
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/models", nil)
+		req.Header.Set("Accept", "text/html")
+		req.Header.Set("Sec-Fetch-Dest", "document")
+		router.ServeHTTP(w, req)
+
+		assert.False(t, nextCalled)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Header().Get("Content-Type"), "text/html")
+		assert.Contains(t, w.Body.String(), "<!doctype html>")
 	})
 
 	t.Run("skips_api_routes", func(t *testing.T) {

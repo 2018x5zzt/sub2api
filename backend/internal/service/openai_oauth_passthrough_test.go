@@ -1328,8 +1328,8 @@ func TestOpenAIGatewayService_OpenAIPassthrough_RetryableStatusesTriggerFailover
 			},
 		},
 		{
-			// fork 定制：passthrough 模式下 5xx 亦触发多账号 failover（handleErrorResponsePassthrough
-			// 经 shouldFailoverOpenAIUpstreamResponse 判定），避免坏号把上游 5xx 直接返回客户端。
+			// fork 定制：passthrough 模式下 5xx 由 shouldFailoverOpenAIPassthroughResponse
+			// 提前触发多账号 failover，避免坏号把上游 5xx 直接返回客户端。
 			// 与上游"5xx 透传回客户端"设计相反——保留 fork 既有生产行为。
 			name:           "oauth_502_bad_gateway",
 			accountType:    AccountTypeOAuth,
