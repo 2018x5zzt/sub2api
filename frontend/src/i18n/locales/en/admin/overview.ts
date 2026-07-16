@@ -468,6 +468,7 @@ export default {
       leaveEmptyToKeep: 'Leave empty to keep current password',
       generatePassword: 'Generate random password',
       copyPassword: 'Copy password',
+      passwordCopied: 'Password copied',
       creating: 'Creating...',
       updating: 'Updating...',
       form: {
@@ -768,6 +769,7 @@ export default {
       public: 'Public',
       columns: {
         name: 'Name',
+        id: 'ID',
         platform: 'Platform',
         rateMultiplier: 'Rate Multiplier',
         rpmOverride: 'RPM Override',

@@ -593,6 +593,11 @@ export default {
       }
     },
 
+    subscriptionProductConfig: {
+      title: '订阅产品配置',
+      description: '配置共享订阅产品、分组绑定和用户产品订阅'
+    },
+
     // Subscriptions Management
     subscriptionProducts: {
       title: '产品订阅',

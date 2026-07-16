@@ -6,7 +6,7 @@
       @mouseenter="handleMouseEnter"
       @mouseleave="handleMouseLeave"
       class="flex cursor-pointer items-center gap-2 rounded-xl bg-purple-50 px-3 py-1.5 transition-colors hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/30"
-      :title="t('productSubscription.viewDetails')"
+      :title="t('subscriptionProgress.viewDetails')"
     >
       <Icon name="creditCard" size="sm" class="text-purple-600 dark:text-purple-400" />
       <span v-if="summary.active_count > 0" class="h-2 w-2 rounded-full bg-emerald-500"></span>
@@ -26,10 +26,10 @@
         <!-- Header -->
         <div class="px-5 pt-5 pb-3">
           <h3 class="text-base font-bold text-gray-900 dark:text-white">
-            {{ t('productSubscription.mySubscriptions') }}
+            {{ t('subscriptionProgress.title') }}
           </h3>
           <p class="mt-0.5 text-xs text-gray-400 dark:text-dark-400">
-            {{ t('productSubscription.activeCount', { count: summary.active_count }) }}
+            {{ t('subscriptionProgress.activeCount', { count: summary.active_count }) }}
           </p>
         </div>
 
@@ -60,7 +60,7 @@
             <div class="space-y-2.5">
               <!-- Daily -->
               <div class="flex items-center gap-3">
-                <span class="w-8 shrink-0 text-xs text-gray-400 dark:text-gray-500">{{ t('productSubscription.daily') }}</span>
+                <span class="w-8 shrink-0 text-xs text-gray-400 dark:text-gray-500">{{ t('subscriptionProgress.daily') }}</span>
                 <div class="h-2 min-w-0 flex-1 rounded-full bg-gray-100 dark:bg-dark-600">
                   <div
                     class="h-2 rounded-full transition-all duration-300"
@@ -74,7 +74,7 @@
               </div>
               <!-- Weekly -->
               <div class="flex items-center gap-3">
-                <span class="w-8 shrink-0 text-xs text-gray-400 dark:text-gray-500">{{ t('productSubscription.weekly') }}</span>
+                <span class="w-8 shrink-0 text-xs text-gray-400 dark:text-gray-500">{{ t('subscriptionProgress.weekly') }}</span>
                 <div class="h-2 min-w-0 flex-1 rounded-full bg-gray-100 dark:bg-dark-600">
                   <div
                     class="h-2 rounded-full transition-all duration-300"
@@ -88,7 +88,7 @@
               </div>
               <!-- Monthly -->
               <div class="flex items-center gap-3">
-                <span class="w-8 shrink-0 text-xs text-gray-400 dark:text-gray-500">{{ t('productSubscription.monthly') }}</span>
+                <span class="w-8 shrink-0 text-xs text-gray-400 dark:text-gray-500">{{ t('subscriptionProgress.monthly') }}</span>
                 <div class="h-2 min-w-0 flex-1 rounded-full bg-gray-100 dark:bg-dark-600">
                   <div
                     class="h-2 rounded-full transition-all duration-300"
@@ -111,7 +111,7 @@
             class="text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
             @click="popoverOpen = false"
           >
-            {{ t('productSubscription.viewAll') }}
+            {{ t('subscriptionProgress.viewAll') }}
           </router-link>
         </div>
       </div>
@@ -183,10 +183,10 @@ function fmtUsage(used: number | undefined, limit: number): string {
 
 function formatDaysRemaining(expiresAt: string): string {
   const diff = new Date(expiresAt).getTime() - Date.now()
-  if (diff < 0) return t('productSubscription.expired')
+  if (diff < 0) return t('subscriptionProgress.expired')
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
-  if (days === 0) return t('productSubscription.expiresToday')
-  return t('productSubscription.daysRemaining', { days })
+  if (days === 0) return t('subscriptionProgress.expiresToday')
+  return t('subscriptionProgress.daysRemaining', { days })
 }
 
 function getDaysClass(expiresAt: string): string {

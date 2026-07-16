@@ -81,6 +81,24 @@ func (s openAI429SilentFailoverState) nextWaitDuration(now time.Time) time.Durat
 	return openAI429SilentFailoverPollInterval
 }
 
+func shouldStopOpenAIOAuthFailover(
+	gatewayService *service.OpenAIGatewayService,
+	account *service.Account,
+	failoverErr *service.UpstreamFailoverError,
+	switchCount int,
+	rateLimitState *openAI429SilentFailoverState,
+	oauthState *service.OpenAIOAuth429FailoverState,
+) bool {
+	if gatewayService == nil || failoverErr == nil {
+		return false
+	}
+	failedSwitches := switchCount + 1
+	if rateLimitState != nil {
+		failedSwitches += rateLimitState.switchCount()
+	}
+	return gatewayService.ShouldStopOpenAIOAuth429Failover(account, failoverErr.StatusCode, failedSwitches, oauthState)
+}
+
 func (h *OpenAIGatewayHandler) waitForOpenAI429SilentFailover(
 	ctx context.Context,
 	reqLog *zap.Logger,

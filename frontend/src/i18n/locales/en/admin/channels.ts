@@ -593,6 +593,11 @@ export default {
       }
     },
 
+    subscriptionProductConfig: {
+      title: 'Subscription Product Config',
+      description: 'Configure shared subscription products, group bindings, and user product subscriptions'
+    },
+
     // Subscriptions
     subscriptionProducts: {
       title: 'Product Subscriptions',

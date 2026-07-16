@@ -38,6 +38,14 @@ export default {
     loadFailedDescription: '请稍后刷新重试。'
   },
 
+  imageStudio: {
+    pageTitle: '生图工作室',
+    openInNewWindow: '在新窗口打开',
+    loadError: '生图工作室加载失败',
+    noEnabledKey: '暂无可用的 API Key',
+    goToKeys: '前往密钥管理'
+  },
+
   // Subscription Progress (Header component)
   subscriptionProgress: {
     title: '我的订阅',
@@ -170,6 +178,7 @@ export default {
       revoked: '已撤销'
     },
     usage: '用量',
+    carryover: '结转',
     expires: '到期时间',
     noExpiration: '无到期时间',
     unlimited: '无限制',

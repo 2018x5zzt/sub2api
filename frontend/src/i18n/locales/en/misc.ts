@@ -38,6 +38,14 @@ export default {
     loadFailedDescription: 'Refresh and try again in a moment.'
   },
 
+  imageStudio: {
+    pageTitle: 'Image Studio',
+    openInNewWindow: 'Open in new window',
+    loadError: 'Failed to load Image Studio',
+    noEnabledKey: 'No enabled API key is available',
+    goToKeys: 'Go to API keys'
+  },
+
   // Subscription Progress (Header component)
   subscriptionProgress: {
     title: 'My Subscriptions',
@@ -173,6 +181,7 @@ export default {
       revoked: 'Revoked'
     },
     usage: 'Usage',
+    carryover: 'Carryover',
     expires: 'Expires',
     noExpiration: 'No expiration',
     unlimited: 'Unlimited',
