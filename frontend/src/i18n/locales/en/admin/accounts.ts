@@ -876,8 +876,6 @@ export default {
           },
           // Refresh Token auth
           refreshTokenAuth: 'Manual RT Input',
-          mobileRefreshTokenAuth: 'Mobile Refresh Token',
-          accessTokenAuth: 'Access Token',
           refreshTokenDesc: 'Enter your existing OpenAI Refresh Token(s). Supports batch input (one per line). The system will automatically validate and create accounts.',
           refreshTokenPlaceholder: 'Paste your OpenAI Refresh Token...\nSupports multiple, one per line',
           mobileRefreshTokenAuth: 'Manual Mobile RT Input',

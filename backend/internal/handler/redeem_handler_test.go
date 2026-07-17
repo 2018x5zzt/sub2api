@@ -402,6 +402,10 @@ func (r *testRedeemUserRepo) BatchAddConcurrency(ctx context.Context, userIDs []
 	return 0, errors.New("not implemented")
 }
 
+func (r *testRedeemUserRepo) BatchUpdateLimits(ctx context.Context, userIDs []int64, concurrency, rpmLimit *int) (int, error) {
+	return 0, errors.New("not implemented")
+}
+
 func (r *testRedeemUserRepo) GetByIDIncludeDeleted(ctx context.Context, id int64) (*service.User, error) {
 	return r.GetByID(ctx, id)
 }
