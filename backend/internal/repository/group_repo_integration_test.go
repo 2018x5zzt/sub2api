@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -65,6 +66,95 @@ func (s *GroupRepoSuite) TestCreate() {
 	got, err := s.repo.GetByID(s.ctx, group.ID)
 	s.Require().NoError(err, "GetByID")
 	s.Require().Equal("test-create", got.Name)
+}
+
+func (s *GroupRepoSuite) TestCreateFromSourcePreservesPriorityAndFiltersIneligibleAccounts() {
+	source := &service.Group{
+		Name:             "duplicate-source",
+		Platform:         service.PlatformOpenAI,
+		RateMultiplier:   1,
+		Status:           service.StatusActive,
+		SubscriptionType: service.SubscriptionTypeStandard,
+		RequireOAuthOnly: true,
+	}
+	s.Require().NoError(s.repo.Create(s.ctx, source))
+
+	insertAccount := func(name, accountType string, deleted bool) int64 {
+		var id int64
+		deletedAt := any(nil)
+		if deleted {
+			deletedAt = "2026-07-16T00:00:00Z"
+		}
+		s.Require().NoError(scanSingleRow(
+			s.ctx,
+			s.tx,
+			"INSERT INTO accounts (name, platform, type, deleted_at) VALUES ($1, $2, $3, $4) RETURNING id",
+			[]any{name, service.PlatformOpenAI, accountType, deletedAt},
+			&id,
+		))
+		return id
+	}
+	oauthID := insertAccount("duplicate-oauth", service.AccountTypeOAuth, false)
+	apiKeyID := insertAccount("duplicate-apikey", service.AccountTypeAPIKey, false)
+	deletedID := insertAccount("duplicate-deleted", service.AccountTypeOAuth, true)
+	for _, binding := range []struct {
+		accountID         int64
+		priority          int
+		billingMultiplier float64
+	}{{oauthID, 37, 1.75}, {apiKeyID, 8, 2.25}, {deletedID, 3, 3.25}} {
+		_, err := s.tx.ExecContext(
+			s.ctx,
+			"INSERT INTO account_groups (account_id, group_id, priority, billing_multiplier, created_at) VALUES ($1, $2, $3, $4, NOW())",
+			binding.accountID,
+			source.ID,
+			binding.priority,
+			binding.billingMultiplier,
+		)
+		s.Require().NoError(err)
+	}
+
+	duplicate := &service.Group{
+		Name:                 "duplicate-source (Copy)",
+		Platform:             source.Platform,
+		RateMultiplier:       source.RateMultiplier,
+		Status:               "inactive",
+		SubscriptionType:     source.SubscriptionType,
+		RequireOAuthOnly:     true,
+		DuplicateOperationID: strings.Repeat("a", 64),
+	}
+	s.Require().NoError(s.repo.CreateFromSource(s.ctx, duplicate, source.ID))
+	s.Require().EqualValues(1, duplicate.AccountCount)
+
+	rows, err := s.tx.QueryContext(
+		s.ctx,
+		"SELECT account_id, priority, billing_multiplier FROM account_groups WHERE group_id = $1 ORDER BY account_id",
+		duplicate.ID,
+	)
+	s.Require().NoError(err)
+	defer func() { _ = rows.Close() }()
+	s.Require().True(rows.Next())
+	var copiedAccountID int64
+	var copiedPriority int
+	var copiedBillingMultiplier float64
+	s.Require().NoError(rows.Scan(&copiedAccountID, &copiedPriority, &copiedBillingMultiplier))
+	s.Require().Equal(oauthID, copiedAccountID)
+	s.Require().Equal(37, copiedPriority)
+	s.Require().Equal(1.75, copiedBillingMultiplier)
+	s.Require().False(rows.Next(), "API-key and soft-deleted accounts must not be copied")
+
+	recovered, err := s.repo.FindByDuplicateOperationID(s.ctx, duplicate.DuplicateOperationID)
+	s.Require().NoError(err)
+	s.Require().Equal(duplicate.ID, recovered.ID)
+
+	var outboxCount int
+	s.Require().NoError(scanSingleRow(
+		s.ctx,
+		s.tx,
+		"SELECT COUNT(*) FROM scheduler_outbox WHERE group_id = $1",
+		[]any{duplicate.ID},
+		&outboxCount,
+	))
+	s.Require().Equal(1, outboxCount)
 }
 
 func (s *GroupRepoSuite) TestGetByID_NotFound() {
