@@ -608,6 +608,11 @@ type adminServiceImpl struct {
 	privacyClientFactory PrivacyClientFactory
 	runtimeBlocker       AccountRuntimeBlocker
 	productSubRepo       ProductSubscriptionRepository
+	affiliateService     adminRechargeAffiliateAccruer
+}
+
+type adminRechargeAffiliateAccruer interface {
+	AccrueInviteRebate(ctx context.Context, inviteeUserID int64, baseRechargeAmount float64) (float64, error)
 }
 
 type userGroupRateBatchReader interface {
@@ -635,6 +640,7 @@ func NewAdminService(
 	privacyClientFactory PrivacyClientFactory,
 	runtimeBlocker AccountRuntimeBlocker,
 	productSubRepo ProductSubscriptionRepository,
+	affiliateService *AffiliateService,
 ) AdminService {
 	return &adminServiceImpl{
 		userRepo:             userRepo,
@@ -657,5 +663,6 @@ func NewAdminService(
 		privacyClientFactory: privacyClientFactory,
 		runtimeBlocker:       runtimeBlocker,
 		productSubRepo:       productSubRepo,
+		affiliateService:     affiliateService,
 	}
 }

@@ -41,6 +41,8 @@ var usageLogInsertArgTypes = [...]string{
 	"integer",     // cache_creation_1h_tokens
 	"integer",     // image_output_tokens
 	"numeric",     // image_output_cost
+	"integer",     // image_input_tokens
+	"numeric",     // image_input_cost
 	"numeric",     // input_cost
 	"numeric",     // output_cost
 	"numeric",     // cache_creation_cost
@@ -101,6 +103,8 @@ const usageLogInsertColumnList = `
 			cache_creation_1h_tokens,
 			image_output_tokens,
 			image_output_cost,
+			image_input_tokens,
+			image_input_cost,
 			input_cost,
 			output_cost,
 			cache_creation_cost,
@@ -702,6 +706,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			cache_creation_1h_tokens,
 			image_output_tokens,
 			image_output_cost,
+			image_input_tokens,
+			image_input_cost,
 			input_cost,
 			output_cost,
 			cache_creation_cost,
@@ -790,6 +796,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				cache_creation_1h_tokens,
 				image_output_tokens,
 				image_output_cost,
+				image_input_tokens,
+				image_input_cost,
 				input_cost,
 				output_cost,
 				cache_creation_cost,
@@ -849,6 +857,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				cache_creation_1h_tokens,
 				image_output_tokens,
 				image_output_cost,
+				image_input_tokens,
+				image_input_cost,
 				input_cost,
 				output_cost,
 				cache_creation_cost,
@@ -948,6 +958,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_creation_1h_tokens,
 			image_output_tokens,
 			image_output_cost,
+			image_input_tokens,
+			image_input_cost,
 			input_cost,
 			output_cost,
 			cache_creation_cost,
@@ -1033,6 +1045,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_creation_1h_tokens,
 			image_output_tokens,
 			image_output_cost,
+			image_input_tokens,
+			image_input_cost,
 			input_cost,
 			output_cost,
 			cache_creation_cost,
@@ -1092,6 +1106,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_creation_1h_tokens,
 			image_output_tokens,
 			image_output_cost,
+			image_input_tokens,
+			image_input_cost,
 			input_cost,
 			output_cost,
 			cache_creation_cost,
@@ -1213,6 +1229,8 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			log.CacheCreation1hTokens,
 			log.ImageOutputTokens,
 			log.ImageOutputCost,
+			log.ImageInputTokens,
+			log.ImageInputCost,
 			log.InputCost,
 			log.OutputCost,
 			log.CacheCreationCost,
