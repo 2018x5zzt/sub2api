@@ -18,6 +18,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 const (
@@ -42,20 +43,24 @@ const (
 type openAIImageJobOwner = service.OpenAIImageJobOwner
 
 type openAIImageJobRequest struct {
-	Endpoint    string
-	ContentType string
-	RemoteAddr  string
-	Headers     http.Header
-	Body        []byte
+	Endpoint                   string
+	ContentType                string
+	RemoteAddr                 string
+	Headers                    http.Header
+	Body                       []byte
+	SecurityAuditCompletion    securityAuditCompletionToken
+	HasSecurityAuditCompletion bool
 }
 
 func (r openAIImageJobRequest) clone() openAIImageJobRequest {
 	return openAIImageJobRequest{
-		Endpoint:    r.Endpoint,
-		ContentType: r.ContentType,
-		RemoteAddr:  r.RemoteAddr,
-		Headers:     r.Headers.Clone(),
-		Body:        append([]byte(nil), r.Body...),
+		Endpoint:                   r.Endpoint,
+		ContentType:                r.ContentType,
+		RemoteAddr:                 r.RemoteAddr,
+		Headers:                    r.Headers.Clone(),
+		Body:                       append([]byte(nil), r.Body...),
+		SecurityAuditCompletion:    r.SecurityAuditCompletion,
+		HasSecurityAuditCompletion: r.HasSecurityAuditCompletion,
 	}
 }
 
@@ -480,11 +485,6 @@ func (h *OpenAIGatewayHandler) ImageJobCreate(c *gin.Context) {
 	if h == nil {
 		return
 	}
-	store := h.ensureImageJobStore()
-	if store == nil {
-		h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Image jobs are not available")
-		return
-	}
 
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
@@ -515,16 +515,56 @@ func (h *OpenAIGatewayHandler) ImageJobCreate(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Request body is empty")
 		return
 	}
+	if !service.GroupAllowsImageGeneration(apiKey.Group) {
+		h.errorResponse(c, http.StatusForbidden, "permission_error", service.ImageGenerationPermissionMessage())
+		return
+	}
+	if h.gatewayService == nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Image gateway is not available")
+		return
+	}
+
+	parseCtx := c.Copy()
+	parseRequest := c.Request.Clone(c.Request.Context())
+	parseURL := *parseRequest.URL
+	parseURL.Path = endpoint
+	parseRequest.URL = &parseURL
+	parseCtx.Request = parseRequest
+	parsed, err := h.gatewayService.ParseOpenAIImagesRequest(parseCtx, body)
+	if err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return
+	}
+	moderationBody := parsed.ModerationBody()
+	if len(moderationBody) == 0 {
+		cacheSecurityAuditCompletion(c, apiKey, subject, service.ContentModerationProtocolOpenAIImages, parsed.Model, moderationBody)
+	} else {
+		reqLog := requestLogger(c, "handler.openai_image_job.security_audit",
+			zap.Int64("user_id", subject.UserID), zap.Int64("api_key_id", apiKey.ID), zap.String("model", parsed.Model))
+		if decision := h.checkSecurityAudit(c, reqLog, apiKey, subject, service.ContentModerationProtocolOpenAIImages, parsed.Model, moderationBody); decision != nil && !decision.AllowNextStage {
+			h.openAISecurityAuditError(c, decision)
+			return
+		}
+	}
+
+	store := h.ensureImageJobStore()
+	if store == nil {
+		h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Image jobs are not available")
+		return
+	}
 
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 	productSettlement, _ := middleware2.GetProductSettlementFromContext(c)
+	securityAuditCompletion, hasSecurityAuditCompletion := securityAuditCompletionFromContext(c)
 
 	jobReq := openAIImageJobRequest{
-		Endpoint:    endpoint,
-		ContentType: c.GetHeader("Content-Type"),
-		RemoteAddr:  c.Request.RemoteAddr,
-		Headers:     c.Request.Header.Clone(),
-		Body:        append([]byte(nil), body...),
+		Endpoint:                   endpoint,
+		ContentType:                c.GetHeader("Content-Type"),
+		RemoteAddr:                 c.Request.RemoteAddr,
+		Headers:                    c.Request.Header.Clone(),
+		Body:                       append([]byte(nil), body...),
+		SecurityAuditCompletion:    securityAuditCompletion,
+		HasSecurityAuditCompletion: hasSecurityAuditCompletion,
 	}
 	owner := openAIImageJobOwner{UserID: subject.UserID, APIKeyID: apiKey.ID}
 	job, err := store.submit(owner, jobReq, func(ctx context.Context, req openAIImageJobRequest) openAIImageJobResult {
@@ -638,6 +678,7 @@ func (h *OpenAIGatewayHandler) runOpenAIImageJob(
 	if productSettlement != nil {
 		jobCtx.Set(string(middleware2.ContextKeyProductSettlement), productSettlement)
 	}
+	applyOpenAIImageJobSecurityAuditCompletion(jobCtx, req)
 
 	h.Images(jobCtx)
 
@@ -654,6 +695,12 @@ func (h *OpenAIGatewayHandler) runOpenAIImageJob(
 		StatusCode: statusCode,
 		Headers:    recorder.Header().Clone(),
 		Body:       body,
+	}
+}
+
+func applyOpenAIImageJobSecurityAuditCompletion(c *gin.Context, req openAIImageJobRequest) {
+	if c != nil && req.HasSecurityAuditCompletion {
+		c.Set(securityAuditCompletedContextKey, req.SecurityAuditCompletion)
 	}
 }
 
